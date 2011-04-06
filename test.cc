@@ -7,17 +7,97 @@
 #include <boost/bind.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 
+class reactor;
+
+std::ostream &operator << (std::ostream &out, const timespec &ts) {
+    out << "{" << ts.tv_sec << "," << ts.tv_nsec << "}";
+    return out;
+}
+
+bool operator == (const timespec &a, const timespec &b) {
+    std::cout << "timespec a: " << a << " b: " << b << "\n";
+    std::cout << "memcmp: " << memcmp(&a, &b, sizeof(timespec)) << "\n";
+    return memcmp(&a, &b, sizeof(timespec)) == 0;
+}
+
 class timer_events {
 public:
     typedef boost::function<void (void)> timer_func;
+    struct state {
+        state(const timespec &ts_, const timer_func &func_) : ts(ts_), func(func_) {}
+        timespec ts;
+        timer_func func;
+    };
+    struct state_comp {
+        bool operator ()(const state &a, const state &b) const {
+            if (a.ts.tv_sec > b.ts.tv_sec) return true;
+            if (a.ts.tv_sec == b.ts.tv_sec) {
+                if (a.ts.tv_nsec > b.ts.tv_nsec) return true;
+            }
+            return false;
+        }
+    };
+    typedef std::vector<state> state_vector;
+
+    timer_events(reactor &r);
+
+    bool callback(uint32_t events) {
+        std::cout << "callback()" << std::endl;
+        // TODO: store the end from when make_heap was called
+        // might need to use that here?
+        timespec ts = heap.front().ts;
+        while (!heap.empty() && ts == heap.front().ts) {
+            std::pop_heap(heap.begin(), heap.end(), state_comp());
+            // trigger timer callback
+            std::cout << "invoking timer callback\n";
+            heap.back().func();
+            // remove timer
+            heap.pop_back();
+        }
+        return true;
+    }
 
     // two types of timers single and periodic
     // for single shot, we can keep a heap and use one timerfd
     // set to the shortest interval (top of the heap).
     // for periodic it is easier just to create a timerfd per.
     // there shouldn't be a lot of these.
-    void add(const struct itimerspec &ts, timer_func &func) {
+    void add(const struct itimerspec &ts, const timer_func &func) {
+        static struct timespec zero = {0, 0};
+        timespec abs;
+        if (ts.it_interval == zero) {
+            // one shot
+            // get the current time so we can get abs time
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
+            if (ts.it_value.tv_sec)
+                abs.tv_sec += ts.it_value.tv_sec;
+            // TODO: turn nsec overflow into sec ?
+            if (ts.it_value.tv_nsec)
+                abs.tv_nsec += ts.it_value.tv_nsec;
+            else
+                // we don't need nanosec resolution
+                abs.tv_nsec = 0;
+            heap.push_back(state(abs, func));
+        } else {
+            // periodic
+        }
     }
+
+    void setup() {
+        itimerspec ts;
+        itimerspec old;
+        memset(&ts, 0, sizeof(ts));
+        if (!heap.empty()) {
+            std::make_heap(heap.begin(), heap.end(), state_comp());
+            std::cout << "heap top: " << heap.front().ts.tv_sec << "\n";
+            ts.it_value = heap.front().ts;
+        }
+        timer.settime(TFD_TIMER_ABSTIME, ts, old);
+    }
+
+protected:
+    state_vector heap;
+    timer_fd timer;
 };
 
 class reactor {
@@ -25,8 +105,8 @@ public:
     typedef boost::function<bool (uint32_t events)> event_func;
     struct state {
         state(int fd_, const event_func &func_) : fd(fd_), func(func_) {}
-        event_func func;
         int fd;
+        event_func func;
         bool operator == (const state &other) { return fd == other.fd; }
     };
     typedef boost::ptr_vector<state> state_vector;
@@ -68,8 +148,9 @@ public:
         }
     }
 
-    void run() {
+    void run(timer_events &te) {
         while (!done) {
+            te.setup();
             runonce();
         }
     }
@@ -81,6 +162,10 @@ protected:
     state_vector thunk;
     bool done;
 };
+
+timer_events::timer_events(reactor &r) {
+    r.add(timer.fd, EPOLLIN, boost::bind(&timer_events::callback, this, _1));
+}
 
 bool timer_cb(uint32_t events, timer_fd &t) {
     uint64_t fired;
@@ -102,6 +187,10 @@ bool accept_cb(uint32_t events, socket_fd &s) {
     s.accept(client_addr);
     std::cout << "accepted " << client_addr << "\n";
     return true;
+}
+
+void timer_void(int n) {
+    std::cout << "timer_void(" << n << ")\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -145,11 +234,26 @@ int main(int argc, char *argv[]) {
     sigaddset(&sigset, SIGINT);
     signal_fd sig(sigset);
 
+
     reactor r;
+
+    timer_events te(r);
+    memset(&ts, 0, sizeof(ts));
+    ts.it_value.tv_sec = 2;
+    te.add(ts, boost::bind(timer_void, 2));
+    ts.it_value.tv_sec = 1;
+    te.add(ts, boost::bind(timer_void, 1));
+    ts.it_value.tv_sec = 0;
+    te.add(ts, boost::bind(timer_void, 0));
+
+    ts.it_value.tv_sec = 1;
+    te.add(ts, boost::bind(timer_void, 11));
+
+
     r.add(t.fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(t)));
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
     r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s)));
-    r.run();
+    r.run(te);
     r.remove(s.fd);
 
     return 0;
