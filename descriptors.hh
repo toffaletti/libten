@@ -14,6 +14,8 @@
 #include <sys/signalfd.h>
 #include <signal.h>
 
+#include <vector>
+
 //! base class for other file descriptors
 //! in C++0x this should be movable, but not copyable
 struct fd_base : boost::noncopyable {
@@ -135,14 +137,49 @@ struct file_fd : fd_base {
 
 //! wrapper around an epoll fd
 struct epoll_fd : fd_base {
+    //! keeps track of how many file descriptors have been added to this epoll instance
+    int maxevents;
+
     //! creates fd with epoll_create
-    epoll_fd() throw (errno_error) {
+    epoll_fd() throw (errno_error) : maxevents(0) {
         // size is ignored since linux kernel 2.6.8, but still must be positive
         fd = epoll_create(1024);
         THROW_ON_ERROR(fd);
     }
 
-    // TODO: epoll_ctl, epoll_wait
+    //! register the target file descriptor with the epoll instance
+    int add(int fd_, struct epoll_event &event) {
+        int s = ::epoll_ctl(fd, EPOLL_CTL_ADD, fd_, &event);
+        if (s == 0) ++maxevents;
+        return s;
+    }
+
+    //! change the event associated with the target file descriptor
+    int modify(int fd_, struct epoll_event &event) {
+        return ::epoll_ctl(fd, EPOLL_CTL_MOD, fd_, &event);
+    }
+
+    //! deregister the target file descriptor from the epoll instance
+    int remove(int fd_) {
+        int s = ::epoll_ctl(fd, EPOLL_CTL_DEL, fd_, NULL);
+        if (s == 0) --maxevents;
+        return s;
+    }
+
+    //! param events an array of epoll_events structs to contain events available to the caller
+    //! param maxevents in the size of events must be greater than zero, returns the number of fds with events triggered
+    //! param timeout milliseconds to wait for events, -1 waits indefinitely
+    // TODO: maybe use std::vector<epoll_events> ?
+    void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
+        events.resize(maxevents); // this can throw bad_alloc and length_error
+        for (;;) {
+            int s = ::epoll_wait(fd, &events[0], maxevents, timeout);
+            if (s == -1 && errno == EINTR) continue;
+            THROW_ON_ERROR(s);
+            events.resize(s);
+            break;
+        }
+    }
 };
 
 
