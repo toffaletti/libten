@@ -7,6 +7,19 @@
 #include <boost/bind.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 
+class timer_events {
+public:
+    typedef boost::function<void (void)> timer_func;
+
+    // two types of timers single and periodic
+    // for single shot, we can keep a heap and use one timerfd
+    // set to the shortest interval (top of the heap).
+    // for periodic it is easier just to create a timerfd per.
+    // there shouldn't be a lot of these.
+    void add(const struct itimerspec &ts, timer_func &func) {
+    }
+};
+
 class reactor {
 public:
     typedef boost::function<bool (uint32_t events)> event_func;
