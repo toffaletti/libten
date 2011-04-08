@@ -25,15 +25,17 @@ struct fd_base : boost::noncopyable {
     //! \param fd_ the file descriptor
     fd_base(int fd_=-1) : fd(fd_) {}
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     // C++0x move stuff
-    //fd_base(fd_base &&other) : fd(other.fd) { other.fd = -1; }
-    //fd_base &operator = (fd_base &&other) {
-    //    if (this != &other) {
-    //        fd = other.fd;
-    //        other.fd = -1;
-    //    }
-    //    return *this;
-    //}
+    fd_base(fd_base &&other) : fd(other.fd) { other.fd = -1; }
+    fd_base &operator = (fd_base &&other) {
+        if (this != &other) {
+            fd = other.fd;
+            other.fd = -1;
+        }
+        return *this;
+    }
+#endif
 
     //! true if fd != -1
     bool valid() { return fd != -1; }

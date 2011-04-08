@@ -15,9 +15,31 @@ std::ostream &operator << (std::ostream &out, const timespec &ts) {
 }
 
 bool operator == (const timespec &a, const timespec &b) {
-    std::cout << "timespec a: " << a << " b: " << b << "\n";
-    std::cout << "memcmp: " << memcmp(&a, &b, sizeof(timespec)) << "\n";
     return memcmp(&a, &b, sizeof(timespec)) == 0;
+}
+
+bool operator > (const timespec &a, const timespec &b) {
+    if (a.tv_sec > b.tv_sec) return true;
+    if (a.tv_sec == b.tv_sec) {
+        if (a.tv_nsec > b.tv_nsec) return true;
+    }
+    return false;
+}
+
+bool operator < (const timespec &a, const timespec &b) {
+    if (a.tv_sec < b.tv_sec) return true;
+    if (a.tv_sec == b.tv_sec) {
+        if (a.tv_nsec < b.tv_nsec) return true;
+    }
+    return false;
+}
+
+bool operator <= (const timespec &a, const timespec &b) {
+    if (a.tv_sec < b.tv_sec) return true;
+    if (a.tv_sec == b.tv_sec) {
+        if (a.tv_nsec <= b.tv_nsec) return true;
+    }
+    return false;
 }
 
 class timer_events {
@@ -30,32 +52,12 @@ public:
     };
     struct state_comp {
         bool operator ()(const state &a, const state &b) const {
-            if (a.ts.tv_sec > b.ts.tv_sec) return true;
-            if (a.ts.tv_sec == b.ts.tv_sec) {
-                if (a.ts.tv_nsec > b.ts.tv_nsec) return true;
-            }
-            return false;
+            return a.ts.tv_sec > b.ts.tv_sec;
         }
     };
-    typedef std::vector<state> state_vector;
+    typedef boost::ptr_vector<state> state_vector;
 
     timer_events(reactor &r);
-
-    bool callback(uint32_t events) {
-        std::cout << "callback()" << std::endl;
-        // TODO: store the end from when make_heap was called
-        // might need to use that here?
-        timespec ts = heap.front().ts;
-        while (!heap.empty() && ts == heap.front().ts) {
-            std::pop_heap(heap.begin(), heap.end(), state_comp());
-            // trigger timer callback
-            std::cout << "invoking timer callback\n";
-            heap.back().func();
-            // remove timer
-            heap.pop_back();
-        }
-        return true;
-    }
 
     // two types of timers single and periodic
     // for single shot, we can keep a heap and use one timerfd
@@ -67,7 +69,7 @@ public:
         timespec abs;
         if (ts.it_interval == zero) {
             // one shot
-            // get the current time so we can get abs time
+            // get the current time so we can order heap by abs time
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
             if (ts.it_value.tv_sec)
                 abs.tv_sec += ts.it_value.tv_sec;
@@ -77,31 +79,57 @@ public:
             else
                 // we don't need nanosec resolution
                 abs.tv_nsec = 0;
-            heap.push_back(state(abs, func));
+            heap.push_back(new state(abs, func));
         } else {
             // periodic
         }
     }
 
-    void setup() {
+protected:
+    state_vector heap;
+    timer_fd timer;
+
+    void hook() {
         itimerspec ts;
         itimerspec old;
         memset(&ts, 0, sizeof(ts));
         if (!heap.empty()) {
             std::make_heap(heap.begin(), heap.end(), state_comp());
-            std::cout << "heap top: " << heap.front().ts.tv_sec << "\n";
+            std::cout << "heap top: " << heap.front().ts << "\n";
             ts.it_value = heap.front().ts;
         }
         timer.settime(TFD_TIMER_ABSTIME, ts, old);
     }
 
-protected:
-    state_vector heap;
-    timer_fd timer;
+    bool callback(uint32_t events) {
+        std::cout << "callback()" << std::endl;
+        uint64_t fired;
+        assert(timer.read(&fired, sizeof(fired)) == 8);
+        std::cout << "fired " << fired << " times\n";
+        timespec now;
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+
+        // TODO: store the end from when make_heap was called
+        // might need to use that here?
+        timespec ts = heap.front().ts;
+        while (!heap.empty() && heap.front().ts <= now) {
+            std::pop_heap(heap.begin(), heap.end(), state_comp());
+            // trigger timer callback
+            std::cout << "invoking timer callback\n";
+            heap.back().func();
+            // remove timer
+            heap.pop_back();
+        }
+        return true;
+    }
+
+
 };
 
 class reactor {
 public:
+    typedef boost::function<void (void)> hook_func;
+    typedef std::vector<hook_func> hook_vector;
     typedef boost::function<bool (uint32_t events)> event_func;
     struct state {
         state(int fd_, const event_func &func_) : fd(fd_), func(func_) {}
@@ -112,12 +140,12 @@ public:
     typedef boost::ptr_vector<state> state_vector;
     typedef std::vector<epoll_event> event_vector;
 
-
     reactor() : done(false) {}
 
     void add(int fd, int events, const event_func &f) {
         thunk.push_back(new state(fd, f));
         epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
         ev.events = events;
         ev.data.ptr = &thunk.back();
         assert(e.add(fd, ev) == 0);
@@ -148,9 +176,19 @@ public:
         }
     }
 
-    void run(timer_events &te) {
+    void add_hook(const hook_func &func) {
+        hooks.push_back(func);
+    }
+
+    void call_hooks() {
+        for (hook_vector::const_iterator it = hooks.begin(); it!=hooks.end(); it++) {
+            (*it)();
+        }
+    }
+
+    void run() {
         while (!done) {
-            te.setup();
+            call_hooks();
             runonce();
         }
     }
@@ -160,10 +198,12 @@ public:
 protected:
     epoll_fd e;
     state_vector thunk;
+    hook_vector hooks;
     bool done;
 };
 
 timer_events::timer_events(reactor &r) {
+    r.add_hook(boost::bind(&timer_events::hook, this));
     r.add(timer.fd, EPOLLIN, boost::bind(&timer_events::callback, this, _1));
 }
 
@@ -253,7 +293,7 @@ int main(int argc, char *argv[]) {
     r.add(t.fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(t)));
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
     r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s)));
-    r.run(te);
+    r.run();
     r.remove(s.fd);
 
     return 0;
