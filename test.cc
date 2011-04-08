@@ -235,10 +235,12 @@ void timer_void(int n) {
 
 int main(int argc, char *argv[]) {
 
-    //fd_base fd1(0);
-    //fd_base fd2(std::move(fd1));
-    //assert(fd1.fd == -1);
-    //assert(fd2.fd != -1);
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    fd_base fd1(0);
+    fd_base fd2(std::move(fd1));
+    assert(fd1.fd == -1);
+    assert(fd2.fd != -1);
+#endif
 
     epoll_fd efd;
 
