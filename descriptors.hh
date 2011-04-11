@@ -197,14 +197,6 @@ struct socket_fd : fd_base {
     //! used for accept() and socketpair()
     socket_fd(int fd_) : fd_base(fd_) {}
 
-    //! \param addr returns the address of the peer socket
-    //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
-    //! \return the file descriptor for the peer socket or -1 on error
-    int accept(address &addr, int flags=0) __attribute__((warn_unused_result)) {
-        socklen_t addrlen = addr.addrlen();
-        return ::accept4(fd, addr.sockaddr(), &addrlen, flags);
-    }
-
     //! bind socket to address
     void bind(address &addr) throw (errno_error) {
         THROW_ON_ERROR(::bind(fd, addr.sockaddr(), addr.addrlen()));
@@ -284,13 +276,37 @@ struct socket_fd : fd_base {
         return *this;
     }
 
+    //! wrapper around socketpair()
     static std::pair<socket_fd, socket_fd> pair(int domain, int type, int protocol=0) {
         int sv[2];
         THROW_ON_ERROR(::socketpair(domain, type, protocol, sv));
         return std::make_pair(sv[0], sv[1]);
     }
+
+    //! \param addr returns the address of the peer socket
+    //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
+    //! \return socket_fd for accepted socket
+    socket_fd accept(address &addr, int flags=0) throw (errno_error) __attribute__((warn_unused_result)) {
+        socklen_t addrlen = addr.addrlen();
+        int afd = ::accept4(fd, addr.sockaddr(), &addrlen, flags);
+        THROW_ON_ERROR(afd);
+        return afd;
+    }
+#else
+    //! \param addr returns the address of the peer socket
+    //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
+    //! \return the file descriptor for the peer socket or -1 on error
+    int accept(address &addr, int flags=0) __attribute__((warn_unused_result)) {
+        socklen_t addrlen = addr.addrlen();
+        return ::accept4(fd, addr.sockaddr(), &addrlen, flags);
+    }
 #endif
 
+    //! print socket file descriptor number
+    friend std::ostream &operator << (std::ostream &out, const socket_fd &s) {
+        out << "socket_fd(" << s.fd << ")";
+        return out;
+    }
 };
 
 //! wrapper around timerfd

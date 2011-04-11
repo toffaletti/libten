@@ -224,8 +224,9 @@ bool sigint_cb(uint32_t events, signal_fd &s, reactor &r) {
 
 bool accept_cb(uint32_t events, socket_fd &s) {
     address client_addr;
-    s.accept(client_addr);
+    socket_fd cs = s.accept(client_addr);
     std::cout << "accepted " << client_addr << "\n";
+    std::cout << "client socket: " << cs << "\n";
     return true;
 }
 
