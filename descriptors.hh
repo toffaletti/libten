@@ -30,8 +30,7 @@ struct fd_base : boost::noncopyable {
     fd_base(fd_base &&other) : fd(other.fd) { other.fd = -1; }
     fd_base &operator = (fd_base &&other) {
         if (this != &other) {
-            fd = other.fd;
-            other.fd = -1;
+            std::swap(fd, other.fd);
         }
         return *this;
     }
@@ -125,8 +124,7 @@ struct file_fd : fd_base {
     file_fd(file_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     file_fd &operator = (file_fd &&other) {
         if (this != &other) {
-            fd = other.fd;
-            other.fd = -1;
+            std::swap(fd, other.fd);
         }
         return *this;
     }
@@ -283,8 +281,7 @@ struct socket_fd : fd_base {
     socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     socket_fd &operator = (socket_fd &&other) {
         if (this != &other) {
-            fd = other.fd;
-            other.fd = -1;
+            std::swap(fd, other.fd);
         }
         return *this;
     }

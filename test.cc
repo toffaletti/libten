@@ -136,6 +136,10 @@ public:
         int fd;
         event_func func;
         bool operator == (const state &other) { return fd == other.fd; }
+        friend std::ostream &operator << (std::ostream &out, const state &s) {
+            out << "state(" << s.fd << "," << (void *)&s.func << ")";
+            return out;
+        }
     };
     typedef boost::ptr_vector<state> state_vector;
     typedef std::vector<epoll_event> event_vector;
@@ -148,7 +152,6 @@ public:
         memset(&ev, 0, sizeof(ev));
         ev.events = events;
         ev.data.ptr = &thunk.back();
-        std::cout << "ptr: " << ev.data.ptr << "\n";
         assert(e.add(fd, ev) == 0);
     }
 
@@ -224,13 +227,26 @@ bool sigint_cb(uint32_t events, signal_fd &s, reactor &r) {
 }
 
 std::vector<socket_fd> clients;
+std::ostream &operator << (std::ostream &out, const std::vector<socket_fd> &v) {
+    out << "[";
+    for (std::vector<socket_fd>::const_iterator it = v.begin(); it!=v.end(); it++) {
+        out << *it << ",";
+    }
+    out << "]";
+    return out;
+}
 
-bool client_cb(uint32_t events, socket_fd &s, reactor &r) {
-    std::cout << "client cb: " << s << "\n";
-    std::cout << "client cb: " << s.fd << "\n";
-    r.remove(s.fd);
-    std::vector<socket_fd>::iterator it = std::find(clients.begin(), clients.end(), s.fd);
-    clients.erase(it);
+bool client_cb(uint32_t events, int fd, reactor &r) {
+    std::cout << "client cb: " << fd << "\n";
+    r.remove(fd);
+    std::vector<socket_fd>::iterator it = std::find(clients.begin(), clients.end(), fd);
+    if (it != clients.end()) {
+        std::cout << "erasing client: " << *it << "\n";
+        clients.erase(it);
+        std::cout << "clients: " << clients << "\n";
+    } else {
+        std::cout << "fd: " << fd << " not found in clients list\n";
+    }
     return true;
 }
 
@@ -239,10 +255,10 @@ bool accept_cb(uint32_t events, socket_fd &s, reactor &r) {
     socket_fd cs = s.accept(client_addr);
     std::cout << "accepted " << client_addr << "\n";
     std::cout << "client socket: " << cs << "\n";
+    r.add(cs.fd, EPOLLIN, boost::bind(client_cb, _1, cs.fd, boost::ref(r)));
     clients.push_back(std::move(cs));
     std::cout << "client socket: " << cs << "\n";
-    socket_fd &&rs = clients.back();
-    r.add(rs.fd, EPOLLIN, boost::bind(client_cb, _1, boost::ref(rs), boost::ref(r)));
+    std::cout << clients.size() << " clients\n";
     return true;
 }
 
@@ -253,10 +269,10 @@ void timer_void(int n) {
 int main(int argc, char *argv[]) {
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-    fd_base fd1(0);
-    fd_base fd2(std::move(fd1));
-    assert(fd1.fd == -1);
-    assert(fd2.fd != -1);
+    //fd_base fd1(0);
+    //fd_base fd2(std::move(fd1));
+    //assert(fd1.fd == -1);
+    //assert(fd2.fd != -1);
 
     std::pair<socket_fd, socket_fd> sp(socket_fd::pair(AF_UNIX, SOCK_STREAM));
     {
