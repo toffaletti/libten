@@ -240,6 +240,14 @@ int main(int argc, char *argv[]) {
     fd_base fd2(std::move(fd1));
     assert(fd1.fd == -1);
     assert(fd2.fd != -1);
+
+    std::pair<socket_fd, socket_fd> sp(socket_fd::pair(AF_UNIX, SOCK_STREAM));
+    {
+        char a = 1;
+        assert(sp.first.write(&a, 1) == 1);
+        assert(sp.second.read(&a, 1) == 1);
+        std::cout << "read: " << (int)a << " from socketpair\n";
+    }
 #endif
 
     epoll_fd efd;

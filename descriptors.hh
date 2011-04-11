@@ -272,6 +272,25 @@ struct socket_fd : fd_base {
         socklen_t optlen = sizeof(optval);
         setsockopt(level, optname, optval, optlen);
     }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    // C++0x move stuff
+    socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }
+    socket_fd &operator = (socket_fd &&other) {
+        if (this != &other) {
+            fd = other.fd;
+            other.fd = -1;
+        }
+        return *this;
+    }
+
+    static std::pair<socket_fd, socket_fd> pair(int domain, int type, int protocol=0) {
+        int sv[2];
+        THROW_ON_ERROR(::socketpair(domain, type, protocol, sv));
+        return std::make_pair(sv[0], sv[1]);
+    }
+#endif
+
 };
 
 //! wrapper around timerfd
