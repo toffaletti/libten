@@ -148,6 +148,7 @@ public:
         memset(&ev, 0, sizeof(ev));
         ev.events = events;
         ev.data.ptr = &thunk.back();
+        std::cout << "ptr: " << ev.data.ptr << "\n";
         assert(e.add(fd, ev) == 0);
     }
 
@@ -222,11 +223,26 @@ bool sigint_cb(uint32_t events, signal_fd &s, reactor &r) {
     return true;
 }
 
-bool accept_cb(uint32_t events, socket_fd &s) {
+std::vector<socket_fd> clients;
+
+bool client_cb(uint32_t events, socket_fd &s, reactor &r) {
+    std::cout << "client cb: " << s << "\n";
+    std::cout << "client cb: " << s.fd << "\n";
+    r.remove(s.fd);
+    std::vector<socket_fd>::iterator it = std::find(clients.begin(), clients.end(), s.fd);
+    clients.erase(it);
+    return true;
+}
+
+bool accept_cb(uint32_t events, socket_fd &s, reactor &r) {
     address client_addr;
     socket_fd cs = s.accept(client_addr);
     std::cout << "accepted " << client_addr << "\n";
     std::cout << "client socket: " << cs << "\n";
+    clients.push_back(std::move(cs));
+    std::cout << "client socket: " << cs << "\n";
+    socket_fd &&rs = clients.back();
+    r.add(rs.fd, EPOLLIN, boost::bind(client_cb, _1, boost::ref(rs), boost::ref(r)));
     return true;
 }
 
@@ -303,7 +319,7 @@ int main(int argc, char *argv[]) {
 
     r.add(t.fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(t)));
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
-    r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s)));
+    r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s), boost::ref(r)));
     r.run();
     r.remove(s.fd);
 

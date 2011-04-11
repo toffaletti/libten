@@ -37,6 +37,8 @@ struct fd_base : boost::noncopyable {
     }
 #endif
 
+    bool operator == (int fd_) const { return fd == fd_; }
+
     //! true if fd != -1
     bool valid() { return fd != -1; }
 
@@ -118,6 +120,17 @@ struct file_fd : fd_base {
     file_fd(const char *pathname, int flags, mode_t mode) {
         fd = ::open(pathname, flags, mode);
     }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    file_fd(file_fd &&other) : fd_base(other.fd) { other.fd = -1; }
+    file_fd &operator = (file_fd &&other) {
+        if (this != &other) {
+            fd = other.fd;
+            other.fd = -1;
+        }
+        return *this;
+    }
+#endif
 
     //! read from a given offset
     ssize_t pread(void *buf, size_t count, off_t offset) __attribute__((warn_unused_result)) {
