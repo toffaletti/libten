@@ -1,46 +1,9 @@
-#include "descriptors.hh"
+#include "timerspec.hh"
+#include "reactor.hh"
 #include <iostream>
 #include <assert.h>
 #include <utility>
 #include <vector>
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
-#include <boost/ptr_container/ptr_vector.hpp>
-
-class reactor;
-
-std::ostream &operator << (std::ostream &out, const timespec &ts) {
-    out << "{" << ts.tv_sec << "," << ts.tv_nsec << "}";
-    return out;
-}
-
-bool operator == (const timespec &a, const timespec &b) {
-    return memcmp(&a, &b, sizeof(timespec)) == 0;
-}
-
-bool operator > (const timespec &a, const timespec &b) {
-    if (a.tv_sec > b.tv_sec) return true;
-    if (a.tv_sec == b.tv_sec) {
-        if (a.tv_nsec > b.tv_nsec) return true;
-    }
-    return false;
-}
-
-bool operator < (const timespec &a, const timespec &b) {
-    if (a.tv_sec < b.tv_sec) return true;
-    if (a.tv_sec == b.tv_sec) {
-        if (a.tv_nsec < b.tv_nsec) return true;
-    }
-    return false;
-}
-
-bool operator <= (const timespec &a, const timespec &b) {
-    if (a.tv_sec < b.tv_sec) return true;
-    if (a.tv_sec == b.tv_sec) {
-        if (a.tv_nsec <= b.tv_nsec) return true;
-    }
-    return false;
-}
 
 class timer_events {
 public:
@@ -57,7 +20,10 @@ public:
     };
     typedef boost::ptr_vector<state> state_vector;
 
-    timer_events(reactor &r);
+    timer_events(reactor &r) {
+        r.add_hook(boost::bind(&timer_events::hook, this));
+        r.add(timer.fd, EPOLLIN, boost::bind(&timer_events::callback, this, _1));
+    }
 
     // two types of timers single and periodic
     // for single shot, we can keep a heap and use one timerfd
@@ -109,8 +75,6 @@ protected:
         timespec now;
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
 
-        // TODO: store the end from when make_heap was called
-        // might need to use that here?
         timespec ts = heap.front().ts;
         while (!heap.empty() && heap.front().ts <= now) {
             std::pop_heap(heap.begin(), heap.end(), state_comp());
@@ -122,94 +86,7 @@ protected:
         }
         return true;
     }
-
-
 };
-
-class reactor {
-public:
-    typedef boost::function<void (void)> hook_func;
-    typedef std::vector<hook_func> hook_vector;
-    typedef boost::function<bool (uint32_t events)> event_func;
-    struct state {
-        state(int fd_, const event_func &func_) : fd(fd_), func(func_) {}
-        int fd;
-        event_func func;
-        bool operator == (const state &other) { return fd == other.fd; }
-        friend std::ostream &operator << (std::ostream &out, const state &s) {
-            out << "state(" << s.fd << "," << (void *)&s.func << ")";
-            return out;
-        }
-    };
-    typedef boost::ptr_vector<state> state_vector;
-    typedef std::vector<epoll_event> event_vector;
-
-    reactor() : done(false) {}
-
-    void add(int fd, int events, const event_func &f) {
-        thunk.push_back(new state(fd, f));
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.events = events;
-        ev.data.ptr = &thunk.back();
-        assert(e.add(fd, ev) == 0);
-    }
-
-    void remove(int fd) {
-        state_vector::iterator it = std::find(thunk.begin(), thunk.end(), state(fd, NULL));
-        if (it != thunk.end()) {
-            thunk.erase(it);
-            assert(e.remove(fd) == 0);
-        }
-    }
-
-    void runonce() {
-        event_vector events;
-        e.wait(events);
-        std::cout << events.size() << " events triggered\n";
-        for (event_vector::const_iterator it=events.begin(); it!=events.end(); ++it) {
-            state *s = (state *)it->data.ptr;
-            try {
-                if (!s->func(it->events)) {
-                    remove(s->fd);
-                }
-            } catch (std::exception &ex) {
-                // TODO: replace with real logging
-                std::cerr << "exception caught at " << __FILE__ << ":" << __LINE__ << " " << ex.what() << std::endl;
-            }
-        }
-    }
-
-    void add_hook(const hook_func &func) {
-        hooks.push_back(func);
-    }
-
-    void call_hooks() {
-        for (hook_vector::const_iterator it = hooks.begin(); it!=hooks.end(); it++) {
-            (*it)();
-        }
-    }
-
-    void run() {
-        while (!done) {
-            call_hooks();
-            runonce();
-        }
-    }
-
-    void quit() { done = true; }
-
-protected:
-    epoll_fd e;
-    state_vector thunk;
-    hook_vector hooks;
-    bool done;
-};
-
-timer_events::timer_events(reactor &r) {
-    r.add_hook(boost::bind(&timer_events::hook, this));
-    r.add(timer.fd, EPOLLIN, boost::bind(&timer_events::callback, this, _1));
-}
 
 bool timer_cb(uint32_t events, timer_fd &t) {
     uint64_t fired;
@@ -336,7 +213,6 @@ int main(int argc, char *argv[]) {
     sigaddset(&sigset, SIGINT);
     signal_fd sig(sigset);
 
-
     reactor r;
 
     timer_events te(r);
@@ -351,12 +227,10 @@ int main(int argc, char *argv[]) {
     ts.it_value.tv_sec = 1;
     te.add(ts, boost::bind(timer_void, 11));
 
-
     r.add(t.fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(t)));
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
     r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s), boost::ref(r)));
     r.run();
-    r.remove(s.fd);
 
     return 0;
 }
