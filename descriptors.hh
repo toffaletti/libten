@@ -173,6 +173,7 @@ struct epoll_fd : fd_base {
     }
 
     //! deregister the target file descriptor from the epoll instance
+    //! NOTE: closing a file descriptor will automatically remove it from all epoll instances
     int remove(int fd_) {
         int s = ::epoll_ctl(fd, EPOLL_CTL_DEL, fd_, NULL);
         if (s == 0) --maxevents;
@@ -182,7 +183,6 @@ struct epoll_fd : fd_base {
     //! param events an array of epoll_events structs to contain events available to the caller
     //! param maxevents in the size of events must be greater than zero, returns the number of fds with events triggered
     //! param timeout milliseconds to wait for events, -1 waits indefinitely
-    // TODO: maybe use std::vector<epoll_events> ?
     void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
         events.resize(maxevents); // this can throw bad_alloc and length_error
         for (;;) {

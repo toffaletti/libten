@@ -238,21 +238,40 @@ std::ostream &operator << (std::ostream &out, const std::vector<socket_fd> &v) {
 
 bool client_cb(uint32_t events, int fd, reactor &r) {
     std::cout << "client cb: " << fd << "\n";
-    r.remove(fd);
     std::vector<socket_fd>::iterator it = std::find(clients.begin(), clients.end(), fd);
-    if (it != clients.end()) {
+    if (it == clients.end()) {
+        // this should never happen
+        std::cout << "fd: " << fd << " not found in clients list\n";
+        return false;
+    }
+    char buf[4];
+    ssize_t rb;
+    do {
+        rb = it->read(buf, sizeof(buf));
+        std::cout << "read " << rb << " bytes from " << *it << "\n";
+    } while (rb == sizeof(buf));
+
+    if (rb == 0) {
         std::cout << "erasing client: " << *it << "\n";
         clients.erase(it);
         std::cout << "clients: " << clients << "\n";
-    } else {
-        std::cout << "fd: " << fd << " not found in clients list\n";
+
+        //timer_fd *leak = new timer_fd();
+        //itimerspec ts;
+        //itimerspec prev;
+        //memset(&ts, 0, sizeof(ts));
+        //ts.it_value.tv_sec = 1;
+        //ts.it_value.tv_nsec = 50;
+        //leak->settime(0, ts, prev);
+        //r.add(leak->fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(*leak)));
     }
+
     return true;
 }
 
 bool accept_cb(uint32_t events, socket_fd &s, reactor &r) {
     address client_addr;
-    socket_fd cs = s.accept(client_addr);
+    socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
     std::cout << "accepted " << client_addr << "\n";
     std::cout << "client socket: " << cs << "\n";
     r.add(cs.fd, EPOLLIN, boost::bind(client_cb, _1, cs.fd, boost::ref(r)));
