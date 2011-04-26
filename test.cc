@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <utility>
 #include <vector>
+#include <boost/shared_ptr.hpp>
+#include <boost/asio/basic_streambuf.hpp>
 
 class timer_events {
 public:
@@ -103,47 +105,67 @@ bool sigint_cb(uint32_t events, signal_fd &s, reactor &r) {
     return true;
 }
 
-std::vector<socket_fd> clients;
-std::ostream &operator << (std::ostream &out, const std::vector<socket_fd> &v) {
+class buffered_socket {
+public:
+    struct state {
+        socket_fd s;
+        //boost::asio::
+        std::vector<char> ibuf;
+        std::vector<char> obuf;
+
+        // take ownership of the socket_fd
+        state(socket_fd &s_) : s(std::move(s_)) {}
+    };
+    typedef boost::shared_ptr<state> shared_state;
+
+    explicit buffered_socket(socket_fd &s_, reactor &r) {
+        m = shared_state(new state(s_));
+        std::cout << "epollin: " << EPOLLIN << "\n";
+        std::cout << "epollout: " << EPOLLOUT << "\n";
+        r.add(m->s.fd, EPOLLIN, boost::bind(&buffered_socket::event_cb, *this, _1));
+    }
+
+    friend std::ostream &operator << (std::ostream &out, const buffered_socket &b) {
+        out << "buffered_socket(" << b.m->s.fd << ")";
+        return out;
+    }
+
+protected:
+    boost::shared_ptr<state> m;
+
+    bool event_cb(int events) {
+        std::cout << "events: " << events << "\n";
+        if (events & EPOLLIN) {
+            std::cout << *this << " epollin\n";
+
+            char buf[4];
+            ssize_t rb;
+            do {
+                rb = m->s.read(buf, sizeof(buf));
+                std::cout << "read " << rb << " bytes from " << *this << "\n";
+            } while (rb == sizeof(buf));
+
+            if (rb == 0) {
+                // TODO: erase from client list
+                return false;
+            }
+        }
+        if (events & EPOLLOUT) {
+            std::cout << *this << " epollout\n";
+            m->s.write("", 0);
+        }
+        return true;
+    }
+};
+
+std::vector<buffered_socket> clients;
+std::ostream &operator << (std::ostream &out, const std::vector<buffered_socket> &v) {
     out << "[";
-    for (std::vector<socket_fd>::const_iterator it = v.begin(); it!=v.end(); it++) {
+    for (std::vector<buffered_socket>::const_iterator it = v.begin(); it!=v.end(); it++) {
         out << *it << ",";
     }
     out << "]";
     return out;
-}
-
-bool client_cb(uint32_t events, int fd, reactor &r) {
-    std::cout << "client cb: " << fd << "\n";
-    std::vector<socket_fd>::iterator it = std::find(clients.begin(), clients.end(), fd);
-    if (it == clients.end()) {
-        // this should never happen
-        std::cout << "fd: " << fd << " not found in clients list\n";
-        return false;
-    }
-    char buf[4];
-    ssize_t rb;
-    do {
-        rb = it->read(buf, sizeof(buf));
-        std::cout << "read " << rb << " bytes from " << *it << "\n";
-    } while (rb == sizeof(buf));
-
-    if (rb == 0) {
-        std::cout << "erasing client: " << *it << "\n";
-        clients.erase(it);
-        std::cout << "clients: " << clients << "\n";
-
-        //timer_fd *leak = new timer_fd();
-        //itimerspec ts;
-        //itimerspec prev;
-        //memset(&ts, 0, sizeof(ts));
-        //ts.it_value.tv_sec = 1;
-        //ts.it_value.tv_nsec = 50;
-        //leak->settime(0, ts, prev);
-        //r.add(leak->fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(*leak)));
-    }
-
-    return true;
 }
 
 bool accept_cb(uint32_t events, socket_fd &s, reactor &r) {
@@ -151,10 +173,8 @@ bool accept_cb(uint32_t events, socket_fd &s, reactor &r) {
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
     std::cout << "accepted " << client_addr << "\n";
     std::cout << "client socket: " << cs << "\n";
-    r.add(cs.fd, EPOLLIN, boost::bind(client_cb, _1, cs.fd, boost::ref(r)));
-    clients.push_back(std::move(cs));
-    std::cout << "client socket: " << cs << "\n";
-    std::cout << clients.size() << " clients\n";
+    buffered_socket bs(cs, r);
+    clients.push_back(std::move(bs));
     return true;
 }
 
