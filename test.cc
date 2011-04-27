@@ -122,7 +122,7 @@ public:
         m = shared_state(new state(s_));
         std::cout << "epollin: " << EPOLLIN << "\n";
         std::cout << "epollout: " << EPOLLOUT << "\n";
-        r.add(m->s.fd, EPOLLIN, boost::bind(&buffered_socket::event_cb, *this, _1));
+        r.add(m->s.fd, EPOLLIN | EPOLLOUT, boost::bind(&buffered_socket::event_cb, *this, _1, boost::ref(r)));
     }
 
     friend std::ostream &operator << (std::ostream &out, const buffered_socket &b) {
@@ -133,7 +133,7 @@ public:
 protected:
     boost::shared_ptr<state> m;
 
-    bool event_cb(int events) {
+    bool event_cb(int events, reactor &r) {
         std::cout << "events: " << events << "\n";
         if (events & EPOLLIN) {
             std::cout << *this << " epollin\n";
@@ -151,8 +151,9 @@ protected:
             }
         }
         if (events & EPOLLOUT) {
+            // connected!
             std::cout << *this << " epollout\n";
-            m->s.write("", 0);
+            r.modify(m->s.fd, EPOLLIN);
         }
         return true;
     }

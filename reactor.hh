@@ -35,6 +35,17 @@ public:
         assert(e.add(fd, ev) == 0);
     }
 
+    void modify(int fd, int events) {
+        state_vector::iterator it = std::find(thunk.begin(), thunk.end(), state(fd, NULL));
+        if (it != thunk.end()) {
+            epoll_event ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.events = events;
+            ev.data.ptr = &(*it);
+            assert(e.modify(fd, ev) == 0);
+        }
+    }
+
     void remove(int fd) {
         state_vector::iterator it = std::find(thunk.begin(), thunk.end(), state(fd, NULL));
         if (it != thunk.end()) {
