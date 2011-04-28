@@ -234,6 +234,17 @@ struct socket_fd : fd_base {
         return ::send(fd, buf, len, flags);
     }
 
+    //! wrapper around recv()
+    ssize_t recvfrom(void *buf, size_t len, address &addr, int flags=0) __attribute__((warn_unused_result)) {
+        socklen_t addrlen = sizeof(address);
+        return ::recvfrom(fd, buf, len, flags, addr.sockaddr(), &addrlen);
+    }
+
+    //! wrapper around send()
+    ssize_t sendto(const void *buf, size_t len, address &addr, int flags=0) __attribute__((warn_unused_result)) {
+        return ::sendto(fd, buf, len, flags, addr.sockaddr(), addr.addrlen());
+    }
+
     //! \param addr returns the address of the peer connected to the socket fd
     //! \return true on success, false if socket is not connected
     bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {

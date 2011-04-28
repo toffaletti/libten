@@ -183,6 +183,16 @@ void timer_void(int n) {
     std::cout << "timer_void(" << n << ")\n";
 }
 
+bool dgram_cb(uint32_t events, socket_fd &s, reactor &r) {
+    char buf[512];
+    address addr;
+    ssize_t nr = s.recvfrom(buf, sizeof(buf), addr);
+    std::cout << "got " << nr << " bytes from " << addr << "\n";
+    // echo
+    ssize_t nw = s.sendto(buf, nr, addr);
+    std::cout << "echo " << nw << " bytes to " << addr << "\n";
+}
+
 int main(int argc, char *argv[]) {
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -248,9 +258,16 @@ int main(int argc, char *argv[]) {
     ts.it_value.tv_sec = 1;
     te.add(ts, boost::bind(timer_void, 11));
 
+    // udp socket
+    socket_fd us(AF_INET, SOCK_DGRAM);
+    us.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    address uaddr("0.0.0.0", 9800);
+    us.bind(uaddr);
+
     r.add(t.fd, EPOLLIN, boost::bind(timer_cb, _1, boost::ref(t)));
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
     r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s), boost::ref(r)));
+    r.add(us.fd, EPOLLIN, boost::bind(dgram_cb, _1, boost::ref(us), boost::ref(r)));
     r.run();
 
     return 0;

@@ -1,3 +1,4 @@
+#include "error.h"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -32,7 +33,7 @@ struct address {
     //! zeros out the address
     void clear() {
         memset(&addr, sizeof(addr), 0);
-        addr.sa.sa_family = 0; // get rid of valgrind warning about unitialized memory
+        addr.sa.sa_family = AF_INET; // get rid of valgrind warning about unitialized memory
     }
 
     //! \return sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6) depending on the value of family()
@@ -42,7 +43,7 @@ struct address {
 
     //! \return a struct sockaddr pointer to the backing storage
     struct sockaddr *sockaddr() {
-        return (struct sockaddr *)&addr;
+        return &addr.sa;
     }
 
     //! sets address family AF_INET or AF_INET6
@@ -67,12 +68,15 @@ struct address {
 
     //! wrapper around inet_ntop
     const char *ntop(char *dst, socklen_t size) {
+        const char *rvalue = NULL;
         if (family() == AF_INET) {
-            return inet_ntop(family(), &addr.sa_in.sin_addr, dst, size);
+            rvalue = inet_ntop(family(), &addr.sa_in.sin_addr, dst, size);
+            THROW_ON_NULL(rvalue);
         } else if (family() == AF_INET6) {
-            return inet_ntop(family(), &addr.sa_in6.sin6_addr, dst, size);
+            rvalue = inet_ntop(family(), &addr.sa_in6.sin6_addr, dst, size);
+            THROW_ON_NULL(rvalue);
         }
-        return NULL;
+        return rvalue;
     }
 
     //! tries inet_pton() first with AF_INET and then AF_INET6

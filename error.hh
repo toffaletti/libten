@@ -45,3 +45,8 @@ struct error : std::exception {
         throw errno_error(); \
     }
 
+#define THROW_ON_NULL(exp) \
+    if ((exp) == NULL) { \
+        throw errno_error(); \
+    }
+
