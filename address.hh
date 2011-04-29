@@ -1,3 +1,6 @@
+#ifndef ADDRESS_HH
+#define ADDRESS_HH
+
 #include "error.h"
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -24,7 +27,7 @@ struct address {
 
     //! \param s address in string format for inet_pton
     //! \param p port in host byte order
-    address(const char *s, uint16_t p) {
+    address(const char *s, uint16_t p=0) {
         clear();
         pton(s); // can throw
         port(p);
@@ -97,3 +100,6 @@ struct address {
         out << addr.ntop(buf, sizeof(buf)) << ":" << addr.port();
     }
 };
+
+#endif // ADDRESS_HH
+

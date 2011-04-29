@@ -1,3 +1,6 @@
+#ifndef DESCRIPTORS_HH
+#define DESCRIPTORS_HH
+
 #include "error.hh"
 #include "address.hh"
 
@@ -367,4 +370,6 @@ struct signal_fd : fd_base {
         THROW_ON_ERROR(r);
     }
 };
+
+#endif // DESCRIPTORS_HH
 

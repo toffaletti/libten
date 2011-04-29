@@ -6,6 +6,7 @@
 #include <vector>
 #include <boost/shared_ptr.hpp>
 #include <boost/asio/basic_streambuf.hpp>
+#include <boost/unordered_map.hpp>
 
 class timer_events {
 public:
@@ -183,14 +184,57 @@ void timer_void(int n) {
     std::cout << "timer_void(" << n << ")\n";
 }
 
+template <int bits> struct bitkey {
+    uint8_t v[bits/8];
+
+    bitkey() {
+        memset(&v, sizeof(v), 0);
+    }
+
+    bitkey(const bitkey<bits> &other) {
+        memcpy(&v, other.v, sizeof(v));
+    }
+
+    bitkey(const uint8_t v_[bits/8]) {
+        memcpy(&v, v_, sizeof(v));
+    }
+
+    bool operator == (const bitkey<bits> &other) const {
+        return memcmp(&v, other.v, sizeof(v)) == 0;
+    }
+
+    friend size_t hash_value(const bitkey<bits> &k) {
+        return *((size_t *)&k.v[(bits/8)-8]);
+    }
+};
+
+typedef bitkey<128> key128;
+
+boost::unordered_map< key128, uint16_t > credit_map;
+
+struct packet {
+    uint64_t xid;
+    uint8_t key[16];
+    uint64_t value;
+} __attribute__((packed));
+
 bool dgram_cb(uint32_t events, socket_fd &s, reactor &r) {
-    char buf[512];
+    packet pkt;
     address addr;
-    ssize_t nr = s.recvfrom(buf, sizeof(buf), addr);
+    ssize_t nr = s.recvfrom(&pkt, sizeof(pkt), addr);
     std::cout << "got " << nr << " bytes from " << addr << "\n";
+    if (pkt.value == 0) {
+        pkt.value = credit_map[pkt.key];
+    } else {
+        // TODO: use iterator to avoid double lookup
+        uint64_t value = credit_map[pkt.key];
+        pkt.value += value;
+        credit_map[pkt.key] = pkt.value;
+    }
     // echo
-    ssize_t nw = s.sendto(buf, nr, addr);
+    ssize_t nw = s.sendto(&pkt, nr, addr);
     std::cout << "echo " << nw << " bytes to " << addr << "\n";
+    return true;
 }
 
 int main(int argc, char *argv[]) {

@@ -1,3 +1,6 @@
+#ifndef ERROR_HH
+#define ERROR_HH
+
 #include <exception>
 #include <cstdarg>
 #include <cstdio>
@@ -49,4 +52,6 @@ struct error : std::exception {
     if ((exp) == NULL) { \
         throw errno_error(); \
     }
+
+#endif // ERROR_HH
 
