@@ -24,7 +24,7 @@ public:
     }
 
     void get_ip_credits(const std::string &ip, const result_callback &cb) {
-        check_credits(ip, cb);
+        inc_credits(ip, cb);
     }
 
     void send_packet(packet &pkt, const result_callback &cb) {
@@ -33,7 +33,7 @@ public:
         ssize_t nw = s.sendto(&pkt, sizeof(pkt), saddr);
     }
 
-    void check_credits(const std::string &ip, const result_callback &cb, uint64_t value=0) {
+    void inc_credits(const std::string &ip, const result_callback &cb, uint64_t value=0) {
         address addr(ip.c_str());
         packet pkt;
 
@@ -87,8 +87,8 @@ void result3(uint64_t v, credit_client &c, reactor &r) {
 int main(int argc, char *argv[]) {
     reactor r;
     credit_client cc(r, "0.0.0.0", 9800);
-    cc.check_credits("127.0.0.1", boost::bind(result1, _1, boost::ref(cc), boost::ref(r)), 1);
-    cc.check_credits("127.0.0.1", boost::bind(result2, _1, boost::ref(cc), boost::ref(r)), 1);
+    cc.inc_credits("127.0.0.1", boost::bind(result1, _1, boost::ref(cc), boost::ref(r)), 1);
+    cc.inc_credits("127.0.0.1", boost::bind(result2, _1, boost::ref(cc), boost::ref(r)), 1);
     cc.get_ip_credits("127.0.0.2", boost::bind(result3, _1, boost::ref(cc), boost::ref(r)));
 
     r.run();
