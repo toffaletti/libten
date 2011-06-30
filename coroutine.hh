@@ -8,16 +8,59 @@
 // setjmp/longjmp:
 // http://stackoverflow.com/questions/4352451/coroutine-demo-source-2
 
+// http://mfichman.blogspot.com/2011/05/lua-style-coroutines-in-c.html
+
+const size_t stack_size = 4096;
+
 class coroutine : boost::noncopyable {
 public:
-    typedef boost::function<void (coroutine &)> start_func_t;
+    typedef boost::function<void ()> func_t;
 
-    coroutine(start_func_t f_, size_t stack_size=4096)
-        : f(f_), stack(stack_size), done(false)
+    bool swap_(coroutine &other) {
+        if (other.done) { delete &other; return false; }
+        coroutine *saved = caller_;
+        caller_ = this;
+        callee_ = &other;
+        int r = swapcontext(&context, &other.context);
+        caller_ = saved;
+        callee_ = this;
+        return true;
+    }
+
+    static coroutine &self() { return *callee_; }
+
+    static bool swap(coroutine &other) {
+        return self().swap_(other);
+    }
+
+    static void yield() {
+        assert(callee_ != NULL);
+        assert(caller_ != NULL);
+        int r = swapcontext(&callee_->context, &caller_->context);
+    }
+
+    static coroutine &spawn(const func_t &f) {
+        if (callee_ == NULL) {
+            callee_ = new coroutine();
+        }
+        return *(new coroutine(f));
+    }
+
+private:
+    static coroutine *caller_;
+    static coroutine *callee_;
+
+    ucontext_t context;
+    func_t f;
+    bool done;
+    char stack[stack_size];
+
+    coroutine(const func_t &f_)
+        : f(f_), done(false)
     {
         getcontext(&context);
         context.uc_stack.ss_sp = &stack[0];
-        context.uc_stack.ss_size = stack.size();
+        context.uc_stack.ss_size = stack_size;
         context.uc_link = 0;
         makecontext(&context, (void (*)())coroutine::start, 1, this);
     }
@@ -26,29 +69,15 @@ public:
         getcontext(&context);
     }
 
-    bool swap(coroutine &other) {
-        if (other.done) return false;
-        int r = swapcontext(&other.caller, &other.context);
-        return true;
-    }
-
-    void yield() {
-        int r = swapcontext(&context, &caller);
-    }
-
-protected:
-    ucontext_t context;
-    start_func_t f;
-    std::vector<char> stack;
-    ucontext_t caller;
-    bool done;
-
-    static void start(coroutine *self) {
+    static void start(coroutine *c) {
         try {
-            self->f(*self);
+            c->f();
         } catch(...) {
         }
-        self->done = true;
-        self->yield();
+        c->done = true;
+        coroutine::yield();
     }
 };
+
+coroutine *coroutine::caller_ = NULL;
+coroutine *coroutine::callee_ = NULL;

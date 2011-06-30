@@ -1,3 +1,4 @@
+#include "thread.hh"
 #include "coroutine.hh"
 #include "timerspec.hh"
 #include "reactor.hh"
@@ -238,23 +239,23 @@ bool dgram_cb(uint32_t events, socket_fd &s, reactor &r) {
     return true;
 }
 
-void c2(coroutine &self) {
+void c2() {
     std::cout << "start c2\n";
-    self.yield();
+    coroutine::self().yield();
     std::cout << "end c2\n";
 }
 
-void c1(coroutine &self) {
+void c1() {
     std::cout << "c1 entered\n";
-    self.yield();
+    coroutine::self().yield();
     std::cout << "c1 after 1 yield\n";
-    self.yield();
+    coroutine::self().yield();
     std::cout << "c1 after 2 yield\n";
-    self.yield();
+    coroutine::self().yield();
     std::cout << "c1 done\n";
 
-    coroutine cr2(c2);
-    while (self.swap(cr2)) {}
+    coroutine &cr2 = coroutine::spawn(c2);
+    while (coroutine::self().swap(cr2)) {}
 }
 
 int main(int argc, char *argv[]) {
@@ -334,10 +335,10 @@ int main(int argc, char *argv[]) {
     r.add(us.fd, EPOLLIN, boost::bind(dgram_cb, _1, boost::ref(us), boost::ref(r)));
     //r.run();
 
-    coroutine main_coro;
-    coroutine cr1(c1);
-    coroutine cr2(c1);
-    while (main_coro.swap(cr1) && main_coro.swap(cr2)) {}
+    coroutine &cr1 = coroutine::spawn(c1);
+    coroutine &cr2 = coroutine::spawn(c1);
+    while (coroutine::swap(cr1)) {}
+    while (coroutine::swap(cr2)) {}
     std::cout << "main done\n";
 
     return 0;
