@@ -53,5 +53,11 @@ struct error : std::exception {
         throw errno_error(); \
     }
 
+#define THROW_ON_NONZERO(exp) \
+    { \
+        int _rv = (exp); \
+        if (_rv != 0) throw errno_error(_rv); \
+    }
+
 #endif // ERROR_HH
 

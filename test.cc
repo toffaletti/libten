@@ -239,25 +239,6 @@ bool dgram_cb(uint32_t events, socket_fd &s, reactor &r) {
     return true;
 }
 
-void c2() {
-    std::cout << "start c2\n";
-    coroutine::self().yield();
-    std::cout << "end c2\n";
-}
-
-void c1() {
-    std::cout << "c1 entered\n";
-    coroutine::self().yield();
-    std::cout << "c1 after 1 yield\n";
-    coroutine::self().yield();
-    std::cout << "c1 after 2 yield\n";
-    coroutine::self().yield();
-    std::cout << "c1 done\n";
-
-    coroutine &cr2 = coroutine::spawn(c2);
-    while (coroutine::self().swap(cr2)) {}
-}
-
 int main(int argc, char *argv[]) {
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -333,12 +314,13 @@ int main(int argc, char *argv[]) {
     r.add(sig.fd, EPOLLIN, boost::bind(sigint_cb, _1, boost::ref(sig), boost::ref(r)));
     r.add(s.fd, EPOLLIN, boost::bind(accept_cb, _1, boost::ref(s), boost::ref(r)));
     r.add(us.fd, EPOLLIN, boost::bind(dgram_cb, _1, boost::ref(us), boost::ref(r)));
-    //r.run();
+    r.run();
 
-    coroutine &cr1 = coroutine::spawn(c1);
-    coroutine &cr2 = coroutine::spawn(c1);
-    while (coroutine::swap(cr1)) {}
-    while (coroutine::swap(cr2)) {}
+    //std::cout << "sleepy time: " << thread::self().id() << "\n";
+    //thread &t1 = thread::spawn(sleep_thread);
+    //thread &t2 = thread::spawn(sleep_thread);
+
+    //sleep(5);
     std::cout << "main done\n";
 
     return 0;
