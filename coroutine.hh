@@ -19,6 +19,8 @@
 
 // http://mfichman.blogspot.com/2011/05/lua-style-coroutines-in-c.html
 
+class thread;
+
 class coroutine : boost::noncopyable {
 public:
     typedef boost::function<void ()> func_t;
@@ -29,6 +31,7 @@ public:
 
     static void yield();
     static void migrate();
+    static void migrate_to(thread *to);
 
 protected:
     friend class thread;

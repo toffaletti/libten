@@ -47,10 +47,13 @@ BOOST_AUTO_TEST_CASE(scheduler) {
 }
 
 static void mig_co(mutex::scoped_lock &l) {
-    pid_t start_pid = thread::self()->id();
+    thread *start_thread = thread::self();
+    pid_t start_pid = start_thread->id();
     coroutine::migrate();
     pid_t end_pid = thread::self()->id();
     BOOST_CHECK_NE(start_pid, end_pid);
+    coroutine::migrate_to(start_thread);
+    BOOST_CHECK_EQUAL(start_pid, thread::self()->id());
     l.unlock();
 }
 

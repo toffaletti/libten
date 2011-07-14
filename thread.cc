@@ -112,6 +112,14 @@ void coroutine::migrate() {
     // will resume in other thread
 }
 
+void coroutine::migrate_to(thread *to) {
+    coroutine *c = coroutine::self();
+    thread *from = thread::self();
+    from->delete_from_runqueue(c);
+    to->add_to_runqueue(c);
+    coroutine::yield();
+}
+
 void thread::add_to_empty_runqueue(coroutine *c) {
     mutex::scoped_lock l(tmutex);
     bool added = false;
