@@ -6,6 +6,9 @@ namespace detail {
 __thread thread *thread_ = NULL;
 }
 
+thread::list thread::threads;
+mutex thread::tmutex;
+
 std::ostream &operator << (std::ostream &o, coro_list &l) {
     o << "[";
     for (coro_list::iterator i=l.begin(); i!=l.end(); ++i) {
@@ -15,35 +18,46 @@ std::ostream &operator << (std::ostream &o, coro_list &l) {
     return o;
 }
 
-void thread::schedule() {
+size_t thread::count() {
+    mutex::scoped_lock l(thread::tmutex);
+    return thread::threads.size();
+}
+
+void thread::schedule(bool loop) {
     for (;;) {
-        mutex::scoped_lock l(mut);
-        while (!runq.empty()) {
-            std::cout << "runq: " << runq << "\n";
-            coro_list::iterator i = runq.begin();
-            while (i != runq.end()) {
+        {
+            mutex::scoped_lock l(mut);
+            while (!runq.empty()) {
+                std::cout << "runq: " << runq << "\n";
+                coroutine *c = runq.front();
+                runq.pop_front();
+                runq.push_back(c);
                 l.unlock();
-                std::cout << "swapping: " << *i << "\n";
-                bool exiting = coroutine::swap(&scheduler, *i);
+                std::cout << "swapping: " << c << "\n";
+                bool exiting = coroutine::swap(&scheduler, c);
                 l.lock();
                 if (exiting) {
-                    std::cout << "deleting: " << *i << "\n";
-                    delete *i;
-                    i = runq.erase(i);
-                } else {
-                    ++i;
+                    std::cout << "deleting: " << c << "\n";
+                    delete c;
+                    runq.remove(c);
                 }
             }
         }
-        //sleep();
-        return;
+        if (loop)
+            sleep();
+        else
+            break;
     }
 }
 
 void *thread::start(void *arg) {
     using namespace detail;
     thread_ = (thread *)arg;
-    detail::thread_->schedule();
+    detail::thread_->append_to_list();
+    try {
+        detail::thread_->schedule();
+    } catch (...) {}
+    detail::thread_->remove_from_list();
     // TODO: if detatched, free memory here
     if (detail::thread_->detached) {
         delete detail::thread_;
@@ -52,15 +66,15 @@ void *thread::start(void *arg) {
 }
 
 coroutine *coroutine::self() {
-    return thread::self().get_coro();
+    return thread::self()->get_coro();
 }
 
 bool coroutine::swap(coroutine *from, coroutine *to) {
     // TODO: wrong place for this code. put in scheduler
-    thread::self().set_coro(to);
+    thread::self()->set_coro(to);
     std::cout << "swapping from " <<
         &(from->context) << " to " << &(to->context) <<
-        " in thread: " << thread::self().id() << "\n";
+        " in thread: " << thread::self()->id() << "\n";
     int r = swapcontext(&from->context, &to->context);
     return to->exiting;
 }
@@ -76,15 +90,40 @@ void coroutine::switch_() {
 }
 
 void coroutine::yield() {
-    std::cout << "coro " << coroutine::self() << " yielding in thread: " << thread::self().id() << "\n";
+    std::cout << "coro " << coroutine::self() << " yielding in thread: " << thread::self()->id() << "\n";
     coroutine::self()->switch_();
 }
 
 void coroutine::start(coroutine *c) {
     try {
-            c->f();
+        c->f();
     } catch(...) {
     }
     c->exiting = true;
     c->switch_();
+}
+
+void coroutine::migrate() {
+    coroutine *c = coroutine::self();
+    thread *t = thread::self();
+    t->delete_from_runqueue(c);
+    thread::add_to_empty_runqueue(c);
+    coroutine::yield();
+    // will resume in other thread
+}
+
+void thread::add_to_empty_runqueue(coroutine *c) {
+    mutex::scoped_lock l(tmutex);
+    bool added = false;
+    for (thread::list::iterator i=threads.begin(); i!=threads.end(); ++i) {
+        std::cout << "testing thread: " << *i << "\n";
+        if ((*i)->add_to_runqueue_if_asleep(c)) {
+            std::cout << "added to thread: " << (*i) << "\n";
+            added = true;
+            break;
+        }
+    }
+    if (!added) {
+        new thread(c);
+    }
 }

@@ -28,6 +28,7 @@ public:
     static coroutine *spawn(const func_t &f);
 
     static void yield();
+    static void migrate();
 
 protected:
     friend class thread;

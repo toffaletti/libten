@@ -113,17 +113,19 @@ typedef std::list<coroutine *> coro_list;
 
 class thread : boost::noncopyable {
 public:
+    typedef std::list<thread *> list;
+
     pid_t id() { return syscall(SYS_gettid);  }
 
     static thread *spawn(const coroutine::func_t &f) {
         return new thread(f);
     }
 
-    static thread &self() {
+    static thread *self() {
         if (detail::thread_ == NULL) {
             detail::thread_ = new thread;
         }
-        return *detail::thread_;
+        return detail::thread_;
     }
 
     void detach() {
@@ -155,7 +157,9 @@ public:
         wakeup_nolock();
     }
 
-    void schedule();
+    void schedule(bool loop=true);
+
+    static size_t count();
 
 protected:
     friend class coroutine;
@@ -167,6 +171,21 @@ protected:
         wakeup_nolock();
     }
 
+    bool add_to_runqueue_if_asleep(coroutine *c) {
+        mutex::scoped_lock l(mut);
+        if (asleep) {
+            runq.push_back(c);
+            wakeup_nolock();
+            return true;
+        }
+        return false;
+    }
+
+    void delete_from_runqueue(coroutine *c) {
+        mutex::scoped_lock l(mut);
+        runq.remove(c);
+    }
+
     // lock must already be held
     void wakeup_nolock() {
         if (asleep) {
@@ -175,12 +194,16 @@ protected:
         }
     }
 
+    static void add_to_empty_runqueue(coroutine *c);
+
     void set_coro(coroutine *c) { coro = c; }
     coroutine *get_coro() {
         return coro;
     }
 
 private:
+    static mutex tmutex;
+    static list threads;
 
     pthread_t t;
 
@@ -194,6 +217,12 @@ private:
     coro_list runq;
 
     thread() : t(0), asleep(false), detached(false), coro(0) {
+        //append_to_list();
+    }
+
+    thread(coroutine *c) : t(0), asleep(false), detached(false), coro(0) {
+        add_to_runqueue(c);
+        pthread_create(&t, NULL, start, this);
     }
 
     thread(const coroutine::func_t &f) : t(0), asleep(false), detached(false), coro(0) {
@@ -206,6 +235,16 @@ private:
     }
 
     static void *start(void *arg);
+
+    void append_to_list() {
+        mutex::scoped_lock l(thread::tmutex);
+        threads.push_back(this);
+    }
+
+    void remove_from_list() {
+        mutex::scoped_lock l(thread::tmutex);
+        threads.push_back(this);
+    }
 };
 
 #endif // THREAD_HH
