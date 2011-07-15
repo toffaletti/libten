@@ -62,7 +62,7 @@ private:
     char *stack;
     size_t stack_size;
 
-    coroutine(const func_t &f_, size_t stack_size_=4096)
+    coroutine(const func_t &f_, size_t stack_size_=32*1024)
         : f(f_), exiting(false), stack_size(stack_size_)
     {
         // add on size for a guard page

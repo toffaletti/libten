@@ -23,6 +23,8 @@ size_t thread::count() {
     return thread::threads.size();
 }
 
+typedef std::vector<epoll_event> event_vector;
+
 void thread::schedule(bool loop) {
     for (;;) {
         {
@@ -42,6 +44,23 @@ void thread::schedule(bool loop) {
                     runq.remove(c);
                 }
             }
+        }
+
+        event_vector events;
+        try {
+            efd.wait(events);
+            for (event_vector::const_iterator i=events.begin();
+                i!=events.end();++i)
+            {
+                coroutine *c = (coroutine *)i->data.ptr;
+                add_to_runqueue(c);
+            }
+            // assume all EPOLLONESHOT
+            std::cout << "maxevents: " << efd.maxevents << "\n";
+            efd.maxevents -= events.size();
+            std::cout << "maxevents: " << efd.maxevents << "\n";
+        } catch (const std::exception &e) {
+            std::cout << "epoll wait error: " << e.what() << "\n";
         }
         if (loop)
             sleep();
@@ -134,4 +153,18 @@ void thread::add_to_empty_runqueue(coroutine *c) {
     if (!added) {
         new thread(c);
     }
+}
+
+void thread::poll(int fd, int events) {
+    coroutine *c = coroutine::self();
+    thread *t = thread::self();
+    t->delete_from_runqueue(c);
+
+    epoll_event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.events = events;
+    ev.data.ptr = c;
+    assert(t->efd.add(fd, ev) == 0);
+    // will be woken back up by epoll loop in schedule()
+    coroutine::yield();
 }

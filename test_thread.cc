@@ -3,6 +3,7 @@
 #include <boost/bind.hpp>
 
 #include "thread.hh"
+#include "descriptors.hh"
 
 #include <iostream>
 
@@ -65,4 +66,26 @@ BOOST_AUTO_TEST_CASE(thread_migrate) {
     thread *t = thread::spawn(boost::bind(mig_co, boost::ref(l)));
     l.lock();
     BOOST_CHECK(thread::count() > 1);
+}
+
+static void listen_co() {
+    socket_fd s(AF_INET, SOCK_STREAM);
+    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    address addr("0.0.0.0", 9900);
+    std::cout << "binding to " << addr << "\n";
+    s.bind(addr);
+    std::cout << "binded to " << addr << "\n";
+    s.listen();
+    thread::poll(s.fd, EPOLLIN|EPOLLONESHOT);
+
+    address client_addr;
+    socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
+    std::cout << "accepted " << client_addr << "\n";
+    std::cout << "client socket: " << cs << "\n";
+}
+
+BOOST_AUTO_TEST_CASE(socket_io) {
+    coroutine::spawn(listen_co);
+    thread *t = thread::self();
+    t->schedule(false);
 }

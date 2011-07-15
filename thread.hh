@@ -8,6 +8,7 @@
 #include <sys/syscall.h>
 #include "error.hh"
 #include "coroutine.hh"
+#include "descriptors.hh"
 
 #include <iostream>
 
@@ -161,6 +162,8 @@ public:
 
     static size_t count();
 
+    static void poll(int fd, int events);
+
 protected:
     friend class coroutine;
 
@@ -215,6 +218,7 @@ private:
     coroutine scheduler;
     coroutine *coro;
     coro_list runq;
+    epoll_fd efd;
 
     thread() : t(0), asleep(false), detached(false), coro(0) {
         //append_to_list();
