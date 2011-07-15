@@ -45,7 +45,7 @@ void thread::schedule(bool loop) {
         }
 
         event_vector events;
-        if (efd.maxevents) {
+        while (efd.maxevents) {
             try {
                 efd.wait(events);
                 for (event_vector::const_iterator i=events.begin();
@@ -62,6 +62,13 @@ void thread::schedule(bool loop) {
                 //std::cout << "epoll wait error: " << e.what() << "\n";
             }
         }
+
+        {
+            // epoll loop might have filled runqueue again
+            mutex::scoped_lock l(mut);
+            if (!runq.empty()) continue;
+        }
+
         if (loop)
             sleep();
         else
@@ -123,12 +130,12 @@ void coroutine::swap(coroutine *from, coroutine *to) {
 
 coroutine *coroutine::spawn(const func_t &f) {
     coroutine *c = new coroutine(f);
-    detail::thread_->add_to_runqueue(c);
+    thread::self()->add_to_runqueue(c);
     return c;
 }
 
 void coroutine::switch_() {
-    coroutine::swap(this, &detail::thread_->scheduler);
+    coroutine::swap(this, &thread::self()->scheduler);
 }
 
 void coroutine::yield() {
@@ -140,6 +147,7 @@ void coroutine::start(coroutine *c) {
     try {
         c->f();
     } catch(...) {
+        abort();
     }
     c->exiting = true;
     c->switch_();

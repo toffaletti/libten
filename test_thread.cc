@@ -70,20 +70,47 @@ BOOST_AUTO_TEST_CASE(thread_migrate) {
     BOOST_CHECK(thread::count() > 1);
 }
 
+static void connect_to(address addr) {
+    socket_fd s(AF_INET, SOCK_STREAM);
+    s.setnonblock();
+    if (s.connect(addr) == 0) {
+        // connected!
+    } else if (errno == EINPROGRESS) {
+        // poll for writeable
+        thread::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
+    } else {
+        throw errno_error();
+    }
+}
+
 static void listen_co() {
     socket_fd s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("0.0.0.0", 9900);
+    address addr("127.0.0.1", 9900);
     //std::cout << "binding to " << addr << "\n";
     s.bind(addr);
     //std::cout << "binded to " << addr << "\n";
     s.listen();
+
+    //coroutine::spawn(boost::bind(connect_to, addr));
+    thread::spawn(boost::bind(connect_to, addr));
+
+    //std::cout << "waiting for connection\n";
     thread::poll(s.fd, EPOLLIN|EPOLLONESHOT);
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
     //std::cout << "accepted " << client_addr << "\n";
     //std::cout << "client socket: " << cs << "\n";
+    thread::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
+    char buf[2];
+    ssize_t nr = cs.recv(buf, 2);
+    //std::cout << "nr: " << nr << "\n";
+
+    // socket should be disconnected because
+    // when connect_to coroutine finished
+    // close was called on its socket
+    BOOST_CHECK_EQUAL(nr, 0);
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {

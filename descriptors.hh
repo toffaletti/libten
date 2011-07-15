@@ -41,6 +41,10 @@ struct fd_base : boost::noncopyable {
 
     bool operator == (int fd_) const { return fd == fd_; }
 
+    int fcntl(int cmd) { return ::fcntl(fd, cmd); }
+    int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
+    int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
+
     //! true if fd != -1
     bool valid() { return fd != -1; }
 
@@ -210,6 +214,11 @@ struct socket_fd : fd_base {
     //! create a socket_fd from an already existing file descriptor
     //! used for accept() and socketpair()
     socket_fd(int fd_) : fd_base(fd_) {}
+
+    //! make socket nonblocking by setting O_NONBLOCK flag
+    void setnonblock() {
+        THROW_ON_ERROR(fd_base::fcntl(F_SETFL, O_NONBLOCK));
+    }
 
     //! bind socket to address
     void bind(address &addr) throw (errno_error) {
