@@ -1,6 +1,7 @@
 #ifndef THREAD_HH
 #define THREAD_HH
 
+#include <deque>
 #include <list>
 #include <boost/function.hpp>
 #include <boost/utility.hpp>
@@ -110,7 +111,7 @@ private:
     pthread_cond_t c;
 };
 
-typedef std::list<coroutine *> coro_list;
+typedef std::deque<coroutine *> coro_deque;
 
 class thread : boost::noncopyable {
 public:
@@ -186,7 +187,8 @@ protected:
 
     void delete_from_runqueue(coroutine *c) {
         mutex::scoped_lock l(mut);
-        runq.remove(c);
+        assert(c == runq.back());
+        runq.pop_back();
     }
 
     // lock must already be held
@@ -217,7 +219,7 @@ private:
     bool detached;
     coroutine scheduler;
     coroutine *coro;
-    coro_list runq;
+    coro_deque runq;
     epoll_fd efd;
 
     thread() : t(0), asleep(false), detached(false), coro(0) {
@@ -252,3 +254,4 @@ private:
 };
 
 #endif // THREAD_HH
+

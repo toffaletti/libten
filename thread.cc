@@ -9,9 +9,9 @@ __thread thread *thread_ = NULL;
 thread::list thread::threads;
 mutex thread::tmutex;
 
-std::ostream &operator << (std::ostream &o, coro_list &l) {
+std::ostream &operator << (std::ostream &o, coro_deque &l) {
     o << "[";
-    for (coro_list::iterator i=l.begin(); i!=l.end(); ++i) {
+    for (coro_deque::iterator i=l.begin(); i!=l.end(); ++i) {
         o << *i << ",";
     }
     o << "]";
@@ -199,3 +199,4 @@ void thread::poll(int fd, int events) {
     // will be woken back up by epoll loop in schedule()
     coroutine::yield();
 }
+
