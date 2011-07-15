@@ -30,37 +30,37 @@ void thread::schedule(bool loop) {
         {
             mutex::scoped_lock l(mut);
             while (!runq.empty()) {
-                std::cout << "runq: " << runq << "\n";
+                //std::cout << "runq: " << runq << "\n";
                 coroutine *c = runq.front();
                 runq.pop_front();
-                runq.push_back(c);
-                l.unlock();
-                std::cout << "swapping: " << c << "\n";
-                bool exiting = coroutine::swap(&scheduler, c);
-                l.lock();
-                if (exiting) {
-                    std::cout << "deleting: " << c << "\n";
+                if (c->exiting) {
                     delete c;
-                    runq.remove(c);
+                } else {
+                    runq.push_back(c);
+                    l.unlock();
+                    coroutine::swap(&scheduler, c);
+                    l.lock();
                 }
             }
         }
 
         event_vector events;
-        try {
-            efd.wait(events);
-            for (event_vector::const_iterator i=events.begin();
-                i!=events.end();++i)
-            {
-                coroutine *c = (coroutine *)i->data.ptr;
-                add_to_runqueue(c);
+        if (efd.maxevents) {
+            try {
+                efd.wait(events);
+                for (event_vector::const_iterator i=events.begin();
+                    i!=events.end();++i)
+                {
+                    coroutine *c = (coroutine *)i->data.ptr;
+                    add_to_runqueue(c);
+                }
+                // assume all EPOLLONESHOT
+                //std::cout << "maxevents: " << efd.maxevents << "\n";
+                efd.maxevents -= events.size();
+                //std::cout << "maxevents: " << efd.maxevents << "\n";
+            } catch (const std::exception &e) {
+                //std::cout << "epoll wait error: " << e.what() << "\n";
             }
-            // assume all EPOLLONESHOT
-            std::cout << "maxevents: " << efd.maxevents << "\n";
-            efd.maxevents -= events.size();
-            std::cout << "maxevents: " << efd.maxevents << "\n";
-        } catch (const std::exception &e) {
-            std::cout << "epoll wait error: " << e.what() << "\n";
         }
         if (loop)
             sleep();
@@ -84,18 +84,41 @@ void *thread::start(void *arg) {
     return NULL;
 }
 
+coroutine::coroutine(const func_t &f_, size_t stack_size_)
+    : f(f_), exiting(false), stack_size(stack_size_)
+{
+    // add on size for a guard page
+    size_t real_size = stack_size + getpagesize();
+    int r = posix_memalign((void **)&stack, getpagesize(), real_size);
+    THROW_ON_NONZERO(r);
+    // protect the guard page
+    THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_NONE));
+    getcontext(&context);
+#ifndef NVALGRIND
+    valgrind_stack_id =
+        VALGRIND_STACK_REGISTER(stack, stack+stack_size);
+#endif
+    context.uc_stack.ss_sp = stack;
+    context.uc_stack.ss_size = stack_size;
+    context.uc_link = 0;
+    // this depends on glibc's work around that allows
+    // pointers to be passed to makecontext
+    // it also depends on g++ allowing static C++
+    // functions to be used for C linkage
+    makecontext(&context, (void (*)())coroutine::start, 1, this);
+}
+
 coroutine *coroutine::self() {
     return thread::self()->get_coro();
 }
 
-bool coroutine::swap(coroutine *from, coroutine *to) {
+void coroutine::swap(coroutine *from, coroutine *to) {
     // TODO: wrong place for this code. put in scheduler
     thread::self()->set_coro(to);
-    std::cout << "swapping from " <<
-        &(from->context) << " to " << &(to->context) <<
-        " in thread: " << thread::self()->id() << "\n";
-    int r = swapcontext(&from->context, &to->context);
-    return to->exiting;
+    //std::cout << "swapping from " <<
+    //    &(from->context) << " to " << &(to->context) <<
+    //    " in thread: " << thread::self()->id() << "\n";
+    swapcontext(&from->context, &to->context);
 }
 
 coroutine *coroutine::spawn(const func_t &f) {
@@ -109,7 +132,7 @@ void coroutine::switch_() {
 }
 
 void coroutine::yield() {
-    std::cout << "coro " << coroutine::self() << " yielding in thread: " << thread::self()->id() << "\n";
+    //std::cout << "coro " << coroutine::self() << " yielding in thread: " << thread::self()->id() << "\n";
     coroutine::self()->switch_();
 }
 
@@ -143,9 +166,9 @@ void thread::add_to_empty_runqueue(coroutine *c) {
     mutex::scoped_lock l(tmutex);
     bool added = false;
     for (thread::list::iterator i=threads.begin(); i!=threads.end(); ++i) {
-        std::cout << "testing thread: " << *i << "\n";
+        //std::cout << "testing thread: " << *i << "\n";
         if ((*i)->add_to_runqueue_if_asleep(c)) {
-            std::cout << "added to thread: " << (*i) << "\n";
+            //std::cout << "added to thread: " << (*i) << "\n";
             added = true;
             break;
         }

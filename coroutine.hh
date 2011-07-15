@@ -26,7 +26,7 @@ public:
     typedef boost::function<void ()> func_t;
 
     static coroutine *self();
-    static bool swap(coroutine *from, coroutine *to);
+    static void swap(coroutine *from, coroutine *to);
     static coroutine *spawn(const func_t &f);
 
     static void yield();
@@ -36,7 +36,7 @@ public:
 protected:
     friend class thread;
     coroutine() : exiting(false), stack(0), stack_size(0) {
-        std::cout << "main coro context: " << &context << "\n";
+        //std::cout << "main coro context: " << &context << "\n";
         getcontext(&context);
     }
 
@@ -62,27 +62,9 @@ private:
     char *stack;
     size_t stack_size;
 
-    coroutine(const func_t &f_, size_t stack_size_=32*1024)
-        : f(f_), exiting(false), stack_size(stack_size_)
-    {
-        // add on size for a guard page
-        size_t real_size = stack_size + getpagesize();
-        int r = posix_memalign((void **)&stack, getpagesize(), real_size);
-        THROW_ON_NONZERO(r);
-        // protect the guard page
-        THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_NONE));
-        getcontext(&context);
-#ifndef NVALGRIND
-        valgrind_stack_id =
-            VALGRIND_STACK_REGISTER(stack, stack+stack_size);
-#endif
-        context.uc_stack.ss_sp = stack;
-        context.uc_stack.ss_size = stack_size;
-        context.uc_link = 0;
-        makecontext(&context, (void (*)())coroutine::start, 1, this);
-    }
+    coroutine(const func_t &f_, size_t stack_size_=4096*2);
 
-    static void start(coroutine *c);
+    static void start(coroutine *);
 };
 
 #endif // COROUTINE_HH

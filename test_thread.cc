@@ -4,31 +4,35 @@
 
 #include "thread.hh"
 #include "descriptors.hh"
+#include "semaphore.hh"
 
 #include <iostream>
 
-static void bar(pid_t p) {
-    BOOST_CHECK_NE(thread::self()->id(), p);
-    BOOST_CHECK(coroutine::self());
-    coroutine::yield();
-}
-
-static void foo(pid_t p, mutex::scoped_lock &l) {
-    BOOST_CHECK_NE(thread::self()->id(), p);
-    coroutine::spawn(boost::bind(bar, p));
-    l.unlock();
-}
-
-BOOST_AUTO_TEST_CASE(constructor_test) {
+BOOST_AUTO_TEST_CASE(mutex_test) {
     mutex m;
     mutex::scoped_lock l(m);
     BOOST_CHECK(l.trylock() == false);
+}
 
+static void bar(pid_t p) {
+    // cant use BOOST_CHECK in multi-threaded tests :(
+    assert(thread::self()->id() != p);
+    coroutine::yield();
+}
+
+static void foo(pid_t p, semaphore &s) {
+    assert(thread::self()->id() != p);
+    coroutine::spawn(boost::bind(bar, p));
+    s.post();
+}
+
+BOOST_AUTO_TEST_CASE(constructor_test) {
+    semaphore s;
     pid_t pid = thread::self()->id();
-    std::cout << "main pid: " << pid << "\n";
+    //std::cout << "main pid: " << pid << "\n";
     BOOST_CHECK(pid);
-    thread *t = thread::spawn(boost::bind(foo, pid, boost::ref(l)));
-    l.lock();
+    thread *t = thread::spawn(boost::bind(foo, pid, boost::ref(s)));
+    s.wait();
 }
 
 static void co1(int &count) {
@@ -47,24 +51,22 @@ BOOST_AUTO_TEST_CASE(scheduler) {
     BOOST_CHECK_EQUAL(20, count);
 }
 
-static void mig_co(mutex::scoped_lock &l) {
+static void mig_co(semaphore &s) {
     thread *start_thread = thread::self();
     pid_t start_pid = start_thread->id();
     coroutine::migrate();
     pid_t end_pid = thread::self()->id();
-    BOOST_CHECK_NE(start_pid, end_pid);
+    //BOOST_CHECK_NE(start_pid, end_pid);
     coroutine::migrate_to(start_thread);
-    BOOST_CHECK_EQUAL(start_pid, thread::self()->id());
-    l.unlock();
+    //BOOST_CHECK_EQUAL(start_pid, thread::self()->id());
+    s.post();
 }
 
 BOOST_AUTO_TEST_CASE(thread_migrate) {
-    mutex m;
-    mutex::scoped_lock l(m);
-
+    semaphore s;
     BOOST_CHECK(thread::count() >= 0);
-    thread *t = thread::spawn(boost::bind(mig_co, boost::ref(l)));
-    l.lock();
+    thread *t = thread::spawn(boost::bind(mig_co, boost::ref(s)));
+    s.wait();
     BOOST_CHECK(thread::count() > 1);
 }
 
@@ -72,16 +74,16 @@ static void listen_co() {
     socket_fd s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("0.0.0.0", 9900);
-    std::cout << "binding to " << addr << "\n";
+    //std::cout << "binding to " << addr << "\n";
     s.bind(addr);
-    std::cout << "binded to " << addr << "\n";
+    //std::cout << "binded to " << addr << "\n";
     s.listen();
     thread::poll(s.fd, EPOLLIN|EPOLLONESHOT);
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
-    std::cout << "accepted " << client_addr << "\n";
-    std::cout << "client socket: " << cs << "\n";
+    //std::cout << "accepted " << client_addr << "\n";
+    //std::cout << "client socket: " << cs << "\n";
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {
