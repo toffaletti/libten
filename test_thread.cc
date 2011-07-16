@@ -2,7 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 
-#include "thread.hh"
+#include "scheduler.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
 
@@ -14,13 +14,13 @@ BOOST_AUTO_TEST_CASE(mutex_test) {
     BOOST_CHECK(l.trylock() == false);
 }
 
-static void bar(pid_t p) {
+static void bar(p::thread p) {
     // cant use BOOST_CHECK in multi-threaded tests :(
     assert(thread::self()->id() != p);
     coroutine::yield();
 }
 
-static void foo(pid_t p, semaphore &s) {
+static void foo(p::thread p, semaphore &s) {
     assert(thread::self()->id() != p);
     coroutine::spawn(boost::bind(bar, p));
     s.post();
@@ -28,9 +28,8 @@ static void foo(pid_t p, semaphore &s) {
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
     semaphore s;
-    pid_t pid = thread::self()->id();
-    //std::cout << "main pid: " << pid << "\n";
-    BOOST_CHECK(pid);
+    p::thread pid = thread::self()->id();
+    BOOST_CHECK(pid.id);
     thread *t = thread::spawn(boost::bind(foo, pid, boost::ref(s)));
     s.wait();
 }
@@ -53,9 +52,9 @@ BOOST_AUTO_TEST_CASE(scheduler) {
 
 static void mig_co(semaphore &s) {
     thread *start_thread = thread::self();
-    pid_t start_pid = start_thread->id();
+    p::thread start_pid = start_thread->id();
     coroutine::migrate();
-    pid_t end_pid = thread::self()->id();
+    p::thread end_pid = thread::self()->id();
     //BOOST_CHECK_NE(start_pid, end_pid);
     coroutine::migrate_to(start_thread);
     //BOOST_CHECK_EQUAL(start_pid, thread::self()->id());

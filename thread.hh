@@ -1,24 +1,11 @@
 #ifndef THREAD_HH
 #define THREAD_HH
 
-#include <deque>
-#include <list>
-#include <boost/function.hpp>
-#include <boost/utility.hpp>
+#include <ostream>
+#include <signal.h>
 #include <pthread.h>
-#include <sys/syscall.h>
+#include <boost/utility.hpp>
 #include "error.hh"
-#include "coroutine.hh"
-#include "descriptors.hh"
-
-#include <iostream>
-
-class coroutine;
-class thread;
-
-namespace detail {
-extern __thread thread *thread_;
-}
 
 class mutex : boost::noncopyable {
 public:
@@ -111,147 +98,58 @@ private:
     pthread_cond_t c;
 };
 
-typedef std::deque<coroutine *> coro_deque;
 
-class thread : boost::noncopyable {
-public:
-    typedef std::list<thread *> list;
+namespace p {
 
-    pid_t id() { return syscall(SYS_gettid);  }
+// thin C++ wrapper around pthreads
+struct thread {
+    typedef void *(*proc)(void*);
 
-    static thread *spawn(const coroutine::func_t &f) {
-        return new thread(f);
-    }
+    pthread_t id;
 
-    static thread *self() {
-        if (detail::thread_ == NULL) {
-            detail::thread_ = new thread;
-        }
-        return detail::thread_;
-    }
+    explicit thread(pthread_t id_=0) : id(id_) {}
 
     void detach() {
-        detached = true;
-        int r = pthread_detach(t);
-        THROW_ON_NONZERO(r);
+        THROW_ON_NONZERO(pthread_detach(id));
     }
 
     void *join() {
         void *rvalue = NULL;
-        int r = pthread_join(t, &rvalue);
-        if (r == 0) {
-            delete this;
-        }
-        THROW_ON_NONZERO(r);
+        THROW_ON_NONZERO(pthread_join(id, &rvalue));
         return rvalue;
     }
 
-    void sleep() {
-        mutex::scoped_lock l(mut);
-        asleep = true;
-        while (asleep) {
-            cond.wait(l);
-        }
+    void kill(int sig) {
+        THROW_ON_NONZERO(pthread_kill(id, sig));
     }
 
-    void wakeup() {
-        mutex::scoped_lock l(mut);
-        wakeup_nolock();
+    void cancel() {
+        THROW_ON_NONZERO(pthread_cancel(id));
     }
 
-    void schedule(bool loop=true);
-
-    static size_t count();
-
-    static void poll(int fd, int events);
-
-protected:
-    friend class coroutine;
-
-    // called by coroutine::spawn
-    void add_to_runqueue(coroutine *c) {
-        mutex::scoped_lock l(mut);
-        runq.push_back(c);
-        wakeup_nolock();
+    bool operator == (const thread &other) {
+        return pthread_equal(id, other.id);
     }
 
-    bool add_to_runqueue_if_asleep(coroutine *c) {
-        mutex::scoped_lock l(mut);
-        if (asleep) {
-            runq.push_back(c);
-            wakeup_nolock();
-            return true;
-        }
-        return false;
+    bool operator != (const thread &other) {
+        return !pthread_equal(id, other.id);
     }
 
-    void delete_from_runqueue(coroutine *c) {
-        mutex::scoped_lock l(mut);
-        assert(c == runq.back());
-        runq.pop_back();
+    friend std::ostream &operator <<(std::ostream &o, const thread &t) {
+        o << t.id;
+        return o;
     }
 
-    // lock must already be held
-    void wakeup_nolock() {
-        if (asleep) {
-            asleep = false;
-            cond.signal();
-        }
+    static thread self() {
+        return thread(pthread_self());
     }
 
-    static void add_to_empty_runqueue(coroutine *c);
-
-    void set_coro(coroutine *c) { coro = c; }
-    coroutine *get_coro() {
-        return coro;
-    }
-
-private:
-    static mutex tmutex;
-    static list threads;
-
-    pthread_t t;
-
-    mutex mut;
-    condition cond;
-    bool asleep;
-
-    bool detached;
-    coroutine scheduler;
-    coroutine *coro;
-    coro_deque runq;
-    epoll_fd efd;
-
-    thread() : t(0), asleep(false), detached(false), coro(0) {
-        //append_to_list();
-    }
-
-    thread(coroutine *c) : t(0), asleep(false), detached(false), coro(0) {
-        add_to_runqueue(c);
-        pthread_create(&t, NULL, start, this);
-    }
-
-    thread(const coroutine::func_t &f) : t(0), asleep(false), detached(false), coro(0) {
-        coroutine *c = new coroutine(f);
-        add_to_runqueue(c);
-        pthread_create(&t, NULL, start, this);
-    }
-
-    ~thread() {
-    }
-
-    static void *start(void *arg);
-
-    void append_to_list() {
-        mutex::scoped_lock l(thread::tmutex);
-        threads.push_back(this);
-    }
-
-    void remove_from_list() {
-        mutex::scoped_lock l(thread::tmutex);
-        threads.push_back(this);
+    static void create(thread &t, proc start_routine, void *arg=NULL, const pthread_attr_t *attr=NULL) {
+        THROW_ON_NONZERO(pthread_create(&t.id, attr, start_routine, arg));
     }
 };
+
+} // end namespace p
 
 #endif // THREAD_HH
 

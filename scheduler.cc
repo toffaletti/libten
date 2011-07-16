@@ -1,4 +1,4 @@
-#include "thread.hh"
+#include "scheduler.hh"
 
 #include <iostream>
 
@@ -85,9 +85,9 @@ void *thread::start(void *arg) {
     } catch (...) {}
     detail::thread_->remove_from_list();
     // TODO: if detatched, free memory here
-    if (detail::thread_->detached) {
-        delete detail::thread_;
-    }
+    //if (detail::thread_->detached) {
+    //    delete detail::thread_;
+    //}
     return NULL;
 }
 
