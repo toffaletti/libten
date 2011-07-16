@@ -107,10 +107,9 @@ void task::swap(task *from, task *to) {
     from->co.swap(&to->co);
 }
 
-task *task::spawn(const proc &f) {
-    task *c = new task(f);
-    runner::self()->add_to_runqueue(c);
-    return c;
+void task::spawn(const proc &f) {
+    task *t = new task(f);
+    runner::self()->add_to_runqueue(t);
 }
 
 void task::yield() {
@@ -160,16 +159,16 @@ void runner::add_to_empty_runqueue(task *c) {
     }
 }
 
-void runner::poll(int fd, int events) {
-    task *c = task::self();
-    runner *t = runner::self();
-    t->delete_from_runqueue(c);
+void task::poll(int fd, int events) {
+    task *t = task::self();
+    runner *r = runner::self();
+    r->delete_from_runqueue(t);
 
     epoll_event ev;
     memset(&ev, 0, sizeof(ev));
     ev.events = events;
-    ev.data.ptr = c;
-    assert(t->efd.add(fd, ev) == 0);
+    ev.data.ptr = t;
+    assert(r->efd.add(fd, ev) == 0);
     // will be woken back up by epoll loop in schedule()
     task::yield();
 }

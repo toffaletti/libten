@@ -18,26 +18,26 @@ class task : boost::noncopyable {
 public:
     typedef boost::function<void ()> proc;
 
-    static task *self();
-    static task *spawn(const proc &f);
+    static void spawn(const proc &f);
 
     static void yield();
     static void migrate();
     static void migrate_to(runner *to);
+    static void poll(int fd, int events);
 
 protected:
     friend class runner;
     task() : exiting(false) {}
 
     static void swap(task *from, task *to);
-    void switch_();
+    static task *self();
 
 private:
     coroutine co;
     proc f;
     bool exiting;
 
-    task(const proc &f_, size_t stack_size=4096);
+    task(const proc &f_, size_t stack_size=4096*1);
 
     static void start(task *);
 };
@@ -48,7 +48,7 @@ class runner : boost::noncopyable {
 public:
     typedef std::list<runner *> list;
 
-    thread id() { return thread(t); }
+    thread get_thread() { return thread(tt); }
 
     static runner *spawn(const task::proc &f) {
         return new runner(f);
@@ -61,14 +61,6 @@ public:
         return detail::runner_;
     }
 
-    void sleep() {
-        mutex::scoped_lock l(mut);
-        asleep = true;
-        while (asleep) {
-            cond.wait(l);
-        }
-    }
-
     void wakeup() {
         mutex::scoped_lock l(mut);
         wakeup_nolock();
@@ -78,12 +70,9 @@ public:
 
     static size_t count();
 
-    static void poll(int fd, int events);
-
 protected:
     friend class task;
 
-    // called by task::spawn
     void add_to_runqueue(task *c) {
         mutex::scoped_lock l(mut);
         runq.push_back(c);
@@ -125,7 +114,7 @@ private:
     static mutex tmutex;
     static list runners;
 
-    thread t;
+    thread tt;
 
     mutex mut;
     condition cond;
@@ -137,22 +126,27 @@ private:
     epoll_fd efd;
 
     runner() : asleep(false), current_task(0) {
-        t=thread::self();
-        //append_to_list();
+        tt=thread::self();
     }
 
     runner(task *c) : asleep(false), current_task(0) {
         add_to_runqueue(c);
-        thread::create(t, start, this);
+        thread::create(tt, start, this);
     }
 
     runner(const task::proc &f) : asleep(false), current_task(0) {
         task *c = new task(f);
         add_to_runqueue(c);
-        thread::create(t, start, this);
+        thread::create(tt, start, this);
     }
 
-    static void *start(void *arg);
+    void sleep() {
+        mutex::scoped_lock l(mut);
+        asleep = true;
+        while (asleep) {
+            cond.wait(l);
+        }
+    }
 
     void append_to_list() {
         mutex::scoped_lock l(tmutex);
@@ -163,6 +157,8 @@ private:
         mutex::scoped_lock l(tmutex);
         runners.push_back(this);
     }
+
+    static void *start(void *arg);
 };
 
 #endif // TASK_HH

@@ -16,21 +16,21 @@ BOOST_AUTO_TEST_CASE(mutex_test) {
 
 static void bar(thread p) {
     // cant use BOOST_CHECK in multi-runnered tests :(
-    assert(runner::self()->id() != p);
+    assert(runner::self()->get_thread() != p);
     task::yield();
 }
 
 static void foo(thread p, semaphore &s) {
-    assert(runner::self()->id() != p);
+    assert(runner::self()->get_thread() != p);
     task::spawn(boost::bind(bar, p));
     s.post();
 }
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
     semaphore s;
-    thread pid = runner::self()->id();
-    BOOST_CHECK(pid.id);
-    runner *t = runner::spawn(boost::bind(foo, pid, boost::ref(s)));
+    thread t = runner::self()->get_thread();
+    BOOST_CHECK(t.id);
+    runner *r = runner::spawn(boost::bind(foo, t, boost::ref(s)));
     s.wait();
 }
 
@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(schedule_test) {
     runner *t = runner::self();
     int count = 0;
     for (int i=0; i<10; ++i) {
-        task *c = task::spawn(boost::bind(co1, boost::ref(count)));
+        task::spawn(boost::bind(co1, boost::ref(count)));
     }
     t->schedule(false);
     BOOST_CHECK_EQUAL(20, count);
@@ -52,12 +52,12 @@ BOOST_AUTO_TEST_CASE(schedule_test) {
 
 static void mig_co(semaphore &s) {
     runner *start_runner = runner::self();
-    thread start_pid = start_runner->id();
+    thread start_thread = start_runner->get_thread();
     task::migrate();
-    thread end_pid = runner::self()->id();
-    //BOOST_CHECK_NE(start_pid, end_pid);
+    thread end_thread = runner::self()->get_thread();
+    assert(start_thread != end_thread);
     task::migrate_to(start_runner);
-    //BOOST_CHECK_EQUAL(start_pid, runner::self()->id());
+    assert(start_thread == runner::self()->get_thread());
     s.post();
 }
 
@@ -76,7 +76,7 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        runner::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
+        task::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
     } else {
         throw errno_error();
     }
@@ -85,9 +85,10 @@ static void connect_to(address addr) {
 static void listen_co() {
     socket_fd s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 9900);
+    address addr("127.0.0.1", 0);
     //std::cout << "binding to " << addr << "\n";
     s.bind(addr);
+    s.getsockname(addr);
     //std::cout << "binded to " << addr << "\n";
     s.listen();
 
@@ -95,13 +96,13 @@ static void listen_co() {
     runner::spawn(boost::bind(connect_to, addr));
 
     //std::cout << "waiting for connection\n";
-    runner::poll(s.fd, EPOLLIN|EPOLLONESHOT);
+    task::poll(s.fd, EPOLLIN|EPOLLONESHOT);
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
     //std::cout << "accepted " << client_addr << "\n";
     //std::cout << "client socket: " << cs << "\n";
-    runner::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
+    task::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
     //std::cout << "nr: " << nr << "\n";
