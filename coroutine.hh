@@ -10,6 +10,28 @@
 #include <valgrind/valgrind.h>
 #endif
 
+namespace b {
+
+class coroutine : boost::noncopyable {
+public:
+    typedef void (*proc)(void *);
+
+    coroutine();
+    coroutine(proc f_, void *arg=NULL, size_t stack_size_=4096);
+    ~coroutine();
+
+    void swap(coroutine *to);
+private:
+    ucontext_t context;
+#ifndef NVALGRIND
+    int valgrind_stack_id;
+#endif
+    char *stack;
+    size_t stack_size;
+};
+
+} // end namespace b
+
 #include "thread.hh"
 
 #include <iostream>
@@ -18,6 +40,8 @@
 // http://stackoverflow.com/questions/4352451/coroutine-demo-source-2
 
 // http://mfichman.blogspot.com/2011/05/lua-style-coroutines-in-c.html
+
+namespace scheduler {
 
 class thread;
 
@@ -66,5 +90,7 @@ private:
 
     static void start(coroutine *);
 };
+
+} // end namespace scheduler
 
 #endif // COROUTINE_HH

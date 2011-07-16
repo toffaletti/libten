@@ -5,6 +5,7 @@
 #include "coroutine.hh"
 #include "descriptors.hh"
 
+namespace scheduler {
 class coroutine;
 class thread;
 
@@ -137,5 +138,5 @@ private:
     }
 };
 
-
+} // end namespace scheduler
 

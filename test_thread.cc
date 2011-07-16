@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+using namespace scheduler;
+
 BOOST_AUTO_TEST_CASE(mutex_test) {
     mutex m;
     mutex::scoped_lock l(m);
@@ -40,7 +42,7 @@ static void co1(int &count) {
     count++;
 }
 
-BOOST_AUTO_TEST_CASE(scheduler) {
+BOOST_AUTO_TEST_CASE(schedule_test) {
     thread *t = thread::self();
     int count = 0;
     for (int i=0; i<10; ++i) {

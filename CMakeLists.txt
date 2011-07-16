@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 2.8)
 add_definitions(-ggdb -std=gnu++0x -DBOOST_TEST_DYN_LINK)
 
-add_executable(test_thread test_thread.cc scheduler.cc)
-#target_link_libraries(test_thread rt boost_unit_test_framework-mt)
-target_link_libraries(test_thread rt boost_unit_test_framework)
+add_library(fw scheduler.cc coroutine.cc)
+target_link_libraries(fw rt)
+
+add_executable(test_thread test_thread.cc)
+target_link_libraries(test_thread fw boost_unit_test_framework)
 
 add_executable(test test.cc)
-target_link_libraries(test rt)
+target_link_libraries(test fw)
 
 add_executable(send send.cc)
-target_link_libraries(send rt)
+target_link_libraries(send fw)

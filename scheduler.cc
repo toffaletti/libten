@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+namespace scheduler {
+
 namespace detail {
 __thread thread *thread_ = NULL;
 }
@@ -199,4 +201,6 @@ void thread::poll(int fd, int events) {
     // will be woken back up by epoll loop in schedule()
     coroutine::yield();
 }
+
+} // end namespace scheduler
 
