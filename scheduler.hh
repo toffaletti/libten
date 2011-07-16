@@ -6,12 +6,40 @@
 #include "descriptors.hh"
 
 namespace scheduler {
-class coroutine;
 class thread;
 
 namespace detail {
 extern __thread thread *thread_;
 }
+
+class coroutine : boost::noncopyable {
+public:
+    typedef boost::function<void ()> func_t;
+
+    static coroutine *self();
+    static void swap(coroutine *from, coroutine *to);
+    static coroutine *spawn(const func_t &f);
+
+    static void yield();
+    static void migrate();
+    static void migrate_to(thread *to);
+
+protected:
+    friend class thread;
+    coroutine() : exiting(false) {}
+
+    void switch_();
+
+private:
+    b::coroutine co;
+    func_t f;
+    bool exiting;
+
+    coroutine(const func_t &f_, size_t stack_size=4096);
+
+    static void start(coroutine *);
+};
+
 typedef std::deque<coroutine *> coro_deque;
 
 class thread : boost::noncopyable {

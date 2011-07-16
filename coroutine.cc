@@ -1,4 +1,10 @@
 #include "coroutine.hh"
+#include "error.hh"
+
+// setjmp/longjmp:
+// http://stackoverflow.com/questions/4352451/coroutine-demo-source-2
+
+// http://mfichman.blogspot.com/2011/05/lua-style-coroutines-in-c.html
 
 namespace b {
 coroutine::coroutine()
