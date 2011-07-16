@@ -10,8 +10,6 @@
 #include <valgrind/valgrind.h>
 #endif
 
-namespace b {
-
 class coroutine : boost::noncopyable {
 public:
     typedef void (*proc)(void *);
@@ -29,10 +27,5 @@ private:
     char *stack;
     size_t stack_size;
 };
-
-} // end namespace b
-
-namespace scheduler {
-} // end namespace scheduler
 
 #endif // COROUTINE_HH

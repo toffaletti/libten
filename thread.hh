@@ -99,8 +99,6 @@ private:
 };
 
 
-namespace p {
-
 // thin C++ wrapper around pthreads
 struct thread {
     typedef void *(*proc)(void*);
@@ -148,8 +146,6 @@ struct thread {
         THROW_ON_NONZERO(pthread_create(&t.id, attr, start_routine, arg));
     }
 };
-
-} // end namespace p
 
 #endif // THREAD_HH
 

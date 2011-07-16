@@ -1,14 +1,12 @@
-#define BOOST_TEST_MODULE thread test
+#define BOOST_TEST_MODULE runner test
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 
-#include "scheduler.hh"
+#include "task.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
 
 #include <iostream>
-
-using namespace scheduler;
 
 BOOST_AUTO_TEST_CASE(mutex_test) {
     mutex m;
@@ -16,59 +14,59 @@ BOOST_AUTO_TEST_CASE(mutex_test) {
     BOOST_CHECK(l.trylock() == false);
 }
 
-static void bar(p::thread p) {
-    // cant use BOOST_CHECK in multi-threaded tests :(
-    assert(thread::self()->id() != p);
-    coroutine::yield();
+static void bar(thread p) {
+    // cant use BOOST_CHECK in multi-runnered tests :(
+    assert(runner::self()->id() != p);
+    task::yield();
 }
 
-static void foo(p::thread p, semaphore &s) {
-    assert(thread::self()->id() != p);
-    coroutine::spawn(boost::bind(bar, p));
+static void foo(thread p, semaphore &s) {
+    assert(runner::self()->id() != p);
+    task::spawn(boost::bind(bar, p));
     s.post();
 }
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
     semaphore s;
-    p::thread pid = thread::self()->id();
+    thread pid = runner::self()->id();
     BOOST_CHECK(pid.id);
-    thread *t = thread::spawn(boost::bind(foo, pid, boost::ref(s)));
+    runner *t = runner::spawn(boost::bind(foo, pid, boost::ref(s)));
     s.wait();
 }
 
 static void co1(int &count) {
     count++;
-    coroutine::yield();
+    task::yield();
     count++;
 }
 
 BOOST_AUTO_TEST_CASE(schedule_test) {
-    thread *t = thread::self();
+    runner *t = runner::self();
     int count = 0;
     for (int i=0; i<10; ++i) {
-        coroutine *c = coroutine::spawn(boost::bind(co1, boost::ref(count)));
+        task *c = task::spawn(boost::bind(co1, boost::ref(count)));
     }
     t->schedule(false);
     BOOST_CHECK_EQUAL(20, count);
 }
 
 static void mig_co(semaphore &s) {
-    thread *start_thread = thread::self();
-    p::thread start_pid = start_thread->id();
-    coroutine::migrate();
-    p::thread end_pid = thread::self()->id();
+    runner *start_runner = runner::self();
+    thread start_pid = start_runner->id();
+    task::migrate();
+    thread end_pid = runner::self()->id();
     //BOOST_CHECK_NE(start_pid, end_pid);
-    coroutine::migrate_to(start_thread);
-    //BOOST_CHECK_EQUAL(start_pid, thread::self()->id());
+    task::migrate_to(start_runner);
+    //BOOST_CHECK_EQUAL(start_pid, runner::self()->id());
     s.post();
 }
 
-BOOST_AUTO_TEST_CASE(thread_migrate) {
+BOOST_AUTO_TEST_CASE(runner_migrate) {
     semaphore s;
-    BOOST_CHECK(thread::count() >= 0);
-    thread *t = thread::spawn(boost::bind(mig_co, boost::ref(s)));
+    BOOST_CHECK(runner::count() >= 0);
+    runner *t = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
-    BOOST_CHECK(thread::count() > 1);
+    BOOST_CHECK(runner::count() > 1);
 }
 
 static void connect_to(address addr) {
@@ -78,7 +76,7 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        thread::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
+        runner::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
     } else {
         throw errno_error();
     }
@@ -93,29 +91,29 @@ static void listen_co() {
     //std::cout << "binded to " << addr << "\n";
     s.listen();
 
-    //coroutine::spawn(boost::bind(connect_to, addr));
-    thread::spawn(boost::bind(connect_to, addr));
+    //task::spawn(boost::bind(connect_to, addr));
+    runner::spawn(boost::bind(connect_to, addr));
 
     //std::cout << "waiting for connection\n";
-    thread::poll(s.fd, EPOLLIN|EPOLLONESHOT);
+    runner::poll(s.fd, EPOLLIN|EPOLLONESHOT);
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
     //std::cout << "accepted " << client_addr << "\n";
     //std::cout << "client socket: " << cs << "\n";
-    thread::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
+    runner::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
     //std::cout << "nr: " << nr << "\n";
 
     // socket should be disconnected because
-    // when connect_to coroutine finished
+    // when connect_to task is finished
     // close was called on its socket
     BOOST_CHECK_EQUAL(nr, 0);
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {
-    coroutine::spawn(listen_co);
-    thread *t = thread::self();
+    task::spawn(listen_co);
+    runner *t = runner::self();
     t->schedule(false);
 }

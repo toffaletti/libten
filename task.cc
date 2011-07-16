@@ -1,46 +1,44 @@
-#include "scheduler.hh"
+#include "task.hh"
 
 #include <iostream>
 
-namespace scheduler {
-
 namespace detail {
-__thread thread *thread_ = NULL;
+__thread runner *runner_ = NULL;
 }
 
-thread::list thread::threads;
-mutex thread::tmutex;
+runner::list runner::runners;
+mutex runner::tmutex;
 
-std::ostream &operator << (std::ostream &o, coro_deque &l) {
+std::ostream &operator << (std::ostream &o, task_deque &l) {
     o << "[";
-    for (coro_deque::iterator i=l.begin(); i!=l.end(); ++i) {
+    for (task_deque::iterator i=l.begin(); i!=l.end(); ++i) {
         o << *i << ",";
     }
     o << "]";
     return o;
 }
 
-size_t thread::count() {
-    mutex::scoped_lock l(thread::tmutex);
-    return thread::threads.size();
+size_t runner::count() {
+    mutex::scoped_lock l(runner::tmutex);
+    return runner::runners.size();
 }
 
 typedef std::vector<epoll_event> event_vector;
 
-void thread::schedule(bool loop) {
+void runner::schedule(bool loop) {
     for (;;) {
         {
             mutex::scoped_lock l(mut);
             while (!runq.empty()) {
                 //std::cout << "runq: " << runq << "\n";
-                coroutine *c = runq.front();
+                task *c = runq.front();
                 runq.pop_front();
                 if (c->exiting) {
                     delete c;
                 } else {
                     runq.push_back(c);
                     l.unlock();
-                    coroutine::swap(&scheduler, c);
+                    task::swap(&scheduler, c);
                     l.lock();
                 }
             }
@@ -53,7 +51,7 @@ void thread::schedule(bool loop) {
                 for (event_vector::const_iterator i=events.begin();
                     i!=events.end();++i)
                 {
-                    coroutine *c = (coroutine *)i->data.ptr;
+                    task *c = (task *)i->data.ptr;
                     add_to_runqueue(c);
                 }
                 // assume all EPOLLONESHOT
@@ -78,56 +76,52 @@ void thread::schedule(bool loop) {
     }
 }
 
-void *thread::start(void *arg) {
+void *runner::start(void *arg) {
     using namespace detail;
-    thread_ = (thread *)arg;
-    detail::thread_->append_to_list();
+    runner_ = (runner *)arg;
+    detail::runner_->append_to_list();
     try {
-        detail::thread_->schedule();
+        detail::runner_->schedule();
     } catch (...) {}
-    detail::thread_->remove_from_list();
+    detail::runner_->remove_from_list();
     // TODO: if detatched, free memory here
-    //if (detail::thread_->detached) {
-    //    delete detail::thread_;
+    //if (detail::runner_->detached) {
+    //    delete detail::runner_;
     //}
     return NULL;
 }
 
-coroutine::coroutine(const func_t &f_, size_t stack_size)
-    : co((b::coroutine::proc)coroutine::start, this, stack_size),
+task::task(const func_t &f_, size_t stack_size)
+    : co((coroutine::proc)task::start, this, stack_size),
     f(f_), exiting(false)
 {
 }
 
-coroutine *coroutine::self() {
-    return thread::self()->get_coro();
+task *task::self() {
+    return runner::self()->get_task();
 }
 
-void coroutine::swap(coroutine *from, coroutine *to) {
+void task::swap(task *from, task *to) {
     // TODO: wrong place for this code. put in scheduler
-    thread::self()->set_coro(to);
-    //std::cout << "swapping from " <<
-    //    &(from->context) << " to " << &(to->context) <<
-    //    " in thread: " << thread::self()->id() << "\n";
+    runner::self()->set_task(to);
     from->co.swap(&to->co);
 }
 
-coroutine *coroutine::spawn(const func_t &f) {
-    coroutine *c = new coroutine(f);
-    thread::self()->add_to_runqueue(c);
+task *task::spawn(const func_t &f) {
+    task *c = new task(f);
+    runner::self()->add_to_runqueue(c);
     return c;
 }
 
-void coroutine::switch_() {
-    coroutine::swap(this, &thread::self()->scheduler);
+void task::switch_() {
+    task::swap(this, &runner::self()->scheduler);
 }
 
-void coroutine::yield() {
-    //std::cout << "coro " << coroutine::self() << " yielding in thread: " << thread::self()->id() << "\n";
-    coroutine::self()->switch_();
+void task::yield() {
+   task::self()->switch_();
 }
 
-void coroutine::start(coroutine *c) {
+void task::start(task *c) {
     try {
         c->f();
     } catch(...) {
@@ -137,42 +131,42 @@ void coroutine::start(coroutine *c) {
     c->switch_();
 }
 
-void coroutine::migrate() {
-    coroutine *c = coroutine::self();
-    thread *t = thread::self();
+void task::migrate() {
+    task *c = task::self();
+    runner *t = runner::self();
     t->delete_from_runqueue(c);
-    thread::add_to_empty_runqueue(c);
-    coroutine::yield();
-    // will resume in other thread
+    runner::add_to_empty_runqueue(c);
+    task::yield();
+    // will resume in other runner
 }
 
-void coroutine::migrate_to(thread *to) {
-    coroutine *c = coroutine::self();
-    thread *from = thread::self();
+void task::migrate_to(runner *to) {
+    task *c = task::self();
+    runner *from = runner::self();
     from->delete_from_runqueue(c);
     to->add_to_runqueue(c);
-    coroutine::yield();
+    task::yield();
 }
 
-void thread::add_to_empty_runqueue(coroutine *c) {
+void runner::add_to_empty_runqueue(task *c) {
     mutex::scoped_lock l(tmutex);
     bool added = false;
-    for (thread::list::iterator i=threads.begin(); i!=threads.end(); ++i) {
-        //std::cout << "testing thread: " << *i << "\n";
+    for (runner::list::iterator i=runners.begin(); i!=runners.end(); ++i) {
+        //std::cout << "testing runner: " << *i << "\n";
         if ((*i)->add_to_runqueue_if_asleep(c)) {
-            //std::cout << "added to thread: " << (*i) << "\n";
+            //std::cout << "added to runner: " << (*i) << "\n";
             added = true;
             break;
         }
     }
     if (!added) {
-        new thread(c);
+        new runner(c);
     }
 }
 
-void thread::poll(int fd, int events) {
-    coroutine *c = coroutine::self();
-    thread *t = thread::self();
+void runner::poll(int fd, int events) {
+    task *c = task::self();
+    runner *t = runner::self();
     t->delete_from_runqueue(c);
 
     epoll_event ev;
@@ -181,8 +175,6 @@ void thread::poll(int fd, int events) {
     ev.data.ptr = c;
     assert(t->efd.add(fd, ev) == 0);
     // will be woken back up by epoll loop in schedule()
-    coroutine::yield();
+    task::yield();
 }
-
-} // end namespace scheduler
 

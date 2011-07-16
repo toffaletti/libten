@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 add_definitions(-ggdb -std=gnu++0x -DBOOST_TEST_DYN_LINK)
 
-add_library(fw scheduler.cc coroutine.cc)
+add_library(fw task.cc coroutine.cc)
 target_link_libraries(fw rt)
 
 add_executable(test_thread test_thread.cc)

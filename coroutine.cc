@@ -6,7 +6,6 @@
 
 // http://mfichman.blogspot.com/2011/05/lua-style-coroutines-in-c.html
 
-namespace b {
 coroutine::coroutine()
     : stack(0), stack_size(0)
 {
@@ -50,6 +49,4 @@ coroutine::~coroutine() {
 void coroutine::swap(coroutine *to) {
     swapcontext(&context, &to->context);
 }
-
-} // end namespace b
 
