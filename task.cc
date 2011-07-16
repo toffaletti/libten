@@ -91,7 +91,7 @@ void *runner::start(void *arg) {
     return NULL;
 }
 
-task::task(const func_t &f_, size_t stack_size)
+task::task(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
     f(f_), exiting(false)
 {
@@ -107,18 +107,14 @@ void task::swap(task *from, task *to) {
     from->co.swap(&to->co);
 }
 
-task *task::spawn(const func_t &f) {
+task *task::spawn(const proc &f) {
     task *c = new task(f);
     runner::self()->add_to_runqueue(c);
     return c;
 }
 
-void task::switch_() {
-    task::swap(this, &runner::self()->scheduler);
-}
-
 void task::yield() {
-   task::self()->switch_();
+    task::self()->co.swap(&runner::self()->scheduler.co);
 }
 
 void task::start(task *c) {
@@ -128,7 +124,7 @@ void task::start(task *c) {
         abort();
     }
     c->exiting = true;
-    c->switch_();
+    c->co.swap(&runner::self()->scheduler.co);
 }
 
 void task::migrate() {

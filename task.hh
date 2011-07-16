@@ -1,3 +1,6 @@
+#ifndef TASK_HH
+#define TASK_HH
+
 #include <deque>
 #include <list>
 #include <boost/function.hpp>
@@ -13,11 +16,10 @@ extern __thread runner *runner_;
 
 class task : boost::noncopyable {
 public:
-    typedef boost::function<void ()> func_t;
+    typedef boost::function<void ()> proc;
 
     static task *self();
-    static void swap(task *from, task *to);
-    static task *spawn(const func_t &f);
+    static task *spawn(const proc &f);
 
     static void yield();
     static void migrate();
@@ -27,14 +29,15 @@ protected:
     friend class runner;
     task() : exiting(false) {}
 
+    static void swap(task *from, task *to);
     void switch_();
 
 private:
     coroutine co;
-    func_t f;
+    proc f;
     bool exiting;
 
-    task(const func_t &f_, size_t stack_size=4096);
+    task(const proc &f_, size_t stack_size=4096);
 
     static void start(task *);
 };
@@ -47,7 +50,7 @@ public:
 
     thread id() { return thread(t); }
 
-    static runner *spawn(const task::func_t &f) {
+    static runner *spawn(const task::proc &f) {
         return new runner(f);
     }
 
@@ -143,7 +146,7 @@ private:
         thread::create(t, start, this);
     }
 
-    runner(const task::func_t &f) : asleep(false), current_task(0) {
+    runner(const task::proc &f) : asleep(false), current_task(0) {
         task *c = new task(f);
         add_to_runqueue(c);
         thread::create(t, start, this);
@@ -161,4 +164,6 @@ private:
         runners.push_back(this);
     }
 };
+
+#endif // TASK_HH
 
