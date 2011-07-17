@@ -1,0 +1,32 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:performance Performance]
+
+* on x86 rdtsc used for performance measurements with overhead correction
+* with stack-protection
+* cache warm-up considered 
+* thread is pinned to one cpu
+* average of 1000 invokations calculated
+* build with 'variant=release cxxflags="-DBOOST_DISABLE_ASSERTS"'
+
+[table Perfomance of context switch
+    [[Platform] [ucontext_t] [fcontext_t]]
+    [
+        [AMD Athlon 64 DualCore 4400+ (32bit Linux)]
+        [1771 cycles]
+        [146 cycles]
+    ]
+    [
+        [Intel Core2 Quad (64bit Linux)]
+        [1739 cycles]
+        [117 cycles]
+    ]
+]
+
+
+[endsect]

@@ -1,0 +1,122 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:enumarator Enumerator]
+
+Adapted from [@http://msdn.microsoft.com/en-us/library/9k7k7cf0.aspx C# yield] documentation example. 
+
+In this example `yield_return()` is used to provide a value which will be returned to the enumerator, for example, in each loop of a `while` statement.
+With `yield_break()` the control is unconditionally returned to the caller to signal the end of iteration.
+
+        template< typename T >
+        class enumerator {
+        private:
+            boost::contexts::context<>          ctx_;
+            T                       const*      result_;
+            bool                                complete_;
+            bool                                do_unwind_;
+
+            static void run( enumerator * self)
+            { self->enumerate(); }
+
+        protected:
+            virtual void enumerate() = 0;
+
+            void yield_return( T const& v)
+            {
+                result_ = & v; // set address of local value
+                ctx_.suspend(); // return tocaller
+                result_ = 0; // reset pointer
+            }
+
+            void yield_break()
+            {
+                result_ = 0; // reset pointer
+                complete_ = true; // signal end of iteration
+                ctx_.suspend(); // return to caller
+            }
+
+        public:
+            enumerator( bool do_unwind = true): 
+                ctx_(
+                    & enumerator::run, this,
+                    boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
+                    false),
+                result_( 0),
+                complete_( false),
+                do_unwind_( do_unwind)
+            {}
+
+            ~enumerator()
+            {
+                if ( do_unwind_ && ! ctx_.is_complete() )
+                    ctx_.unwind_stack();
+            }
+
+            bool get( T & result)
+            {
+                ctx_.resume(); // jump to implementation of enumerate()
+                if ( result_) result = * result_; // set return value
+                return ! ( complete_ || ctx_.is_complete() ); // check for next item
+            }
+        };
+
+
+Class power derives from `enumerator< int >` and computes the power from `0` to `number` in
+function `enumerate()`. Please note that the loop computing the values has local scope and
+each `yield_return()` jumps back to the calling context which is the `while`-loop in `main()`.
+
+        class power : public enumerator< int >
+        {
+        private:
+            void enumerate()
+            {
+                int counter = 0;
+                int result = 1;
+                // local scoped while loop
+                while ( counter++ < exponent_)
+                {
+                        // compute the value
+                        result = result * number_;
+
+                        // return the value by jumping to calling context
+                        // == jump to while-loop in main()
+                        yield_return( result);
+                }
+            }
+
+            int     number_;
+            int     exponent_;
+
+        public:
+            power( int number, int exponent) :
+                number_( number), exponent_( exponent)
+            {}
+        };
+
+        int main()
+        {
+            {
+                power pw( 2, 8);
+                int i;
+                // first call to pw.get() jumps to the
+                // beginning of power::enumerate()
+                // pw.get() returns the computed power
+                // for each value from 0 to 8
+                // return value of pw.get() signals if
+                // a next value is available
+                while ( pw.get( i) ) {
+                    std::cout << i <<  " ";
+                }
+            }
+
+            std::cout << "\nDone" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+[endsect]

@@ -1,0 +1,530 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:context Context]
+
+[heading Synopsis]
+
+Each instance of __context__ represents a context (CPU registers and stack
+space) of execution or __not_a_context__. Objects of type __context__ are move-
+but not copyable (but can be returned by a function).
+
+        boost::contexts::context make_context();
+
+        void f()
+        {
+                boost::contexts::context ctx( make_context() );
+                ctx.resume();
+        }
+
+[note In order to implement rvalue references __boost_move__ was used.]
+
+[warning If contexts are migrated between threads the code called by a context
+must not use __tls__.]
+
+[note If __fls__ is used on Windows the user is responsible to call
+__fls_alloc__, __fls_free__.]
+
+
+[heading Launching context]
+
+__context__ takes the stack type as template argument. The type of the __stack__
+is required to implement a certain stack_link[implicit interface].
+A new context is created by passing a callable object (arbitrary functor ==
+__context_fn__) and moving a instance of the stack to the constructor of
+__context__. The last two arguments of the context constructor determine
+automatically stack unwinding and context termination.
+
+If desired a function or callable object that requires arguments can be supplied
+by passing additional arguments to the __context__ constructor.
+
+    void f( int i);
+
+    boost::contexts::context ctx( f, 42, false, true);
+
+The arguments are copied into the internal context structure: if a reference is
+required, use boost::ref, just as for references to callable functions.
+
+The maximum number of arguments of __context_fn__ is defined by
+BOOST_CONTEXT_ARITY (default is 10) and might be changed.
+
+The execution control is transfered to the context if __context_resume__ is
+called and __context_fn__ ist entered the first time.
+If the context has to be suspended __context_suspend__ must be called - 
+registers, flags, stack and intruction pointer will be stored and the execution
+control is transfered back to the caller of __context_resume__ by returning
+from this function.
+The next time __context_resume__ is called the execution control is transfered
+back to the context by returning from __context_suspend__.
+
+        boost::contexts::context<> ctx;
+
+        void fn( int j)
+        {
+            for( int i = 0; i < j; ++i)
+            {
+                std::cout << "fn(): local variable i == " << i << std::endl;
+
+                // save current context
+                // value of local variable is preserved
+                // transfer execution control back to caller
+                ctx.suspend();
+
+                // ctx.resume() was called
+                // execution control transfered back to fn()    
+            }
+        }
+
+        int main( int argc, char * argv[])
+        {
+            boost::contexts::protected_stack stack( boost::contexts::stack_helper::default_stacksize());
+            ctx = boost::contexts::context<>( fn, 7, boost::move( stack), false, true);
+
+            while ( ! ctx.is_complete() )
+            {
+                std::cout << "main() calls context ctx" << std::endl;
+                // start fn() / resume inside fn()
+                // execution control is transfered to ctx
+                ctx.resume();
+
+                // ctx.suspend() was called
+            }
+
+            std::cout << "Done" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+
+[heading Exceptions in context function]
+
+If the __context_fn__ passed to __context__ constructor propagates an exception,
+std::terminate() is called.
+
+[important The code executed by __context__ may not use catch ellipses
+otherwise stack unwinding doesn't work.]
+
+
+[heading Terminating context]
+
+The last argument `do_return` in the constructor of __context__ takes a bool value which
+determines what happens after the context is complete (== __context_fn__ returns).
+A value of `true` transfers the execution control back to the last invokation of
+__context__resume__.
+
+        boost::contexts::context<> ctx;
+
+        void fn( int j)
+        {
+            for( int i = 0; i < j; ++i)
+            {
+                std::cout << "fn(): local variable i == " << i << std::endl;
+                ctx.suspend();
+            }
+
+            // fn() returns
+            // execution control is transfered back to main()
+        }
+
+        int main( int argc, char * argv[])
+        {
+            boost::contexts::protected_stack stack( boost::contexts::stack_helper::default_stacksize());
+            ctx = boost::contexts::context<>( fn, 7, boost::move( stack), false, true);
+
+            while ( ! ctx.is_complete() )
+            {
+                std::cout << "main() calls context ctx" << std::endl;
+                ctx.resume();
+            }
+
+            // fn() returned; the context is complete
+
+            std::cout << "Done" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+A value of `false` inidcates that the application terminates (exit-code == 0) after the context
+becomes complete.
+
+        boost::contexts::context<> ctx;
+
+        void fn( int j)
+        {
+            for( int i = 0; i < j; ++i)
+            {
+                std::cout << "fn(): local variable i == " << i << std::endl;
+                ctx.suspend();
+            }
+
+            // fn() returns
+            // application will terminate
+        }
+
+        int main( int argc, char * argv[])
+        {
+            boost::contexts::protected_stack stack( boost::contexts::stack_helper::default_stacksize());
+            ctx = boost::contexts::context<>( fn, 7, boost::move( stack), false, false);
+
+            while ( ! ctx.is_complete() )
+            {
+                std::cout << "main() calls context ctx" << std::endl;
+                ctx.resume();
+            }
+
+            // never reached
+            std::cout << "Done" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+
+[heading Linking context]
+
+__boost_context__ provides the ability to link __context__ instances. In the constructor
+of __context__ the last argument takes a reference to a context (which must not be
+a __not_a_context__). If a context becomes complete and a successor was defined then
+the __context_fn__ of the successor will be invoked.
+It is possible to create a chain of contexts and depending on the `do_return` argument
+in the constructor of the last context in the chain the application terminates or the
+execution control is transfered back to the last invokation of __context_resume__.
+Each call of __context_suspend__ for the chained context instances will return to
+__context_resume__.
+
+        boost::contexts::context<> ctx2;
+
+        void fn1()
+        {
+            std::cout << "fn1(): when fn1() returns fn2() will be entered"  << std::endl;
+        }
+
+        void fn2()
+        {
+            std::cout << "first time inside fn2()" << std::endl;
+            ctx2.suspend();
+            std::cout << "second time inside fn2(), returns to main()" << std::endl;
+        }
+
+        int main( int argc, char * argv[])
+        {
+            {
+                // ctx2 will return to ctx2.resume()
+                ctx2 = boost::contexts::context<>(
+                    fn2, 
+                    boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
+                    false,
+                    true);
+
+                // ctx1 defines ctx2 as its successor
+                boost::contexts::context<> ctx1(
+                    fn1, 
+                    boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
+                    false,
+                    ctx2);
+
+                // transfer execution control to ctx1
+                // fn1() is entered 
+                ctx1.resume();
+
+                // ctx2.suspend() was called
+            }
+
+            ctx2.resume();
+
+            std::cout << "Done" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+
+[heading Unwinding stack]
+
+Sometimes it is necessary to unwind the stack of an unfinished context because of 
+local variables on the stack which allocated resourcesi (RAII pattern).
+The next to last argumenti `do_unwind` of contexts constructor deterimes if the
+stack should be automaticaly unwinded in the destructor of the context or not.
+The unwinding of the stack can be triggered by __context_unwind__ too.
+Preconditions for stack unwinding are the the instance of context is not a
+__not_a_context__, the context is not complete, does own a stack and is not
+running.
+After unwinding the context is complete (postcondition).
+
+        boost::contexts::context<> ctx;
+
+        struct X
+        {
+            X()
+            { std::cout << "X()" << std::endl; }
+
+            ~X()
+            { std::cout << "~X()" << std::endl; }
+        };
+
+        void fn()
+        {
+            X x;
+
+            for( int i = 0;; ++i)
+            {
+                std::cout << "fn(): " << i << std::endl;
+                // transfer execution control back to main()
+                ctx.suspend();
+            }
+        }
+
+        int main( int argc, char * argv[])
+        {
+            ctx = boost::contexts::context<>(
+                    fn,
+                    boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
+                    false,  // do not automaticall unwind the stack at destruction
+                    true);  // return to caller
+            for ( int i = 0; i < 5; ++i)
+            {
+                // transfer execution control to fn()
+                ctx.resume();
+            }
+
+            std::cout << "ctx is complete: " << std::boolalpha << ctx.is_complete() << "\n";
+            std::cout << "call ctx.unwind_stack()" << std::endl;
+
+            // unwind the stack
+            // X::~X() will be called
+            ctx.unwind_stack(); // unwind the stack
+
+            std::cout << "ctx is complete: " << std::boolalpha << ctx.is_complete() << "\n";
+            std::cout << "Done" << std::endl;
+
+            return EXIT_SUCCESS;
+        }
+
+
+[heading Reusing stack]
+
+A stack can be released by calling __context_release__ - unwinding
+will not be done and the __context__ can not be used anymore.
+This helps to reduce allocation/deallocation of memory (stack space).
+
+        protected_stack stack = ctx.release_stack();
+        boost::contexts::context<> ctx(
+            fn,
+            boost::move (stack),
+            false, true);
+
+
+[section:context Class `context`]
+
+    #include <boost/context/context.hpp>
+
+    template< typename StackT = protected_stack >
+    class context
+    {
+    public:
+        typedef StackT          stack_type;
+
+        context();
+
+        template< typename Fn >
+        context( Fn fn, stack_type && stack, bool do_unwind, bool do_return = true);
+
+        template< typename Fn >
+        context( Fn fn, stack_type && stack, bool do_unwind, context & nxt);
+
+        template< typename Fn, typename A0 >
+        context( Fn fn A0 a0, stack_type && stack, bool do_unwind, bool do_return = true);
+        ...
+        template< typename Fn, typename A0,.., typename A9 >
+        context( Fn fn A0 a0, A9, a9, stack_type && stack, bool do_unwind, bool do_return = true);
+
+        template< typename Fn, typename A0 >
+        context( Fn fn A0 a0, stack_type && stack, bool do_unwind, context & nxt);
+        ...
+        template< typename Fn, typename A0,.., typename A9 >
+        context( Fn fn A0 a0, A9, a9, stack_type && stack, bool do_unwind, context & nxt);
+
+        template< typename Fn >
+        context( Fn && fn, stack_type && stack, bool do_unwind, bool do_return = true);
+
+        template< typename Fn >
+        context( Fn && fn, stack_type && stack, bool do_unwind, context & nxt);
+
+        ~context();
+
+        context( context && other);
+
+        context & operator=( context && other);
+
+        operator unspecified-bool-type() const;
+
+        bool operator!() const;
+
+        void swap( context & other);
+
+        bool is_complete() const;
+
+        bool is_running() const;
+
+        bool owns_stack() const;
+    
+        stack_type release_stack();
+
+        void resume();
+
+        void suspend();
+
+        void unwind_stack();
+    };
+
+    template< typename StackT >
+    void swap( context< StackT > & l, context< StackT > & r);
+
+[heading `context()`]
+[variablelist
+[[Effects:] [Creates an context representing a __not_a_context__.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `template< typename Fn > context( Fn fn, stack_type && stack, bool do_unwind, bool do_return = true)`]
+[variablelist
+[[Preconditions:] [`stack` is not a __not_a_stack__.]]
+[[Effects:] [Creates an context which will execute `fn`. If `do_unwind` is true the destructor of `*this` unwinds
+the stack before destructing it. If `do_return` is `false` the application exits with return code `0`, otherwise
+the execution control is transfered back to the invoker (`resume()` returns).]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `template< typename Fn > context( Fn fn, stack_type && stack, bool do_unwind, context & nxt)`]
+[variablelist
+[[Preconditions:] [`stack` is not a __not_a_stack__, `nxt` is not a __not_a_context__.]]
+[[Effects:] [Creates an context which will execute `fn`. If `do_unwind` is true the destructor of `*this` unwinds
+the stack before destructing it. The execution control is transfered to `nxt` if `fn` returns (`nxt` is linked).]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `template< typename Fn, typename A0,... > context( Fn fn, A0 a0,..., stack_type && stack, bool do_unwind, bool do_return = true)`]
+[variablelist
+[[Preconditions:] [`stack` is not a __not_a_stack__.]]
+[[Effects:] [Creates an context which will execute `fn` (arguments `A0`,... are bound to `fn`). If `do_unwind` is true the destructor of `*this` unwinds
+the stack before destructing it. If `do_return` is `false` the application exits with return code `0`, otherwise
+the execution control is transfered back to the invoker (`resume()` returns).]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `template< typename Fn, typename A0,... > context( Fn fn, A0 a0,..., stack_type && stack, bool do_unwind, context & nxt)`]
+[variablelist
+[[Preconditions:] [`stack` is not a __not_a_stack__, `nxt` is not a __not_a_context__.]]
+[[Effects:] [Creates an context which will execute `fn` (arguments`A0`,... are bound to `fn`). If `do_unwind` is true the destructor of `*this` unwinds
+the stack before destructing it. The execution control is transfered to `nxt` if `fn` returns (`nxt` is linked).]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `~context()`]
+[variablelist
+[[Effects:] [Destroyes the instance and deallocates the owned stack. Unwinds the stack if it was specified in the
+constructor of `*this`.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `context( context && other)`]
+[variablelist
+[[Effects:] [Moves the internal data of `other` to `*this`.
+`other` becomes __not_a_context__.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `context & operator=( context && other)`]
+[variablelist
+[[Effects:] [Destroyes the internal data of `*this` and moves the
+internal data of `other` to `*this`. `other` becomes __not_a_context__.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `operator unspecified-bool-type() const`]
+[variablelist
+[[Returns:] [If `*this` refers to __not_a_context__, the function returns false. Otherwise
+true.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `bool operator!() const`]
+[variablelist
+[[Returns:] [If `*this` refers not to __not_a_context__, the function returns true.
+Otherwise false.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `void swap( context & other)`]
+[variablelist
+[[Effects:] [Swaps the internal data from `*this` with the values
+of `other`.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `bool is_complete() const`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__.]]
+[[Effects:] [Returns `true` if context-function of `*this` has returned.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `bool is_running() const`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__.]]
+[[Effects:] [Returns `true` if execution control is transfered to `*this`.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `bool owns_stack() const`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__.]]
+[[Effects:] [Returns `true` if `*this` maintains a valid stack.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `stack_type release_stack()`]
+[variablelist
+[[Effects:] [Releases (moves) the stack from `*this`.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `void resume()`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__, `owns_stack()`, `! is_complete()` and `! is_running()`.]]
+[[Effects:] [If `resume()` is invoked the first time then `fn` with wich the context was constructed is started.
+If `*this` was suspended (by `suspend()`) the execution control is transfered back resuming `*this` (means
+`suspend() returns).]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `void suspend()`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__, `owns_stack()`, `! is_complete()` and `is_running()`.]]
+[[Effects:] [Suspends `*this` by transfering the executiin control back to the code which has invoked
+`resume()` befor.]]
+[[Throws:] [Nothing.]]
+]
+
+[heading `void unwind_stack()`]
+[variablelist
+[[Preconditions:] [`*this` is not a __not_a_context__, `owns_stack()`, `! is_complete()` and `! is_running()`.]]
+[[Effects:] [Does unwinding all objects allocated by the stack owned by `*this`.]]
+[[Throws:] [Nothing.]]
+[[Postconditions:] [`*this` is not a __not_a_context__ and `is_complete()`.]]
+]
+
+[heading Non-member function `swap()`]
+
+    template< typename StackT >
+    void swap( context< StackT > & l, context< StackT > & r);
+
+[variablelist
+[[Effects:] [Swaps content of `l` with `r`.]]
+]
+
+[endsect]
+
+[endsect]

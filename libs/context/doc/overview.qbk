@@ -1,0 +1,49 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:overview Overview]
+
+__boost_context__ provides an abstraction of the execution state, e.g. it
+maintains data like stack (with local variables), all registers and CPU flags,
+stack pointer and instruction pointer - a instance of__context__ represents a
+point in the applications execution path.
+
+A __context__ decides explicitly when it suspends and allows another __context__
+to run (execution control transfered).
+The use of a stackful transfer mechanism enables a __context__ to suspend its
+execution from within nested functions and continues from the exact point where
+it was suspended, if it is resumed next time.
+
+This allows multiple execution paths running on a single __thread__ using a sort
+of cooperative multitasking (__threads__ provide preemptive multitasking).
+A __context__ can only run on a single __thread__ at any point in time but may
+be migrated between __threads__.
+
+A context switch between threads costs usally thousends of CPU cycles on x86
+compared to a __context__ switch with few hundreds of cycles.
+
+__boost_context__ is intented to be the basis for a higher abstractions like
+__coroutines__ and __fibers__.
+
+In order to use the classes and functions described here, you can either include
+the specific headers specified by the descriptions of each class or function, or
+include the master library header:
+
+    #include <boost/context/all.hpp>
+
+which includes all the other headers in turn.
+
+Used namespaces are:
+
+    namespace boost::contexts
+
+[warning This library is ['not] an official Boost library]
+
+__boost_context__ depends uppon __boost_move__.
+
+
+[endsect]

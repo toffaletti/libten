@@ -1,0 +1,135 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:rational Rational]
+
+[heading NoThrow guarantee]
+
+Member functions of __context__ do not thow exceptions but require that certain
+preconditions are fulfilled.
+Context swapps can only be made by instances which are not a __not_a_context__,
+the __context_fn__ has not returned and the context still owns the stack.
+
+
+[heading Stack as template argument]
+
+A context must own stack because it must control the life time of the stack, for
+instance if the destructor of __context__ has to unwind the stack the nthe stack
+must be still valid. For reusage of the stack it can be released - unwinding
+will not be done and the __context__ can not be used anymore.
+In orde to release the stack its type must be known by __context__ therefore
+__context__ takes the stack type as template argument.
+Usualy an application uses instances of __contexts__ with the same stack type
+instead of mixing contexts with with different stack types.
+
+[heading Pimpl idiom]
+
+In order to support move semantics and context switching operations it was
+required to separate both features in separat classes via pimpl idiom.
+A nice featre is that a __context__ has the size of a pointer, so it fits into a
+register.
+
+With the current design the constructor accepts functors and its arguments+
+similiar to __thread__.
+
+What if pimpl idom wouldn't be used?
+Because stack unwinding is required a reference to control structures (like
+fcontext_t) is required inside the trampoline function (on top of stack).
+If the context object was moved the refernces to the control structures on the
+top of the stack pointing to invalid control structures.
+
+Why not putting all the context control structures on top of the stack?
+If the control structures reside on top of the stack (inside the function body
+of the trampoline function) the context control structures would be destructed
+if the trampoline function returns (that happens if the functor passed to the 
+constructor of__context__ returns == the context is complete). If the control
+structures are destructed informations about the state of the context are lost.
+
+
+[heading Unwinding]
+
+In order to release resource allocated on the stack unwinding the stack must be
+supported.
+The current implementation throws a exception in order to unwind the stack (jump
+back to invocation of `suspend()`). The special exception is catched inside the
+trampoline function (first function on top of stack).
+usage of exception handler framework (.eh_frame), based on the DWARF CFI (Call Frame Information)
+* depending on architecture and language being compiled might not be available at all
+
+[heading Protection]
+
+Because the size of the stack is fixed (no support for split-stacks) it is essential
+to establish a protection against exceeding the stack otherwise in best case a
+segmentation fault/access violation is generated (or worst meory of the own application
+is overwritten).
+__protected_stack__ appends on each stack a guard page which doesn't consume
+pyhsical memory but generate segmentation fault/access violation if virtual addresses
+are accessed from within.
+
+
+[heading fcontext_t]
+
+__boost_context__ provides the low leve lAPI boost_fcontext_t which is implemented in assembler
+to provide context swapping operations. boost_fcontext_t is the default implementation used by 
+__context__. Other low level APIs and their caveats are described in the following sections.
+
+[heading setjmp()/longjmp()]
+
+The C99 defines `setjmp()`/`longjmp()` to provide non-local jumps but it does not require that
+['longjmp()] preserves the current stack frame, e. g. jumping into a function which was exited
+via a call to ['longjmp()] is undefined [footnote [@boost:/libs/context/doc/pdf/iso_c99.pdf
+ISO/IEC 9899:1999, 2005], 7.13.2.1:2].
+
+[heading ucontext_t]
+
+Since POSIX.1-2008 `ucontext_t` is deprecated!
+The function signature of `makecontext()`:
+
+    void makecontext(ucontext_t *ucp, void (*func)(), int argc, ...);
+
+The function `func` is called if the context `ucp` is activated alter. The signature of func is:
+
+    void func( void);
+
+The third argument of `makecontext()` specifies the number of integer arguments that follow which
+will require function pointer cast if `func` will accept those arguments which is undefined in C99
+[footnote [@boost:/libs/context/doc/pdf/iso_c99.pdf ISO/IEC 9899:1999, 2005], J.2].
+
+The arguments in the var-arg list are required to be integers, passing pointers in var-arg list
+is not guarantied to work, especially it will fail for architectures where pointers are larger
+than integers.
+
+`ucontext_t` preserves signal mask between context switches which involes system calls consuming
+a lot of CPU cycles (ucontext_t is slower by perfomance_link[factor 13x] related to `boost_fcontext_t`).
+
+If desired `boost_fcontext_t` can be replaced by `ucontext_t` by applying -DBOOST_CONTEXT_UCTX at
+commandline.
+
+[heading Windows fibers]
+
+A drawback of Windows Fiber API is that `CreateFiber()` does not accept a pointer to user allocated
+stack space preventing the reuse of stacks for other context instances.
+Because the Windows Fiber API requires to call `ConvertThreadToFiber()` if `SwitchFiber()` is called
+for a thread which has not been converted to a fiber. For the same reason `ConvertFiberToThread()`
+must be called after return from `SwitchFiber()` if the thread was forced to be converted to a fiber
+befor (which is inefficient).
+
+        if ( ! is_a_fiber() )
+        {
+            ConvertThreadToFiber( 0);
+            SwitchToFiber( ctx);
+            ConvertFiberToThread();
+        }
+
+If the condition `_WIN32_WINNT >= _WIN32_WINNT_VISTA` is met function `IsThreadAFiber()` is provided
+in order to detect if the current thread was already converted. Unfortunately Windows XP + SP 2/3 defines
+`_WIN32_WINNT >= _WIN32_WINNT_VISTA` without providing `IsThreadAFiber()`.
+
+If desired `boost_fcontext_t` can be replaced by Windows Fibers by applying -DBOOST_CONTEXT_FIBER at
+commandline.
+
+[endsect]

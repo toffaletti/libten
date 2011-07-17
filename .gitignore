@@ -1,0 +1,10 @@
+bin.v2/**/*
+dist/**/*
+doc/**/*
+html/**/*
+stage/**/*
+docbook*
+*~
+*.html
+*.sw*
+*.xml
