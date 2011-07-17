@@ -54,7 +54,11 @@ protected_stack::protected_stack( std::size_t size) :
     const int fd( ::open("/dev/zero", O_RDONLY) );
     BOOST_ASSERT( -1 != fd);
     void * limit =
+# if defined(macintosh) || defined(__APPLE__) || defined(__APPLE_CC__)
+        ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+# else
         ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+# endif
     ::close( fd);
     if ( ! limit) throw std::bad_alloc();
 
@@ -113,4 +117,3 @@ protected_stack::operator unspecified_bool_type() const
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_SUFFIX
 #endif
-
