@@ -56,7 +56,7 @@ static void mig_co(semaphore &s) {
     task::migrate();
     thread end_thread = runner::self()->get_thread();
     assert(start_thread != end_thread);
-    task::migrate_to(start_runner);
+    task::migrate(start_runner);
     assert(start_thread == runner::self()->get_thread());
     s.post();
 }

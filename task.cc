@@ -33,13 +33,29 @@ void runner::schedule(bool loop) {
                 //std::cout << "runq: " << runq << "\n";
                 task *c = runq.front();
                 runq.pop_front();
-                if (c->exiting) {
-                    delete c;
-                } else {
-                    runq.push_back(c);
-                    l.unlock();
-                    task::swap(&scheduler, c);
+                l.unlock();
+                task::swap(&scheduler, c);
+                switch (c->state) {
+                case task::state_running:
+                    c->state = task::state_idle;
                     l.lock();
+                    runq.push_back(c);
+                    break;
+                case task::state_exiting:
+                    delete c;
+                    l.lock();
+                    break;
+                case task::state_migrating:
+                    if (c->in) {
+                        c->in->add_to_runqueue(c);
+                    } else {
+                        add_to_empty_runqueue(c);
+                    }
+                    l.lock();
+                    break;
+                default:
+                    abort();
+                    break;
                 }
             }
         }
@@ -47,17 +63,46 @@ void runner::schedule(bool loop) {
         event_vector events;
         while (efd.maxevents) {
             try {
-                efd.wait(events);
+                timespec now;
+                // TODO: porbably should cache now for runner
+                // avoid calling it every add_waiter()
+                THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+                std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+                int timeout_ms = -1;
+                if (!waiters.empty()) {
+                    if (waiters.front()->ts <= now) {
+                        // epoll_wait must return immediately
+                        timeout_ms = 0;
+                    } else {
+                        timespec r = waiters.front()->ts - now;
+                        timeout_ms = r.tv_sec * 1000;
+                        timeout_ms += r.tv_nsec / 1000000;
+                    }
+                }
+
+                efd.wait(events, timeout_ms);
                 for (event_vector::const_iterator i=events.begin();
                     i!=events.end();++i)
                 {
                     task *c = (task *)i->data.ptr;
                     add_to_runqueue(c);
                 }
+
                 // assume all EPOLLONESHOT
                 //std::cout << "maxevents: " << efd.maxevents << "\n";
                 efd.maxevents -= events.size();
                 //std::cout << "maxevents: " << efd.maxevents << "\n";
+
+
+                THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+                // fire expired timeouts
+                // TODO: make sure task wasn't already triggered by epoll loop
+                while (!waiters.empty() && waiters.front()->ts <= now) {
+                    std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+                    add_to_runqueue(waiters.back());
+                    waiters.pop_back();
+                }
+
             } catch (const std::exception &e) {
                 //std::cout << "epoll wait error: " << e.what() << "\n";
             }
@@ -93,7 +138,7 @@ void *runner::start(void *arg) {
 
 task::task(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
-    f(f_), exiting(false)
+    f(f_), state(state_idle)
 {
 }
 
@@ -104,7 +149,12 @@ task *task::self() {
 void task::swap(task *from, task *to) {
     // TODO: wrong place for this code. put in scheduler
     runner::self()->set_task(to);
+    to->state = state_running;
+    from->state = state_idle;
     from->co.swap(&to->co);
+    from->state = state_running;
+    // don't modify to state after
+    // because it might have been changed
 }
 
 void task::spawn(const proc &f) {
@@ -122,25 +172,18 @@ void task::start(task *c) {
     } catch(...) {
         abort();
     }
-    c->exiting = true;
+    c->state = state_exiting;
     c->co.swap(&runner::self()->scheduler.co);
 }
 
-void task::migrate() {
+void task::migrate(runner *to) {
     task *c = task::self();
-    runner *t = runner::self();
-    t->delete_from_runqueue(c);
-    runner::add_to_empty_runqueue(c);
+    // if to is NULL, first available runner is used
+    // or a new one is spawned
+    c->in = to;
+    c->state = state_migrating;
     task::yield();
     // will resume in other runner
-}
-
-void task::migrate_to(runner *to) {
-    task *c = task::self();
-    runner *from = runner::self();
-    from->delete_from_runqueue(c);
-    to->add_to_runqueue(c);
-    task::yield();
 }
 
 void runner::add_to_empty_runqueue(task *c) {
@@ -157,6 +200,17 @@ void runner::add_to_empty_runqueue(task *c) {
     if (!added) {
         new runner(c);
     }
+}
+
+void runner::add_waiter(task *t) {
+    // XXX: not really thread safe
+    // but we shouldn't be in runqueue
+    assert(t != runq.back());
+
+    timespec abs;
+    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
+    t->ts += abs;
+    waiters.push_back(t);
 }
 
 void task::poll(int fd, int events) {

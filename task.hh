@@ -7,6 +7,7 @@
 #include "thread.hh"
 #include "coroutine.hh"
 #include "descriptors.hh"
+#include "timespec.hh"
 
 class runner;
 
@@ -16,18 +17,24 @@ extern __thread runner *runner_;
 
 class task : boost::noncopyable {
 public:
+    enum state_e {
+        state_idle,
+        state_running,
+        state_exiting,
+        state_migrating,
+    };
+
     typedef boost::function<void ()> proc;
 
     static void spawn(const proc &f);
 
     static void yield();
-    static void migrate();
-    static void migrate_to(runner *to);
+    static void migrate(runner *to=NULL);
     static void poll(int fd, int events);
 
 protected:
     friend class runner;
-    task() : exiting(false) {}
+    task() : state(state_running) {}
 
     static void swap(task *from, task *to);
     static task *self();
@@ -35,7 +42,9 @@ protected:
 private:
     coroutine co;
     proc f;
-    bool exiting;
+    state_e state;
+    timespec ts;
+    runner *in;
 
     task(const proc &f_, size_t stack_size=16*1024);
 
@@ -73,6 +82,7 @@ public:
 protected:
     friend class task;
 
+    // TODO: make sure task isn't already in runqueue
     void add_to_runqueue(task *c) {
         mutex::scoped_lock l(mut);
         runq.push_back(c);
@@ -106,6 +116,7 @@ protected:
     static void add_to_empty_runqueue(task *);
 
     void set_task(task *c) {
+        c->in = this;
         current_task = c;
     }
 
@@ -127,6 +138,17 @@ private:
     task *current_task;
     task_deque runq;
     epoll_fd efd;
+
+    struct task_timeout_heap_compare {
+        bool operator ()(const task *a, const task *b) const {
+            return a->ts > b->ts;
+        }
+    };
+    typedef std::vector<task *> task_heap;
+    // tasks waiting with a timeout value set
+    task_heap waiters;
+
+    void add_waiter(task *t);
 
     runner() : asleep(false), current_task(0) {
         tt=thread::self();
