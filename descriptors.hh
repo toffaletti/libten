@@ -216,8 +216,8 @@ struct socket_fd : fd_base {
     socket_fd(int fd_) : fd_base(fd_) {}
 
     //! make socket nonblocking by setting O_NONBLOCK flag
-    void setnonblock() {
-        THROW_ON_ERROR(fd_base::fcntl(F_SETFL, O_NONBLOCK));
+    void setnonblock() throw (errno_error) {
+        THROW_ON_ERROR(fd_base::fcntl(F_SETFL, fd_base::fcntl(F_GETFL)|O_NONBLOCK));
     }
 
     //! bind socket to address

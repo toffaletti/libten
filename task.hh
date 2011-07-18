@@ -37,7 +37,7 @@ private:
     proc f;
     bool exiting;
 
-    task(const proc &f_, size_t stack_size=4096*1);
+    task(const proc &f_, size_t stack_size=16*1024);
 
     static void start(task *);
 };
@@ -105,7 +105,10 @@ protected:
 
     static void add_to_empty_runqueue(task *);
 
-    void set_task(task *c) { current_task = c; }
+    void set_task(task *c) {
+        current_task = c;
+    }
+
     task *get_task() {
         return current_task;
     }
@@ -141,6 +144,17 @@ private:
     }
 
     void sleep() {
+        // move to the head of the list
+        // to simulate a FIFO
+        // if there are too many threads
+        // and not enough tasks, we can
+        // use a cond.timedwait here and
+        // exit a thread that times out
+        {
+            mutex::scoped_lock l(tmutex);
+            runners.remove(this);
+            runners.push_front(this);
+        }
         mutex::scoped_lock l(mut);
         asleep = true;
         while (asleep) {
@@ -155,7 +169,7 @@ private:
 
     void remove_from_list() {
         mutex::scoped_lock l(tmutex);
-        runners.push_back(this);
+        runners.remove(this);
     }
 
     static void *start(void *arg);
