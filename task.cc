@@ -207,6 +207,9 @@ void task::start(task *c) {
     } catch(...) {
         abort();
     }
+    // NOTE: the scheduler deletes tasks in exiting state
+    // so this function won't ever return. don't expect
+    // objects on this stack to have the destructor called
     c->state = state_exiting;
     c->co.swap(&runner::self()->scheduler.co);
 }
