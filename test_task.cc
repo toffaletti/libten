@@ -184,3 +184,21 @@ BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     r->schedule(false);
     s.wait();
 }
+
+void sleep_many(int &count) {
+    count++;
+    task::sleep(5);
+    count++;
+    task::sleep(10);
+    count++;
+}
+
+BOOST_AUTO_TEST_CASE(many_timeouts) {
+    int count=0;
+    for (int i=0; i<1000; i++) {
+        task::spawn(boost::bind(sleep_many, boost::ref(count)));
+    }
+    runner *r = runner::self();
+    r->schedule(false);
+    BOOST_CHECK_EQUAL(count, 3000);
+}

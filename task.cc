@@ -120,11 +120,10 @@ void runner::check_io() {
                     }
                 }
             }
-            if ((*i)->ts.tv_sec > 0 && (*i)->ts <= now) {
+            if (keep_waiting && (*i)->ts.tv_sec > 0 && (*i)->ts <= now) {
                 keep_waiting = false;
                 add_to_runqueue(*i);
             }
-
             if (keep_waiting) {
                 keep_waiters.push_back(*i);
             } else {
