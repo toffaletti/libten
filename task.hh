@@ -31,6 +31,7 @@ public:
     static void yield();
     static void migrate(runner *to=NULL);
     static void poll(int fd, int events);
+    static void sleep(int ms);
 
 protected:
     friend class runner;
@@ -193,6 +194,9 @@ private:
         mutex::scoped_lock l(tmutex);
         runners.remove(this);
     }
+
+    void run_queued_tasks();
+    void check_io();
 
     static void *start(void *arg);
 };

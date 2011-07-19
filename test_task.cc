@@ -118,3 +118,41 @@ BOOST_AUTO_TEST_CASE(socket_io) {
     runner *t = runner::self();
     t->schedule(false);
 }
+
+static void sleeper(semaphore &s) {
+    timespec start;
+    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &start));
+    task::sleep(10);
+    timespec end;
+    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &end));
+
+    timespec passed = end - start;
+    BOOST_CHECK_EQUAL(passed.tv_sec, 0);
+    // check that at least 10 milliseconds passed
+    BOOST_CHECK_GE(passed.tv_nsec, 10*1000000);
+    std::cout << "time passed: " << passed.tv_nsec << "\n";
+    s.post();
+}
+
+BOOST_AUTO_TEST_CASE(task_sleep) {
+    semaphore s;
+    task::spawn(boost::bind(sleeper, boost::ref(s)));
+    runner *t = runner::self();
+    t->schedule(false);
+    s.wait();
+}
+
+BOOST_AUTO_TEST_CASE(timespec_operations) {
+    timespec a = {100, 9};
+    timespec b = {99, 10};
+
+    BOOST_CHECK(a > b);
+    BOOST_CHECK(b < a);
+
+    timespec r = a - b;
+    BOOST_CHECK_EQUAL(r.tv_sec, 0);
+    BOOST_CHECK_EQUAL(r.tv_nsec, 999999999);
+
+    b += r;
+    BOOST_CHECK_EQUAL(a, b);
+}

@@ -25,96 +25,118 @@ size_t runner::count() {
 
 typedef std::vector<epoll_event> event_vector;
 
+void runner::run_queued_tasks() {
+    mutex::scoped_lock l(mut);
+    while (!runq.empty()) {
+        //std::cout << "runq: " << runq << "\n";
+        task *c = runq.front();
+        runq.pop_front();
+        l.unlock();
+        task::swap(&scheduler, c);
+        switch (c->state) {
+        case task::state_idle:
+            std::cout << "task is sleeping: " << c << "\n";
+            // task wants to sleep
+            l.lock();
+            break;
+        case task::state_running:
+            c->state = task::state_idle;
+            l.lock();
+            runq.push_back(c);
+            break;
+        case task::state_exiting:
+            delete c;
+            l.lock();
+            break;
+        case task::state_migrating:
+            if (c->in) {
+                c->in->add_to_runqueue(c);
+            } else {
+                add_to_empty_runqueue(c);
+            }
+            l.lock();
+            break;
+        default:
+            abort();
+            break;
+        }
+    }
+}
+
+void runner::check_io() {
+    event_vector events(efd.maxevents ? efd.maxevents : 1);
+    while (efd.maxevents || !waiters.empty()) {
+        try {
+            timespec now;
+            // TODO: porbably should cache now for runner
+            // avoid calling it every add_waiter()
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+            int timeout_ms = -1;
+            if (!waiters.empty()) {
+                if (waiters.front()->ts <= now) {
+                    // epoll_wait must return immediately
+                    timeout_ms = 0;
+                } else {
+                    timespec r = waiters.front()->ts - now;
+                    // convert timespec to milliseconds
+                    timeout_ms = r.tv_sec * 1000;
+                    // 1 millisecond is 1 million nanoseconds
+                    timeout_ms += r.tv_nsec / 1000000;
+                }
+            }
+
+            std::cout << runner::self() << " epoll wait: " << timeout_ms << "\n";
+            std::cout << "events size: " << events.size() << "\n";
+            if (events.empty()) {
+                events.resize(efd.maxevents ? efd.maxevents : 1);
+            }
+            efd.wait(events, timeout_ms);
+            std::cout << "got " << events.size() << " events\n";
+            std::cout << "now: " << now << "\n";
+            for (event_vector::const_iterator i=events.begin();
+                i!=events.end();++i)
+            {
+                task *c = (task *)i->data.ptr;
+                add_to_runqueue(c);
+            }
+
+            // assume all EPOLLONESHOT
+            //std::cout << "maxevents: " << efd.maxevents << "\n";
+            efd.maxevents -= events.size();
+            //std::cout << "maxevents: " << efd.maxevents << "\n";
+
+
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            // fire expired timeouts
+            // TODO: make sure task wasn't already triggered by epoll loop
+            std::cout << "waiters: " << waiters.size() << "\n";
+            while (!waiters.empty() && waiters.front()->ts <= now) {
+                std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+                std::cout << "adding waiter to runq\n";
+                add_to_runqueue(waiters.back());
+                waiters.pop_back();
+            }
+
+        } catch (const std::exception &e) {
+            std::cout << "epoll wait error: " << e.what() << "\n";
+        }
+    }
+}
+
 void runner::schedule(bool loop) {
     for (;;) {
-        {
-            mutex::scoped_lock l(mut);
-            while (!runq.empty()) {
-                //std::cout << "runq: " << runq << "\n";
-                task *c = runq.front();
-                runq.pop_front();
-                l.unlock();
-                task::swap(&scheduler, c);
-                switch (c->state) {
-                case task::state_running:
-                    c->state = task::state_idle;
-                    l.lock();
-                    runq.push_back(c);
-                    break;
-                case task::state_exiting:
-                    delete c;
-                    l.lock();
-                    break;
-                case task::state_migrating:
-                    if (c->in) {
-                        c->in->add_to_runqueue(c);
-                    } else {
-                        add_to_empty_runqueue(c);
-                    }
-                    l.lock();
-                    break;
-                default:
-                    abort();
-                    break;
-                }
-            }
-        }
-
-        event_vector events;
-        while (efd.maxevents) {
-            try {
-                timespec now;
-                // TODO: porbably should cache now for runner
-                // avoid calling it every add_waiter()
-                THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-                std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                int timeout_ms = -1;
-                if (!waiters.empty()) {
-                    if (waiters.front()->ts <= now) {
-                        // epoll_wait must return immediately
-                        timeout_ms = 0;
-                    } else {
-                        timespec r = waiters.front()->ts - now;
-                        timeout_ms = r.tv_sec * 1000;
-                        timeout_ms += r.tv_nsec / 1000000;
-                    }
-                }
-
-                efd.wait(events, timeout_ms);
-                for (event_vector::const_iterator i=events.begin();
-                    i!=events.end();++i)
-                {
-                    task *c = (task *)i->data.ptr;
-                    add_to_runqueue(c);
-                }
-
-                // assume all EPOLLONESHOT
-                //std::cout << "maxevents: " << efd.maxevents << "\n";
-                efd.maxevents -= events.size();
-                //std::cout << "maxevents: " << efd.maxevents << "\n";
-
-
-                THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-                // fire expired timeouts
-                // TODO: make sure task wasn't already triggered by epoll loop
-                while (!waiters.empty() && waiters.front()->ts <= now) {
-                    std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                    add_to_runqueue(waiters.back());
-                    waiters.pop_back();
-                }
-
-            } catch (const std::exception &e) {
-                //std::cout << "epoll wait error: " << e.what() << "\n";
-            }
-        }
+        run_queued_tasks();
+        check_io();
 
         {
-            // epoll loop might have filled runqueue again
+            // check_io might have filled runqueue again
             mutex::scoped_lock l(mut);
             if (!runq.empty()) continue;
         }
 
         if (loop)
+            // block waiting for tasks to be scheduled on this runner
             sleep();
         else
             break;
@@ -202,14 +224,21 @@ void runner::add_to_empty_runqueue(task *c) {
     }
 }
 
-void runner::add_waiter(task *t) {
-    // XXX: not really thread safe
-    // but we shouldn't be in runqueue
-    assert(t != runq.back());
+void task::sleep(int ms) {
+    task *t = task::self();
+    runner *r = runner::self();
+    // convert milliseconds to seconds and nanoseconds
+    t->ts.tv_sec = ms / 1000;
+    t->ts.tv_nsec = (ms % 1000) * 1000000;
+    r->add_waiter(t);
+    task::yield();
+}
 
+void runner::add_waiter(task *t) {
     timespec abs;
     THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
     t->ts += abs;
+    t->state = task::state_idle;
     waiters.push_back(t);
 }
 

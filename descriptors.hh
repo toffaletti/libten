@@ -191,9 +191,9 @@ struct epoll_fd : fd_base {
     //! param maxevents in the size of events must be greater than zero, returns the number of fds with events triggered
     //! param timeout milliseconds to wait for events, -1 waits indefinitely
     void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
-        events.resize(maxevents); // this can throw bad_alloc and length_error
+        //events.resize(maxevents); // this can throw bad_alloc and length_error
         for (;;) {
-            int s = ::epoll_wait(fd, &events[0], maxevents, timeout);
+            int s = ::epoll_wait(fd, &events[0], events.size(), timeout);
             if (s == -1 && errno == EINTR) continue;
             THROW_ON_ERROR(s);
             events.resize(s);
