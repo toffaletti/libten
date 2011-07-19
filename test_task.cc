@@ -76,13 +76,13 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        task::poll(s.fd, EPOLLOUT|EPOLLONESHOT);
+        assert(task::poll(s.fd, EPOLLOUT));
     } else {
         throw errno_error();
     }
 }
 
-static void listen_co() {
+static void listen_co(bool multithread, semaphore &sm) {
     socket_fd s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("127.0.0.1", 0);
@@ -90,14 +90,17 @@ static void listen_co() {
     s.getsockname(addr);
     s.listen();
 
-    //task::spawn(boost::bind(connect_to, addr));
-    runner::spawn(boost::bind(connect_to, addr));
+    if (multithread) {
+        runner::spawn(boost::bind(connect_to, addr));
+    } else {
+        task::spawn(boost::bind(connect_to, addr));
+    }
 
-    task::poll(s.fd, EPOLLIN|EPOLLONESHOT);
+    assert(task::poll(s.fd, EPOLLIN));
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
-    task::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
+    task::poll(cs.fd, EPOLLIN);
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
 
@@ -105,12 +108,23 @@ static void listen_co() {
     // when connect_to task is finished
     // close was called on its socket
     BOOST_CHECK_EQUAL(nr, 0);
+    sm.post();
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {
-    task::spawn(listen_co);
-    runner *t = runner::self();
-    t->schedule(false);
+    semaphore s;
+    task::spawn(boost::bind(listen_co, false, boost::ref(s)));
+    runner *r = runner::self();
+    r->schedule(false);
+    s.wait();
+}
+
+BOOST_AUTO_TEST_CASE(socket_io_mt) {
+    semaphore s;
+    task::spawn(boost::bind(listen_co, true, boost::ref(s)));
+    runner *r = runner::self();
+    r->schedule(false);
+    s.wait();
 }
 
 static void sleeper(semaphore &s) {
@@ -148,4 +162,25 @@ BOOST_AUTO_TEST_CASE(timespec_operations) {
 
     b += r;
     BOOST_CHECK_EQUAL(a, b);
+}
+
+static void listen_timeout_co(semaphore &sm) {
+    socket_fd s(AF_INET, SOCK_STREAM);
+    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    address addr("127.0.0.1", 0);
+    s.bind(addr);
+    s.getsockname(addr);
+    s.listen();
+
+    bool timeout = !task::poll(s.fd, EPOLLIN, 5);
+    BOOST_CHECK(timeout);
+    sm.post();
+}
+
+BOOST_AUTO_TEST_CASE(poll_timeout_io) {
+    semaphore s;
+    task::spawn(boost::bind(listen_timeout_co, boost::ref(s)));
+    runner *r = runner::self();
+    r->schedule(false);
+    s.wait();
 }

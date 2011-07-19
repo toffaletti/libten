@@ -63,6 +63,7 @@ void runner::run_queued_tasks() {
 
 void runner::check_io() {
     event_vector events(efd.maxevents ? efd.maxevents : 1);
+    bool goto_runq = false;
     while (efd.maxevents || !waiters.empty()) {
         try {
             timespec now;
@@ -92,20 +93,29 @@ void runner::check_io() {
                 i!=events.end();++i)
             {
                 task *c = (task *)i->data.ptr;
+                goto_runq = true;
                 add_to_runqueue(c);
             }
 
             // assume all EPOLLONESHOT
-            efd.maxevents -= events.size();
+            //efd.maxevents -= events.size();
 
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // fire expired timeouts
             // TODO: make sure task wasn't already triggered by epoll loop
             while (!waiters.empty() && waiters.front()->ts <= now) {
                 std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                add_to_runqueue(waiters.back());
+                goto_runq = true;
+                task *t = waiters.back();
+                if (add_to_runqueue(t)) {
+                    // only timeout if epoll() loop didnt put it in runq
+                    t->state = task::state_timeout;
+                }
                 waiters.pop_back();
             }
+
+            // added some to runqueue, time to exit
+            if (goto_runq) return;
 
         } catch (const std::exception &e) {
             abort();
@@ -160,10 +170,13 @@ task *task::self() {
 void task::swap(task *from, task *to) {
     // TODO: wrong place for this code. put in scheduler
     runner::self()->set_task(to);
-    to->state = state_running;
-    from->state = state_idle;
+    if (to->state == state_idle)
+        to->state = state_running;
+    if (from->state == state_running)
+        from->state = state_idle;
     from->co.swap(&to->co);
-    from->state = state_running;
+    if (from->state == state_idle)
+        from->state = state_running;
     // don't modify to state after
     // because it might have been changed
 }
@@ -211,7 +224,7 @@ void runner::add_to_empty_runqueue(task *c) {
     }
 }
 
-void task::sleep(int ms) {
+void task::sleep(unsigned int ms) {
     task *t = task::self();
     runner *r = runner::self();
     // convert milliseconds to seconds and nanoseconds
@@ -229,10 +242,18 @@ void runner::add_waiter(task *t) {
     waiters.push_back(t);
 }
 
-void task::poll(int fd, int events) {
+bool task::poll(int fd, int events, unsigned int ms) {
     task *t = task::self();
     runner *r = runner::self();
-    r->delete_from_runqueue(t);
+    // XXX: shouldn't be in the runqueue anyway
+    //r->delete_from_runqueue(t);
+    // TODO: maybe make a state for waiting io?
+    t->state = state_idle;
+    if (ms) {
+        t->ts.tv_sec = ms / 1000;
+        t->ts.tv_nsec = (ms % 1000) * 1000000;
+        r->add_waiter(t);
+    }
 
     epoll_event ev;
     memset(&ev, 0, sizeof(ev));
@@ -241,5 +262,7 @@ void task::poll(int fd, int events) {
     assert(r->efd.add(fd, ev) == 0);
     // will be woken back up by epoll loop in schedule()
     task::yield();
+    assert(r->efd.remove(fd) == 0);
+    return t->state != state_timeout;
 }
 

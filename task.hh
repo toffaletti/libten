@@ -22,6 +22,7 @@ public:
         state_running,
         state_exiting,
         state_migrating,
+        state_timeout,
     };
 
     typedef boost::function<void ()> proc;
@@ -30,8 +31,8 @@ public:
 
     static void yield();
     static void migrate(runner *to=NULL);
-    static void poll(int fd, int events);
-    static void sleep(int ms);
+    static bool poll(int fd, int events, unsigned int ms=0);
+    static void sleep(unsigned int ms);
 
 protected:
     friend class runner;
@@ -83,11 +84,17 @@ public:
 protected:
     friend class task;
 
-    // TODO: make sure task isn't already in runqueue
-    void add_to_runqueue(task *c) {
+    bool add_to_runqueue(task *t) {
         mutex::scoped_lock l(mut);
-        runq.push_back(c);
-        wakeup_nolock();
+        task_deque::iterator i = std::find(runq.begin(), runq.end(), t);
+        // don't add multiple times
+        // this is possible with io loop and timeout loop
+        if (i == runq.end()) {
+            runq.push_back(t);
+            wakeup_nolock();
+            return true;
+        }
+        return false;
     }
 
     bool add_to_runqueue_if_asleep(task *c) {
