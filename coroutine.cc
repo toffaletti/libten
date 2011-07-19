@@ -9,7 +9,7 @@
 coroutine::coroutine()
     : stack(0), stack_size(0)
 {
-    getcontext(&context);
+    ctxt.init();
 }
 
 coroutine::coroutine(proc f, void *arg, size_t stack_size_)
@@ -21,19 +21,11 @@ coroutine::coroutine(proc f, void *arg, size_t stack_size_)
     THROW_ON_NONZERO(r);
     // protect the guard page
     THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_NONE));
-    getcontext(&context);
 #ifndef NVALGRIND
     valgrind_stack_id =
         VALGRIND_STACK_REGISTER(stack, stack+stack_size);
 #endif
-    context.uc_stack.ss_sp = stack;
-    context.uc_stack.ss_size = stack_size;
-    context.uc_link = 0;
-    // this depends on glibc's work around that allows
-    // pointers to be passed to makecontext
-    // it also depends on g++ allowing static C++
-    // functions to be used for C linkage
-    makecontext(&context, (void (*)())f, 1, arg);
+    ctxt.init(f, arg, stack, stack_size);
 }
 
 coroutine::~coroutine() {
@@ -47,6 +39,6 @@ coroutine::~coroutine() {
 }
 
 void coroutine::swap(coroutine *to) {
-    swapcontext(&context, &to->context);
+    ctxt.swap(&to->ctxt);
 }
 

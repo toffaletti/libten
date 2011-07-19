@@ -3,8 +3,8 @@
 #include <boost/function.hpp>
 #include <boost/utility.hpp>
 #include <vector>
-#include <ucontext.h>
 #include <sys/mman.h>
+#include "context.hh"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
@@ -20,7 +20,7 @@ public:
 
     void swap(coroutine *to);
 private:
-    ucontext_t context;
+    context ctxt;
 #ifndef NVALGRIND
     int valgrind_stack_id;
 #endif
