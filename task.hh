@@ -1,6 +1,7 @@
 #ifndef TASK_HH
 #define TASK_HH
 
+#include <poll.h>
 #include <deque>
 #include <list>
 #include <boost/function.hpp>
@@ -22,7 +23,6 @@ public:
         state_running,
         state_exiting,
         state_migrating,
-        state_timeout,
     };
 
     typedef boost::function<void ()> proc;
@@ -31,12 +31,14 @@ public:
 
     static void yield();
     static void migrate(runner *to=NULL);
-    static bool poll(int fd, int events, unsigned int ms=0);
+    static bool poll(int fd, short events, unsigned int ms=0);
+    static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
     static void sleep(unsigned int ms);
 
 protected:
     friend class runner;
-    task() : state(state_running) {}
+    friend struct task_timeout_heap_compare;
+    task() : state(state_running), fds(0), nfds(0) {}
 
     static void swap(task *from, task *to);
     static task *self();
@@ -47,6 +49,8 @@ private:
     state_e state;
     timespec ts;
     runner *in;
+    pollfd *fds;
+    nfds_t nfds;
 
     task(const proc &f_, size_t stack_size=16*1024);
 
@@ -147,11 +151,6 @@ private:
     task_deque runq;
     epoll_fd efd;
 
-    struct task_timeout_heap_compare {
-        bool operator ()(const task *a, const task *b) const {
-            return a->ts > b->ts;
-        }
-    };
     typedef std::vector<task *> task_heap;
     // tasks waiting with a timeout value set
     task_heap waiters;

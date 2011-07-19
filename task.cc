@@ -18,6 +18,14 @@ std::ostream &operator << (std::ostream &o, task_deque &l) {
     return o;
 }
 
+struct task_timeout_heap_compare {
+    bool operator ()(const task *a, const task *b) const {
+        // handle -1 case, which we want at the end
+        if (a->ts.tv_sec < 0) return true;
+        return a->ts > b->ts;
+    }
+};
+
 size_t runner::count() {
     mutex::scoped_lock l(runner::tmutex);
     return runner::runners.size();
@@ -73,15 +81,19 @@ void runner::check_io() {
             std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
             int timeout_ms = -1;
             if (!waiters.empty()) {
-                if (waiters.front()->ts <= now) {
-                    // epoll_wait must return immediately
-                    timeout_ms = 0;
-                } else {
-                    timespec r = waiters.front()->ts - now;
-                    // convert timespec to milliseconds
-                    timeout_ms = r.tv_sec * 1000;
-                    // 1 millisecond is 1 million nanoseconds
-                    timeout_ms += r.tv_nsec / 1000000;
+                if (waiters.front()->ts.tv_sec > 0) {
+                    if (waiters.front()->ts <= now) {
+                        // epoll_wait must return immediately
+                        timeout_ms = 0;
+                    } else {
+                        timespec r = waiters.front()->ts - now;
+                        // convert timespec to milliseconds
+                        timeout_ms = r.tv_sec * 1000;
+                        // 1 millisecond is 1 million nanoseconds
+                        timeout_ms += r.tv_nsec / 1000000;
+                        // help avoid spinning on timeouts smaller than 1 ms
+                        if (timeout_ms <= 0) timeout_ms = 1;
+                    }
                 }
             }
 
@@ -92,27 +104,47 @@ void runner::check_io() {
             for (event_vector::const_iterator i=events.begin();
                 i!=events.end();++i)
             {
-                task *c = (task *)i->data.ptr;
-                goto_runq = true;
-                add_to_runqueue(c);
+                pollfd *pfd = (pollfd *)i->data.ptr;
+                pfd->revents = i->events;
             }
+
+            task_heap keep_waiters;
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
+                bool keep_waiting = true;
+                if ((*i)->nfds > 0) {
+                    for (nfds_t x=0; x<(*i)->nfds; ++x) {
+                        if ((*i)->fds[x].revents) {
+                            keep_waiting = false;
+                            add_to_runqueue(*i);
+                            break;
+                        }
+                    }
+                }
+                if ((*i)->ts.tv_sec > 0 && (*i)->ts <= now) {
+                    keep_waiting = false;
+                    add_to_runqueue(*i);
+                }
+
+                if (keep_waiting) {
+                    keep_waiters.push_back(*i);
+                } else {
+                    goto_runq = true;
+                }
+            }
+
+            waiters.swap(keep_waiters);
 
             // assume all EPOLLONESHOT
             //efd.maxevents -= events.size();
 
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // fire expired timeouts
             // TODO: make sure task wasn't already triggered by epoll loop
-            while (!waiters.empty() && waiters.front()->ts <= now) {
-                std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                goto_runq = true;
-                task *t = waiters.back();
-                if (add_to_runqueue(t)) {
-                    // only timeout if epoll() loop didnt put it in runq
-                    t->state = task::state_timeout;
-                }
-                waiters.pop_back();
-            }
+            //while (!waiters.empty() && waiters.front()->ts <= now) {
+            //    std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+            //    task *t = waiters.back();
+            //    waiters.pop_back();
+            //}
 
             // added some to runqueue, time to exit
             if (goto_runq) return;
@@ -159,7 +191,7 @@ void *runner::start(void *arg) {
 
 task::task(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
-    f(f_), state(state_idle)
+    f(f_), state(state_idle), fds(0), nfds(0)
 {
 }
 
@@ -236,33 +268,55 @@ void task::sleep(unsigned int ms) {
 
 void runner::add_waiter(task *t) {
     timespec abs;
-    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
-    t->ts += abs;
+    if (t->ts.tv_sec != -1) {
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
+        t->ts += abs;
+    }
     t->state = task::state_idle;
     waiters.push_back(t);
 }
 
-bool task::poll(int fd, int events, unsigned int ms) {
+bool task::poll(int fd, short events, unsigned int ms) {
+    pollfd fds = {fd, events, 0};
+    return task::poll(&fds, 1, ms);
+}
+
+int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     task *t = task::self();
     runner *r = runner::self();
-    // XXX: shouldn't be in the runqueue anyway
-    //r->delete_from_runqueue(t);
     // TODO: maybe make a state for waiting io?
     t->state = state_idle;
-    if (ms) {
-        t->ts.tv_sec = ms / 1000;
-        t->ts.tv_nsec = (ms % 1000) * 1000000;
-        r->add_waiter(t);
+    if (timeout) {
+        t->ts.tv_sec = timeout / 1000;
+        t->ts.tv_nsec = (timeout % 1000) * 1000000;
+    } else {
+        t->ts.tv_sec = -1;
+        t->ts.tv_nsec = -1;
+    }
+    r->add_waiter(t);
+
+    for (nfds_t i=0; i<nfds; ++i) {
+        epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.events = fds[i].events;
+        ev.data.ptr = &fds[i];
+        assert(r->efd.add(fds[i].fd, ev) == 0);
     }
 
-    epoll_event ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.events = events;
-    ev.data.ptr = t;
-    assert(r->efd.add(fd, ev) == 0);
+    t->fds = fds;
+    t->nfds = nfds;
     // will be woken back up by epoll loop in schedule()
     task::yield();
-    assert(r->efd.remove(fd) == 0);
-    return t->state != state_timeout;
+
+    t->fds = NULL;
+    t->nfds = 0;
+
+    // TODO: figure out a way to not need to remove on every loop
+    int rvalue = 0;
+    for (nfds_t i=0; i<nfds; ++i) {
+        if (fds[i].revents) rvalue++;
+        assert(r->efd.remove(fds[i].fd) == 0);
+    }
+    return rvalue;
 }
 
