@@ -86,26 +86,20 @@ static void listen_co() {
     socket_fd s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("127.0.0.1", 0);
-    //std::cout << "binding to " << addr << "\n";
     s.bind(addr);
     s.getsockname(addr);
-    //std::cout << "binded to " << addr << "\n";
     s.listen();
 
     //task::spawn(boost::bind(connect_to, addr));
     runner::spawn(boost::bind(connect_to, addr));
 
-    //std::cout << "waiting for connection\n";
     task::poll(s.fd, EPOLLIN|EPOLLONESHOT);
 
     address client_addr;
     socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
-    //std::cout << "accepted " << client_addr << "\n";
-    //std::cout << "client socket: " << cs << "\n";
     task::poll(cs.fd, EPOLLIN|EPOLLONESHOT);
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
-    //std::cout << "nr: " << nr << "\n";
 
     // socket should be disconnected because
     // when connect_to task is finished
@@ -130,7 +124,6 @@ static void sleeper(semaphore &s) {
     BOOST_CHECK_EQUAL(passed.tv_sec, 0);
     // check that at least 10 milliseconds passed
     BOOST_CHECK_GE(passed.tv_nsec, 10*1000000);
-    std::cout << "time passed: " << passed.tv_nsec << "\n";
     s.post();
 }
 

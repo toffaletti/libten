@@ -28,14 +28,12 @@ typedef std::vector<epoll_event> event_vector;
 void runner::run_queued_tasks() {
     mutex::scoped_lock l(mut);
     while (!runq.empty()) {
-        //std::cout << "runq: " << runq << "\n";
         task *c = runq.front();
         runq.pop_front();
         l.unlock();
         task::swap(&scheduler, c);
         switch (c->state) {
         case task::state_idle:
-            std::cout << "task is sleeping: " << c << "\n";
             // task wants to sleep
             l.lock();
             break;
@@ -86,14 +84,10 @@ void runner::check_io() {
                 }
             }
 
-            std::cout << runner::self() << " epoll wait: " << timeout_ms << "\n";
-            std::cout << "events size: " << events.size() << "\n";
             if (events.empty()) {
                 events.resize(efd.maxevents ? efd.maxevents : 1);
             }
             efd.wait(events, timeout_ms);
-            std::cout << "got " << events.size() << " events\n";
-            std::cout << "now: " << now << "\n";
             for (event_vector::const_iterator i=events.begin();
                 i!=events.end();++i)
             {
@@ -102,24 +96,19 @@ void runner::check_io() {
             }
 
             // assume all EPOLLONESHOT
-            //std::cout << "maxevents: " << efd.maxevents << "\n";
             efd.maxevents -= events.size();
-            //std::cout << "maxevents: " << efd.maxevents << "\n";
-
 
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // fire expired timeouts
             // TODO: make sure task wasn't already triggered by epoll loop
-            std::cout << "waiters: " << waiters.size() << "\n";
             while (!waiters.empty() && waiters.front()->ts <= now) {
                 std::pop_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                std::cout << "adding waiter to runq\n";
                 add_to_runqueue(waiters.back());
                 waiters.pop_back();
             }
 
         } catch (const std::exception &e) {
-            std::cout << "epoll wait error: " << e.what() << "\n";
+            abort();
         }
     }
 }
@@ -212,9 +201,7 @@ void runner::add_to_empty_runqueue(task *c) {
     mutex::scoped_lock l(tmutex);
     bool added = false;
     for (runner::list::iterator i=runners.begin(); i!=runners.end(); ++i) {
-        //std::cout << "testing runner: " << *i << "\n";
         if ((*i)->add_to_runqueue_if_asleep(c)) {
-            //std::cout << "added to runner: " << (*i) << "\n";
             added = true;
             break;
         }
