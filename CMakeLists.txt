@@ -6,7 +6,7 @@ include_directories(../boost.context-0.7.3)
 set(ASM ../boost.context-0.7.3/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
-add_library(fw task.cc coroutine.cc ${ASM})
+add_library(fw task.cc ${ASM})
 target_link_libraries(fw rt)
 
 add_executable(test_task test_task.cc)

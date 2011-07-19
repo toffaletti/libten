@@ -9,7 +9,21 @@ __thread runner *runner_ = NULL;
 runner::list runner::runners;
 mutex runner::tmutex;
 
-std::ostream &operator << (std::ostream &o, task_deque &l) {
+static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
+    // convert milliseconds to seconds and nanoseconds
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000000;
+}
+
+static unsigned int timespec_to_milliseconds(const timespec &ts) {
+    // convert timespec to milliseconds
+    unsigned int ms = ts.tv_sec * 1000;
+    // 1 millisecond is 1 million nanoseconds
+    ms += ts.tv_nsec / 1000000;
+    return ms;
+}
+
+static std::ostream &operator << (std::ostream &o, task_deque &l) {
     o << "[";
     for (task_deque::iterator i=l.begin(); i!=l.end(); ++i) {
         o << *i << ",";
@@ -86,11 +100,7 @@ void runner::check_io() {
                 // epoll_wait must return immediately
                 timeout_ms = 0;
             } else {
-                timespec r = waiters.front()->ts - now;
-                // convert timespec to milliseconds
-                timeout_ms = r.tv_sec * 1000;
-                // 1 millisecond is 1 million nanoseconds
-                timeout_ms += r.tv_nsec / 1000000;
+                timeout_ms = timespec_to_milliseconds(waiters.front()->ts - now);
                 // help avoid spinning on timeouts smaller than 1 ms
                 if (timeout_ms <= 0) timeout_ms = 1;
             }
@@ -241,9 +251,7 @@ void runner::add_to_empty_runqueue(task *c) {
 void task::sleep(unsigned int ms) {
     task *t = task::self();
     runner *r = runner::self();
-    // convert milliseconds to seconds and nanoseconds
-    t->ts.tv_sec = ms / 1000;
-    t->ts.tv_nsec = (ms % 1000) * 1000000;
+    milliseconds_to_timespec(ms, t->ts);
     r->add_waiter(t);
     task::yield();
 }
@@ -269,8 +277,7 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     // TODO: maybe make a state for waiting io?
     t->state = state_idle;
     if (timeout) {
-        t->ts.tv_sec = timeout / 1000;
-        t->ts.tv_nsec = (timeout % 1000) * 1000000;
+        milliseconds_to_timespec(timeout, t->ts);
     } else {
         t->ts.tv_sec = -1;
         t->ts.tv_nsec = -1;
@@ -293,7 +300,8 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     t->fds = NULL;
     t->nfds = 0;
 
-    // TODO: figure out a way to not need to remove on every loop
+    // TODO: figure out a way to not need to remove on every loop by using EPOLLET
+    // right now the epoll_event.data.ptr is on the task's stack, so not possible.
     int rvalue = 0;
     for (nfds_t i=0; i<nfds; ++i) {
         if (fds[i].revents) rvalue++;
