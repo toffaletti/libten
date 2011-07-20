@@ -5,6 +5,7 @@
 #include "task.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
+#include "channel.hh"
 
 #include <iostream>
 
@@ -185,7 +186,7 @@ BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     s.wait();
 }
 
-void sleep_many(int &count) {
+static void sleep_many(int &count) {
     count++;
     task::sleep(5);
     count++;
@@ -201,4 +202,21 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
     runner *r = runner::self();
     r->schedule(false);
     BOOST_CHECK_EQUAL(count, 3000);
+}
+
+static void channel_send(channel &c) {
+    static char str[] = "hi";
+    c.send(1875309);
+    c.send(str);
+}
+
+BOOST_AUTO_TEST_CASE(channel_test) {
+    channel c(10);
+    runner::spawn(boost::bind(channel_send, boost::ref(c)));
+    runner *r = runner::self();
+    r->schedule(false);
+    intptr_t d = c.recv<uintptr_t>();
+    BOOST_CHECK_EQUAL(d, 1875309);
+    char *str = c.recv<char *>();
+    BOOST_CHECK_EQUAL(str, "hi");
 }

@@ -23,10 +23,30 @@ public:
             if (lock_) { lock(); }
         }
 
-        void lock() { m.lock(); }
-        bool trylock() { return m.trylock(); }
-        bool timedlock(const struct timespec &abs_timeout) { return m.timedlock(abs_timeout); }
-        void unlock() { m.unlock(); }
+        void lock() { m.lock(); locked = true; }
+
+        bool trylock() {
+            if (m.trylock()) {
+                locked = true;
+                return true;
+            }
+            return false;
+        }
+
+        bool timedlock(const struct timespec &abs_timeout) {
+            if (m.timedlock(abs_timeout)) {
+                locked = true;
+                return true;
+            }
+            return false;
+        }
+
+        void unlock() {
+            if (locked) {
+                locked = false;
+                m.unlock();
+            }
+        }
 
         ~scoped_lock() {
             unlock();
@@ -34,6 +54,7 @@ public:
     protected:
         friend class condition;
         mutex &m;
+        bool locked;
     };
 
 protected:
