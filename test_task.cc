@@ -258,14 +258,11 @@ static void channel_multi_send(channel &c) {
 }
 
 static void channel_multi_recv(channel &c) {
-    std::cout << "bar\n";
     for (int i=0; i<5; ++i) {
         intptr_t d = c.recv<uintptr_t>();
-        std::cout << "recv: " << i << "\n";
         BOOST_CHECK_EQUAL(d, 1234);
     }
     BOOST_CHECK(c.empty());
-    std::cout << "foo\n";
 }
 
 BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {

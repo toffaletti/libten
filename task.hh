@@ -226,16 +226,16 @@ private:
 
     void add_waiter(task *t);
 
-    runner() : asleep(false), current_task(0) {
+    runner() : asleep(false), current_task(&scheduler) {
         tt=thread::self();
     }
 
-    runner(task *c) : asleep(false), current_task(0) {
+    runner(task *c) : asleep(false), current_task(&scheduler) {
         add_to_runqueue(c);
         thread::create(tt, start, this);
     }
 
-    runner(const task::proc &f) : asleep(false), current_task(0) {
+    runner(const task::proc &f) : asleep(false), current_task(&scheduler) {
         task *c = new task(f);
         add_to_runqueue(c);
         thread::create(tt, start, this);

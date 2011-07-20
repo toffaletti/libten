@@ -199,9 +199,11 @@ void task::swap(task *from, task *to) {
         to->state = state_running;
     if (from->state == state_running)
         from->state = state_idle;
+    // do the actual coro swap
     from->co.swap(&to->co);
     if (from->state == state_idle)
         from->state = state_running;
+    runner::self()->set_task(from);
     // don't modify to state after
     // because it might have been changed
 }
@@ -212,6 +214,7 @@ void task::spawn(const proc &f) {
 }
 
 void task::yield() {
+    assert(task::self() != &runner::self()->scheduler);
     task::self()->co.swap(&runner::self()->scheduler.co);
 }
 
@@ -229,11 +232,12 @@ void task::start(task *c) {
 }
 
 void task::migrate(runner *to) {
-    task *c = task::self();
+    task *t = task::self();
+    assert(t->co.main() == false);
     // if to is NULL, first available runner is used
     // or a new one is spawned
-    c->in = to;
-    c->state = state_migrating;
+    t->in = to;
+    t->state = state_migrating;
     task::yield();
     // will resume in other runner
 }
@@ -254,6 +258,7 @@ void runner::add_to_empty_runqueue(task *c) {
 
 void task::sleep(unsigned int ms) {
     task *t = task::self();
+    assert(t->co.main() == false);
     runner *r = runner::self();
     milliseconds_to_timespec(ms, t->ts);
     r->add_waiter(t);
@@ -261,6 +266,7 @@ void task::sleep(unsigned int ms) {
 }
 
 void task::suspend(mutex::scoped_lock &l) {
+    assert(co.main() == false);
     state = task::state_idle;
     in = runner::self();
     l.unlock();
@@ -289,6 +295,7 @@ bool task::poll(int fd, short events, unsigned int ms) {
 
 int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     task *t = task::self();
+    assert(t->co.main() == false);
     runner *r = runner::self();
     // TODO: maybe make a state for waiting io?
     t->state = state_idle;
