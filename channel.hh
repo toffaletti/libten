@@ -4,8 +4,6 @@
 #include <boost/circular_buffer.hpp>
 #include "thread.hh"
 
-// TODO: fix this so it doesn't block in a single thread
-
 // based on bounded_buffer example
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
 class channel : boost::noncopyable {
@@ -57,8 +55,9 @@ private:
     size_type m_unread;
     container_type m_container;
     mutex m_mutex;
-    condition m_not_empty;
-    condition m_not_full;
+    // using task-aware conditions
+    task::condition m_not_empty;
+    task::condition m_not_full;
 
     bool is_empty() const { return m_unread == 0; }
     bool is_full() const { return m_unread >= m_container.capacity(); }

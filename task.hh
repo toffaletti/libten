@@ -43,6 +43,9 @@ protected:
     static void swap(task *from, task *to);
     static task *self();
 
+    void suspend(mutex::scoped_lock &l);
+    void resume(mutex::scoped_lock &l);
+
 private:
     coroutine co;
     proc f;
@@ -55,6 +58,36 @@ private:
     task(const proc &f_, size_t stack_size=16*1024);
 
     static void start(task *);
+public:
+
+    class condition : boost::noncopyable {
+    public:
+        typedef std::deque<task *> task_deque;
+        condition() {}
+
+        void signal() {
+            mutex::scoped_lock l(mm);
+            if (!waiters.empty()) {
+                task *t = waiters.front();
+                waiters.pop_front();
+                t->resume(l);
+            }
+        }
+
+        void broadcast() {}
+
+        void wait(mutex::scoped_lock &l) {
+            task *t = task::self();
+            {
+                mutex::scoped_lock l(mm);
+                waiters.push_back(t);
+            }
+            t->suspend(l);
+        }
+    private:
+        mutex mm;
+        task_deque waiters;
+    };
 };
 
 typedef std::deque<task*> task_deque;

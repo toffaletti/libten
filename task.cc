@@ -256,6 +256,18 @@ void task::sleep(unsigned int ms) {
     task::yield();
 }
 
+void task::suspend(mutex::scoped_lock &l) {
+    state = task::state_idle;
+    in = runner::self();
+    l.unlock();
+    task::yield();
+    l.lock();
+}
+
+void task::resume(mutex::scoped_lock &l) {
+    in->add_to_runqueue(this);
+}
+
 void runner::add_waiter(task *t) {
     timespec abs;
     if (t->ts.tv_sec != -1) {
