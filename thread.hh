@@ -155,7 +155,7 @@ struct thread {
     }
 
     friend std::ostream &operator <<(std::ostream &o, const thread &t) {
-        o << t.id;
+        o << "thread:" << t.id;
         return o;
     }
 

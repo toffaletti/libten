@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(schedule_test) {
     for (int i=0; i<10; ++i) {
         task::spawn(boost::bind(co1, boost::ref(count)));
     }
-    t->schedule(false);
+    t->schedule();
     BOOST_CHECK_EQUAL(20, count);
 }
 
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(runner_migrate) {
     BOOST_CHECK(runner::count() >= 0);
     runner *t = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
-    BOOST_CHECK(runner::count() > 1);
+    BOOST_CHECK(runner::count() == 1);
 }
 
 static void connect_to(address addr) {
@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(socket_io) {
     semaphore s;
     task::spawn(boost::bind(listen_co, false, boost::ref(s)));
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     s.wait();
 }
 
@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(socket_io_mt) {
     semaphore s;
     task::spawn(boost::bind(listen_co, true, boost::ref(s)));
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     s.wait();
 }
 
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(task_sleep) {
     semaphore s;
     task::spawn(boost::bind(sleeper, boost::ref(s)));
     runner *t = runner::self();
-    t->schedule(false);
+    t->schedule();
     s.wait();
 }
 
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     semaphore s;
     task::spawn(boost::bind(listen_timeout_co, boost::ref(s)));
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     s.wait();
 }
 
@@ -200,7 +200,7 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
         task::spawn(boost::bind(sleep_many, boost::ref(count)));
     }
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(channel_test) {
     task::spawn(boost::bind(channel_recv, boost::ref(c)));
     task::spawn(boost::bind(channel_send, boost::ref(c)));
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     BOOST_CHECK(c.empty());
 }
 
@@ -231,7 +231,7 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
     task::spawn(boost::bind(channel_recv, boost::ref(c)));
     task::spawn(boost::bind(channel_send, boost::ref(c)));
     runner *r = runner::self();
-    r->schedule(false);
+    r->schedule();
     BOOST_CHECK(c.empty());
 }
 
@@ -249,5 +249,32 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
     runner::spawn(boost::bind(channel_recv_mt, boost::ref(c), boost::ref(s)));
     runner::spawn(boost::bind(channel_send, boost::ref(c)));
     s.wait();
+    BOOST_CHECK(c.empty());
+}
+
+static void channel_multi_send(channel &c) {
+    c.send(1234);
+    c.send(1234);
+}
+
+static void channel_multi_recv(channel &c) {
+    std::cout << "bar\n";
+    for (int i=0; i<5; ++i) {
+        intptr_t d = c.recv<uintptr_t>();
+        std::cout << "recv: " << i << "\n";
+        BOOST_CHECK_EQUAL(d, 1234);
+    }
+    BOOST_CHECK(c.empty());
+    std::cout << "foo\n";
+}
+
+BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
+    channel c(1);
+    c.send(1234);
+    task::spawn(boost::bind(channel_multi_recv, boost::ref(c)));
+    task::spawn(boost::bind(channel_multi_send, boost::ref(c)));
+    task::spawn(boost::bind(channel_multi_send, boost::ref(c)));
+    runner *r = runner::self();
+    r->schedule();
     BOOST_CHECK(c.empty());
 }

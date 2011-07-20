@@ -10,6 +10,39 @@
 #include "descriptors.hh"
 #include "timespec.hh"
 
+#if defined(__GLIBCXX__) // g++ 3.4+
+using __gnu_cxx::__atomic_add;
+using __gnu_cxx::__exchange_and_add;
+#endif
+
+class atomic_count
+{
+public:
+    explicit atomic_count( int v ) : value_( v ) {}
+
+    int operator++()
+    {
+        return __exchange_and_add( &value_, +1 ) + 1;
+    }
+
+    int operator--()
+    {
+        return __exchange_and_add( &value_, -1 ) - 1;
+    }
+
+    operator int() const
+    {
+        return __exchange_and_add( &value_, 0 );
+    }
+
+private:
+    atomic_count(atomic_count const &);
+    atomic_count & operator=(atomic_count const &);
+
+    mutable _Atomic_word value_;
+};
+
+
 class runner;
 
 namespace detail {
@@ -39,6 +72,7 @@ protected:
     friend class runner;
     friend struct task_timeout_heap_compare;
     task() : state(state_running), fds(0), nfds(0) {}
+    ~task() { if (!co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
     static task *self();
@@ -47,6 +81,8 @@ protected:
     void resume(mutex::scoped_lock &l);
 
 private:
+    static atomic_count ntasks;
+
     coroutine co;
     proc f;
     state_e state;
@@ -114,7 +150,7 @@ public:
         wakeup_nolock();
     }
 
-    void schedule(bool loop=true);
+    void schedule();
 
     static size_t count();
 

@@ -6,6 +6,8 @@ namespace detail {
 __thread runner *runner_ = NULL;
 }
 
+// statics
+atomic_count task::ntasks(0);
 runner::list runner::runners;
 mutex runner::tmutex;
 
@@ -144,7 +146,7 @@ void runner::check_io() {
     }
 }
 
-void runner::schedule(bool loop) {
+void runner::schedule() {
     for (;;) {
         run_queued_tasks();
         check_io();
@@ -155,11 +157,12 @@ void runner::schedule(bool loop) {
             if (!runq.empty()) continue;
         }
 
-        if (loop)
+        if (task::ntasks > 0) {
             // block waiting for tasks to be scheduled on this runner
             sleep();
-        else
+        } else {
             break;
+        }
     }
 }
 
@@ -182,6 +185,7 @@ task::task(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
     f(f_), state(state_idle), fds(0), nfds(0)
 {
+    ++ntasks;
 }
 
 task *task::self() {

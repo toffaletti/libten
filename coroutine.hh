@@ -47,6 +47,8 @@ public:
         ctxt.swap(&to->ctxt);
     }
 
+    bool main() { return stack == 0; }
+
 private:
     context ctxt;
 #ifndef NVALGRIND

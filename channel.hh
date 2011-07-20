@@ -16,6 +16,8 @@ public:
     template <typename T> size_type send(T *p) {
         mutex::scoped_lock l(m_mutex);
         size_type unread = m_unread;
+        // TODO: maybe if capacity is 1 then we block
+        // waiting for m_not_full after the send.
         while (is_full()) {
             m_not_full.wait(l);
         }
