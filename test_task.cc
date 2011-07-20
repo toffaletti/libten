@@ -67,7 +67,6 @@ BOOST_AUTO_TEST_CASE(runner_migrate) {
     BOOST_CHECK(runner::count() >= 0);
     runner *t = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
-    BOOST_CHECK(runner::count() == 1);
 }
 
 static void connect_to(address addr) {

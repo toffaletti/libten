@@ -151,17 +151,17 @@ void runner::schedule() {
         run_queued_tasks();
         check_io();
 
-        {
-            // check_io might have filled runqueue again
-            mutex::scoped_lock l(mut);
-            if (!runq.empty()) continue;
-        }
-
-        if (task::ntasks > 0) {
-            // block waiting for tasks to be scheduled on this runner
-            sleep();
-        } else {
-            break;
+        // check_io might have filled runqueue again
+        mutex::scoped_lock l(mut);
+        if (runq.empty()) {
+            if (task::ntasks > 0) {
+                // block waiting for tasks to be scheduled on this runner
+                sleep(l);
+            } else {
+                l.unlock();
+                wakeup_all_runners();
+                return;
+            }
         }
     }
 }
@@ -169,15 +169,14 @@ void runner::schedule() {
 void *runner::start(void *arg) {
     using namespace detail;
     runner_ = (runner *)arg;
+    thread::self().detach();
     detail::runner_->append_to_list();
     try {
         detail::runner_->schedule();
     } catch (...) {}
     detail::runner_->remove_from_list();
-    // TODO: if detatched, free memory here
-    //if (detail::runner_->detached) {
-    //    delete detail::runner_;
-    //}
+    delete detail::runner_;
+    detail::runner_ = NULL;
     return NULL;
 }
 
@@ -234,8 +233,9 @@ void task::start(task *c) {
 void task::migrate(runner *to) {
     task *t = task::self();
     assert(t->co.main() == false);
-    // if to is NULL, first available runner is used
+    // if "to" is NULL, first available runner is used
     // or a new one is spawned
+    // logic is in schedule()
     t->in = to;
     t->state = state_migrating;
     task::yield();

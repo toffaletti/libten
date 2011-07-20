@@ -241,19 +241,20 @@ private:
         thread::create(tt, start, this);
     }
 
-    void sleep() {
+    void sleep(mutex::scoped_lock &l) {
         // move to the head of the list
         // to simulate a FIFO
         // if there are too many threads
         // and not enough tasks, we can
         // use a cond.timedwait here and
         // exit a thread that times out
+        l.unlock();
         {
-            mutex::scoped_lock l(tmutex);
+            mutex::scoped_lock tl(tmutex);
             runners.remove(this);
             runners.push_front(this);
         }
-        mutex::scoped_lock l(mut);
+        l.lock();
         asleep = true;
         while (asleep) {
             cond.wait(l);
@@ -268,6 +269,14 @@ private:
     void remove_from_list() {
         mutex::scoped_lock l(tmutex);
         runners.remove(this);
+    }
+
+    void wakeup_all_runners() {
+        mutex::scoped_lock l(tmutex);
+        for (runner::list::iterator i=runners.begin(); i!=runners.end(); ++i) {
+            if (this == *i) continue;
+            (*i)->wakeup();
+        }
     }
 
     void run_queued_tasks();
