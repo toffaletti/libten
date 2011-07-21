@@ -248,6 +248,13 @@ private:
         // and not enough tasks, we can
         // use a cond.timedwait here and
         // exit a thread that times out
+
+        // must set sleep here
+        // another thread could add to runq
+        // (a resume() for example)
+        // during the unlock and if we're
+        // not marked asleep, then we
+        // end up sleeping while runq isn't empty
         asleep = true;
         l.unlock();
         {
