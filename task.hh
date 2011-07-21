@@ -78,14 +78,14 @@ protected:
     static task *self();
 
     void suspend(mutex::scoped_lock &l);
-    void resume(mutex::scoped_lock &l);
+    void resume();
 
 private:
     static atomic_count ntasks;
 
     coroutine co;
     proc f;
-    state_e state;
+    volatile state_e state;
     timespec ts;
     runner *in;
     pollfd *fds;
@@ -106,7 +106,7 @@ public:
             if (!waiters.empty()) {
                 task *t = waiters.front();
                 waiters.pop_front();
-                t->resume(l);
+                t->resume();
             }
         }
 
@@ -115,7 +115,7 @@ public:
         void wait(mutex::scoped_lock &l) {
             task *t = task::self();
             {
-                mutex::scoped_lock l(mm);
+                mutex::scoped_lock ll(mm);
                 waiters.push_back(t);
             }
             t->suspend(l);
@@ -248,6 +248,7 @@ private:
         // and not enough tasks, we can
         // use a cond.timedwait here and
         // exit a thread that times out
+        asleep = true;
         l.unlock();
         {
             mutex::scoped_lock tl(tmutex);
@@ -255,7 +256,6 @@ private:
             runners.push_front(this);
         }
         l.lock();
-        asleep = true;
         while (asleep) {
             cond.wait(l);
         }

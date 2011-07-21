@@ -23,8 +23,8 @@ public:
         }
         m_container.push_front(p);
         ++m_unread;
-        l.unlock();
         m_not_empty.signal();
+        l.unlock();
         return unread;
     }
 
@@ -40,8 +40,8 @@ public:
         }
         // we don't pop_back because the item will just get overwritten
         item = reinterpret_cast<T>(m_container[--m_unread]);
-        l.unlock();
         m_not_full.signal();
+        l.unlock();
         return item;
     }
 

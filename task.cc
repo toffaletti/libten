@@ -147,34 +147,36 @@ void runner::check_io() {
 }
 
 void runner::schedule() {
-    for (;;) {
-        run_queued_tasks();
-        check_io();
+    detail::runner_->append_to_list();
+    try {
+        for (;;) {
+            run_queued_tasks();
+            check_io();
 
-        // check_io might have filled runqueue again
-        mutex::scoped_lock l(mut);
-        if (runq.empty()) {
-            if (task::ntasks > 0) {
-                // block waiting for tasks to be scheduled on this runner
-                sleep(l);
-            } else {
-                l.unlock();
-                wakeup_all_runners();
-                return;
+            // check_io might have filled runqueue again
+            mutex::scoped_lock l(mut);
+            if (runq.empty()) {
+                if (task::ntasks > 0) {
+                    // block waiting for tasks to be scheduled on this runner
+                    sleep(l);
+                } else {
+                    l.unlock();
+                    wakeup_all_runners();
+                    break;
+                }
             }
         }
-    }
+    } catch (...) {}
+    detail::runner_->remove_from_list();
 }
 
 void *runner::start(void *arg) {
     using namespace detail;
     runner_ = (runner *)arg;
     thread::self().detach();
-    detail::runner_->append_to_list();
     try {
         detail::runner_->schedule();
     } catch (...) {}
-    detail::runner_->remove_from_list();
     delete detail::runner_;
     detail::runner_ = NULL;
     return NULL;
@@ -217,17 +219,18 @@ void task::yield() {
     task::self()->co.swap(&runner::self()->scheduler.co);
 }
 
-void task::start(task *c) {
+void task::start(task *t) {
     try {
-        c->f();
-    } catch(...) {
+        t->f();
+    } catch(std::exception &e) {
+        fprintf(stderr, "exception in task(%p): %s\n", t, e.what());
         abort();
     }
     // NOTE: the scheduler deletes tasks in exiting state
     // so this function won't ever return. don't expect
     // objects on this stack to have the destructor called
-    c->state = state_exiting;
-    c->co.swap(&runner::self()->scheduler.co);
+    t->state = state_exiting;
+    t->co.swap(&runner::self()->scheduler.co);
 }
 
 void task::migrate(runner *to) {
@@ -274,8 +277,8 @@ void task::suspend(mutex::scoped_lock &l) {
     l.lock();
 }
 
-void task::resume(mutex::scoped_lock &l) {
-    in->add_to_runqueue(this);
+void task::resume() {
+    assert(in->add_to_runqueue(this) == true);
 }
 
 void runner::add_waiter(task *t) {
