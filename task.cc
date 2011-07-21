@@ -1,6 +1,7 @@
 #include "task.hh"
 
-#include <iostream>
+#include <algorithm>
+#include <set>
 
 namespace detail {
 __thread runner *runner_ = NULL;
@@ -85,6 +86,16 @@ void runner::run_queued_tasks() {
     }
 }
 
+template <typename SetT> struct in_set {
+    SetT &set;
+
+    in_set(SetT &s) : set(s) {}
+
+    bool operator()(typename SetT::key_type &k) {
+        return set.count(k) > 0;
+    }
+};
+
 void runner::check_io() {
     event_vector events(efd.maxevents ? efd.maxevents : 1);
     if (waiters.empty()) return;
@@ -112,37 +123,37 @@ void runner::check_io() {
             events.resize(efd.maxevents ? efd.maxevents : 1);
         }
         efd.wait(events, timeout_ms);
+
+        std::set<task *> wake_tasks;
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
-            pollfd *pfd = (pollfd *)i->data.ptr;
-            pfd->revents = i->events;
+            task *t = pollfds[i->data.fd].first;
+            pollfd *pfd = pollfds[i->data.fd].second;
+            if (t && pfd) {
+                pfd->revents = i->events;
+                add_to_runqueue(t);
+                wake_tasks.insert(t);
+            } else {
+                fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
+            }
+            // TODO: otherwise we might want to remove fd from epoll
         }
 
-        task_heap keep_waiters;
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
-            bool keep_waiting = true;
-            if ((*i)->nfds > 0) {
-                for (nfds_t x=0; x<(*i)->nfds; ++x) {
-                    if ((*i)->fds[x].revents) {
-                        keep_waiting = false;
-                        add_to_runqueue(*i);
-                        break;
-                    }
-                }
-            }
-            if (keep_waiting && (*i)->ts.tv_sec > 0 && (*i)->ts <= now) {
-                keep_waiting = false;
-                add_to_runqueue(*i);
-            }
-            if (keep_waiting) {
-                keep_waiters.push_back(*i);
-            } else {
-                done = true;
+            task *t = *i;
+            if (t->ts.tv_sec > 0 && t->ts <= now) {
+                wake_tasks.insert(t);
+                add_to_runqueue(t);
             }
         }
-        waiters.swap(keep_waiters);
+
+        task_heap::iterator nend =
+            std::remove_if(waiters.begin(), waiters.end(), in_set<std::set<task *> >(wake_tasks));
+        waiters.erase(nend, waiters.end());
+        // there are tasks to wake up!
+        if (!wake_tasks.empty()) done = true;
     }
 }
 
@@ -184,7 +195,7 @@ void *runner::start(void *arg) {
 
 task::task(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
-    f(f_), state(state_idle), fds(0), nfds(0)
+    f(f_), state(state_idle)
 {
     ++ntasks;
 }
@@ -313,25 +324,35 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     for (nfds_t i=0; i<nfds; ++i) {
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
-        ev.events = fds[i].events;
-        ev.data.ptr = &fds[i];
-        assert(r->efd.add(fds[i].fd, ev) == 0);
+        // make room for the highest fd number
+        int fd = fds[i].fd;
+        if (r->pollfds.size() <= fd) {
+            r->pollfds.resize(fd+1);
+        }
+        r->pollfds[fd].first = t;
+        r->pollfds[fd].second = &fds[i];
+        // TODO: need more tests for edge triggered events
+        ev.events = fds[i].events | EPOLLET;
+        ev.data.fd = fd;
+        assert(r->efd.add(fd, ev) == 0);
     }
 
-    t->fds = fds;
-    t->nfds = nfds;
+    //t->fds = fds;
+    //t->nfds = nfds;
     // will be woken back up by epoll loop in schedule()
     task::yield();
 
-    t->fds = NULL;
-    t->nfds = 0;
+    //t->fds = NULL;
+    //t->nfds = 0;
 
     // TODO: figure out a way to not need to remove on every loop by using EPOLLET
     // right now the epoll_event.data.ptr is on the task's stack, so not possible.
     int rvalue = 0;
     for (nfds_t i=0; i<nfds; ++i) {
         if (fds[i].revents) rvalue++;
-        assert(r->efd.remove(fds[i].fd) == 0);
+        //assert(r->efd.remove(fds[i].fd) == 0);
+        r->pollfds[fds[i].fd].first = 0;
+        r->pollfds[fds[i].fd].second = 0;
     }
     return rvalue;
 }

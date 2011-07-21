@@ -4,6 +4,7 @@
 #include <poll.h>
 #include <deque>
 #include <list>
+#include <utility>
 #include <boost/function.hpp>
 #include "thread.hh"
 #include "coroutine.hh"
@@ -71,7 +72,7 @@ public:
 protected:
     friend class runner;
     friend struct task_timeout_heap_compare;
-    task() : state(state_running), fds(0), nfds(0) {}
+    task() : state(state_running) {}
     ~task() { if (!co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
@@ -88,8 +89,6 @@ private:
     volatile state_e state;
     timespec ts;
     runner *in;
-    pollfd *fds;
-    nfds_t nfds;
 
     task(const proc &f_, size_t stack_size=16*1024);
 
@@ -223,6 +222,10 @@ private:
     typedef std::vector<task *> task_heap;
     // tasks waiting with a timeout value set
     task_heap waiters;
+
+    // key is the fd number
+    typedef std::vector< std::pair<task *, pollfd *> > poll_task_array;
+    poll_task_array pollfds;
 
     void add_waiter(task *t);
 
