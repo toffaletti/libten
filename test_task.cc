@@ -9,6 +9,14 @@
 
 #include <iostream>
 
+BOOST_AUTO_TEST_CASE(task_size) {
+    printf("sizeof(context) == %ju\n", sizeof(context));
+    printf("sizeof(int) = %ju\n", sizeof(int));
+    printf("sizeof(coroutine) = %ju\n", sizeof(coroutine));
+    printf("sizeof(timespec) = %ju\n", sizeof(timespec));
+    printf("sizeof(task) = %ju\n", sizeof(task));
+}
+
 BOOST_AUTO_TEST_CASE(mutex_test) {
     mutex m;
     mutex::scoped_lock l(m);

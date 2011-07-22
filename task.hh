@@ -53,12 +53,12 @@ public: /* runner interface */
 private:
     static atomic_count ntasks;
 
-    coroutine co;
+    runner *in;
     proc f;
-    volatile state_e state;
     std::string state_msg;
     timespec ts;
-    runner *in;
+    volatile state_e state;
+    coroutine co;
 
     static void start(task *);
 

@@ -7,10 +7,6 @@
 
 class runner;
 
-namespace detail {
-extern __thread runner *runner_;
-}
-
 class runner : boost::noncopyable {
 public:
     typedef std::list<runner *> list;
@@ -21,12 +17,7 @@ public:
         return new runner(f);
     }
 
-    static runner *self() {
-        if (detail::runner_ == NULL) {
-            detail::runner_ = new runner;
-        }
-        return detail::runner_;
-    }
+    static runner *self();
 
     static size_t count();
 

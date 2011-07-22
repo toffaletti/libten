@@ -46,6 +46,12 @@ template <typename SetT> struct in_set {
     }
 };
 
+runner *runner::self() {
+    if (detail::runner_ == NULL) {
+        detail::runner_ = new runner;
+    }
+    return detail::runner_;
+}
 
 size_t runner::count() {
     mutex::scoped_lock l(runner::tmutex);

@@ -51,12 +51,13 @@ public:
 
 private:
     context ctxt;
-#ifndef NVALGRIND
-    int valgrind_stack_id;
-#endif
     char *stack;
     // TODO: probably not needed, can be retrieved from context?
     size_t stack_size;
+#ifndef NVALGRIND
+    int valgrind_stack_id;
+#endif
+
 };
 
 #endif // COROUTINE_HH
