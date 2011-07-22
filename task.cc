@@ -135,9 +135,9 @@ void runner::check_io() {
                 add_to_runqueue(t);
                 wake_tasks.insert(t);
             } else {
+                // TODO: otherwise we might want to remove fd from epoll
                 fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
             }
-            // TODO: otherwise we might want to remove fd from epoll
         }
 
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
