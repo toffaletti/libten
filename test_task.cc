@@ -2,7 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 
-#include "task.hh"
+#include "runner.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"

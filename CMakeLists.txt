@@ -7,7 +7,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}) # for boost.context
 set(ASM asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
-add_library(fw task.cc ${ASM})
+add_library(fw task.cc runner.cc ${ASM})
 target_link_libraries(fw rt)
 
 add_executable(test_task test_task.cc)
