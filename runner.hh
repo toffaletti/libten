@@ -28,67 +28,12 @@ public:
         return detail::runner_;
     }
 
-    void wakeup() {
-        mutex::scoped_lock l(mut);
-        wakeup_nolock();
-    }
+    static size_t count();
 
     void schedule();
 
-    static size_t count();
-
-protected:
-    friend class task;
-
-    bool add_to_runqueue(task *t) {
-        mutex::scoped_lock l(mut);
-        task_deque::iterator i = std::find(runq.begin(), runq.end(), t);
-        // don't add multiple times
-        // this is possible with io loop and timeout loop
-        if (i == runq.end()) {
-            runq.push_back(t);
-            wakeup_nolock();
-            return true;
-        }
-        return false;
-    }
-
-    bool add_to_runqueue_if_asleep(task *c) {
-        mutex::scoped_lock l(mut);
-        if (asleep) {
-            runq.push_back(c);
-            wakeup_nolock();
-            return true;
-        }
-        return false;
-    }
-
-    void delete_from_runqueue(task *c) {
-        mutex::scoped_lock l(mut);
-        assert(c == runq.back());
-        runq.pop_back();
-    }
-
-    // lock must already be held
-    void wakeup_nolock() {
-        if (asleep) {
-            asleep = false;
-            cond.signal();
-        }
-    }
-
-    static void add_to_empty_runqueue(task *);
-
-    void set_task(task *c) {
-        c->in = this;
-        current_task = c;
-    }
-
-    task *get_task() {
-        return current_task;
-    }
-
 private:
+    friend class task;
     static mutex tmutex;
     static list runners;
 
@@ -100,7 +45,7 @@ private:
 
     task scheduler;
     task *current_task;
-    task_deque runq;
+    task::deque runq;
     epoll_fd efd;
 
     typedef std::vector<task *> task_heap;
@@ -175,6 +120,59 @@ private:
 
     void run_queued_tasks();
     void check_io();
+
+    bool add_to_runqueue(task *t) {
+        mutex::scoped_lock l(mut);
+        task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
+        // don't add multiple times
+        // this is possible with io loop and timeout loop
+        if (i == runq.end()) {
+            runq.push_back(t);
+            wakeup_nolock();
+            return true;
+        }
+        return false;
+    }
+
+    bool add_to_runqueue_if_asleep(task *c) {
+        mutex::scoped_lock l(mut);
+        if (asleep) {
+            runq.push_back(c);
+            wakeup_nolock();
+            return true;
+        }
+        return false;
+    }
+
+    void delete_from_runqueue(task *c) {
+        mutex::scoped_lock l(mut);
+        assert(c == runq.back());
+        runq.pop_back();
+    }
+
+    // lock must already be held
+    void wakeup_nolock() {
+        if (asleep) {
+            asleep = false;
+            cond.signal();
+        }
+    }
+
+    void set_task(task *t) {
+        t->set_runner(this);
+        current_task = t;
+    }
+
+    task *get_task() {
+        return current_task;
+    }
+
+    void wakeup() {
+        mutex::scoped_lock l(mut);
+        wakeup_nolock();
+    }
+
+    static void add_to_empty_runqueue(task *);
 
     static void *start(void *arg);
 };

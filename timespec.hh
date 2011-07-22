@@ -39,6 +39,17 @@ inline bool operator <= (const timespec &a, const timespec &b) {
     return false;
 }
 
+inline timespec operator + (const timespec &a, const timespec &b) {
+    timespec tmp;
+    tmp.tv_sec = a.tv_sec + b.tv_sec;
+    tmp.tv_nsec = a.tv_nsec + b.tv_nsec;
+    if (tmp.tv_nsec >= 1000000000L) {
+        tmp.tv_sec++;
+        tmp.tv_nsec -= 1000000000L;
+    }
+    return tmp;
+}
+
 inline timespec &operator += (timespec &a, const timespec &b) {
     a.tv_sec += b.tv_sec;
     a.tv_nsec += b.tv_nsec;

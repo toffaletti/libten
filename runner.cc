@@ -19,9 +19,9 @@ static unsigned int timespec_to_milliseconds(const timespec &ts) {
     return ms;
 }
 
-static std::ostream &operator << (std::ostream &o, task_deque &l) {
+static std::ostream &operator << (std::ostream &o, task::deque &l) {
     o << "[";
-    for (task_deque::iterator i=l.begin(); i!=l.end(); ++i) {
+    for (task::deque::iterator i=l.begin(); i!=l.end(); ++i) {
         o << *i << ",";
     }
     o << "]";
@@ -31,8 +31,8 @@ static std::ostream &operator << (std::ostream &o, task_deque &l) {
 struct task_timeout_heap_compare {
     bool operator ()(const task *a, const task *b) const {
         // handle -1 case, which we want at the end
-        if (a->ts.tv_sec < 0) return true;
-        return a->ts > b->ts;
+        if (a->get_timeout().tv_sec < 0) return true;
+        return a->get_timeout() > b->get_timeout();
     }
 };
 
@@ -57,29 +57,29 @@ typedef std::vector<epoll_event> event_vector;
 void runner::run_queued_tasks() {
     mutex::scoped_lock l(mut);
     while (!runq.empty()) {
-        task *c = runq.front();
+        task *t = runq.front();
         runq.pop_front();
         l.unlock();
-        task::swap(&scheduler, c);
-        switch (c->state) {
+        task::swap(&scheduler, t);
+        switch (t->get_state()) {
         case task::state_idle:
             // task wants to sleep
             l.lock();
             break;
         case task::state_running:
-            c->state = task::state_idle;
+            t->set_state(task::state_idle, "idle");
             l.lock();
-            runq.push_back(c);
+            runq.push_back(t);
             break;
         case task::state_exiting:
-            delete c;
+            delete t;
             l.lock();
             break;
         case task::state_migrating:
-            if (c->in) {
-                c->in->add_to_runqueue(c);
+            if (t->get_runner()) {
+                t->get_runner()->add_to_runqueue(t);
             } else {
-                add_to_empty_runqueue(c);
+                add_to_empty_runqueue(t);
             }
             l.lock();
             break;
@@ -102,12 +102,12 @@ void runner::check_io() {
         std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
         int timeout_ms = -1;
         assert(!waiters.empty());
-        if (waiters.front()->ts.tv_sec > 0) {
-            if (waiters.front()->ts <= now) {
+        if (waiters.front()->get_timeout().tv_sec > 0) {
+            if (waiters.front()->get_timeout() <= now) {
                 // epoll_wait must return immediately
                 timeout_ms = 0;
             } else {
-                timeout_ms = timespec_to_milliseconds(waiters.front()->ts - now);
+                timeout_ms = timespec_to_milliseconds(waiters.front()->get_timeout() - now);
                 // help avoid spinning on timeouts smaller than 1 ms
                 if (timeout_ms <= 0) timeout_ms = 1;
             }
@@ -137,7 +137,7 @@ void runner::check_io() {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
             task *t = *i;
-            if (t->ts.tv_sec > 0 && t->ts <= now) {
+            if (t->get_timeout().tv_sec > 0 && t->get_timeout() <= now) {
                 wake_tasks.insert(t);
                 add_to_runqueue(t);
             }
@@ -161,7 +161,7 @@ void runner::schedule() {
             // check_io might have filled runqueue again
             mutex::scoped_lock l(mut);
             if (runq.empty()) {
-                if (task::ntasks > 0) {
+                if (task::get_ntasks() > 0) {
                     // block waiting for tasks to be scheduled on this runner
                     sleep(l);
                 } else {
@@ -203,11 +203,11 @@ void runner::add_to_empty_runqueue(task *c) {
 
 void runner::add_waiter(task *t) {
     timespec abs;
-    if (t->ts.tv_sec != -1) {
+    if (t->get_timeout().tv_sec != -1) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
-        t->ts += abs;
+        t->set_abs_timeout(t->get_timeout() + abs);
     }
-    t->state = task::state_idle;
+    t->set_state(task::state_idle, "waiting");
     waiters.push_back(t);
 }
 

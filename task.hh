@@ -5,7 +5,6 @@
 #include "thread.hh"
 #include "coroutine.hh"
 #include "timespec.hh"
-//#include "runner.hh"
 
 #include <poll.h>
 #include <deque>
@@ -16,6 +15,7 @@ class runner;
 
 class task : boost::noncopyable {
 public:
+    typedef std::deque<task*> deque;
     enum state_e {
         state_idle,
         state_running,
@@ -33,35 +33,45 @@ public:
     static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
     static void sleep(unsigned int ms);
 
-protected:
-    friend class runner;
-    friend struct task_timeout_heap_compare;
+public: /* runner interface */
+    void set_runner(runner *i) { in = i; }
+    runner *get_runner() const { return in; }
+    void set_state(state_e st, const std::string &str) {
+        state = st;
+        state_msg = str;
+    }
+    state_e get_state() const { return state; }
+    const timespec &get_timeout() const { return ts; }
+    void set_abs_timeout(const timespec &abs) { ts = abs; }
+    static int get_ntasks() { return ntasks; }
+
     task() : state(state_running) {}
+    task(const proc &f_, size_t stack_size=16*1024);
     ~task() { if (!co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
-    static task *self();
-
-    void suspend(mutex::scoped_lock &l);
-    void resume();
-
 private:
     static atomic_count ntasks;
 
     coroutine co;
     proc f;
     volatile state_e state;
+    std::string state_msg;
     timespec ts;
     runner *in;
 
-    task(const proc &f_, size_t stack_size=16*1024);
-
     static void start(task *);
+
+private: /* condition interface */
+    static task *self();
+    void suspend(mutex::scoped_lock &l);
+    void resume();
+
+
 public:
 
     class condition : boost::noncopyable {
     public:
-        typedef std::deque<task *> task_deque;
         condition() {}
 
         void signal() {
@@ -85,11 +95,9 @@ public:
         }
     private:
         mutex mm;
-        task_deque waiters;
+        task::deque waiters;
     };
 };
-
-typedef std::deque<task*> task_deque;
 
 #endif // TASK_HH
 
