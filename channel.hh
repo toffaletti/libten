@@ -13,37 +13,47 @@ public:
     typedef boost::circular_buffer<void *> container_type;
     typedef container_type::size_type size_type;
 
-    explicit channel(size_type capacity) : m_unread(0), m_container(capacity) {}
+    channel(size_type capacity=0) : m_unread(0), m_container(capacity) {}
 
     template <typename T> size_type send(T *p) {
         mutex::scoped_lock l(m_mutex);
         size_type unread = m_unread;
-        // TODO: maybe if capacity is 1 then we block
-        // waiting for m_not_full after the send.
         while (is_full()) {
             m_not_full.wait(l);
         }
         m_container.push_front(p);
         ++m_unread;
         m_not_empty.signal();
-        l.unlock();
         return unread;
     }
 
     size_type send(uintptr_t p) {
-        return send((void *)p);
+        return send(reinterpret_cast<void *>(p));
     }
 
     template <typename T> T recv() {
         T item;
         mutex::scoped_lock l(m_mutex);
+        bool unbuffered = m_container.capacity() == 0;
+        if (unbuffered) {
+            // grow the capacity for a single item
+            m_container.set_capacity(1);
+            // unblock sender
+            m_not_full.signal();
+        }
         while (is_empty()) {
             m_not_empty.wait(l);
         }
         // we don't pop_back because the item will just get overwritten
+        // when the circular buffer wraps around
         item = reinterpret_cast<T>(m_container[--m_unread]);
-        m_not_full.signal();
-        l.unlock();
+        if (unbuffered) {
+            // shrink capacity again so sends will block
+            // waiting for recv
+            m_container.set_capacity(0);
+        } else {
+            m_not_full.signal();
+        }
         return item;
     }
 

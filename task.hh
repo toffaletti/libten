@@ -70,8 +70,8 @@ private:
     proc f;
     std::string state_msg;
     timespec ts;
-    volatile state_e state;
     coroutine co;
+    volatile state_e state;
 
     task(const proc &f_, size_t stack_size=16*1024);
     static void start(task *);

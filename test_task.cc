@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#if 0
 BOOST_AUTO_TEST_CASE(task_size) {
     printf("sizeof(context) == %ju\n", sizeof(context));
     printf("sizeof(int) = %ju\n", sizeof(int));
@@ -16,6 +17,7 @@ BOOST_AUTO_TEST_CASE(task_size) {
     printf("sizeof(timespec) = %ju\n", sizeof(timespec));
     printf("sizeof(task) = %ju\n", sizeof(task));
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(mutex_test) {
     mutex m;
@@ -233,7 +235,7 @@ BOOST_AUTO_TEST_CASE(channel_test) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
-    channel c(1);
+    channel c;
     task::spawn(boost::bind(channel_recv, boost::ref(c)));
     task::spawn(boost::bind(channel_send, boost::ref(c)));
     runner *r = runner::self();
@@ -251,7 +253,7 @@ static void channel_recv_mt(channel &c, semaphore &s) {
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
     semaphore s;
-    channel c(1);
+    channel c;
     runner::spawn(boost::bind(channel_recv_mt, boost::ref(c), boost::ref(s)));
     runner::spawn(boost::bind(channel_send, boost::ref(c)));
     s.wait();
@@ -272,7 +274,7 @@ static void channel_multi_recv(channel &c) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
-    channel c(1);
+    channel c(4);
     c.send(1234);
     task::spawn(boost::bind(channel_multi_recv, boost::ref(c)));
     task::spawn(boost::bind(channel_multi_send, boost::ref(c)));
