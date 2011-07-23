@@ -78,7 +78,7 @@ void runner::sleep(mutex::scoped_lock &l) {
     // use a cond.timedwait here and
     // exit a thread that times out
 
-    // must set sleep here
+    // must set asleep here
     // another thread could add to runq
     // (a resume() for example)
     // during the unlock and if we're
@@ -169,8 +169,8 @@ void runner::check_io() {
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
-            task *t = pollfds[i->data.fd].first;
-            pollfd *pfd = pollfds[i->data.fd].second;
+            task *t = pollfds[i->data.fd].t;
+            pollfd *pfd = pollfds[i->data.fd].pfd;
             if (t && pfd) {
                 pfd->revents = i->events;
                 add_to_runqueue(t);

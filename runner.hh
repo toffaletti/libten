@@ -43,12 +43,10 @@ public: /* task interface */
             if (pollfds.size() <= fd) {
                 pollfds.resize(fd+1);
             }
-            pollfds[fd].first = t;
-            pollfds[fd].second = &fds[i];
-            // TODO: need more tests for edge triggered events
-            ev.events = fds[i].events | EPOLLET;
+            ev.events = fds[i].events;
             ev.data.fd = fd;
             assert(efd.add(fd, ev) == 0);
+            pollfds[fd] = task_poll_state(t, &fds[i]);
         }
     }
 
@@ -56,8 +54,9 @@ public: /* task interface */
         int rvalue = 0;
         for (nfds_t i=0; i<nfds; ++i) {
             if (fds[i].revents) rvalue++;
-            pollfds[fds[i].fd].first = 0;
-            pollfds[fds[i].fd].second = 0;
+            pollfds[fds[i].fd].t = 0;
+            pollfds[fds[i].fd].pfd = 0;
+            assert(efd.remove(fds[i].fd) == 0);
         }
         return rvalue;
     }
@@ -91,7 +90,14 @@ private:
     // tasks waiting with a timeout value set
     task_heap waiters;
     // key is the fd number
-    typedef std::vector< std::pair<task *, pollfd *> > poll_task_array;
+    struct task_poll_state {
+        task *t;
+        pollfd *pfd;
+        task_poll_state() : t(0), pfd(0) {}
+        task_poll_state(task *t_, pollfd *pfd_)
+            : t(t_), pfd(pfd_) {}
+    };
+    typedef std::vector<task_poll_state> poll_task_array;
     poll_task_array pollfds;
 
 
