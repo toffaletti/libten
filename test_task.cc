@@ -24,7 +24,7 @@ BOOST_AUTO_TEST_CASE(mutex_test) {
 }
 
 static void bar(thread p) {
-    // cant use BOOST_CHECK in multi-runnered tests :(
+    // cant use BOOST_CHECK in multi-threaded tests :(
     assert(runner::self()->get_thread() != p);
     task::yield();
 }
@@ -72,7 +72,6 @@ static void mig_co(semaphore &s) {
 
 BOOST_AUTO_TEST_CASE(runner_migrate) {
     semaphore s;
-    BOOST_CHECK(runner::count() >= 0);
     runner *t = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
 }

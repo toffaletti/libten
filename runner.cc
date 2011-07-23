@@ -5,11 +5,9 @@
 
 namespace detail {
 __thread runner *runner_ = NULL;
+runner::list runners;
+mutex tmutex;
 }
-
-// static
-runner::list runner::runners;
-mutex runner::tmutex;
 
 static unsigned int timespec_to_milliseconds(const timespec &ts) {
     // convert timespec to milliseconds
@@ -26,6 +24,25 @@ static std::ostream &operator << (std::ostream &o, task::deque &l) {
     }
     o << "]";
     return o;
+}
+
+static void append_to_list(runner *r) {
+    mutex::scoped_lock l(detail::tmutex);
+    detail::runners.push_back(r);
+}
+
+static void remove_from_list(runner *r) {
+    mutex::scoped_lock l(detail::tmutex);
+    detail::runners.remove(r);
+}
+
+static void wakeup_all_runners() {
+    mutex::scoped_lock l(detail::tmutex);
+    runner *current = runner::self();
+    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
+        if (current == *i) continue;
+        (*i)->wakeup();
+    }
 }
 
 struct task_timeout_heap_compare {
@@ -53,10 +70,34 @@ runner *runner::self() {
     return detail::runner_;
 }
 
-size_t runner::count() {
-    mutex::scoped_lock l(runner::tmutex);
-    return runner::runners.size();
+void runner::sleep(mutex::scoped_lock &l) {
+    // move to the head of the list
+    // to simulate a FIFO
+    // if there are too many threads
+    // and not enough tasks, we can
+    // use a cond.timedwait here and
+    // exit a thread that times out
+
+    // must set sleep here
+    // another thread could add to runq
+    // (a resume() for example)
+    // during the unlock and if we're
+    // not marked asleep, then we
+    // end up sleeping while runq isn't empty
+    asleep = true;
+    l.unlock();
+    {
+        mutex::scoped_lock tl(detail::tmutex);
+        detail::runners.remove(this);
+        detail::runners.push_front(this);
+    }
+    l.lock();
+    while (asleep) {
+        cond.wait(l);
+    }
 }
+
+
 
 typedef std::vector<epoll_event> event_vector;
 
@@ -158,7 +199,7 @@ void runner::check_io() {
 }
 
 void runner::schedule() {
-    detail::runner_->append_to_list();
+    append_to_list(detail::runner_);
     try {
         for (;;) {
             run_queued_tasks();
@@ -178,7 +219,7 @@ void runner::schedule() {
             }
         }
     } catch (...) {}
-    detail::runner_->remove_from_list();
+    remove_from_list(detail::runner_);
 }
 
 void *runner::start(void *arg) {
@@ -194,9 +235,9 @@ void *runner::start(void *arg) {
 }
 
 void runner::add_to_empty_runqueue(task *c) {
-    mutex::scoped_lock l(tmutex);
+    mutex::scoped_lock l(detail::tmutex);
     bool added = false;
-    for (runner::list::iterator i=runners.begin(); i!=runners.end(); ++i) {
+    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
         if ((*i)->add_to_runqueue_if_asleep(c)) {
             added = true;
             break;

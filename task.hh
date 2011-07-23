@@ -25,7 +25,7 @@ public:
 
     typedef boost::function<void ()> proc;
 
-    static void spawn(const proc &f);
+    static task *spawn(const proc &f, runner *in=NULL);
 
     static void yield();
     static void migrate(runner *to=NULL);
@@ -46,7 +46,6 @@ public: /* runner interface */
     static int get_ntasks() { return ntasks; }
 
     task() : state(state_running) {}
-    task(const proc &f_, size_t stack_size=16*1024);
     ~task() { if (!co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
@@ -60,6 +59,7 @@ private:
     volatile state_e state;
     coroutine co;
 
+    task(const proc &f_, size_t stack_size=16*1024);
     static void start(task *);
 
 private: /* condition interface */

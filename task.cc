@@ -37,9 +37,14 @@ void task::swap(task *from, task *to) {
     // because it might have been changed
 }
 
-void task::spawn(const proc &f) {
+task *task::spawn(const proc &f, runner *in) {
     task *t = new task(f);
-    runner::self()->add_to_runqueue(t);
+    if (in) {
+        in->add_to_runqueue(t);
+    } else {
+        runner::self()->add_to_runqueue(t);
+    }
+    return t;
 }
 
 void task::yield() {
@@ -113,33 +118,11 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
         t->ts.tv_nsec = -1;
     }
     r->add_waiter(t);
-
-    for (nfds_t i=0; i<nfds; ++i) {
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        // make room for the highest fd number
-        int fd = fds[i].fd;
-        if (r->pollfds.size() <= fd) {
-            r->pollfds.resize(fd+1);
-        }
-        r->pollfds[fd].first = t;
-        r->pollfds[fd].second = &fds[i];
-        // TODO: need more tests for edge triggered events
-        ev.events = fds[i].events | EPOLLET;
-        ev.data.fd = fd;
-        assert(r->efd.add(fd, ev) == 0);
-    }
+    r->add_pollfds(t, fds, nfds);
 
     // will be woken back up by epoll loop in runner::schedule()
     task::yield();
 
-    int rvalue = 0;
-    for (nfds_t i=0; i<nfds; ++i) {
-        if (fds[i].revents) rvalue++;
-        //assert(r->efd.remove(fds[i].fd) == 0);
-        r->pollfds[fds[i].fd].first = 0;
-        r->pollfds[fds[i].fd].second = 0;
-    }
-    return rvalue;
+    return r->remove_pollfds(fds, nfds);
 }
 
