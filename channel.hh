@@ -6,6 +6,8 @@
 
 // based on bounded_buffer example
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
+
+//! send and receive pointers between tasks
 class channel : boost::noncopyable {
 public:
     typedef boost::circular_buffer<void *> container_type;

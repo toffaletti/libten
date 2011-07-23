@@ -11,6 +11,8 @@
 #include <valgrind/valgrind.h>
 #endif
 
+//! lightweight cooperatively scheduled threads of execution
+//! each with its own stack and guard page.
 class coroutine : boost::noncopyable {
 public:
     typedef void (*proc)(void *);
@@ -25,6 +27,7 @@ public:
         int r = posix_memalign((void **)&stack, getpagesize(), real_size);
         THROW_ON_NONZERO(r);
         // protect the guard page
+        // TODO: is this right? check which direction stack grows
         THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_NONE));
 #ifndef NVALGRIND
         valgrind_stack_id =
@@ -43,10 +46,12 @@ public:
         }
     }
 
+    //! save the state of the current stack and swap to another
     void swap(coroutine *to) {
         ctxt.swap(&to->ctxt);
     }
 
+    //! is this the main stack?
     bool main() { return stack == 0; }
 
 private:

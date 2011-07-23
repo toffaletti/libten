@@ -5,20 +5,31 @@
 #include "task.hh"
 #include <list>
 
+//! scheduler for tasks
+//! runs tasks in an OS-thread
+//! uses epoll for io events and timeouts
 class runner : boost::noncopyable {
 public:
     typedef std::list<runner *> list;
 
+    //! return the thread this runner is using
     thread get_thread() { return thread(tt); }
 
+    //! spawn a new runner with a task that will execute
     static runner *spawn(const task::proc &f) {
         return new runner(f);
     }
 
+    //! return the runner for this thread
     static runner *self();
 
+    //! schedule all tasks in this runner
+    //! will block until all tasks exit
     void schedule();
 
+    //! wake runner from sleep state
+    //! runners go to sleep when they have no tasks
+    //! to schedule.
     void wakeup() {
         mutex::scoped_lock l(mut);
         wakeup_nolock();
@@ -34,12 +45,16 @@ public: /* task interface */
         return current_task;
     }
 
+    //! add fds to this runners epoll fd
+    //! param t task to wake up for fd events
+    //! param fds pointer to array of pollfd structs
+    //! param nfds number of pollfd structs in array
     void add_pollfds(task *t, pollfd *fds, nfds_t nfds) {
         for (nfds_t i=0; i<nfds; ++i) {
             epoll_event ev;
             memset(&ev, 0, sizeof(ev));
-            // make room for the highest fd number
             int fd = fds[i].fd;
+            // make room for the highest fd number
             if (pollfds.size() <= fd) {
                 pollfds.resize(fd+1);
             }
@@ -50,6 +65,7 @@ public: /* task interface */
         }
     }
 
+    //! remove fds from epoll fd
     int remove_pollfds(pollfd *fds, nfds_t nfds) {
         int rvalue = 0;
         for (nfds_t i=0; i<nfds; ++i) {
@@ -61,6 +77,8 @@ public: /* task interface */
         return rvalue;
     }
 
+    //! add task to run queue.
+    //! will wakeup runner if it was sleeping.
     bool add_to_runqueue(task *t) {
         mutex::scoped_lock l(mut);
         task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
@@ -74,9 +92,12 @@ public: /* task interface */
         return false;
     }
 
+    //! add task to wait list.
+    //! used for io and timeouts
     void add_waiter(task *t);
 
-    task scheduler;
+    //! task used for scheduling
+    task scheduler; // TODO: maybe this can just be a coroutine?
 
 private:
     thread tt;

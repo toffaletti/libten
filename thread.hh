@@ -51,13 +51,13 @@ public:
         ~scoped_lock() {
             unlock();
         }
-    protected:
+    private:
         friend class condition;
         mutex &m;
         bool locked;
     };
 
-protected:
+private:
     friend class scoped_lock;
 
     void lock() {
@@ -89,7 +89,7 @@ protected:
     void unlock() {
         THROW_ON_NONZERO(pthread_mutex_unlock(&m));
     }
-protected:
+private:
     friend class condition;
     pthread_mutex_t m;
 };
