@@ -13,7 +13,9 @@ public:
     typedef boost::circular_buffer<void *> container_type;
     typedef container_type::size_type size_type;
 
-    channel(size_type capacity=0) : m_unread(0), m_container(capacity) {}
+    //! default is unbuffered (send will block until recv)
+    channel(size_type capacity=0) : m_capacity(capacity), m_unread(0),
+        m_container(capacity ? capacity : 1) {}
 
     template <typename T> size_type send(T *p) {
         mutex::scoped_lock l(m_mutex);
@@ -34,10 +36,10 @@ public:
     template <typename T> T recv() {
         T item;
         mutex::scoped_lock l(m_mutex);
-        bool unbuffered = m_container.capacity() == 0;
+        bool unbuffered = m_capacity == 0;
         if (unbuffered) {
             // grow the capacity for a single item
-            m_container.set_capacity(1);
+            m_capacity = 1;
             // unblock sender
             m_not_full.signal();
         }
@@ -50,7 +52,7 @@ public:
         if (unbuffered) {
             // shrink capacity again so sends will block
             // waiting for recv
-            m_container.set_capacity(0);
+            m_capacity = 0;
         } else {
             m_not_full.signal();
         }
@@ -66,6 +68,10 @@ public:
         return m_unread;
     }
 private:
+    // m_capacity is different than m_container.capacity()
+    // to avoid needing to reallocate the container
+    // on every send/recv for unbuffered channels
+    size_type m_capacity;
     size_type m_unread;
     container_type m_container;
     mutex m_mutex;
@@ -74,7 +80,7 @@ private:
     task::condition m_not_full;
 
     bool is_empty() const { return m_unread == 0; }
-    bool is_full() const { return m_unread >= m_container.capacity(); }
+    bool is_full() const { return m_unread >= m_capacity; }
 };
 
 #endif // CHANNEL_HH
