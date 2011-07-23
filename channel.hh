@@ -8,16 +8,16 @@
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
 
 //! send and receive pointers between tasks
-class channel : boost::noncopyable {
+template <typename T> class channel : boost::noncopyable {
 public:
-    typedef boost::circular_buffer<void *> container_type;
-    typedef container_type::size_type size_type;
+    typedef typename boost::circular_buffer<T> container_type;
+    typedef typename container_type::size_type size_type;
 
     //! default is unbuffered (send will block until recv)
     channel(size_type capacity=0) : m_capacity(capacity), m_unread(0),
         m_container(capacity ? capacity : 1) {}
 
-    template <typename T> size_type send(T *p) {
+    size_type send(T p) {
         mutex::scoped_lock l(m_mutex);
         size_type unread = m_unread;
         while (is_full()) {
@@ -29,11 +29,7 @@ public:
         return unread;
     }
 
-    size_type send(uintptr_t p) {
-        return send(reinterpret_cast<void *>(p));
-    }
-
-    template <typename T> T recv() {
+    T recv() {
         T item;
         mutex::scoped_lock l(m_mutex);
         bool unbuffered = m_capacity == 0;
@@ -48,7 +44,7 @@ public:
         }
         // we don't pop_back because the item will just get overwritten
         // when the circular buffer wraps around
-        item = reinterpret_cast<T>(m_container[--m_unread]);
+        item = m_container[--m_unread];
         if (unbuffered) {
             // shrink capacity again so sends will block
             // waiting for recv

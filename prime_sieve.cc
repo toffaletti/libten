@@ -3,15 +3,15 @@
 
 #include <boost/bind.hpp>
 
-void generate(channel *out) {
+void generate(channel<int> *out) {
     for (int i=2; ; ++i) {
         out->send(i);
     }
 }
 
-void filter(channel *in, channel *out, int prime) {
+void filter(channel<int> *in, channel<int> *out, int prime) {
     for (;;) {
-        int i = in->recv<uintptr_t>();
+        int i = in->recv();
         if (i % prime != 0) {
             out->send(i);
         }
@@ -19,12 +19,12 @@ void filter(channel *in, channel *out, int prime) {
 }
 
 void primes() {
-    channel *ch = new channel;
+    channel<int> *ch = new channel<int>;
     task::spawn(boost::bind(generate, ch));
     for (int i=0; i<100; ++i) {
-        int prime = ch->recv<uintptr_t>();
+        int prime = ch->recv();
         printf("%i\n", prime);
-        channel *out = new channel;
+        channel<int> *out = new channel<int>;
         task::spawn(boost::bind(filter, ch, out, prime));
         ch = out;
     }
