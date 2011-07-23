@@ -16,5 +16,8 @@ target_link_libraries(test_descriptors fw boost_unit_test_framework)
 add_executable(test_task test_task.cc)
 target_link_libraries(test_task fw boost_unit_test_framework)
 
+add_executable(prime_sieve prime_sieve.cc)
+target_link_libraries(prime_sieve fw)
+
 add_executable(playground playground.cc)
 target_link_libraries(playground fw)
