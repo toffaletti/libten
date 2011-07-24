@@ -73,6 +73,37 @@ runner *runner::self() {
     return detail::runner_;
 }
 
+runner *runner::spawn(const task::proc &f) {
+    long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+    mutex::scoped_lock l(*detail::tmutex);
+    if (detail::runners->size() >= ncpu) {
+        runner *r = detail::runners->front();
+        detail::runners->pop_front();
+        detail::runners->push_back(r);
+        task::spawn(f, r);
+        return r;
+    }
+    l.unlock();
+    return new runner(f);
+}
+
+runner::runner() : asleep(false), current_task(&scheduler) {
+    append_to_list(this);
+    tt=thread::self();
+}
+
+runner::runner(task *t) : asleep(false), current_task(&scheduler) {
+    add_to_runqueue(t);
+    append_to_list(this);
+    thread::create(tt, start, this);
+}
+
+runner::runner(const task::proc &f) : asleep(false), current_task(&scheduler) {
+    task::spawn(f, this);
+    append_to_list(this);
+    thread::create(tt, start, this);
+}
+
 void runner::sleep(mutex::scoped_lock &l) {
     // move to the head of the list
     // to simulate a FIFO
@@ -201,7 +232,6 @@ void runner::check_io() {
 }
 
 void runner::schedule() {
-    append_to_list(detail::runner_);
     try {
         for (;;) {
             run_queued_tasks();
@@ -246,17 +276,17 @@ void *runner::start(void *arg) {
     return NULL;
 }
 
-void runner::add_to_empty_runqueue(task *c) {
+void runner::add_to_empty_runqueue(task *t) {
     mutex::scoped_lock l(*detail::tmutex);
     bool added = false;
     for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
-        if ((*i)->add_to_runqueue_if_asleep(c)) {
+        if ((*i)->add_to_runqueue_if_asleep(t)) {
             added = true;
             break;
         }
     }
     if (!added) {
-        new runner(c);
+        new runner(t);
     }
 }
 

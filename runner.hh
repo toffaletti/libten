@@ -16,9 +16,7 @@ public:
     thread get_thread() { return thread(tt); }
 
     //! spawn a new runner with a task that will execute
-    static runner *spawn(const task::proc &f) {
-        return new runner(f);
-    }
+    static runner *spawn(const task::proc &f);
 
     //! return the runner for this thread
     static runner *self();
@@ -122,19 +120,9 @@ private:
     poll_task_array pollfds;
 
 
-    runner() : asleep(false), current_task(&scheduler) {
-        tt=thread::self();
-    }
-
-    runner(task *t) : asleep(false), current_task(&scheduler) {
-        add_to_runqueue(t);
-        thread::create(tt, start, this);
-    }
-
-    runner(const task::proc &f) : asleep(false), current_task(&scheduler) {
-        task::spawn(f, this);
-        thread::create(tt, start, this);
-    }
+    runner();
+    runner(task *t);
+    runner(const task::proc &f);
 
     void sleep(mutex::scoped_lock &l);
 
