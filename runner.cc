@@ -286,6 +286,7 @@ void runner::add_to_empty_runqueue(task *t) {
         }
     }
     if (!added) {
+        l.unlock();
         new runner(t);
     }
 }
