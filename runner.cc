@@ -7,9 +7,8 @@
 
 namespace detail {
 __thread runner *runner_ = NULL;
-runner::list runners;
-mutex tmutex;
-atomic_count quit(0);
+runner::list *runners = new runner::list;
+mutex *tmutex = new mutex;
 }
 
 static unsigned int timespec_to_milliseconds(const timespec &ts) {
@@ -30,20 +29,19 @@ static std::ostream &operator << (std::ostream &o, task::deque &l) {
 }
 
 static void append_to_list(runner *r) {
-    if (detail::quit) { r->get_thread().cancel(); }
-    mutex::scoped_lock l(detail::tmutex);
-    detail::runners.push_back(r);
+    mutex::scoped_lock l(*detail::tmutex);
+    detail::runners->push_back(r);
 }
 
 static void remove_from_list(runner *r) {
-    mutex::scoped_lock l(detail::tmutex);
-    detail::runners.remove(r);
+    mutex::scoped_lock l(*detail::tmutex);
+    detail::runners->remove(r);
 }
 
 static void wakeup_all_runners() {
-    mutex::scoped_lock l(detail::tmutex);
+    mutex::scoped_lock l(*detail::tmutex);
     runner *current = runner::self();
-    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
+    for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
         if (current == *i) continue;
         (*i)->wakeup();
     }
@@ -67,28 +65,10 @@ template <typename SetT> struct in_set {
     }
 };
 
-static void atexit_cleanup() {
-    ++detail::quit;
-    mutex::scoped_lock l(detail::tmutex);
-    detail::runners.remove(detail::runner_);
-    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
-        (*i)->wakeup();
-        (*i)->get_thread().cancel();
-    }
-
-    for (;;) {
-        l.unlock();
-        sleep(0);
-        l.lock();
-        if (detail::runners.empty()) break;
-    }
-}
-
 runner *runner::self() {
     if (detail::runner_ == NULL) {
         // this should happen in the main thread only and only once
         detail::runner_ = new runner;
-        atexit(atexit_cleanup);
     }
     return detail::runner_;
 }
@@ -110,16 +90,15 @@ void runner::sleep(mutex::scoped_lock &l) {
     asleep = true;
     l.unlock();
     {
-        mutex::scoped_lock tl(detail::tmutex);
-        detail::runners.remove(this);
-        detail::runners.push_front(this);
+        mutex::scoped_lock tl(*detail::tmutex);
+        detail::runners->remove(this);
+        detail::runners->push_front(this);
     }
     l.lock();
     while (asleep) {
         cond.wait(l);
     }
 }
-
 
 
 typedef std::vector<epoll_event> event_vector;
@@ -268,9 +247,9 @@ void *runner::start(void *arg) {
 }
 
 void runner::add_to_empty_runqueue(task *c) {
-    mutex::scoped_lock l(detail::tmutex);
+    mutex::scoped_lock l(*detail::tmutex);
     bool added = false;
-    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
+    for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
         if ((*i)->add_to_runqueue_if_asleep(c)) {
             added = true;
             break;

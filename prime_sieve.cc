@@ -25,8 +25,7 @@ void primes() {
         int prime = ch->recv();
         printf("%i\n", prime);
         channel<int> *out = new channel<int>;
-        //task::spawn(boost::bind(filter, ch, out, prime));
-        runner::spawn(boost::bind(filter, ch, out, prime));
+        task::spawn(boost::bind(filter, ch, out, prime));
         ch = out;
     }
     exit(0);
