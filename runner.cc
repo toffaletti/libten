@@ -1,5 +1,7 @@
 #include "runner.hh"
+#include <cxxabi.h>
 
+#include <stdexcept>
 #include <algorithm>
 #include <set>
 
@@ -7,6 +9,7 @@ namespace detail {
 __thread runner *runner_ = NULL;
 runner::list runners;
 mutex tmutex;
+atomic_count quit(0);
 }
 
 static unsigned int timespec_to_milliseconds(const timespec &ts) {
@@ -27,6 +30,7 @@ static std::ostream &operator << (std::ostream &o, task::deque &l) {
 }
 
 static void append_to_list(runner *r) {
+    if (detail::quit) { r->get_thread().cancel(); }
     mutex::scoped_lock l(detail::tmutex);
     detail::runners.push_back(r);
 }
@@ -63,9 +67,28 @@ template <typename SetT> struct in_set {
     }
 };
 
+static void atexit_cleanup() {
+    ++detail::quit;
+    mutex::scoped_lock l(detail::tmutex);
+    detail::runners.remove(detail::runner_);
+    for (runner::list::iterator i=detail::runners.begin(); i!=detail::runners.end(); ++i) {
+        (*i)->wakeup();
+        (*i)->get_thread().cancel();
+    }
+
+    for (;;) {
+        l.unlock();
+        sleep(0);
+        l.lock();
+        if (detail::runners.empty()) break;
+    }
+}
+
 runner *runner::self() {
     if (detail::runner_ == NULL) {
+        // this should happen in the main thread only and only once
         detail::runner_ = new runner;
+        atexit(atexit_cleanup);
     }
     return detail::runner_;
 }
@@ -218,7 +241,13 @@ void runner::schedule() {
                 }
             }
         }
-    } catch (...) {}
+    } catch (abi::__forced_unwind&) {
+        remove_from_list(detail::runner_);
+        throw;
+    } catch (std::exception &e) {
+        remove_from_list(detail::runner_);
+        throw;
+    }
     remove_from_list(detail::runner_);
 }
 
@@ -228,7 +257,11 @@ void *runner::start(void *arg) {
     thread::self().detach();
     try {
         detail::runner_->schedule();
-    } catch (...) {}
+    } catch (abi::__forced_unwind&) {
+        throw;
+    } catch (std::exception &e) {
+        fprintf(stderr, "uncaught exception in runner: %s\n", e.what());
+    }
     delete detail::runner_;
     detail::runner_ = NULL;
     return NULL;
