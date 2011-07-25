@@ -10,23 +10,40 @@
 #include <deque>
 #include <utility>
 #include <boost/function.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/enable_shared_from_this.hpp>
 
 class runner;
 
 //! coroutine with scheduling via a runner
 //! can wait on io and timeouts
-class task : boost::noncopyable {
+class task {
 public:
-    typedef std::deque<task*> deque;
+    typedef boost::function<void ()> proc;
     enum state_e {
         state_idle,
         state_running,
         state_exiting,
         state_migrating,
     };
+    typedef std::deque<task*> deque;
 
-    typedef boost::function<void ()> proc;
+    struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
+        runner *in;
+        proc f;
+        std::string state_msg;
+        timespec ts;
+        coroutine co;
+        volatile state_e state;
 
+        impl() : state(state_running) {}
+        impl(const proc &f_, size_t stack_size=16*1024);
+
+        task to_task() { return shared_from_this(); }
+    };
+    typedef boost::shared_ptr<impl> simpl;
+
+public:
     //! spawn a task and add it to a runners run queue
     static task *spawn(const proc &f, runner *in=NULL);
 
@@ -48,33 +65,31 @@ public:
     static void sleep(unsigned int ms);
 
 public: /* runner interface */
-    void set_runner(runner *i) { in = i; }
-    runner *get_runner() const { return in; }
+    void set_runner(runner *i) { m->in = i; }
+    runner *get_runner() const { return m->in; }
     void set_state(state_e st, const std::string &str) {
-        state = st;
-        state_msg = str;
+        m->state = st;
+        m->state_msg = str;
     }
-    state_e get_state() const { return state; }
-    const timespec &get_timeout() const { return ts; }
-    void set_abs_timeout(const timespec &abs) { ts = abs; }
+    state_e get_state() const { return m->state; }
+    const timespec &get_timeout() const { return m->ts; }
+    void set_abs_timeout(const timespec &abs) { m->ts = abs; }
     static int get_ntasks() { return ntasks; }
 
-    task() : state(state_running) {}
-    ~task() { if (!co.main()) { --ntasks; } }
+    task() { m.reset(new impl); }
+    ~task() { if (!m->co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
 private:
     static atomic_count ntasks;
 
-    runner *in;
-    proc f;
-    std::string state_msg;
-    timespec ts;
-    coroutine co;
-    volatile state_e state;
+    simpl m;
 
-    task(const proc &f_, size_t stack_size=16*1024);
-    static void start(task *);
+    task(const simpl &m_) : m(m_) {}
+    task(const proc &f_, size_t stack_size=16*1024) {
+        m.reset(new impl(f_, stack_size));
+    }
+    static void start(impl *);
 
 private: /* condition interface */
     static task *self();
