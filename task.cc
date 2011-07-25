@@ -21,18 +21,18 @@ task task::self() {
     return runner::self()->get_task();
 }
 
-void task::swap(task *from, task *to) {
+void task::swap(task &from, task &to) {
     // TODO: wrong place for this code. put in scheduler
-    runner::self()->set_task(*to);
-    if (to->m->state == state_idle)
-        to->m->state = state_running;
-    if (from->m->state == state_running)
-        from->m->state = state_idle;
+    runner::self()->set_task(to);
+    if (to.m->state == state_idle)
+        to.m->state = state_running;
+    if (from.m->state == state_running)
+        from.m->state = state_idle;
     // do the actual coro swap
-    from->m->co.swap(&to->m->co);
-    if (from->m->state == state_idle)
-        from->m->state = state_running;
-    runner::self()->set_task(*from);
+    from.m->co.swap(&to.m->co);
+    if (from.m->state == state_idle)
+        from.m->state = state_running;
+    runner::self()->set_task(from);
     // don't modify to state after
     // because it might have been changed
 }

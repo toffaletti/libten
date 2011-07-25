@@ -105,7 +105,7 @@ private:
     task current_task;
     task::deque runq;
     epoll_fd efd;
-    typedef std::vector<task *> task_heap;
+    typedef std::vector<task> task_heap;
     // tasks waiting with a timeout value set
     task_heap waiters;
     // key is the fd number

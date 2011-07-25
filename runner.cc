@@ -48,10 +48,10 @@ static void wakeup_all_runners() {
 }
 
 struct task_timeout_heap_compare {
-    bool operator ()(const task *a, const task *b) const {
+    bool operator ()(const task &a, const task &b) const {
         // handle -1 case, which we want at the end
-        if (a->get_timeout().tv_sec < 0) return true;
-        return a->get_timeout() > b->get_timeout();
+        if (a.get_timeout().tv_sec < 0) return true;
+        return a.get_timeout() > b.get_timeout();
     }
 };
 
@@ -140,7 +140,7 @@ void runner::run_queued_tasks() {
         task t = runq.front();
         runq.pop_front();
         l.unlock();
-        task::swap(&scheduler, &t);
+        task::swap(scheduler, t);
         switch (t.get_state()) {
         case task::state_idle:
             // task wants to sleep
@@ -183,12 +183,12 @@ void runner::check_io() {
         std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
         int timeout_ms = -1;
         assert(!waiters.empty());
-        if (waiters.front()->get_timeout().tv_sec > 0) {
-            if (waiters.front()->get_timeout() <= now) {
+        if (waiters.front().get_timeout().tv_sec > 0) {
+            if (waiters.front().get_timeout() <= now) {
                 // epoll_wait must return immediately
                 timeout_ms = 0;
             } else {
-                timeout_ms = timespec_to_milliseconds(waiters.front()->get_timeout() - now);
+                timeout_ms = timespec_to_milliseconds(waiters.front().get_timeout() - now);
                 // help avoid spinning on timeouts smaller than 1 ms
                 if (timeout_ms <= 0) timeout_ms = 1;
             }
@@ -199,7 +199,7 @@ void runner::check_io() {
         }
         efd.wait(events, timeout_ms);
 
-        std::set<task *> wake_tasks;
+        std::set<task> wake_tasks;
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
@@ -208,7 +208,7 @@ void runner::check_io() {
             if (t && pfd) {
                 pfd->revents = i->events;
                 add_to_runqueue(*t);
-                wake_tasks.insert(t);
+                wake_tasks.insert(*t);
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
                 fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
@@ -217,15 +217,15 @@ void runner::check_io() {
 
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
-            task *t = *i;
-            if (t->get_timeout().tv_sec > 0 && t->get_timeout() <= now) {
+            task t = *i;
+            if (t.get_timeout().tv_sec > 0 && t.get_timeout() <= now) {
                 wake_tasks.insert(t);
-                add_to_runqueue(*t);
+                add_to_runqueue(t);
             }
         }
 
         task_heap::iterator nend =
-            std::remove_if(waiters.begin(), waiters.end(), in_set<std::set<task *> >(wake_tasks));
+            std::remove_if(waiters.begin(), waiters.end(), in_set<std::set<task> >(wake_tasks));
         waiters.erase(nend, waiters.end());
         // there are tasks to wake up!
         if (!wake_tasks.empty()) done = true;
@@ -299,6 +299,6 @@ void runner::add_waiter(task &t) {
         t.set_abs_timeout(t.get_timeout() + abs);
     }
     t.set_state(task::state_idle, "waiting");
-    waiters.push_back(&t);
+    waiters.push_back(t);
 }
 

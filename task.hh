@@ -52,6 +52,10 @@ public:
         return m.get() != t.m.get();
     }
 
+    bool operator < (const task &t) const {
+        return m.get() < t.m.get();
+    }
+
     friend std::ostream &operator << (std::ostream &o, const task &t) {
         o << t.m.get();
         return o;
@@ -92,7 +96,7 @@ public: /* runner interface */
 
     task() { m.reset(new impl); }
 
-    static void swap(task *from, task *to);
+    static void swap(task &from, task &to);
 private:
     static atomic_count ntasks;
 
