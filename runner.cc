@@ -60,7 +60,7 @@ template <typename SetT> struct in_set {
 
     in_set(SetT &s) : set(s) {}
 
-    bool operator()(typename SetT::key_type &k) {
+    bool operator()(const typename SetT::key_type &k) {
         return set.count(k) > 0;
     }
 };
@@ -203,12 +203,12 @@ void runner::check_io() {
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
-            task *t = pollfds[i->data.fd].t;
+            task::impl *t = pollfds[i->data.fd].t;
             pollfd *pfd = pollfds[i->data.fd].pfd;
             if (t && pfd) {
                 pfd->revents = i->events;
-                add_to_runqueue(*t);
-                wake_tasks.insert(*t);
+                add_to_runqueue(t->to_task());
+                wake_tasks.insert(t->to_task());
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
                 fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
@@ -217,10 +217,9 @@ void runner::check_io() {
 
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
-            task t = *i;
-            if (t.get_timeout().tv_sec > 0 && t.get_timeout() <= now) {
-                wake_tasks.insert(t);
-                add_to_runqueue(t);
+            if (i->get_timeout().tv_sec > 0 && i->get_timeout() <= now) {
+                wake_tasks.insert(*i);
+                add_to_runqueue(*i);
             }
         }
 

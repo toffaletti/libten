@@ -65,6 +65,9 @@ void task::start(impl *i) {
     // objects on this stack to have the destructor called
     t.m->state = state_exiting;
     t.m.reset();
+    // this is a dangerous bit of code, the shared_ptr is reset
+    // potentially freeing the impl *, however the scheduler
+    // should always be holding a reference, so it is "safe"
     i->co.swap(&runner::self()->scheduler.m->co);
 }
 
@@ -120,7 +123,7 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
         t.m->ts.tv_nsec = -1;
     }
     r->add_waiter(t);
-    r->add_pollfds(&t, fds, nfds);
+    r->add_pollfds(t.m.get(), fds, nfds);
 
     // will be woken back up by epoll loop in runner::schedule()
     task::yield();

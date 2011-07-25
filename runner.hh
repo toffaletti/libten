@@ -47,7 +47,7 @@ public: /* task interface */
     //! param t task to wake up for fd events
     //! param fds pointer to array of pollfd structs
     //! param nfds number of pollfd structs in array
-    void add_pollfds(task *t, pollfd *fds, nfds_t nfds) {
+    void add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds) {
         for (nfds_t i=0; i<nfds; ++i) {
             epoll_event ev;
             memset(&ev, 0, sizeof(ev));
@@ -110,10 +110,10 @@ private:
     task_heap waiters;
     // key is the fd number
     struct task_poll_state {
-        task *t;
+        task::impl *t;
         pollfd *pfd;
         task_poll_state() : t(0), pfd(0) {}
-        task_poll_state(task *t_, pollfd *pfd_)
+        task_poll_state(task::impl *t_, pollfd *pfd_)
             : t(t_), pfd(pfd_) {}
     };
     typedef std::vector<task_poll_state> poll_task_array;
