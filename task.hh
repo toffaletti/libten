@@ -26,7 +26,7 @@ public:
         state_exiting,
         state_migrating,
     };
-    typedef std::deque<task*> deque;
+    typedef std::deque<task> deque;
 
     struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
         runner *in;
@@ -38,14 +38,28 @@ public:
 
         impl() : state(state_running) {}
         impl(const proc &f_, size_t stack_size=16*1024);
+        ~impl() { if (!co.main()) { --ntasks; } }
 
         task to_task() { return shared_from_this(); }
     };
     typedef boost::shared_ptr<impl> simpl;
 
+    bool operator == (const task &t) const {
+        return m.get() == t.m.get();
+    }
+
+    bool operator != (const task &t) const {
+        return m.get() != t.m.get();
+    }
+
+    friend std::ostream &operator << (std::ostream &o, const task &t) {
+        o << t.m.get();
+        return o;
+    }
+
 public:
     //! spawn a task and add it to a runners run queue
-    static task *spawn(const proc &f, runner *in=NULL);
+    static task spawn(const proc &f, runner *in=NULL);
 
     //! yield the current task
     static void yield();
@@ -77,7 +91,6 @@ public: /* runner interface */
     static int get_ntasks() { return ntasks; }
 
     task() { m.reset(new impl); }
-    ~task() { if (!m->co.main()) { --ntasks; } }
 
     static void swap(task *from, task *to);
 private:
@@ -92,7 +105,7 @@ private:
     static void start(impl *);
 
 private: /* condition interface */
-    static task *self();
+    static task self();
     void suspend(mutex::scoped_lock &l);
     void resume();
 
@@ -106,9 +119,9 @@ public:
         void signal() {
             mutex::scoped_lock l(mm);
             if (!waiters.empty()) {
-                task *t = waiters.front();
+                task t = waiters.front();
                 waiters.pop_front();
-                t->resume();
+                t.resume();
             }
         }
 
@@ -117,12 +130,12 @@ public:
 
         //! wait for condition to be signaled
         void wait(mutex::scoped_lock &l) {
-            task *t = task::self();
+            task t = task::self();
             {
                 mutex::scoped_lock ll(mm);
                 waiters.push_back(t);
             }
-            t->suspend(l);
+            t.suspend(l);
         }
     private:
         mutex mm;

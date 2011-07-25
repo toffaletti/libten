@@ -87,18 +87,18 @@ runner *runner::spawn(const task::proc &f) {
     return new runner(f);
 }
 
-runner::runner() : asleep(false), current_task(&scheduler) {
+runner::runner() : asleep(false), current_task(scheduler) {
     append_to_list(this);
     tt=thread::self();
 }
 
-runner::runner(task *t) : asleep(false), current_task(&scheduler) {
+runner::runner(const task &t) : asleep(false), current_task(scheduler) {
     add_to_runqueue(t);
     append_to_list(this);
     thread::create(tt, start, this);
 }
 
-runner::runner(const task::proc &f) : asleep(false), current_task(&scheduler) {
+runner::runner(const task::proc &f) : asleep(false), current_task(scheduler) {
     task::spawn(f, this);
     append_to_list(this);
     thread::create(tt, start, this);
@@ -137,27 +137,28 @@ typedef std::vector<epoll_event> event_vector;
 void runner::run_queued_tasks() {
     mutex::scoped_lock l(mut);
     while (!runq.empty()) {
-        task *t = runq.front();
+        task t = runq.front();
         runq.pop_front();
         l.unlock();
-        task::swap(&scheduler, t);
-        switch (t->get_state()) {
+        task::swap(&scheduler, &t);
+        switch (t.get_state()) {
         case task::state_idle:
             // task wants to sleep
             l.lock();
             break;
         case task::state_running:
-            t->set_state(task::state_idle, "idle");
+            t.set_state(task::state_idle, "idle");
             l.lock();
             runq.push_back(t);
             break;
         case task::state_exiting:
-            delete t;
+            //delete t;
+            //t.reset();
             l.lock();
             break;
         case task::state_migrating:
-            if (t->get_runner()) {
-                t->get_runner()->add_to_runqueue(t);
+            if (t.get_runner()) {
+                t.get_runner()->add_to_runqueue(t);
             } else {
                 add_to_empty_runqueue(t);
             }
@@ -206,7 +207,7 @@ void runner::check_io() {
             pollfd *pfd = pollfds[i->data.fd].pfd;
             if (t && pfd) {
                 pfd->revents = i->events;
-                add_to_runqueue(t);
+                add_to_runqueue(*t);
                 wake_tasks.insert(t);
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
@@ -219,7 +220,7 @@ void runner::check_io() {
             task *t = *i;
             if (t->get_timeout().tv_sec > 0 && t->get_timeout() <= now) {
                 wake_tasks.insert(t);
-                add_to_runqueue(t);
+                add_to_runqueue(*t);
             }
         }
 
@@ -276,7 +277,7 @@ void *runner::start(void *arg) {
     return NULL;
 }
 
-void runner::add_to_empty_runqueue(task *t) {
+void runner::add_to_empty_runqueue(const task &t) {
     mutex::scoped_lock l(*detail::tmutex);
     bool added = false;
     for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
@@ -291,13 +292,13 @@ void runner::add_to_empty_runqueue(task *t) {
     }
 }
 
-void runner::add_waiter(task *t) {
+void runner::add_waiter(task &t) {
     timespec abs;
-    if (t->get_timeout().tv_sec != -1) {
+    if (t.get_timeout().tv_sec != -1) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
-        t->set_abs_timeout(t->get_timeout() + abs);
+        t.set_abs_timeout(t.get_timeout() + abs);
     }
-    t->set_state(task::state_idle, "waiting");
-    waiters.push_back(t);
+    t.set_state(task::state_idle, "waiting");
+    waiters.push_back(&t);
 }
 

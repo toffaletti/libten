@@ -17,13 +17,13 @@ task::impl::impl(const proc &f_, size_t stack_size)
     ++ntasks;
 }
 
-task *task::self() {
+task task::self() {
     return runner::self()->get_task();
 }
 
 void task::swap(task *from, task *to) {
     // TODO: wrong place for this code. put in scheduler
-    runner::self()->set_task(to);
+    runner::self()->set_task(*to);
     if (to->m->state == state_idle)
         to->m->state = state_running;
     if (from->m->state == state_running)
@@ -32,13 +32,13 @@ void task::swap(task *from, task *to) {
     from->m->co.swap(&to->m->co);
     if (from->m->state == state_idle)
         from->m->state = state_running;
-    runner::self()->set_task(from);
+    runner::self()->set_task(*from);
     // don't modify to state after
     // because it might have been changed
 }
 
-task *task::spawn(const proc &f, runner *in) {
-    task *t = new task(f);
+task task::spawn(const proc &f, runner *in) {
+    task t(f);
     if (in) {
         in->add_to_runqueue(t);
     } else {
@@ -48,8 +48,8 @@ task *task::spawn(const proc &f, runner *in) {
 }
 
 void task::yield() {
-    assert(task::self() != &runner::self()->scheduler);
-    task::self()->m->co.swap(&runner::self()->scheduler.m->co);
+    assert(task::self() != runner::self()->scheduler);
+    task::self().m->co.swap(&runner::self()->scheduler.m->co);
 }
 
 void task::start(impl *i) {
@@ -69,22 +69,22 @@ void task::start(impl *i) {
 }
 
 void task::migrate(runner *to) {
-    task *t = task::self();
-    assert(t->m->co.main() == false);
+    task t = task::self();
+    assert(t.m->co.main() == false);
     // if "to" is NULL, first available runner is used
     // or a new one is spawned
     // logic is in schedule()
-    t->m->in = to;
-    t->m->state = state_migrating;
+    t.m->in = to;
+    t.m->state = state_migrating;
     task::yield();
     // will resume in other runner
 }
 
 void task::sleep(unsigned int ms) {
-    task *t = task::self();
-    assert(t->m->co.main() == false);
+    task t = task::self();
+    assert(t.m->co.main() == false);
     runner *r = runner::self();
-    milliseconds_to_timespec(ms, t->m->ts);
+    milliseconds_to_timespec(ms, t.m->ts);
     r->add_waiter(t);
     task::yield();
 }
@@ -99,7 +99,7 @@ void task::suspend(mutex::scoped_lock &l) {
 }
 
 void task::resume() {
-    assert(m->in->add_to_runqueue(this) == true);
+    assert(m->in->add_to_runqueue(m->to_task()) == true);
 }
 
 bool task::poll(int fd, short events, unsigned int ms) {
@@ -108,19 +108,19 @@ bool task::poll(int fd, short events, unsigned int ms) {
 }
 
 int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
-    task *t = task::self();
-    assert(t->m->co.main() == false);
+    task t = task::self();
+    assert(t.m->co.main() == false);
     runner *r = runner::self();
     // TODO: maybe make a state for waiting io?
-    t->m->state = state_idle;
+    t.m->state = state_idle;
     if (timeout) {
-        milliseconds_to_timespec(timeout, t->m->ts);
+        milliseconds_to_timespec(timeout, t.m->ts);
     } else {
-        t->m->ts.tv_sec = -1;
-        t->m->ts.tv_nsec = -1;
+        t.m->ts.tv_sec = -1;
+        t.m->ts.tv_nsec = -1;
     }
     r->add_waiter(t);
-    r->add_pollfds(t, fds, nfds);
+    r->add_pollfds(&t, fds, nfds);
 
     // will be woken back up by epoll loop in runner::schedule()
     task::yield();

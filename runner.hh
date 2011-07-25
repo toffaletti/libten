@@ -34,12 +34,12 @@ public:
     }
 public: /* task interface */
 
-    void set_task(task *t) {
-        t->set_runner(this);
+    void set_task(task &t) {
+        t.set_runner(this);
         current_task = t;
     }
 
-    task *get_task() {
+    task get_task() {
         return current_task;
     }
 
@@ -77,7 +77,7 @@ public: /* task interface */
 
     //! add task to run queue.
     //! will wakeup runner if it was sleeping.
-    bool add_to_runqueue(task *t) {
+    bool add_to_runqueue(const task &t) {
         mutex::scoped_lock l(mut);
         task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
         // don't add multiple times
@@ -92,7 +92,7 @@ public: /* task interface */
 
     //! add task to wait list.
     //! used for io and timeouts
-    void add_waiter(task *t);
+    void add_waiter(task &t);
 
     //! task used for scheduling
     task scheduler; // TODO: maybe this can just be a coroutine?
@@ -102,7 +102,7 @@ private:
     mutex mut;
     condition cond;
     bool asleep;
-    task *current_task;
+    task current_task;
     task::deque runq;
     epoll_fd efd;
     typedef std::vector<task *> task_heap;
@@ -121,7 +121,7 @@ private:
 
 
     runner();
-    runner(task *t);
+    runner(const task &t);
     runner(const task::proc &f);
 
     void sleep(mutex::scoped_lock &l);
@@ -129,19 +129,19 @@ private:
     void run_queued_tasks();
     void check_io();
 
-    bool add_to_runqueue_if_asleep(task *c) {
+    bool add_to_runqueue_if_asleep(const task &t) {
         mutex::scoped_lock l(mut);
         if (asleep) {
-            runq.push_back(c);
+            runq.push_back(t);
             wakeup_nolock();
             return true;
         }
         return false;
     }
 
-    void delete_from_runqueue(task *c) {
+    void delete_from_runqueue(const task &t) {
         mutex::scoped_lock l(mut);
-        assert(c == runq.back());
+        assert(t == runq.back());
         runq.pop_back();
     }
 
@@ -153,7 +153,7 @@ private:
         }
     }
 
-    static void add_to_empty_runqueue(task *);
+    static void add_to_empty_runqueue(const task &);
 
     static void *start(void *arg);
 };
