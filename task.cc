@@ -12,7 +12,7 @@ static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
 
 task::impl::impl(const proc &f_, size_t stack_size)
     : co((coroutine::proc)task::start, this, stack_size),
-    f(f_), state(state_idle)
+    f(f_), flags(_TASK_SLEEP)
 {
     ++ntasks;
 }
@@ -21,6 +21,7 @@ task task::self() {
     return runner::self()->get_task();
 }
 
+#if 0
 void task::swap(task &from, task &to) {
     // TODO: wrong place for this code. put in scheduler
     runner::self()->set_task(to);
@@ -35,6 +36,27 @@ void task::swap(task &from, task &to) {
     runner::self()->set_task(from);
     // don't modify to state after
     // because it might have been changed
+}
+#endif
+
+void task::swap(task &from, task &to) {
+    assert(!(to.m->flags & _TASK_RUNNING));
+    to.m->flags |= _TASK_RUNNING;
+
+    assert(from.m->flags & _TASK_RUNNING);
+    from.m->flags ^= _TASK_RUNNING;
+
+    runner::self()->set_task(to);
+
+    from.m->co.swap(&to.m->co);
+
+    assert(to.m->flags & _TASK_RUNNING);
+    to.m->flags ^= _TASK_RUNNING;
+
+    assert(!(from.m->flags & _TASK_RUNNING));
+    from.m->flags |= _TASK_RUNNING;
+
+    runner::self()->set_task(from);
 }
 
 task task::spawn(const proc &f, runner *in) {
@@ -63,7 +85,7 @@ void task::start(impl *i) {
     // NOTE: the scheduler deletes tasks in exiting state
     // so this function won't ever return. don't expect
     // objects on this stack to have the destructor called
-    t.m->state = state_exiting;
+    t.m->flags |= _TASK_EXIT;
     t.m.reset();
     // this is a dangerous bit of code, the shared_ptr is reset
     // potentially freeing the impl *, however the scheduler
@@ -78,7 +100,7 @@ void task::migrate(runner *to) {
     // or a new one is spawned
     // logic is in schedule()
     t.m->in = to;
-    t.m->state = state_migrating;
+    t.m->flags |= _TASK_MIGRATE;
     task::yield();
     // will resume in other runner
 }
@@ -94,7 +116,7 @@ void task::sleep(unsigned int ms) {
 
 void task::suspend(mutex::scoped_lock &l) {
     assert(m->co.main() == false);
-    m->state = task::state_idle;
+    m->flags |= _TASK_SLEEP;
     m->in = runner::self();
     l.unlock();
     task::yield();
@@ -102,7 +124,8 @@ void task::suspend(mutex::scoped_lock &l) {
 }
 
 void task::resume() {
-    assert(m->in->add_to_runqueue(m->to_task()) == true);
+    task t = m->to_task();
+    assert(m->in->add_to_runqueue(t) == true);
 }
 
 bool task::poll(int fd, short events, unsigned int ms) {
@@ -115,7 +138,8 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     assert(t.m->co.main() == false);
     runner *r = runner::self();
     // TODO: maybe make a state for waiting io?
-    t.m->state = state_idle;
+    //t.m->flags |= _TASK_POLL;
+    t.m->flags |= _TASK_SLEEP;
     if (timeout) {
         milliseconds_to_timespec(timeout, t.m->ts);
     } else {

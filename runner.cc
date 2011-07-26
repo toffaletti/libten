@@ -92,7 +92,7 @@ runner::runner() : asleep(false), current_task(scheduler) {
     tt=thread::self();
 }
 
-runner::runner(const task &t) : asleep(false), current_task(scheduler) {
+runner::runner(task &t) : asleep(false), current_task(scheduler) {
     add_to_runqueue(t);
     append_to_list(this);
     thread::create(tt, start, this);
@@ -141,32 +141,23 @@ void runner::run_queued_tasks() {
         runq.pop_front();
         l.unlock();
         task::swap(scheduler, t);
-        switch (t.get_state()) {
-        case task::state_idle:
-            // task wants to sleep
-            l.lock();
-            break;
-        case task::state_running:
-            t.set_state(task::state_idle, "idle");
-            l.lock();
-            runq.push_back(t);
-            break;
-        case task::state_exiting:
-            //delete t;
-            //t.reset();
-            l.lock();
-            break;
-        case task::state_migrating:
+        if (t.get_flags() & _TASK_MIGRATE) {
+            t.set_flags(t.get_flags() ^ _TASK_MIGRATE);
+            t.set_flags(t.get_flags() | _TASK_SLEEP);
             if (t.get_runner()) {
                 t.get_runner()->add_to_runqueue(t);
             } else {
                 add_to_empty_runqueue(t);
             }
             l.lock();
-            break;
-        default:
-            abort();
-            break;
+        } else if (t.get_flags() & _TASK_SLEEP) {
+            l.lock();
+        } else if (t.get_flags() & _TASK_EXIT) {
+            l.lock();
+        } else {
+            //printf("queueing task: %p flags: %u\n", t.m.get(), t.get_flags());
+            runq.push_back(t);
+            l.lock();
         }
     }
 }
@@ -203,12 +194,13 @@ void runner::check_io() {
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
-            task::impl *t = pollfds[i->data.fd].t;
+            task::impl *ti = pollfds[i->data.fd].t;
             pollfd *pfd = pollfds[i->data.fd].pfd;
-            if (t && pfd) {
+            if (ti && pfd) {
                 pfd->revents = i->events;
-                add_to_runqueue(t->to_task());
-                wake_tasks.insert(t->to_task());
+                task t = ti->to_task();
+                add_to_runqueue(t);
+                wake_tasks.insert(t);
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
                 fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
@@ -276,7 +268,7 @@ void *runner::start(void *arg) {
     return NULL;
 }
 
-void runner::add_to_empty_runqueue(const task &t) {
+void runner::add_to_empty_runqueue(task &t) {
     mutex::scoped_lock l(*detail::tmutex);
     bool added = false;
     for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
@@ -297,7 +289,8 @@ void runner::add_waiter(task &t) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
         t.set_abs_timeout(t.get_timeout() + abs);
     }
-    t.set_state(task::state_idle, "waiting");
+    t.set_state("waiting");
+    t.set_flags(t.get_flags() | _TASK_SLEEP);
     waiters.push_back(t);
 }
 

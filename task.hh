@@ -13,6 +13,11 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 
+#define _TASK_SLEEP     (1<<0)
+#define _TASK_RUNNING   (1<<1)
+#define _TASK_EXIT      (1<<2)
+#define _TASK_MIGRATE   (1<<3)
+
 class runner;
 
 //! coroutine with scheduling via a runner
@@ -20,29 +25,26 @@ class runner;
 class task {
 public:
     typedef boost::function<void ()> proc;
-    enum state_e {
-        state_idle,
-        state_running,
-        state_exiting,
-        state_migrating,
-    };
     typedef std::deque<task> deque;
 
     struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
         runner *in;
         proc f;
-        std::string state_msg;
+        // TODO: allow user to set state and name
+        std::string name;
+        std::string state;
         timespec ts;
         coroutine co;
-        volatile state_e state;
+        //volatile state_e state;
+        uint32_t flags;
 
-        impl() : state(state_running) {}
+        impl() : flags(_TASK_RUNNING) {}
         impl(const proc &f_, size_t stack_size=16*1024);
         ~impl() { if (!co.main()) { --ntasks; } }
 
         task to_task() { return shared_from_this(); }
     };
-    typedef boost::shared_ptr<impl> simpl;
+    typedef boost::shared_ptr<impl> shared_impl;
 
     bool operator == (const task &t) const {
         return m.get() == t.m.get();
@@ -85,11 +87,12 @@ public:
 public: /* runner interface */
     void set_runner(runner *i) { m->in = i; }
     runner *get_runner() const { return m->in; }
-    void set_state(state_e st, const std::string &str) {
-        m->state = st;
-        m->state_msg = str;
+    void set_state(const std::string &str) {
+        m->state = str;
     }
-    state_e get_state() const { return m->state; }
+    void set_flags(uint32_t f) { m->flags = f; }
+    uint32_t get_flags() const { return m->flags; }
+    const std::string &get_state() const { return m->state; }
     const timespec &get_timeout() const { return m->ts; }
     void set_abs_timeout(const timespec &abs) { m->ts = abs; }
     static int get_ntasks() { return ntasks; }
@@ -100,9 +103,9 @@ public: /* runner interface */
 private:
     static atomic_count ntasks;
 
-    simpl m;
+    shared_impl m;
 
-    task(const simpl &m_) : m(m_) {}
+    task(const shared_impl &m_) : m(m_) {}
     task(const proc &f_, size_t stack_size=16*1024) {
         m.reset(new impl(f_, stack_size));
     }

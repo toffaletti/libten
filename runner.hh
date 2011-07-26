@@ -77,8 +77,12 @@ public: /* task interface */
 
     //! add task to run queue.
     //! will wakeup runner if it was sleeping.
-    bool add_to_runqueue(const task &t) {
+    bool add_to_runqueue(task &t) {
         mutex::scoped_lock l(mut);
+        assert(t.get_flags() ^ _TASK_RUNNING);
+        assert(t.get_flags() & _TASK_SLEEP);
+        t.set_flags(t.get_flags() ^ _TASK_SLEEP);
+        // TODO: might not need to check this anymore with flags
         task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
         // don't add multiple times
         // this is possible with io loop and timeout loop
@@ -121,7 +125,7 @@ private:
 
 
     runner();
-    runner(const task &t);
+    runner(task &t);
     runner(const task::proc &f);
 
     void sleep(mutex::scoped_lock &l);
@@ -129,9 +133,10 @@ private:
     void run_queued_tasks();
     void check_io();
 
-    bool add_to_runqueue_if_asleep(const task &t) {
+    bool add_to_runqueue_if_asleep(task &t) {
         mutex::scoped_lock l(mut);
         if (asleep) {
+            t.set_flags(t.get_flags() ^ _TASK_SLEEP);
             runq.push_back(t);
             wakeup_nolock();
             return true;
@@ -139,10 +144,11 @@ private:
         return false;
     }
 
-    void delete_from_runqueue(const task &t) {
+    void delete_from_runqueue(task &t) {
         mutex::scoped_lock l(mut);
         assert(t == runq.back());
         runq.pop_back();
+        t.set_flags(t.get_flags() | _TASK_SLEEP);
     }
 
     // lock must already be held
@@ -153,7 +159,7 @@ private:
         }
     }
 
-    static void add_to_empty_runqueue(const task &);
+    static void add_to_empty_runqueue(task &);
 
     static void *start(void *arg);
 };
