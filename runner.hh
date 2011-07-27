@@ -47,52 +47,14 @@ public: /* task interface */
     //! param t task to wake up for fd events
     //! param fds pointer to array of pollfd structs
     //! param nfds number of pollfd structs in array
-    void add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds) {
-        for (nfds_t i=0; i<nfds; ++i) {
-            epoll_event ev;
-            memset(&ev, 0, sizeof(ev));
-            int fd = fds[i].fd;
-            // make room for the highest fd number
-            if (pollfds.size() <= fd) {
-                pollfds.resize(fd+1);
-            }
-            ev.events = fds[i].events;
-            ev.data.fd = fd;
-            assert(efd.add(fd, ev) == 0);
-            pollfds[fd] = task_poll_state(t, &fds[i]);
-        }
-    }
+    void add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds);
 
     //! remove fds from epoll fd
-    int remove_pollfds(pollfd *fds, nfds_t nfds) {
-        int rvalue = 0;
-        for (nfds_t i=0; i<nfds; ++i) {
-            if (fds[i].revents) rvalue++;
-            pollfds[fds[i].fd].t = 0;
-            pollfds[fds[i].fd].pfd = 0;
-            assert(efd.remove(fds[i].fd) == 0);
-        }
-        return rvalue;
-    }
+    int remove_pollfds(pollfd *fds, nfds_t nfds);
 
     //! add task to run queue.
     //! will wakeup runner if it was sleeping.
-    bool add_to_runqueue(task &t) {
-        mutex::scoped_lock l(mut);
-        assert(t.get_flags() ^ _TASK_RUNNING);
-        assert(t.get_flags() & _TASK_SLEEP);
-        t.set_flags(t.get_flags() ^ _TASK_SLEEP);
-        // TODO: might not need to check this anymore with flags
-        task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
-        // don't add multiple times
-        // this is possible with io loop and timeout loop
-        if (i == runq.end()) {
-            runq.push_back(t);
-            wakeup_nolock();
-            return true;
-        }
-        return false;
-    }
+    bool add_to_runqueue(task &t);
 
     //! add task to wait list.
     //! used for io and timeouts
@@ -136,7 +98,7 @@ private:
     bool add_to_runqueue_if_asleep(task &t) {
         mutex::scoped_lock l(mut);
         if (asleep) {
-            t.set_flags(t.get_flags() ^ _TASK_SLEEP);
+            t.clear_flag(_TASK_SLEEP);
             runq.push_back(t);
             wakeup_nolock();
             return true;
@@ -148,7 +110,7 @@ private:
         mutex::scoped_lock l(mut);
         assert(t == runq.back());
         runq.pop_back();
-        t.set_flags(t.get_flags() | _TASK_SLEEP);
+        t.set_flag(_TASK_SLEEP);
     }
 
     // lock must already be held

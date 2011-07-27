@@ -141,18 +141,18 @@ void runner::run_queued_tasks() {
         runq.pop_front();
         l.unlock();
         task::swap(scheduler, t);
-        if (t.get_flags() & _TASK_MIGRATE) {
-            t.set_flags(t.get_flags() ^ _TASK_MIGRATE);
-            t.set_flags(t.get_flags() | _TASK_SLEEP);
+        if (t.test_flag_set(_TASK_MIGRATE)) {
+            t.clear_flag(_TASK_MIGRATE);
+            t.set_flag(_TASK_SLEEP);
             if (t.get_runner()) {
                 t.get_runner()->add_to_runqueue(t);
             } else {
                 add_to_empty_runqueue(t);
             }
             l.lock();
-        } else if (t.get_flags() & _TASK_SLEEP) {
+        } else if (t.test_flag_set(_TASK_SLEEP)) {
             l.lock();
-        } else if (t.get_flags() & _TASK_EXIT) {
+        } else if (t.test_flag_set(_TASK_EXIT)) {
             l.lock();
         } else {
             //printf("queueing task: %p flags: %u\n", t.m.get(), t.get_flags());
@@ -252,6 +252,50 @@ void runner::schedule() {
     remove_from_list(detail::runner_);
 }
 
+void runner::add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds) {
+    for (nfds_t i=0; i<nfds; ++i) {
+        epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
+        int fd = fds[i].fd;
+        // make room for the highest fd number
+        if (pollfds.size() <= fd) {
+            pollfds.resize(fd+1);
+        }
+        ev.events = fds[i].events;
+        ev.data.fd = fd;
+        assert(efd.add(fd, ev) == 0);
+        pollfds[fd] = task_poll_state(t, &fds[i]);
+    }
+}
+
+int runner::remove_pollfds(pollfd *fds, nfds_t nfds) {
+    int rvalue = 0;
+    for (nfds_t i=0; i<nfds; ++i) {
+        if (fds[i].revents) rvalue++;
+        pollfds[fds[i].fd].t = 0;
+        pollfds[fds[i].fd].pfd = 0;
+        assert(efd.remove(fds[i].fd) == 0);
+    }
+    return rvalue;
+}
+
+bool runner::add_to_runqueue(task &t) {
+    mutex::scoped_lock l(mut);
+    assert(t.test_flag_not_set(_TASK_RUNNING));
+    assert(t.test_flag_set(_TASK_SLEEP));
+    t.clear_flag(_TASK_SLEEP);
+    // TODO: might not need to check this anymore with flags
+    task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
+    // don't add multiple times
+    // this is possible with io loop and timeout loop
+    if (i == runq.end()) {
+        runq.push_back(t);
+        wakeup_nolock();
+        return true;
+    }
+    return false;
+}
+
 void *runner::start(void *arg) {
     using namespace detail;
     runner_ = (runner *)arg;
@@ -290,7 +334,7 @@ void runner::add_waiter(task &t) {
         t.set_abs_timeout(t.get_timeout() + abs);
     }
     t.set_state("waiting");
-    t.set_flags(t.get_flags() | _TASK_SLEEP);
+    t.set_flag(_TASK_SLEEP);
     waiters.push_back(t);
 }
 

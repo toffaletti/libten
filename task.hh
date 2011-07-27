@@ -35,7 +35,6 @@ public:
         std::string state;
         timespec ts;
         coroutine co;
-        //volatile state_e state;
         uint32_t flags;
 
         impl() : flags(_TASK_RUNNING) {}
@@ -90,8 +89,12 @@ public: /* runner interface */
     void set_state(const std::string &str) {
         m->state = str;
     }
-    void set_flags(uint32_t f) { m->flags = f; }
-    uint32_t get_flags() const { return m->flags; }
+
+    inline void clear_flag(uint32_t f) { m->flags ^= f; }
+    inline void set_flag(uint32_t f) { m->flags |= f; }
+    inline bool test_flag_set(uint32_t f) const { return m->flags & f; }
+    inline bool test_flag_not_set(uint32_t f) const { return m->flags ^ f; }
+
     const std::string &get_state() const { return m->state; }
     const timespec &get_timeout() const { return m->ts; }
     void set_abs_timeout(const timespec &abs) { m->ts = abs; }
