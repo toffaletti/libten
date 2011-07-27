@@ -5,16 +5,21 @@
 #include <boost/utility.hpp>
 #include <semaphore.h>
 
+//! wrapper around anonymous POSIX semaphore
 class semaphore : boost::noncopyable {
 public:
     semaphore(unsigned int value = 0) {
         THROW_ON_ERROR(sem_init(&s, 0, value));
     }
 
+    //! increment (unlock) the semaphore
     void post() {
         THROW_ON_ERROR(sem_post(&s));
     }
 
+    //! decrement (lock) the semaphore
+    //
+    //! blocks if the value drops below 0
     void wait() {
         THROW_ON_ERROR(sem_wait(&s));
     }

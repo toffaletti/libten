@@ -6,19 +6,20 @@
 #include <list>
 
 //! scheduler for tasks
+
 //! runs tasks in an OS-thread
 //! uses epoll for io events and timeouts
 class runner : boost::noncopyable {
 public:
     typedef std::list<runner *> list;
 
-    //! return the thread this runner is using
+    //! \return the thread this runner is using
     thread get_thread() { return thread(tt); }
 
     //! spawn a new runner with a task that will execute
     static runner *spawn(const task::proc &f);
 
-    //! return the runner for this thread
+    //! \return the runner for this thread
     static runner *self();
 
     //! schedule all tasks in this runner
@@ -26,13 +27,15 @@ public:
     void schedule();
 
     //! wake runner from sleep state
+    //
     //! runners go to sleep when they have no tasks
     //! to schedule.
     void wakeup() {
         mutex::scoped_lock l(mut);
         wakeup_nolock();
     }
-public: /* task interface */
+private: /* task interface */
+    friend class task;
 
     void set_task(task &t) {
         t.set_runner(this);
@@ -44,9 +47,9 @@ public: /* task interface */
     }
 
     //! add fds to this runners epoll fd
-    //! param t task to wake up for fd events
-    //! param fds pointer to array of pollfd structs
-    //! param nfds number of pollfd structs in array
+    //! \param t task to wake up for fd events
+    //! \param fds pointer to array of pollfd structs
+    //! \param nfds number of pollfd structs in array
     void add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds);
 
     //! remove fds from epoll fd
@@ -63,7 +66,7 @@ public: /* task interface */
     //! task used for scheduling
     task scheduler; // TODO: maybe this can just be a coroutine?
 
-private:
+private: /* internal */
     thread tt;
     mutex mut;
     condition cond;

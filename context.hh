@@ -1,6 +1,15 @@
 #ifndef CONTEXT_HH
 #define CONTEXT_HH
 
+//! \file
+//! context handles switching stacks
+//
+//! there are two implementations, ucontext
+//! and fcontext. ucontext is slower because it
+//! also saves and restores the signal handler state
+//! this requires system calls. fcontext only saves
+//! the bare minimum register states.
+
 #ifdef USE_UCONTEXT
 #include <ucontext.h>
 struct context : ucontext_t {

@@ -34,14 +34,24 @@ template <typename T> struct impl : boost::noncopyable {
 
 } // end namespace detail
 
-//! send and receive pointers between tasks
+//! send and receive data between tasks in FIFO order
+//
+//! channels can be buffered or unbuffered.
+//! unbuffered channels block on every send until recv
+//! buffered channels only block send when the buffer is full
+//! data is copied, so if you need to send large data
+//! its best to allocate them on the heap and send the pointer
+//! share by communicating!
+//! channels are thread and task safe.
 template <typename T> class channel {
 public:
-    //! default is unbuffered (send will block until recv)
+    //! create a new channel
+    //! \param capacity number of items to buffer. the default is 0, unbuffered.
     channel(typename detail::impl<T>::size_type capacity=0) {
        m.reset(new detail::impl<T>(capacity));
     }
 
+    //! send data
     typename detail::impl<T>::size_type send(T p) {
         mutex::scoped_lock l(m->mtx);
         typename detail::impl<T>::size_type unread = m->unread;
@@ -54,6 +64,7 @@ public:
         return unread;
     }
 
+    //! receive data
     T recv() {
         T item;
         mutex::scoped_lock l(m->mtx);
@@ -84,6 +95,7 @@ public:
         return unread() == 0;
     }
 
+    //! \return number of unread items
     size_t unread() {
         mutex::scoped_lock lock(m->mtx);
         return m->unread;

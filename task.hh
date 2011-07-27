@@ -13,6 +13,7 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 
+// flags for task state
 #define _TASK_SLEEP     (1<<0)
 #define _TASK_RUNNING   (1<<1)
 #define _TASK_EXIT      (1<<2)
@@ -20,30 +21,38 @@
 
 class runner;
 
-//! coroutine with scheduling via a runner
-//! can wait on io and timeouts
+//! coroutine with scheduling
+//
+//! tasks are scheduld by runners
+//! runners can suspend tasks to wait
+//! on io and timeouts while allowing
+//! other tasks to run cooperatively.
 class task {
 public:
     typedef boost::function<void ()> proc;
     typedef std::deque<task> deque;
 
-    struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
-        runner *in;
-        proc f;
-        // TODO: allow user to set state and name
-        std::string name;
-        std::string state;
-        timespec ts;
-        coroutine co;
-        uint32_t flags;
+    //! spawn a task and add it to a runners run queue
+    static task spawn(const proc &f, runner *in=NULL);
 
-        impl() : flags(_TASK_RUNNING) {}
-        impl(const proc &f_, size_t stack_size=16*1024);
-        ~impl() { if (!co.main()) { --ntasks; } }
-
-        task to_task() { return shared_from_this(); }
-    };
-    typedef boost::shared_ptr<impl> shared_impl;
+    //! yield the current task
+    static void yield();
+    //! migrate a task to a different runner
+    //
+    //! if no runner is specified an empty runner will be chosen
+    //! if no empty runners exist, a new one will spawn
+    //! this is useful for moving a task to a different thread
+    //! when it is about to make a blocking call
+    //! so it does not block any other tasks
+    static void migrate(runner *to=NULL);
+    //! wrapper around poll for single fd
+    static bool poll(int fd, short events, unsigned int ms=0);
+    //! task aware poll, for waiting on io. task will
+    //! go to sleep until epoll events or timeout
+    static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
+    //! put task to sleep
+    static void sleep(unsigned int ms);
+public: /* operators */
 
     bool operator == (const task &t) const {
         return m.get() == t.m.get();
@@ -62,28 +71,40 @@ public:
         return o;
     }
 
-public:
-    //! spawn a task and add it to a runners run queue
-    static task spawn(const proc &f, runner *in=NULL);
+private: /* implementation details */
+    struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
+        runner *in;
+        proc f;
+        // TODO: allow user to set state and name
+        std::string name;
+        std::string state;
+        timespec ts;
+        coroutine co;
+        uint32_t flags;
 
-    //! yield the current task
-    static void yield();
-    //! migrate a task to a different runner
-    //! if no runner is specified an empty runner will be chosen
-    //! if no empty runners exist, a new one will spawn
-    //! this is useful for moving a task to a different thread
-    //! when it is about to make a blocking call
-    //! so it does not block any other tasks
-    static void migrate(runner *to=NULL);
-    //! wrapper around poll for single fd
-    static bool poll(int fd, short events, unsigned int ms=0);
-    //! task aware poll, for waiting on io. task will
-    //! go to sleep until epoll events or timeout
-    static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
-    //! put task to sleep
-    static void sleep(unsigned int ms);
+        impl() : flags(_TASK_RUNNING) {}
+        impl(const proc &f_, size_t stack_size=16*1024);
+        ~impl() { if (!co.main()) { --ntasks; } }
 
-public: /* runner interface */
+        task to_task() { return shared_from_this(); }
+    };
+    typedef boost::shared_ptr<impl> shared_impl;
+
+    //! number of tasks currently existing across all runners
+    static atomic_count ntasks;
+
+    shared_impl m;
+
+    task(const shared_impl &m_) : m(m_) {}
+    task(const proc &f_, size_t stack_size=16*1024) {
+        m.reset(new impl(f_, stack_size));
+    }
+    static void start(impl *);
+
+private: /* runner interface */
+    friend class runner;
+    friend struct task_timeout_heap_compare;
+
     void set_runner(runner *i) { m->in = i; }
     runner *get_runner() const { return m->in; }
     void set_state(const std::string &str) {
@@ -103,24 +124,21 @@ public: /* runner interface */
     task() { m.reset(new impl); }
 
     static void swap(task &from, task &to);
-private:
-    static atomic_count ntasks;
-
-    shared_impl m;
-
-    task(const shared_impl &m_) : m(m_) {}
-    task(const proc &f_, size_t stack_size=16*1024) {
-        m.reset(new impl(f_, stack_size));
-    }
-    static void start(impl *);
-
 private: /* condition interface */
     static task self();
+    //! suspend the task while the condition is false
     void suspend(mutex::scoped_lock &l);
+    //! resume the task in the same runner where it was suspended
     void resume();
 
 public:
     //! task aware condition.
+    //
+    //! must be used inside a spawned task.
+    //! will only put the task to sleep
+    //! allowing the runner to continue scheduling other tasks
+    //! should be thread safe, to allow channel to be thread safe
+    //! see channel for usage example
     class condition : boost::noncopyable {
     public:
         condition() {}
@@ -148,7 +166,9 @@ public:
             t.suspend(l);
         }
     private:
+        //! mutex used to ensure thread safety
         mutex mm;
+        //! tasks waiting on this condition
         task::deque waiters;
     };
 };

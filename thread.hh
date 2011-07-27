@@ -7,6 +7,7 @@
 #include <boost/utility.hpp>
 #include "error.hh"
 
+//! wrapper around pthread_mutex
 class mutex : boost::noncopyable {
 public:
     mutex(const pthread_mutexattr_t *mutexattr = NULL) {
@@ -17,6 +18,7 @@ public:
         THROW_ON_NONZERO(pthread_mutex_destroy(&m));
     }
 
+    //! exception safe locking for mutex
     class scoped_lock : boost::noncopyable {
     public:
         scoped_lock(mutex &m_, bool lock_=true) : m(m_) {
@@ -94,6 +96,7 @@ private:
     pthread_mutex_t m;
 };
 
+//! wrapper around pthread_cond_*
 class condition {
 public:
     condition(const pthread_condattr_t *attr=NULL) {
@@ -119,8 +122,7 @@ private:
     pthread_cond_t c;
 };
 
-
-// thin C++ wrapper around pthreads
+//! thin wrapper around pthreads
 struct thread {
     typedef void *(*proc)(void*);
 

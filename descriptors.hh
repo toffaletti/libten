@@ -17,10 +17,16 @@
 #include <sys/signalfd.h>
 #include <signal.h>
 
+//! \file
+//! contains wrappers around most fd based apis
+
 #include <vector>
 
 //! base class for other file descriptors
+//
+//! contains methods common to most file descriptors
 //! in C++0x this should be movable, but not copyable
+//! close is called in destructor
 struct fd_base : boost::noncopyable {
     //! the file descriptor
     int fd;
@@ -187,9 +193,9 @@ struct epoll_fd : fd_base {
         return s;
     }
 
-    //! param events an array of epoll_events structs to contain events available to the caller
-    //! param maxevents in the size of events must be greater than zero, returns the number of fds with events triggered
-    //! param timeout milliseconds to wait for events, -1 waits indefinitely
+    //! \param events an array of epoll_events structs to contain events available to the caller
+    //! \param maxevents in the size of events must be greater than zero, returns the number of fds with events triggered
+    //! \param timeout milliseconds to wait for events, -1 waits indefinitely
     void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
         if (events.size() < maxevents)
             events.resize(maxevents); // this can throw bad_alloc and length_error

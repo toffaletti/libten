@@ -12,13 +12,19 @@
 #endif
 
 //! lightweight cooperatively scheduled threads of execution
-//! each with its own stack and guard page.
+//
+//! each coroutine allocates it own stack with a guard page.
+//! it uses context to swap between stacks.
 class coroutine : boost::noncopyable {
 public:
     typedef void (*proc)(void *);
 
+    //! this represents the main coroutine
     coroutine() : stack(0), stack_size(0) { ctxt.init(); }
 
+    //! create a new coroutine
+    //
+    //! allocates a stack and guard page
     coroutine(proc f, void *arg=NULL, size_t stack_size_=4096)
         : stack_size(stack_size_)
     {
@@ -46,7 +52,7 @@ public:
         }
     }
 
-    //! save the state of the current stack and swap to another
+    //! save the state of the current coroutine and swap to another
     void swap(coroutine *to) {
         ctxt.swap(&to->ctxt);
     }
@@ -55,11 +61,14 @@ public:
     bool main() { return stack == 0; }
 
 private:
+    //! saved state of this coroutine
     context ctxt;
+    //! pointer to stack memory
     char *stack;
     // TODO: probably not needed, can be retrieved from context?
     size_t stack_size;
 #ifndef NVALGRIND
+    //! stack id so valgrind doesn't freak when stack swapping happens
     int valgrind_stack_id;
 #endif
 
