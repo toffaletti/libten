@@ -2,6 +2,9 @@
 #include "channel.hh"
 
 #include <boost/bind.hpp>
+#include <iostream>
+
+// adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 
 void generate(channel<int> out) {
     for (int i=2; ; ++i) {
@@ -23,7 +26,7 @@ void primes() {
     task::spawn(boost::bind(generate, ch));
     for (int i=0; i<100; ++i) {
         int prime = ch.recv();
-        printf("%i\n", prime);
+        std::cout << prime << "\n";
         channel<int> out;
         task::spawn(boost::bind(filter, ch, out, prime));
         ch = out;
