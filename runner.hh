@@ -87,7 +87,8 @@ private: /* internal */
     };
     typedef std::vector<task_poll_state> poll_task_array;
     poll_task_array pollfds;
-
+    //! time calculated once through event loop
+    timespec now;
 
     runner();
     runner(task &t);

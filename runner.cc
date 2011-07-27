@@ -167,9 +167,6 @@ void runner::check_io() {
     if (waiters.empty()) return;
     bool done = false;
     while (!done) {
-        timespec now;
-        // TODO: probably should cache now for runner
-        // avoid calling it every add_waiter()
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
         int timeout_ms = -1;
@@ -328,10 +325,9 @@ void runner::add_to_empty_runqueue(task &t) {
 }
 
 void runner::add_waiter(task &t) {
-    timespec abs;
-    if (t.get_timeout().tv_sec != -1) {
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &abs));
-        t.set_abs_timeout(t.get_timeout() + abs);
+    timespec to = t.get_timeout();
+    if (to.tv_sec != -1) {
+        t.set_abs_timeout(to + now);
     }
     t.set_state("waiting");
     t.set_flag(_TASK_SLEEP);
