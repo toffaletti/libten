@@ -47,6 +47,7 @@
 
 .text
 .globl _boost_fcontext_jump
+.type _boost_fcontext_jump,@function
 .align 8
 _boost_fcontext_jump:
     movq     %rbx,       (%rdi)         /* save RBX */
@@ -84,6 +85,7 @@ _boost_fcontext_jump:
 
 .text
 .globl _boost_fcontext_make
+.type _boost_fcontext_make,@function
 .align 8
 _boost_fcontext_make:
     movq   %rdi,                 (%rdi)     /* save the address of current context */

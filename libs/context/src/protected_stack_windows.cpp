@@ -74,7 +74,7 @@ protected_stack::~protected_stack()
         ::VirtualFree( limit, 0, MEM_RELEASE);
     }
 }
-
+#if 0
 protected_stack::protected_stack( BOOST_RV_REF( protected_stack) other) :
     size_( 0), size__( 0), address_( 0)
 { swap( other); }
@@ -86,7 +86,7 @@ protected_stack::operator=( BOOST_RV_REF( protected_stack) other)
     swap( tmp);
     return * this;
 }
-
+#endif
 void *
 protected_stack::address() const
 { return address_; }

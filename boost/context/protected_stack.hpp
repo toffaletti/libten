@@ -41,9 +41,16 @@ public:
 
     ~protected_stack();
 
-    protected_stack( BOOST_RV_REF( protected_stack) other);
+    protected_stack( BOOST_RV_REF( protected_stack) other) :
+        size_( 0), size__( 0), address_( 0)
+    { swap( other); }
 
-    protected_stack & operator=( BOOST_RV_REF( protected_stack) other);
+    protected_stack & operator=( BOOST_RV_REF( protected_stack) other)
+    {
+        protected_stack tmp( boost::move( other) );
+        swap( tmp);
+        return * this;
+    }
 
     void * address() const;
 

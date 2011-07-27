@@ -54,11 +54,7 @@ protected_stack::protected_stack( std::size_t size) :
     const int fd( ::open("/dev/zero", O_RDONLY) );
     BOOST_ASSERT( -1 != fd);
     void * limit =
-# if defined(macintosh) || defined(__APPLE__) || defined(__APPLE_CC__)
-        ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-# else
         ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-# endif
     ::close( fd);
     if ( ! limit) throw std::bad_alloc();
 
@@ -76,7 +72,7 @@ protected_stack::~protected_stack()
         ::munmap( limit, size__);
     }
 }
-
+#if 0
 protected_stack::protected_stack( BOOST_RV_REF( protected_stack) other) :
     size_( 0), size__( 0), address_( 0)
 { swap( other); }
@@ -88,7 +84,7 @@ protected_stack::operator=( BOOST_RV_REF( protected_stack) other)
     swap( tmp);
     return * this;
 }
-
+#endif
 void *
 protected_stack::address() const
 { return address_; }
@@ -117,3 +113,4 @@ protected_stack::operator unspecified_bool_type() const
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_SUFFIX
 #endif
+
