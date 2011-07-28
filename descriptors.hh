@@ -17,6 +17,12 @@
 #include <sys/signalfd.h>
 #include <signal.h>
 
+#if EAGAIN != EWOULDBLOCK
+#define IO_NOT_READY_ERROR  ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+#else
+#define IO_NOT_READY_ERROR  (errno == EAGAIN)
+#endif
+
 //! \file
 //! contains wrappers around most fd based apis
 
@@ -326,13 +332,13 @@ struct socket_fd : fd_base {
     //! \param addr returns the address of the peer socket
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
     //! \return socket_fd for accepted socket
-    socket_fd accept(address &addr, int flags=0) throw (errno_error) __attribute__((warn_unused_result)) {
-        socklen_t addrlen = addr.addrlen();
-        int afd = ::accept4(fd, addr.sockaddr(), &addrlen, flags);
-        THROW_ON_ERROR(afd);
-        return afd;
-    }
-#else
+    //socket_fd accept(address &addr, int flags=0) throw (errno_error) __attribute__((warn_unused_result)) {
+    //    socklen_t addrlen = addr.addrlen();
+    //    int afd = ::accept4(fd, addr.sockaddr(), &addrlen, flags);
+    //    THROW_ON_ERROR(afd);
+    //    return afd;
+    //}
+#endif
     //! \param addr returns the address of the peer socket
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
     //! \return the file descriptor for the peer socket or -1 on error
@@ -340,7 +346,6 @@ struct socket_fd : fd_base {
         socklen_t addrlen = addr.addrlen();
         return ::accept4(fd, addr.sockaddr(), &addrlen, flags);
     }
-#endif
 
     //! print socket file descriptor number
     friend std::ostream &operator << (std::ostream &out, const socket_fd &s) {

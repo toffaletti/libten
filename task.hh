@@ -5,6 +5,7 @@
 #include "thread.hh"
 #include "coroutine.hh"
 #include "timespec.hh"
+#include "descriptors.hh"
 
 #include <poll.h>
 #include <deque>
@@ -170,6 +171,72 @@ public:
         mutex mm;
         //! tasks waiting on this condition
         task::deque waiters;
+    };
+
+public:
+
+    // TODO: add timeout params
+    class socket : boost::noncopyable {
+    public:
+        socket(int domain, int type, int protocol=0) throw (errno_error)
+            : s(domain, type, protocol)
+        {
+            s.setnonblock();
+        }
+
+        void bind(address &addr) throw (errno_error) {
+            s.bind(addr);
+        }
+
+        int connect(address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
+            while (s.connect(addr) < 0) {
+                if (errno == EINTR)
+                    continue;
+                if (errno == EINPROGRESS || errno == EADDRINUSE) {
+                    if (task::poll(s.fd, EPOLLOUT, timeout_ms)) {
+                        return 0;
+                    } else {
+                        errno = ETIMEDOUT;
+                    }
+                }
+                return -1;
+            }
+            return 0;
+        }
+
+        int accept(address &addr, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
+            flags |= SOCK_NONBLOCK;
+            int fd;
+            while ((fd = s.accept(addr, flags)) < 0) {
+                if (errno == EINTR)
+                    continue;
+                if (!IO_NOT_READY_ERROR)
+                    return -1;
+                if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
+                    errno = ETIMEDOUT;
+                    return -1;
+                }
+            }
+            return fd;
+        }
+
+        ssize_t recv(void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
+            ssize_t nr;
+            while ((nr = s.recv(buf, len, flags)) < 0) {
+                if (errno == EINTR)
+                    continue;
+                if (!IO_NOT_READY_ERROR)
+                    break;
+                if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
+                    errno = ETIMEDOUT;
+                    break;
+                }
+            }
+            return nr;
+        }
+
+    private:
+        socket_fd s;
     };
 };
 

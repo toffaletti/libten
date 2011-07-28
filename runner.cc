@@ -234,6 +234,7 @@ void runner::schedule() {
                     sleep(l);
                 } else {
                     l.unlock();
+                    // no tasks exist so it is time to exit all runners
                     wakeup_all_runners();
                     break;
                 }

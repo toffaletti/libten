@@ -108,7 +108,7 @@ static void listen_co(bool multithread, semaphore &sm) {
     assert(task::poll(s.fd, EPOLLIN));
 
     address client_addr;
-    socket_fd cs = s.accept(client_addr, SOCK_NONBLOCK);
+    socket_fd cs(s.accept(client_addr, SOCK_NONBLOCK));
     task::poll(cs.fd, EPOLLIN);
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);

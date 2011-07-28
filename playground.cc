@@ -4,7 +4,7 @@
 
 void echo_task(socket_fd &_s) {
     address client_addr;
-    socket_fd s = _s.accept(client_addr, SOCK_NONBLOCK);
+    socket_fd s(_s.accept(client_addr, SOCK_NONBLOCK));
     char buf[4096];
     for (;;) {
         task::poll(s.fd, EPOLLIN);
