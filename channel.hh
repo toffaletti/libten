@@ -63,7 +63,7 @@ public:
     typename detail::impl<T>::size_type send(T p) {
         mutex::scoped_lock l(m->mtx);
         typename detail::impl<T>::size_type unread = m->unread;
-        while (m->is_full() && !m.unique()) {
+        while (m->is_full() && !m.unique() && !m->closed) {
             m->not_full.wait(l);
         }
         check_closed();
@@ -84,7 +84,7 @@ public:
             // unblock sender
             m->not_full.signal();
         }
-        while (m->is_empty() && !m.unique()) {
+        while (m->is_empty() && !m.unique() && !m->closed) {
             m->not_empty.wait(l);
         }
         if (m->unread == 0) check_closed();

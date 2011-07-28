@@ -322,3 +322,27 @@ BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
 	task::spawn(wait_on_io);
     runner::self()->schedule();
 }
+
+static void channel_closer(channel<int> c, int &closed) {
+	task::yield();
+	c.close();
+	closed++;
+}
+
+static void channel_recv_close(channel<int> c, int &closed) {
+	try {
+		c.recv();
+	} catch (channel_closed_error &e) {
+		closed++;
+	}
+}
+
+BOOST_AUTO_TEST_CASE(channel_close_test) {
+	channel<int> c;
+	int closed=0;
+	task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
+	task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
+	task::spawn(boost::bind(channel_closer, c, boost::ref(closed)));
+    runner::self()->schedule();
+	BOOST_CHECK_EQUAL(closed, 3);
+}
