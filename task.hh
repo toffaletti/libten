@@ -154,8 +154,16 @@ public:
             }
         }
 
-        // TODO: resume all waiters
-        void broadcast() {}
+        //! resume all waiters
+        void broadcast() {
+            mutex::scoped_lock l(mm);
+            for (task::deque::iterator i=waiters.begin();
+                i!=waiters.end(); ++i)
+            {
+                i->resume();
+            }
+            waiters.clear();
+        }
 
         //! wait for condition to be signaled
         void wait(mutex::scoped_lock &l) {

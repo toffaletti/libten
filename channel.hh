@@ -115,13 +115,15 @@ public:
         mutex::scoped_lock l(m->mtx);
         m->closed = true;
         // wake up all users of channel
-        m->not_empty.signal();
-        m->not_full.signal();
+        m->not_empty.broadcast();
+        m->not_full.broadcast();
     }
 private:
     boost::shared_ptr<detail::impl<T> > m;
 
     void check_closed() {
+        // i dont like throwing an exception for this
+        // but i don't want to complicate the interface for send/recv
         if (m->closed) throw channel_closed_error();
     }
 };
