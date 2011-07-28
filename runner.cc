@@ -67,7 +67,6 @@ template <typename SetT> struct in_set {
 
 runner *runner::self() {
     if (detail::runner_ == NULL) {
-        // this should happen in the main thread only and only once
         detail::runner_ = new runner;
     }
     return detail::runner_;
@@ -87,23 +86,38 @@ runner *runner::spawn(const task::proc &f) {
     return new runner(f);
 }
 
-runner::runner() : asleep(false), current_task(scheduler) {
+void runner::add_pipe() {
+    epoll_event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = pi.r.fd;
+    if (pollfds.size() <= pi.r.fd) {
+        pollfds.resize(pi.r.fd+1);
+    }
+    efd.add(pi.r.fd, ev);
+}
+
+runner::runner() : current_task(scheduler), pi(O_NONBLOCK) {
+    add_pipe();
     append_to_list(this);
     tt=thread::self();
 }
 
-runner::runner(task &t) : asleep(false), current_task(scheduler) {
+runner::runner(task &t) : current_task(scheduler), pi(O_NONBLOCK) {
+    add_pipe();
     add_to_runqueue(t);
     append_to_list(this);
     thread::create(tt, start, this);
 }
 
-runner::runner(const task::proc &f) : asleep(false), current_task(scheduler) {
+runner::runner(const task::proc &f) : current_task(scheduler), pi(O_NONBLOCK) {
+    add_pipe();
     task::spawn(f, this);
     append_to_list(this);
     thread::create(tt, start, this);
 }
 
+#if 0
 void runner::sleep(mutex::scoped_lock &l) {
     // move to the head of the list
     // to simulate a FIFO
@@ -126,17 +140,18 @@ void runner::sleep(mutex::scoped_lock &l) {
         detail::runners->push_front(this);
     }
     l.lock();
-    while (asleep) {
-        cond.wait(l);
-    }
+    //while (asleep) {
+    //    cond.wait(l);
+    //}
 }
-
+#endif
 
 typedef std::vector<epoll_event> event_vector;
 
 void runner::run_queued_tasks() {
     mutex::scoped_lock l(mut);
     while (!runq.empty()) {
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         task t = runq.front();
         runq.pop_front();
         l.unlock();
@@ -155,7 +170,6 @@ void runner::run_queued_tasks() {
         } else if (t.test_flag_set(_TASK_EXIT)) {
             l.lock();
         } else {
-            //printf("queueing task: %p flags: %u\n", t.m.get(), t.get_flags());
             runq.push_back(t);
             l.lock();
         }
@@ -164,26 +178,32 @@ void runner::run_queued_tasks() {
 
 void runner::check_io() {
     event_vector events(efd.maxevents ? efd.maxevents : 1);
-    if (waiters.empty()) return;
+    //if (waiters.empty()) return;
     bool done = false;
     while (!done) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
         int timeout_ms = -1;
-        assert(!waiters.empty());
-        if (waiters.front().get_timeout().tv_sec > 0) {
-            if (waiters.front().get_timeout() <= now) {
-                // epoll_wait must return immediately
-                timeout_ms = 0;
-            } else {
-                timeout_ms = timespec_to_milliseconds(waiters.front().get_timeout() - now);
-                // help avoid spinning on timeouts smaller than 1 ms
-                if (timeout_ms <= 0) timeout_ms = 1;
+        if (!waiters.empty()) {
+            if (waiters.front().get_timeout().tv_sec > 0) {
+                if (waiters.front().get_timeout() <= now) {
+                    // epoll_wait must return immediately
+                    timeout_ms = 0;
+                } else {
+                    timeout_ms = timespec_to_milliseconds(waiters.front().get_timeout() - now);
+                    // help avoid spinning on timeouts smaller than 1 ms
+                    if (timeout_ms <= 0) timeout_ms = 1;
+                }
             }
         }
 
         if (events.empty()) {
             events.resize(efd.maxevents ? efd.maxevents : 1);
+        }
+
+        if (task::get_ntasks() == 0) {
+            wakeup_all_runners();
+            return;
         }
         efd.wait(events, timeout_ms);
 
@@ -198,6 +218,12 @@ void runner::check_io() {
                 task t = ti->to_task();
                 add_to_runqueue(t);
                 wake_tasks.insert(t);
+            } else if (i->data.fd == pi.r.fd) {
+                // our wake up pipe was written to
+                char buf[32];
+                // clear pipe
+                while (pi.read(buf, sizeof(buf)) > 0) {}
+                done = true;
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
                 fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
@@ -220,34 +246,15 @@ void runner::check_io() {
     }
 }
 
-void runner::schedule() {
-    try {
-        for (;;) {
-            run_queued_tasks();
-            check_io();
+runner::~runner() {
+    remove_from_list(this);
+}
 
-            // check_io might have filled runqueue again
-            mutex::scoped_lock l(mut);
-            if (runq.empty()) {
-                if (task::get_ntasks() > 0) {
-                    // block waiting for tasks to be scheduled on this runner
-                    sleep(l);
-                } else {
-                    l.unlock();
-                    // no tasks exist so it is time to exit all runners
-                    wakeup_all_runners();
-                    break;
-                }
-            }
-        }
-    } catch (abi::__forced_unwind&) {
-        remove_from_list(detail::runner_);
-        throw;
-    } catch (std::exception &e) {
-        remove_from_list(detail::runner_);
-        throw;
+void runner::schedule() {
+    while (task::get_ntasks() > 0) {
+        run_queued_tasks();
+        check_io();
     }
-    remove_from_list(detail::runner_);
 }
 
 void runner::add_pollfds(task::impl *t, pollfd *fds, nfds_t nfds) {

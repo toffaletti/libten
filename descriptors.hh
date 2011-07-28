@@ -207,7 +207,9 @@ struct epoll_fd : fd_base {
             events.resize(maxevents); // this can throw bad_alloc and length_error
         for (;;) {
             int s = ::epoll_wait(fd, &events[0], events.size(), timeout);
-            if (s == -1 && errno == EINTR) continue;
+            // if EINTR, the caller might need to do something else
+            // and then call wait again. so don't throw exception
+            if (s == -1 && errno == EINTR) s=0;
             THROW_ON_ERROR(s);
             events.resize(s);
             break;
@@ -328,16 +330,6 @@ struct socket_fd : fd_base {
         THROW_ON_ERROR(::socketpair(domain, type, protocol, sv));
         return std::make_pair(sv[0], sv[1]);
     }
-
-    //! \param addr returns the address of the peer socket
-    //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
-    //! \return socket_fd for accepted socket
-    //socket_fd accept(address &addr, int flags=0) throw (errno_error) __attribute__((warn_unused_result)) {
-    //    socklen_t addrlen = addr.addrlen();
-    //    int afd = ::accept4(fd, addr.sockaddr(), &addrlen, flags);
-    //    THROW_ON_ERROR(afd);
-    //    return afd;
-    //}
 #endif
     //! \param addr returns the address of the peer socket
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC

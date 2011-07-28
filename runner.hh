@@ -69,10 +69,10 @@ private: /* task interface */
 private: /* internal */
     thread tt;
     mutex mut;
-    condition cond;
-    bool asleep;
+    //condition cond;
     task current_task;
     task::deque runq;
+    pipe_fd pi;
     epoll_fd efd;
     typedef std::vector<task> task_heap;
     // tasks waiting with a timeout value set
@@ -93,20 +93,25 @@ private: /* internal */
     runner();
     runner(task &t);
     runner(const task::proc &f);
+    ~runner();
 
-    void sleep(mutex::scoped_lock &l);
+    void add_pipe();
+    //void sleep(mutex::scoped_lock &l);
 
     void run_queued_tasks();
     void check_io();
 
     bool add_to_runqueue_if_asleep(task &t) {
-        mutex::scoped_lock l(mut);
-        if (asleep) {
-            t.clear_flag(_TASK_SLEEP);
-            runq.push_back(t);
-            wakeup_nolock();
-            return true;
-        }
+        // TODO: this logic was broken. could be asleep and still
+        // have a task waiting on a channel.
+
+        //mutex::scoped_lock l(mut);
+        //if (asleep) {
+        //    t.clear_flag(_TASK_SLEEP);
+        //    runq.push_back(t);
+        //    wakeup_nolock();
+        //    return true;
+        //}
         return false;
     }
 
@@ -119,10 +124,13 @@ private: /* internal */
 
     // lock must already be held
     void wakeup_nolock() {
-        if (asleep) {
-            asleep = false;
-            cond.signal();
-        }
+        //if (asleep) {
+        //    asleep = false;
+        ////    cond.signal();
+        //}
+        //tt.kill(SIGUSR1);
+        ssize_t nw = pi.write("\1", 1);
+        (void)nw;
     }
 
     static void add_to_empty_runqueue(task &);

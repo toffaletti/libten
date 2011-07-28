@@ -283,3 +283,42 @@ BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
     r->schedule();
     BOOST_CHECK(c.empty());
 }
+
+static void delayed_channel_send(channel<int> c) {
+	task::sleep(100);
+	c.send(5309);
+}
+
+static void delayed_channel(address addr) {
+	channel<int> c;
+	// spawn the send in another thread before blocking on recv
+	runner::spawn(boost::bind(delayed_channel_send, c));
+	int a = c.recv();
+
+	socket_fd s(AF_INET, SOCK_STREAM);
+    s.setnonblock();
+    if (s.connect(addr) == 0) {
+	} else if (errno == EINPROGRESS) {
+        // poll for writeable
+        assert(task::poll(s.fd, EPOLLOUT));
+    } else {
+        throw errno_error();
+    }
+}
+
+static void wait_on_io() {
+    socket_fd s(AF_INET, SOCK_STREAM);
+    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    address addr("127.0.0.1", 0);
+    s.bind(addr);
+    s.getsockname(addr);
+    s.listen();
+
+	task::spawn(boost::bind(delayed_channel, addr));
+    task::poll(s.fd, EPOLLIN);
+}
+
+BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
+	task::spawn(wait_on_io);
+    runner::self()->schedule();
+}
