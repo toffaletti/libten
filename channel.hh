@@ -9,13 +9,16 @@
 // based on bounded_buffer example
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
 
+// TODO: use http://www.boost.org/doc/libs/1_47_0/libs/smart_ptr/intrusive_ptr.html
+// to close the channel if the reference count reaches 1 while in a blocking send/recv
+
 namespace detail {
 template <typename T> struct impl : boost::noncopyable {
     typedef typename boost::circular_buffer<T> container_type;
     typedef typename container_type::size_type size_type;
 
     impl(size_type capacity_=0) : capacity(capacity_), unread(0),
-        container(capacity ? capacity : 1) {}
+        container(capacity ? capacity : 1), closed(false) {}
 
     // capacity is different than container.capacity()
     // to avoid needing to reallocate the container
@@ -27,12 +30,17 @@ template <typename T> struct impl : boost::noncopyable {
     // using task-aware conditions
     task::condition not_empty;
     task::condition not_full;
+    bool closed;
 
     bool is_empty() const { return unread == 0; }
     bool is_full() const { return unread >= capacity; }
 };
 
 } // end namespace detail
+
+struct channel_closed_error : std::exception {
+    channel_closed_error() {}
+};
 
 //! send and receive data between tasks in FIFO order
 //
@@ -55,9 +63,10 @@ public:
     typename detail::impl<T>::size_type send(T p) {
         mutex::scoped_lock l(m->mtx);
         typename detail::impl<T>::size_type unread = m->unread;
-        while (m->is_full()) {
+        while (m->is_full() && !m.unique()) {
             m->not_full.wait(l);
         }
+        check_closed();
         m->container.push_front(p);
         ++m->unread;
         m->not_empty.signal();
@@ -75,9 +84,10 @@ public:
             // unblock sender
             m->not_full.signal();
         }
-        while (m->is_empty()) {
+        while (m->is_empty() && !m.unique()) {
             m->not_empty.wait(l);
         }
+        if (m->unread == 0) check_closed();
         // we don't pop_back because the item will just get overwritten
         // when the circular buffer wraps around
         item = m->container[--m->unread];
@@ -100,8 +110,20 @@ public:
         mutex::scoped_lock lock(m->mtx);
         return m->unread;
     }
+
+    void close() {
+        mutex::scoped_lock l(m->mtx);
+        m->closed = true;
+        // wake up all users of channel
+        m->not_empty.signal();
+        m->not_full.signal();
+    }
 private:
     boost::shared_ptr<detail::impl<T> > m;
+
+    void check_closed() {
+        if (m->closed) throw channel_closed_error();
+    }
 };
 
 #endif // CHANNEL_HH

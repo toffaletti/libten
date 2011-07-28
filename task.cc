@@ -1,5 +1,6 @@
 #include "task.hh"
 #include "runner.hh"
+#include "channel.hh"
 
 // static
 atomic_count task::ntasks(0);
@@ -78,6 +79,8 @@ void task::start(impl *i) {
     task t = i->to_task();
     try {
         t.m->f();
+    } catch (channel_closed_error &e) {
+        fprintf(stderr, "caught channel close error in task(%p)\n", t.m.get());
     } catch(std::exception &e) {
         fprintf(stderr, "exception in task(%p): %s\n", t.m.get(), e.what());
         abort();

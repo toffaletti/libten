@@ -212,14 +212,14 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
-static void channel_recv(channel<intptr_t> &c) {
+static void channel_recv(channel<intptr_t> c) {
     intptr_t d = c.recv();
     BOOST_CHECK_EQUAL(d, 1875309);
     char *str = reinterpret_cast<char *>(c.recv());
     BOOST_CHECK_EQUAL(str, "hi");
 }
 
-static void channel_send(channel<intptr_t> &c) {
+static void channel_send(channel<intptr_t> c) {
     static char str[] = "hi";
     c.send(1875309);
     c.send(reinterpret_cast<intptr_t>(str));
@@ -227,8 +227,8 @@ static void channel_send(channel<intptr_t> &c) {
 
 BOOST_AUTO_TEST_CASE(channel_test) {
     channel<intptr_t> c(10);
-    task::spawn(boost::bind(channel_recv, boost::ref(c)));
-    task::spawn(boost::bind(channel_send, boost::ref(c)));
+    task::spawn(boost::bind(channel_recv, c));
+    task::spawn(boost::bind(channel_send, c));
     runner *r = runner::self();
     r->schedule();
     BOOST_CHECK(c.empty());
@@ -236,14 +236,14 @@ BOOST_AUTO_TEST_CASE(channel_test) {
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
     channel<intptr_t> c;
-    task::spawn(boost::bind(channel_recv, boost::ref(c)));
-    task::spawn(boost::bind(channel_send, boost::ref(c)));
+    task::spawn(boost::bind(channel_recv, c));
+    task::spawn(boost::bind(channel_send, c));
     runner *r = runner::self();
     r->schedule();
     BOOST_CHECK(c.empty());
 }
 
-static void channel_recv_mt(channel<intptr_t> &c, semaphore &s) {
+static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
     intptr_t d = c.recv();
     assert(d == 1875309);
     char *str = reinterpret_cast<char *>(c.recv());
@@ -254,18 +254,18 @@ static void channel_recv_mt(channel<intptr_t> &c, semaphore &s) {
 BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
     semaphore s;
     channel<intptr_t> c;
-    runner::spawn(boost::bind(channel_recv_mt, boost::ref(c), boost::ref(s)));
-    runner::spawn(boost::bind(channel_send, boost::ref(c)));
+    runner::spawn(boost::bind(channel_recv_mt, c, boost::ref(s)));
+    runner::spawn(boost::bind(channel_send, c));
     s.wait();
     BOOST_CHECK(c.empty());
 }
 
-static void channel_multi_send(channel<intptr_t> &c) {
+static void channel_multi_send(channel<intptr_t> c) {
     c.send(1234);
     c.send(1234);
 }
 
-static void channel_multi_recv(channel<intptr_t> &c) {
+static void channel_multi_recv(channel<intptr_t> c) {
     for (int i=0; i<5; ++i) {
         intptr_t d = c.recv();
         BOOST_CHECK_EQUAL(d, 1234);
@@ -276,9 +276,9 @@ static void channel_multi_recv(channel<intptr_t> &c) {
 BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
     channel<intptr_t> c(4);
     c.send(1234);
-    task::spawn(boost::bind(channel_multi_recv, boost::ref(c)));
-    task::spawn(boost::bind(channel_multi_send, boost::ref(c)));
-    task::spawn(boost::bind(channel_multi_send, boost::ref(c)));
+    task::spawn(boost::bind(channel_multi_recv, c));
+    task::spawn(boost::bind(channel_multi_send, c));
+    task::spawn(boost::bind(channel_multi_send, c));
     runner *r = runner::self();
     r->schedule();
     BOOST_CHECK(c.empty());
