@@ -83,7 +83,8 @@ runner *runner::spawn(const task::proc &f) {
         return r;
     }
     l.unlock();
-    return new runner(f);
+    task t(f);
+    return new runner(t);
 }
 
 void runner::add_pipe() {
@@ -110,42 +111,6 @@ runner::runner(task &t) : current_task(scheduler), pi(O_NONBLOCK) {
     thread::create(tt, start, this);
 }
 
-runner::runner(const task::proc &f) : current_task(scheduler), pi(O_NONBLOCK) {
-    add_pipe();
-    task::spawn(f, this);
-    append_to_list(this);
-    thread::create(tt, start, this);
-}
-
-#if 0
-void runner::sleep(mutex::scoped_lock &l) {
-    // move to the head of the list
-    // to simulate a FIFO
-    // if there are too many threads
-    // and not enough tasks, we can
-    // use a cond.timedwait here and
-    // exit a thread that times out
-
-    // must set asleep here
-    // another thread could add to runq
-    // (a resume() for example)
-    // during the unlock and if we're
-    // not marked asleep, then we
-    // end up sleeping while runq isn't empty
-    asleep = true;
-    l.unlock();
-    {
-        mutex::scoped_lock tl(*detail::tmutex);
-        detail::runners->remove(this);
-        detail::runners->push_front(this);
-    }
-    l.lock();
-    //while (asleep) {
-    //    cond.wait(l);
-    //}
-}
-#endif
-
 typedef std::vector<epoll_event> event_vector;
 
 void runner::run_queued_tasks() {
@@ -162,7 +127,7 @@ void runner::run_queued_tasks() {
             if (t.get_runner()) {
                 t.get_runner()->add_to_runqueue(t);
             } else {
-                add_to_empty_runqueue(t);
+                new runner(t);
             }
             l.lock();
         } else if (t.test_flag_set(_TASK_SLEEP)) {
@@ -317,27 +282,11 @@ void *runner::start(void *arg) {
     return NULL;
 }
 
-void runner::add_to_empty_runqueue(task &t) {
-    mutex::scoped_lock l(*detail::tmutex);
-    bool added = false;
-    for (runner::list::iterator i=detail::runners->begin(); i!=detail::runners->end(); ++i) {
-        if ((*i)->add_to_runqueue_if_asleep(t)) {
-            added = true;
-            break;
-        }
-    }
-    if (!added) {
-        l.unlock();
-        new runner(t);
-    }
-}
-
 void runner::add_waiter(task &t) {
     timespec to = t.get_timeout();
     if (to.tv_sec != -1) {
         t.set_abs_timeout(to + now);
     }
-    t.set_state("waiting");
     t.set_flag(_TASK_SLEEP);
     waiters.push_back(t);
 }

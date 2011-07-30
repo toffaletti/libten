@@ -182,8 +182,6 @@ public:
     };
 
 public:
-
-    // TODO: add timeout params
     class socket : boost::noncopyable {
     public:
         socket(int domain, int type, int protocol=0) throw (errno_error)

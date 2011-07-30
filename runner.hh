@@ -92,28 +92,12 @@ private: /* internal */
 
     runner();
     runner(task &t);
-    runner(const task::proc &f);
     ~runner();
 
     void add_pipe();
-    //void sleep(mutex::scoped_lock &l);
 
     void run_queued_tasks();
     void check_io();
-
-    bool add_to_runqueue_if_asleep(task &t) {
-        // TODO: this logic was broken. could be asleep and still
-        // have a task waiting on a channel.
-
-        //mutex::scoped_lock l(mut);
-        //if (asleep) {
-        //    t.clear_flag(_TASK_SLEEP);
-        //    runq.push_back(t);
-        //    wakeup_nolock();
-        //    return true;
-        //}
-        return false;
-    }
 
     void delete_from_runqueue(task &t) {
         mutex::scoped_lock l(mut);
@@ -122,18 +106,11 @@ private: /* internal */
         t.set_flag(_TASK_SLEEP);
     }
 
-    // lock must already be held
+    //! lock must already be held
     void wakeup_nolock() {
-        //if (asleep) {
-        //    asleep = false;
-        ////    cond.signal();
-        //}
-        //tt.kill(SIGUSR1);
         ssize_t nw = pi.write("\1", 1);
         (void)nw;
     }
-
-    static void add_to_empty_runqueue(task &);
 
     static void *start(void *arg);
 };
