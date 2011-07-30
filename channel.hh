@@ -38,9 +38,9 @@ template <typename T> struct impl : boost::noncopyable {
 
 } // end namespace detail
 
-struct channel_closed_error : std::exception {
-    channel_closed_error() {}
-};
+struct channel_closed_error : std::exception {};
+//! tried to block on a channel with no other references
+struct channel_unique_error : std::exception {};
 
 //! send and receive data between tasks in FIFO order
 //
@@ -87,7 +87,13 @@ public:
         while (m->is_empty() && !m.unique() && !m->closed) {
             m->not_empty.wait(l);
         }
-        if (m->unread == 0) check_closed();
+        if (m->unread == 0) {
+            check_closed();
+            if (m.unique()) {
+                throw channel_unique_error();
+            }
+        }
+
         // we don't pop_back because the item will just get overwritten
         // when the circular buffer wraps around
         item = m->container[--m->unread];

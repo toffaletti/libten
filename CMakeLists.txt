@@ -11,14 +11,27 @@ SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 add_library(fw task.cc runner.cc ${ASM})
 target_link_libraries(fw rt)
 
-add_executable(test_descriptors test_descriptors.cc)
-target_link_libraries(test_descriptors fw boost_unit_test_framework)
-
-add_executable(test_task test_task.cc)
-target_link_libraries(test_task fw boost_unit_test_framework)
-
 add_executable(prime_sieve prime_sieve.cc)
 target_link_libraries(prime_sieve fw)
 
 add_executable(playground playground.cc)
 target_link_libraries(playground fw)
+
+# tests
+add_executable(test_descriptors test_descriptors.cc)
+target_link_libraries(test_descriptors fw boost_unit_test_framework)
+
+add_executable(test_thread test_thread.cc)
+target_link_libraries(test_thread fw boost_unit_test_framework)
+
+add_executable(test_task test_task.cc)
+target_link_libraries(test_task fw boost_unit_test_framework)
+
+add_executable(test_channel test_channel.cc)
+target_link_libraries(test_channel fw boost_unit_test_framework)
+
+enable_testing()
+add_test(test_descriptors test_descriptors --random)
+add_test(test_thread test_thread --random)
+add_test(test_task test_task --random)
+add_test(test_channel test_channel --random)
