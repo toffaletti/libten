@@ -69,27 +69,12 @@ public: /* operators */
     }
 
     friend std::ostream &operator << (std::ostream &o, const task &t) {
-        o << t.m.get();
+        o << "task:" << t.m.get();
         return o;
     }
 
 private: /* implementation details */
-    struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
-        runner in;
-        proc f;
-        // TODO: allow user to set state and name
-        std::string name;
-        std::string state;
-        timespec ts;
-        coroutine co;
-        uint32_t flags;
-
-        impl() : flags(_TASK_RUNNING) {}
-        impl(const proc &f_, size_t stack_size=16*1024);
-        ~impl() { if (!co.main()) { --ntasks; } }
-
-        task to_task() { return shared_from_this(); }
-    };
+    struct impl;
     typedef boost::shared_ptr<impl> shared_impl;
 
     //! number of tasks currently existing across all runners
@@ -98,9 +83,7 @@ private: /* implementation details */
     shared_impl m;
 
     task(const shared_impl &m_) : m(m_) {}
-    task(const proc &f_, size_t stack_size=16*1024) {
-        m.reset(new impl(f_, stack_size));
-    }
+    task(const proc &f_, size_t stack_size=16*1024);
     static void start(impl *);
 
 private: /* runner interface */
@@ -111,22 +94,22 @@ private: /* runner interface */
     void set_runner(runner &i);
     runner &get_runner() const;
 
-    void set_state(const std::string &str) {
-        m->state = str;
-    }
+    static task impl_to_task(task::impl *);
 
-    inline void clear_flag(uint32_t f) { m->flags ^= f; }
-    inline void set_flag(uint32_t f) { m->flags |= f; }
-    inline bool test_flag_set(uint32_t f) const { return m->flags & f; }
-    inline bool test_flag_not_set(uint32_t f) const { return m->flags ^ f; }
+    coroutine *get_coroutine();
+    void set_state(const std::string &str);
+    void clear_flag(uint32_t f);
+    void set_flag(uint32_t f);
+    bool test_flag_set(uint32_t f) const;
+    bool test_flag_not_set(uint32_t f) const;
 
-    const std::string &get_state() const { return m->state; }
-    const timespec &get_timeout() const { return m->ts; }
-    void set_abs_timeout(const timespec &abs) { m->ts = abs; }
+    const std::string &get_state() const;
+    const timespec &get_timeout() const;
+    void set_abs_timeout(const timespec &abs);
     static int get_ntasks() { return ntasks; }
 
     task() {}
-    explicit task(bool) { m.reset(new impl); }
+    explicit task(bool);
 
     static void swap(task &from, task &to);
 private: /* condition interface */

@@ -39,10 +39,13 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
 
     impl();
     impl(task &t);
-    ~impl() { }
+    ~impl() {
+        mutex::scoped_lock l(mut);
+        current_task.m.reset();
+    }
 
     void delete_from_runqueue(task &t);
-    void run_queued_tasks();
+    void run_queued_tasks(runner &);
     void check_io();
     void add_pipe();
     void wakeup();
@@ -164,12 +167,12 @@ runner::impl::impl(task &t) : scheduler(true), current_task(scheduler.m), pi(O_N
 
 typedef std::vector<epoll_event> event_vector;
 
-void runner::impl::run_queued_tasks() {
+void runner::impl::run_queued_tasks(runner &r) {
     mutex::scoped_lock l(mut);
     while (!runq.empty()) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         current_task = runq.front();
-        // TODO: maybe current_task.set_runner() here
+        current_task.set_runner(r);
         runq.pop_front();
         l.unlock();
         task::swap(scheduler, current_task);
@@ -193,7 +196,7 @@ void runner::impl::run_queued_tasks() {
             l.lock();
         }
     }
-    current_task.m.reset();
+    current_task = scheduler;
 }
 
 void runner::impl::check_io() {
@@ -234,7 +237,7 @@ void runner::impl::check_io() {
             pollfd *pfd = pollfds[i->data.fd].pfd;
             if (ti && pfd) {
                 pfd->revents = i->events;
-                task t = ti->to_task();
+                task t = task::impl_to_task(ti);
                 add_to_runqueue(t);
                 wake_tasks.insert(t);
             } else if (i->data.fd == pi.r.fd) {
@@ -267,7 +270,7 @@ void runner::impl::check_io() {
 
 void runner::schedule() {
     while (task::get_ntasks() > 0) {
-        m->run_queued_tasks();
+        m->run_queued_tasks(*this);
         m->check_io();
     }
 }
@@ -370,7 +373,9 @@ task runner::get_task() {
 
 runner::runner() {}
 runner::runner(const shared_impl &m_) : m(m_) {}
-runner::runner(task &t) { m.reset(new impl(t)); }
+runner::runner(task &t) {
+    m.reset(new impl(t));
+}
 
 void runner::impl::wakeup_nolock() {
     ssize_t nw = pi.write("\1", 1);
@@ -378,6 +383,6 @@ void runner::impl::wakeup_nolock() {
 }
 
 void runner::swap_to_scheduler() {
-    impl_->current_task.m->co.swap(&impl_->scheduler.m->co);
+    impl_->current_task.get_coroutine()->swap(impl_->scheduler.get_coroutine());
 }
 

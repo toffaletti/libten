@@ -5,6 +5,24 @@
 // static
 atomic_count task::ntasks(0);
 
+struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
+    runner in;
+    proc f;
+    // TODO: allow user to set state and name
+    std::string name;
+    std::string state;
+    timespec ts;
+    coroutine co;
+    uint32_t flags;
+
+    impl() : flags(_TASK_RUNNING) {}
+    impl(const proc &f_, size_t stack_size=16*1024);
+    ~impl() { if (!co.main()) { --ntasks; } }
+
+    task to_task() { return shared_from_this(); }
+};
+
+
 static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
     // convert milliseconds to seconds and nanoseconds
     ts.tv_sec = ms / 1000;
@@ -16,6 +34,10 @@ task::impl::impl(const proc &f_, size_t stack_size)
     f(f_), flags(_TASK_SLEEP)
 {
     ++ntasks;
+}
+
+task::task(const proc &f_, size_t stack_size) {
+    m.reset(new impl(f_, stack_size));
 }
 
 task task::self() {
@@ -81,7 +103,7 @@ void task::migrate(runner *to) {
     // or a new one is spawned
     // logic is in schedule()
     if (to)
-        t.m->in = *to;
+        t.set_runner(*to);
     else
         t.m->in.m.reset();
     t.m->flags |= _TASK_MIGRATE;
@@ -100,7 +122,6 @@ void task::sleep(unsigned int ms) {
 void task::suspend(mutex::scoped_lock &l) {
     assert(m->co.main() == false);
     m->flags |= _TASK_SLEEP;
-    m->in = runner::self();
     l.unlock();
     task::yield();
     l.lock();
@@ -146,3 +167,25 @@ runner &task::get_runner() const {
     return m->in;
 }
 
+void task::set_state(const std::string &str) {
+    m->state = str;
+}
+
+void task::clear_flag(uint32_t f) { m->flags ^= f; }
+void task::set_flag(uint32_t f) { m->flags |= f; }
+bool task::test_flag_set(uint32_t f) const { return m->flags & f; }
+bool task::test_flag_not_set(uint32_t f) const { return m->flags ^ f; }
+
+const std::string &task::get_state() const { return m->state; }
+const timespec &task::get_timeout() const { return m->ts; }
+void task::set_abs_timeout(const timespec &abs) { m->ts = abs; }
+
+task::task(bool) { m.reset(new impl); }
+
+task task::impl_to_task(task::impl *i) {
+    return i->to_task();
+}
+
+coroutine *task::get_coroutine() {
+    return &m->co;
+}
