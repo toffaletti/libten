@@ -21,21 +21,21 @@ BOOST_AUTO_TEST_CASE(task_size) {
 
 static void bar(thread p) {
     // cant use BOOST_CHECK in multi-threaded tests :(
-    assert(runner::self()->get_thread() != p);
+    assert(runner::self().get_thread() != p);
     task::yield();
 }
 
 static void foo(thread p, semaphore &s) {
-    assert(runner::self()->get_thread() != p);
+    assert(runner::self().get_thread() != p);
     task::spawn(boost::bind(bar, p));
     s.post();
 }
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
     semaphore s;
-    thread t = runner::self()->get_thread();
+    thread t = runner::self().get_thread();
     BOOST_CHECK(t.id);
-    runner *r = runner::spawn(boost::bind(foo, t, boost::ref(s)));
+    runner::spawn(boost::bind(foo, t, boost::ref(s)));
     s.wait();
 }
 
@@ -46,29 +46,29 @@ static void co1(int &count) {
 }
 
 BOOST_AUTO_TEST_CASE(schedule_test) {
-    runner *t = runner::self();
+    runner r = runner::self();
     int count = 0;
     for (int i=0; i<10; ++i) {
         task::spawn(boost::bind(co1, boost::ref(count)));
     }
-    t->schedule();
+    r.schedule();
     BOOST_CHECK_EQUAL(20, count);
 }
 
 static void mig_co(semaphore &s) {
-    runner *start_runner = runner::self();
-    thread start_thread = start_runner->get_thread();
+    runner start_runner = runner::self();
+    thread start_thread = start_runner.get_thread();
     task::migrate();
-    thread end_thread = runner::self()->get_thread();
+    thread end_thread = runner::self().get_thread();
     assert(start_thread != end_thread);
-    task::migrate(start_runner);
-    assert(start_thread == runner::self()->get_thread());
+    task::migrate(&start_runner);
+    assert(start_thread == runner::self().get_thread());
     s.post();
 }
 
 BOOST_AUTO_TEST_CASE(runner_migrate) {
     semaphore s;
-    runner *t = runner::spawn(boost::bind(mig_co, boost::ref(s)));
+    runner r = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
 }
 
@@ -117,16 +117,16 @@ static void listen_co(bool multithread, semaphore &sm) {
 BOOST_AUTO_TEST_CASE(socket_io) {
     semaphore s;
     task::spawn(boost::bind(listen_co, false, boost::ref(s)));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     s.wait();
 }
 
 BOOST_AUTO_TEST_CASE(socket_io_mt) {
     semaphore s;
     task::spawn(boost::bind(listen_co, true, boost::ref(s)));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     s.wait();
 }
 
@@ -147,8 +147,8 @@ static void sleeper(semaphore &s) {
 BOOST_AUTO_TEST_CASE(task_sleep) {
     semaphore s;
     task::spawn(boost::bind(sleeper, boost::ref(s)));
-    runner *t = runner::self();
-    t->schedule();
+    runner r = runner::self();
+    r.schedule();
     s.wait();
 }
 
@@ -183,8 +183,8 @@ static void listen_timeout_co(semaphore &sm) {
 BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     semaphore s;
     task::spawn(boost::bind(listen_timeout_co, boost::ref(s)));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     s.wait();
 }
 
@@ -201,8 +201,8 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
     for (int i=0; i<1000; i++) {
         task::spawn(boost::bind(sleep_many, boost::ref(count)));
     }
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     BOOST_CHECK_EQUAL(count, 3000);
 }
 

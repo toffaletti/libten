@@ -26,8 +26,8 @@ BOOST_AUTO_TEST_CASE(channel_test) {
     channel<intptr_t> c(10);
     task::spawn(boost::bind(channel_recv, c));
     task::spawn(boost::bind(channel_send, c));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     BOOST_CHECK(c.empty());
 }
 
@@ -35,8 +35,8 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
     channel<intptr_t> c;
     task::spawn(boost::bind(channel_recv, c));
     task::spawn(boost::bind(channel_send, c));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     BOOST_CHECK(c.empty());
 }
 
@@ -76,26 +76,26 @@ BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
     task::spawn(boost::bind(channel_multi_recv, c));
     task::spawn(boost::bind(channel_multi_send, c));
     task::spawn(boost::bind(channel_multi_send, c));
-    runner *r = runner::self();
-    r->schedule();
+    runner r = runner::self();
+    r.schedule();
     BOOST_CHECK(c.empty());
 }
 
 static void delayed_channel_send(channel<int> c) {
-	task::sleep(100);
-	c.send(5309);
+    task::sleep(100);
+    c.send(5309);
 }
 
 static void delayed_channel(address addr) {
-	channel<int> c;
-	// spawn the send in another thread before blocking on recv
-	runner::spawn(boost::bind(delayed_channel_send, c));
-	int a = c.recv();
+    channel<int> c;
+    // spawn the send in another thread before blocking on recv
+    runner::spawn(boost::bind(delayed_channel_send, c));
+    int a = c.recv();
 
-	socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s(AF_INET, SOCK_STREAM);
     s.setnonblock();
     if (s.connect(addr) == 0) {
-	} else if (errno == EINPROGRESS) {
+    } else if (errno == EINPROGRESS) {
         // poll for writeable
         assert(task::poll(s.fd, EPOLLOUT));
     } else {
@@ -111,35 +111,35 @@ static void wait_on_io() {
     s.getsockname(addr);
     s.listen();
 
-	task::spawn(boost::bind(delayed_channel, addr));
+    task::spawn(boost::bind(delayed_channel, addr));
     task::poll(s.fd, EPOLLIN);
 }
 
 BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
-	task::spawn(wait_on_io);
-    runner::self()->schedule();
+    task::spawn(wait_on_io);
+    runner::self().schedule();
 }
 
 static void channel_closer(channel<int> c, int &closed) {
-	task::yield();
-	c.close();
-	closed++;
+    task::yield();
+    c.close();
+    closed++;
 }
 
 static void channel_recv_close(channel<int> c, int &closed) {
-	try {
-		c.recv();
-	} catch (channel_closed_error &e) {
-		closed++;
-	}
+    try {
+        c.recv();
+    } catch (channel_closed_error &e) {
+        closed++;
+    }
 }
 
 BOOST_AUTO_TEST_CASE(channel_close_test) {
-	channel<int> c;
-	int closed=0;
-	task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
-	task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
-	task::spawn(boost::bind(channel_closer, c, boost::ref(closed)));
-    runner::self()->schedule();
-	BOOST_CHECK_EQUAL(closed, 3);
+    channel<int> c;
+    int closed=0;
+    task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
+    task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
+    task::spawn(boost::bind(channel_closer, c, boost::ref(closed)));
+    runner::self().schedule();
+    BOOST_CHECK_EQUAL(closed, 3);
 }

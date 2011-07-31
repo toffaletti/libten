@@ -12,32 +12,6 @@
 // TODO: use http://www.boost.org/doc/libs/1_47_0/libs/smart_ptr/intrusive_ptr.html
 // to close the channel if the reference count reaches 1 while in a blocking send/recv
 
-namespace detail {
-template <typename T> struct impl : boost::noncopyable {
-    typedef typename boost::circular_buffer<T> container_type;
-    typedef typename container_type::size_type size_type;
-
-    impl(size_type capacity_=0) : capacity(capacity_), unread(0),
-        container(capacity ? capacity : 1), closed(false) {}
-
-    // capacity is different than container.capacity()
-    // to avoid needing to reallocate the container
-    // on every send/recv for unbuffered channels
-    size_type capacity;
-    size_type unread;
-    container_type container;
-    mutex mtx;
-    // using task-aware conditions
-    task::condition not_empty;
-    task::condition not_full;
-    bool closed;
-
-    bool is_empty() const { return unread == 0; }
-    bool is_full() const { return unread >= capacity; }
-};
-
-} // end namespace detail
-
 struct channel_closed_error : std::exception {};
 //! tried to block on a channel with no other references
 struct channel_unique_error : std::exception {};
@@ -52,17 +26,41 @@ struct channel_unique_error : std::exception {};
 //! share by communicating!
 //! channels are thread and task safe.
 template <typename T> class channel {
+private:
+    struct impl : boost::noncopyable {
+        typedef typename boost::circular_buffer<T> container_type;
+        typedef typename container_type::size_type size_type;
+
+        impl(size_type capacity_=0) : capacity(capacity_), unread(0),
+            container(capacity ? capacity : 1), closed(false) {}
+
+        // capacity is different than container.capacity()
+        // to avoid needing to reallocate the container
+        // on every send/recv for unbuffered channels
+        size_type capacity;
+        size_type unread;
+        container_type container;
+        mutex mtx;
+        // using task-aware conditions
+        task::condition not_empty;
+        task::condition not_full;
+        bool closed;
+
+        bool is_empty() const { return unread == 0; }
+        bool is_full() const { return unread >= capacity; }
+    };
+
 public:
     //! create a new channel
     //! \param capacity number of items to buffer. the default is 0, unbuffered.
-    channel(typename detail::impl<T>::size_type capacity=0) {
-       m.reset(new detail::impl<T>(capacity));
+    channel(typename impl::size_type capacity=0) {
+       m.reset(new impl(capacity));
     }
 
     //! send data
-    typename detail::impl<T>::size_type send(T p) {
+    typename impl::size_type send(T p) {
         mutex::scoped_lock l(m->mtx);
-        typename detail::impl<T>::size_type unread = m->unread;
+        typename impl::size_type unread = m->unread;
         while (m->is_full() && !m.unique() && !m->closed) {
             m->not_full.wait(l);
         }
@@ -125,7 +123,7 @@ public:
         m->not_full.broadcast();
     }
 private:
-    boost::shared_ptr<detail::impl<T> > m;
+    boost::shared_ptr<impl> m;
 
     void check_closed() {
         // i dont like throwing an exception for this

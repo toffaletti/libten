@@ -36,5 +36,5 @@ void primes() {
 
 int main(int argc, char *argv[]) {
     task::spawn(primes);
-    runner::self()->schedule();
+    runner::self().schedule();
 }

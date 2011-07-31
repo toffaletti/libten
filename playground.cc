@@ -1,4 +1,5 @@
 #include "runner.hh"
+#include "task.hh"
 #include "descriptors.hh"
 #include <boost/bind.hpp>
 
@@ -30,7 +31,7 @@ void listen_task() {
 
 int main(int argc, char *argv[]) {
     task::spawn(listen_task);
-    runner::self()->schedule();
+    runner::self().schedule();
     return 0;
 }
 

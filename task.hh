@@ -7,12 +7,13 @@
 #include "timespec.hh"
 #include "descriptors.hh"
 
-#include <poll.h>
 #include <deque>
 #include <utility>
 #include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
+
+#include "runner.hh"
 
 // flags for task state
 #define _TASK_SLEEP     (1<<0)
@@ -74,7 +75,7 @@ public: /* operators */
 
 private: /* implementation details */
     struct impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
-        runner *in;
+        runner in;
         proc f;
         // TODO: allow user to set state and name
         std::string name;
@@ -104,10 +105,12 @@ private: /* implementation details */
 
 private: /* runner interface */
     friend class runner;
+    friend struct task_poll_state;
     friend struct task_timeout_heap_compare;
 
-    void set_runner(runner *i) { m->in = i; }
-    runner *get_runner() const { return m->in; }
+    void set_runner(runner &i);
+    runner &get_runner() const;
+
     void set_state(const std::string &str) {
         m->state = str;
     }
@@ -122,7 +125,8 @@ private: /* runner interface */
     void set_abs_timeout(const timespec &abs) { m->ts = abs; }
     static int get_ntasks() { return ntasks; }
 
-    task() { m.reset(new impl); }
+    task() {}
+    explicit task(bool) { m.reset(new impl); }
 
     static void swap(task &from, task &to);
 private: /* condition interface */
