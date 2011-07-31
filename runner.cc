@@ -35,12 +35,15 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
     timespec now;
     //! task used for scheduling
     task scheduler; // TODO: maybe this can just be a coroutine?
-    boost::weak_ptr<task::impl> current_task;
+    task current_task;
 
     impl();
     impl(task &t);
     ~impl() { }
 
+    void delete_from_runqueue(task &t);
+    void run_queued_tasks();
+    void check_io();
     void add_pipe();
     void wakeup();
     //! lock must already be held before calling this
@@ -161,51 +164,52 @@ runner::impl::impl(task &t) : scheduler(true), current_task(scheduler.m), pi(O_N
 
 typedef std::vector<epoll_event> event_vector;
 
-void runner::run_queued_tasks() {
-    mutex::scoped_lock l(m->mut);
-    while (!m->runq.empty()) {
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &m->now));
-        task t = m->runq.front();
-        m->runq.pop_front();
+void runner::impl::run_queued_tasks() {
+    mutex::scoped_lock l(mut);
+    while (!runq.empty()) {
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+        current_task = runq.front();
+        // TODO: maybe current_task.set_runner() here
+        runq.pop_front();
         l.unlock();
-        task::swap(m->scheduler, t);
-        if (t.test_flag_set(_TASK_MIGRATE)) {
-            t.clear_flag(_TASK_MIGRATE);
-            t.set_flag(_TASK_SLEEP);
-            if (t.get_runner().m) {
-                t.get_runner().add_to_runqueue(t);
+        task::swap(scheduler, current_task);
+        if (current_task.test_flag_set(_TASK_MIGRATE)) {
+            current_task.clear_flag(_TASK_MIGRATE);
+            current_task.set_flag(_TASK_SLEEP);
+            if (current_task.get_runner().m) {
+                current_task.get_runner().add_to_runqueue(current_task);
             } else {
                 mutex::scoped_lock ll(*tmutex);
-                runner rr(t);
+                runner rr(current_task);
                 append_to_list(rr, ll);
             }
             l.lock();
-        } else if (t.test_flag_set(_TASK_SLEEP)) {
+        } else if (current_task.test_flag_set(_TASK_SLEEP)) {
             l.lock();
-        } else if (t.test_flag_set(_TASK_EXIT)) {
+        } else if (current_task.test_flag_set(_TASK_EXIT)) {
             l.lock();
         } else {
-            m->runq.push_back(t);
+            runq.push_back(current_task);
             l.lock();
         }
     }
+    current_task.m.reset();
 }
 
-void runner::check_io() {
-    event_vector events(m->efd.maxevents ? m->efd.maxevents : 1);
-    //if (waiters.empty()) return;
+void runner::impl::check_io() {
+    event_vector events(efd.maxevents ? efd.maxevents : 1);
     bool done = false;
     while (!done) {
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &m->now));
-        std::make_heap(m->waiters.begin(), m->waiters.end(), task_timeout_heap_compare());
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+        std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
         int timeout_ms = -1;
-        if (!m->waiters.empty()) {
-            if (m->waiters.front().get_timeout().tv_sec > 0) {
-                if (m->waiters.front().get_timeout() <= m->now) {
+        if (!waiters.empty()) {
+            if (waiters.front().get_timeout().tv_sec > 0) {
+                if (waiters.front().get_timeout() <= now) {
                     // epoll_wait must return immediately
                     timeout_ms = 0;
                 } else {
-                    timeout_ms = timespec_to_milliseconds(m->waiters.front().get_timeout() - m->now);
+                    timeout_ms = timespec_to_milliseconds(waiters.front().get_timeout() - now);
                     // help avoid spinning on timeouts smaller than 1 ms
                     if (timeout_ms <= 0) timeout_ms = 1;
                 }
@@ -213,31 +217,31 @@ void runner::check_io() {
         }
 
         if (events.empty()) {
-            events.resize(m->efd.maxevents ? m->efd.maxevents : 1);
+            events.resize(efd.maxevents ? efd.maxevents : 1);
         }
 
         if (task::get_ntasks() == 0) {
             wakeup_all_runners();
             return;
         }
-        m->efd.wait(events, timeout_ms);
+        efd.wait(events, timeout_ms);
 
         std::set<task> wake_tasks;
         for (event_vector::const_iterator i=events.begin();
             i!=events.end();++i)
         {
-            task::impl *ti = m->pollfds[i->data.fd].t;
-            pollfd *pfd = m->pollfds[i->data.fd].pfd;
+            task::impl *ti = pollfds[i->data.fd].t;
+            pollfd *pfd = pollfds[i->data.fd].pfd;
             if (ti && pfd) {
                 pfd->revents = i->events;
                 task t = ti->to_task();
                 add_to_runqueue(t);
                 wake_tasks.insert(t);
-            } else if (i->data.fd == m->pi.r.fd) {
+            } else if (i->data.fd == pi.r.fd) {
                 // our wake up pipe was written to
                 char buf[32];
                 // clear pipe
-                while (m->pi.read(buf, sizeof(buf)) > 0) {}
+                while (pi.read(buf, sizeof(buf)) > 0) {}
                 done = true;
             } else {
                 // TODO: otherwise we might want to remove fd from epoll
@@ -245,17 +249,17 @@ void runner::check_io() {
             }
         }
 
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &m->now));
-        for (task_heap::iterator i=m->waiters.begin(); i!=m->waiters.end(); ++i) {
-            if (i->get_timeout().tv_sec > 0 && i->get_timeout() <= m->now) {
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+        for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
+            if (i->get_timeout().tv_sec > 0 && i->get_timeout() <= now) {
                 wake_tasks.insert(*i);
                 add_to_runqueue(*i);
             }
         }
 
         task_heap::iterator nend =
-            std::remove_if(m->waiters.begin(), m->waiters.end(), in_set<std::set<task> >(wake_tasks));
-        m->waiters.erase(nend, m->waiters.end());
+            std::remove_if(waiters.begin(), waiters.end(), in_set<std::set<task> >(wake_tasks));
+        waiters.erase(nend, waiters.end());
         // there are tasks to wake up!
         if (!wake_tasks.empty()) done = true;
     }
@@ -263,8 +267,8 @@ void runner::check_io() {
 
 void runner::schedule() {
     while (task::get_ntasks() > 0) {
-        run_queued_tasks();
-        check_io();
+        m->run_queued_tasks();
+        m->check_io();
     }
 }
 
@@ -346,17 +350,10 @@ void runner::add_waiter(task &t) {
     m->waiters.push_back(t);
 }
 
-void runner::set_task(task &t) {
-    //mutex::scoped_lock l(*tmutex);
-    //runner r = m->to_runner(l);
-    //t.set_runner(*this);
-    m->current_task = t.m;
-}
-
-void runner::delete_from_runqueue(task &t) {
-    mutex::scoped_lock l(m->mut);
-    assert(t == m->runq.back());
-    m->runq.pop_back();
+void runner::impl::delete_from_runqueue(task &t) {
+    mutex::scoped_lock l(mut);
+    assert(t == runq.back());
+    runq.pop_back();
     t.set_flag(_TASK_SLEEP);
 }
 
@@ -368,7 +365,7 @@ void runner::impl::wakeup() {
 }
 
 task runner::get_task() {
-    return m->current_task.lock();
+    return m->current_task;
 }
 
 runner::runner() {}
@@ -381,12 +378,6 @@ void runner::impl::wakeup_nolock() {
 }
 
 void runner::swap_to_scheduler() {
-    task::impl *i;
-    {
-        // this is ok because scheduler loop is holding ref
-        // TODO: maybe make current_task the ref that gets assigned and used in schedule loop
-        // instead of it being a weakref
-        i=impl_->current_task.lock().get();
-    }
-    i->co.swap(&impl_->scheduler.m->co);
+    impl_->current_task.m->co.swap(&impl_->scheduler.m->co);
 }
+

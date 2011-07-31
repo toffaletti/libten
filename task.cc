@@ -29,8 +29,6 @@ void task::swap(task &from, task &to) {
     assert(from.m->flags & _TASK_RUNNING);
     from.m->flags ^= _TASK_RUNNING;
 
-    runner::self().set_task(to);
-
     from.m->co.swap(&to.m->co);
 
     assert(to.m->flags & _TASK_RUNNING);
@@ -38,8 +36,6 @@ void task::swap(task &from, task &to) {
 
     assert(!(from.m->flags & _TASK_RUNNING));
     from.m->flags |= _TASK_RUNNING;
-
-    runner::self().set_task(from);
 }
 
 task task::spawn(const proc &f, runner *in) {
@@ -54,8 +50,6 @@ task task::spawn(const proc &f, runner *in) {
 
 void task::yield() {
     runner::swap_to_scheduler();
-    //assert(task::self() != runner::self().scheduler());
-    //task::self().m->co.swap(&runner::self().scheduler().m->co);
 }
 
 void task::start(impl *i) {
@@ -78,7 +72,6 @@ void task::start(impl *i) {
     // should always be holding a reference, so it is "safe"
 
     runner::swap_to_scheduler();
-    //i->co.swap(&runner::self().scheduler().m->co);
 }
 
 void task::migrate(runner *to) {

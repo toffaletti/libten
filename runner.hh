@@ -76,13 +76,6 @@ private: /* internal */
     runner(task &t);
     runner(const shared_impl &m_);
 
-    void add_pipe();
-
-    void run_queued_tasks();
-    void check_io();
-
-    void delete_from_runqueue(task &t);
-
     static void *start(void *arg);
 };
 
