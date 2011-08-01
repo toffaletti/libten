@@ -24,7 +24,7 @@ public:
     thread get_thread();
 
     //! spawn a new runner with a task that will execute
-    static runner spawn(const proc &f);
+    static runner spawn(const proc &f, bool force=true);
 
     //! \return the runner for this thread
     static runner self();
@@ -33,12 +33,17 @@ public:
     //! will block until all tasks exit
     void schedule();
 
+    //! number of processors
+    static unsigned long ncpu();
+
+    //! number of runners
+    static unsigned long count();
+
 private: /* task interface */
     friend class task;
 
     void set_task(task &t);
     task get_task();
-    //task &scheduler();
 
     //! add fds to this runners epoll fd
     //! \param t task to wake up for fd events
@@ -65,6 +70,8 @@ private: /* internal */
     typedef boost::shared_ptr<impl> shared_impl;
     shared_impl m;
 
+    static thread main_thread_;
+    static unsigned long ncpu_;
     static __thread runner::impl *impl_;
     static list *runners;
     static mutex *tmutex;

@@ -188,16 +188,16 @@ BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     s.wait();
 }
 
-static void sleep_many(int &count) {
-    count++;
+static void sleep_many(atomic_count &count) {
+    ++count;
     task::sleep(5);
-    count++;
+    ++count;
     task::sleep(10);
-    count++;
+    ++count;
 }
 
 BOOST_AUTO_TEST_CASE(many_timeouts) {
-    int count=0;
+    atomic_count count(0);
     for (int i=0; i<1000; i++) {
         task::spawn(boost::bind(sleep_many, boost::ref(count)));
     }
@@ -206,3 +206,17 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
+static void long_timeout() {
+	task::sleep(200);
+	BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
+}
+
+BOOST_AUTO_TEST_CASE(too_many_runners) {
+    atomic_count count(0);
+	for (int i=0; i<runner::ncpu()+5; ++i) {
+        runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
+	}
+	task::spawn(long_timeout);
+	runner::self().schedule();
+	BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
+}

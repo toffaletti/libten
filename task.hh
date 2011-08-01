@@ -108,8 +108,7 @@ private: /* runner interface */
     void set_abs_timeout(const timespec &abs);
     static int get_ntasks() { return ntasks; }
 
-    task() {}
-    explicit task(bool);
+    task();
 
     static void swap(task &from, task &to);
 private: /* condition interface */

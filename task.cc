@@ -16,7 +16,13 @@ struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<im
     uint32_t flags;
 
     impl() : flags(_TASK_RUNNING) {}
-    impl(const proc &f_, size_t stack_size=16*1024);
+    impl(const proc &f_, size_t stack_size=16*1024)
+        : co((coroutine::proc)task::start, this, stack_size),
+        f(f_), flags(_TASK_SLEEP)
+    {
+        ++ntasks;
+    }
+
     ~impl() { if (!co.main()) { --ntasks; } }
 
     task to_task() { return shared_from_this(); }
@@ -29,12 +35,7 @@ static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
     ts.tv_nsec = (ms % 1000) * 1000000;
 }
 
-task::impl::impl(const proc &f_, size_t stack_size)
-    : co((coroutine::proc)task::start, this, stack_size),
-    f(f_), flags(_TASK_SLEEP)
-{
-    ++ntasks;
-}
+task::task() { m.reset(new impl); }
 
 task::task(const proc &f_, size_t stack_size) {
     m.reset(new impl(f_, stack_size));
@@ -179,8 +180,6 @@ bool task::test_flag_not_set(uint32_t f) const { return m->flags ^ f; }
 const std::string &task::get_state() const { return m->state; }
 const timespec &task::get_timeout() const { return m->ts; }
 void task::set_abs_timeout(const timespec &abs) { m->ts = abs; }
-
-task::task(bool) { m.reset(new impl); }
 
 task task::impl_to_task(task::impl *i) {
     return i->to_task();
