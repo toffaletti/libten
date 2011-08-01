@@ -219,8 +219,10 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             // wake up timeouts tasks
             for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
                 if (i->get_timeout().tv_sec > 0 && i->get_timeout() <= now) {
-                    wake_tasks.insert(*i);
-                    add_to_runqueue(*i);
+                    // task might have been added to wake_tasks earlier in io loop
+                    if (wake_tasks.insert(*i).second) {
+                        add_to_runqueue(*i);
+                    }
                 }
             }
 
@@ -406,6 +408,7 @@ void runner::add_waiter(task &t) {
         t.set_abs_timeout(to + m->now);
     }
     t.set_flag(_TASK_SLEEP);
+    assert(std::find(m->waiters.begin(), m->waiters.end(), t) == m->waiters.end());
     m->waiters.push_back(t);
 }
 

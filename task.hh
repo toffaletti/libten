@@ -54,6 +54,8 @@ public:
     static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
     //! put task to sleep
     static void sleep(unsigned int ms);
+
+    std::string str() const;
 public: /* operators */
 
     bool operator == (const task &t) const {
@@ -69,7 +71,7 @@ public: /* operators */
     }
 
     friend std::ostream &operator << (std::ostream &o, const task &t) {
-        o << "task:" << t.m.get();
+        o << "task:" << t.str();
         return o;
     }
 
@@ -131,41 +133,13 @@ public:
         condition() {}
 
         //! signal one of the waiters
-        void signal() {
-            mutex::scoped_lock l(mm);
-            if (!waiters.empty()) {
-                task t = waiters.front();
-                waiters.pop_front();
-                t.resume();
-            }
-        }
+        void signal();
 
         //! resume all waiters
-        void broadcast() {
-            mutex::scoped_lock l(mm);
-            for (task::deque::iterator i=waiters.begin();
-                i!=waiters.end(); ++i)
-            {
-                i->resume();
-            }
-            waiters.clear();
-        }
+        void broadcast();
 
         //! wait for condition to be signaled
-        void wait(mutex::scoped_lock &l) {
-            task t = task::self();
-            // must set the flag before adding to waiters
-            // because another thread could resume()
-            // before this calls suspend()
-            t.set_flag(_TASK_SLEEP);
-            {
-                mutex::scoped_lock ll(mm);
-                if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
-                    waiters.push_back(t);
-                }
-            }
-            t.suspend(l);
-        }
+        void wait(mutex::scoped_lock &l);
     private:
         //! mutex used to ensure thread safety
         mutex mm;
@@ -176,81 +150,17 @@ public:
 public:
     class socket : boost::noncopyable {
     public:
-        socket(int domain, int type, int protocol=0) throw (errno_error)
-            : s(domain, type, protocol)
-        {
-            s.setnonblock();
-        }
+        socket(int domain, int type, int protocol=0) throw (errno_error);
 
-        void bind(address &addr) throw (errno_error) {
-            s.bind(addr);
-        }
+        void bind(address &addr) throw (errno_error);
 
-        int connect(address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
-            while (s.connect(addr) < 0) {
-                if (errno == EINTR)
-                    continue;
-                if (errno == EINPROGRESS || errno == EADDRINUSE) {
-                    if (task::poll(s.fd, EPOLLOUT, timeout_ms)) {
-                        return 0;
-                    } else {
-                        errno = ETIMEDOUT;
-                    }
-                }
-                return -1;
-            }
-            return 0;
-        }
+        int connect(address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
-        int accept(address &addr, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
-            flags |= SOCK_NONBLOCK;
-            int fd;
-            while ((fd = s.accept(addr, flags)) < 0) {
-                if (errno == EINTR)
-                    continue;
-                if (!IO_NOT_READY_ERROR)
-                    return -1;
-                if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
-                    errno = ETIMEDOUT;
-                    return -1;
-                }
-            }
-            return fd;
-        }
+        int accept(address &addr, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
-        ssize_t recv(void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
-            ssize_t nr;
-            while ((nr = s.recv(buf, len, flags)) < 0) {
-                if (errno == EINTR)
-                    continue;
-                if (!IO_NOT_READY_ERROR)
-                    break;
-                if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
-                    errno = ETIMEDOUT;
-                    break;
-                }
-            }
-            return nr;
-        }
+        ssize_t recv(void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
-        ssize_t send(const void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
-            ssize_t total_sent=0;
-            while (total_sent < len) {
-                ssize_t nw = s.send(&((const char *)buf)[total_sent], len-total_sent, flags);
-                if (nw == -1) {
-                    if (errno == EINTR)
-                        continue;
-                    if (!IO_NOT_READY_ERROR)
-                        return -1;
-                    if (!task::poll(s.fd, EPOLLOUT, timeout_ms)) {
-                        errno = ETIMEDOUT;
-                        return total_sent;
-                    }
-                }
-                total_sent += nw;
-            }
-            return total_sent;
-        }
+        ssize_t send(const void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
     private:
         socket_fd s;
