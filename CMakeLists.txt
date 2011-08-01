@@ -17,6 +17,9 @@ target_link_libraries(prime_sieve fw)
 add_executable(playground playground.cc)
 target_link_libraries(playground fw)
 
+add_executable(file-send file-send.cc)
+target_link_libraries(file-send fw)
+
 # tests
 add_executable(test_descriptors test_descriptors.cc)
 target_link_libraries(test_descriptors fw boost_unit_test_framework)

@@ -122,7 +122,9 @@ void task::sleep(unsigned int ms) {
 
 void task::suspend(mutex::scoped_lock &l) {
     assert(m->co.main() == false);
-    m->flags |= _TASK_SLEEP;
+    // sleep flag must be set before calling suspend
+    // see note in task::condition::wait about race condition
+    assert(m->flags & _TASK_SLEEP);
     l.unlock();
     task::yield();
     l.lock();

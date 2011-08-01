@@ -154,9 +154,15 @@ public:
         //! wait for condition to be signaled
         void wait(mutex::scoped_lock &l) {
             task t = task::self();
+            // must set the flag before adding to waiters
+            // because another thread could resume()
+            // before this calls suspend()
+            t.set_flag(_TASK_SLEEP);
             {
                 mutex::scoped_lock ll(mm);
-                waiters.push_back(t);
+                if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
+                    waiters.push_back(t);
+                }
             }
             t.suspend(l);
         }
@@ -225,6 +231,25 @@ public:
                 }
             }
             return nr;
+        }
+
+        ssize_t send(const void *buf, size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result)) {
+            ssize_t total_sent=0;
+            while (total_sent < len) {
+                ssize_t nw = s.send(&((const char *)buf)[total_sent], len-total_sent, flags);
+                if (nw == -1) {
+                    if (errno == EINTR)
+                        continue;
+                    if (!IO_NOT_READY_ERROR)
+                        return -1;
+                    if (!task::poll(s.fd, EPOLLOUT, timeout_ms)) {
+                        errno = ETIMEDOUT;
+                        return total_sent;
+                    }
+                }
+                total_sent += nw;
+            }
+            return total_sent;
         }
 
     private:

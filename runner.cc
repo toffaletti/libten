@@ -311,6 +311,7 @@ runner runner::self() {
     mutex::scoped_lock l(*tmutex);
     if (impl_ == NULL) {
         ncpu();
+        signal(SIGPIPE, SIG_IGN);
         runner::shared_impl i(new impl);
         runner r = i->to_runner(l);
         append_to_list(r, l);
