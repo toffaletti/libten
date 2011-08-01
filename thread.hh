@@ -165,6 +165,10 @@ struct thread {
         return thread(pthread_self());
     }
 
+    static void yield() {
+        pthread_yield();
+    }
+
     static void create(thread &t, proc start_routine, void *arg=NULL, const pthread_attr_t *attr=NULL) {
         THROW_ON_NONZERO(pthread_create(&t.id, attr, start_routine, arg));
     }

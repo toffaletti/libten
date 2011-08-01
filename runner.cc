@@ -346,6 +346,15 @@ void runner::schedule() {
         m->run_queued_tasks(*this);
         m->check_io();
     }
+
+    if (m->tt == main_thread_) {
+        mutex::scoped_lock l(*tmutex);
+        while (runners->size() > 1) {
+            l.unlock();
+            thread::yield();
+            l.lock();
+        }
+    }
 }
 
 void runner::add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
