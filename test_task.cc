@@ -213,6 +213,8 @@ static void long_timeout() {
 
 BOOST_AUTO_TEST_CASE(too_many_runners) {
     atomic_count count(0);
+    // lower timeout to make test run faster
+    runner::set_thread_timeout(100);
 	for (int i=0; i<runner::ncpu()+5; ++i) {
         runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
 	}

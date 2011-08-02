@@ -14,13 +14,19 @@ struct buffer {
     size_t len;
 };
 
+#define channel_cap 0
+// need two buffers more than the channel cap
+// because we'll be writing into the next one while
+// file_sender is sending from one
+#define buffer_cap channel_cap+2
+
 void file_reader(channel<buffer> c, file_fd &f) {
     // use two buffers because we'll hand one off to file_sender
     // while we read into the next one
-    buffer bufs[2];
+    buffer bufs[buffer_cap];
     // allocate buffers on the heap so they will still
     // exist for file_sender after this task has exited
-    for (int i=0; i<2; ++i) {
+    for (int i=0; i<buffer_cap; ++i) {
         bufs[i].buf = new char[4096];
     }
     int bufp = 0;
@@ -34,7 +40,7 @@ void file_reader(channel<buffer> c, file_fd &f) {
         // use the other buffer while file_sender is
         // busy with the one we just sent
         bufp++;
-        if (bufp == 2) bufp = 0;
+        if (bufp == buffer_cap) bufp = 0;
     }
     buffer empty = {0,0};
     c.send(empty);
@@ -56,7 +62,7 @@ void file_sender(channel<buffer> c) {
 int main(int argc, char *argv[]) {
     if (argc < 2) return 1;
     file_fd f(argv[1], 0, 0);
-    channel<buffer> c;
+    channel<buffer> c(channel_cap);
     task::spawn(boost::bind(file_sender, c));
     // start a new OS-thread for file_reader
     runner::spawn(boost::bind(file_reader, c, boost::ref(f)));

@@ -8,6 +8,7 @@
 
 __thread runner::impl *runner::impl_ = NULL;
 
+unsigned int runner::thread_timeout_ms = 5*1000;
 thread runner::main_thread_ = thread::self();
 unsigned long runner::ncpu_ = 0;
 runner::list *runner::runners = new runner::list;
@@ -132,7 +133,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
         current_task = scheduler;
     }
 
-    void check_io() {
+    void check_io(runner &r) {
         event_vector events(efd.maxevents ? efd.maxevents : 1);
         bool done = false;
         while (!done) {
@@ -163,13 +164,13 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             }
 
             // check to see if this runner might be able to exit
-            {
+            if (r.m.use_count() <= 2) {
                 mutex::scoped_lock ll(mut);
                 if (runq.empty() && waiters.empty() && timeout_ms == -1) {
                     ll.unlock();
                     mutex::scoped_lock l(*tmutex);
                     if (runners->size() > ncpu()) {
-                        timeout_ms = 100;
+                        timeout_ms = thread_timeout_ms;
                     }
                 }
             }
@@ -177,8 +178,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             efd.wait(events, timeout_ms);
 
             // check to see if we can exit this runner
-            // TODO: check the ref count of the runner
-            {
+            if (r.m.use_count() <= 2) {
                 mutex::scoped_lock ll(mut);
                 if (runq.empty() && waiters.empty() && events.empty() && tt != main_thread_) {
                     ll.unlock();
@@ -344,7 +344,7 @@ bool runner::operator == (const runner &r) const {
 void runner::schedule() {
     while (task::get_ntasks() > 0 || m.use_count() > 2) {
         m->run_queued_tasks(*this);
-        m->check_io();
+        m->check_io(*this);
     }
 
     if (m->tt == main_thread_) {
@@ -436,3 +436,7 @@ unsigned long runner::count() {
     return runners->size();
 }
 
+void runner::set_thread_timeout(unsigned int ms) {
+    mutex::scoped_lock l(*tmutex);
+    thread_timeout_ms = ms;
+}

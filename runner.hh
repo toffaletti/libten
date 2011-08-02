@@ -39,6 +39,9 @@ public:
     //! number of runners
     static unsigned long count();
 
+    //! amount of time a runner with no tasks will wait for work before exiting
+    static void set_thread_timeout(unsigned int ms);
+
 private: /* task interface */
     friend class task;
 
@@ -70,6 +73,7 @@ private: /* internal */
     typedef boost::shared_ptr<impl> shared_impl;
     shared_impl m;
 
+    static unsigned int thread_timeout_ms;
     static thread main_thread_;
     static unsigned long ncpu_;
     static __thread runner::impl *impl_;
