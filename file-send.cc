@@ -61,11 +61,11 @@ void file_sender(channel<buffer> c) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return 1;
+    runner::init();
     file_fd f(argv[1], 0, 0);
     channel<buffer> c(channel_cap);
     task::spawn(boost::bind(file_sender, c));
     // start a new OS-thread for file_reader
     runner::spawn(boost::bind(file_reader, c, boost::ref(f)));
-    runner::self().schedule();
-    return 0;
+    return runner::main();
 }

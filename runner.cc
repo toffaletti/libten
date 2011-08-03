@@ -138,6 +138,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
         bool done = false;
         while (!done) {
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            // sort heap to find the shortest timeout we can pass to epoll_wait
             std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
             int timeout_ms = -1;
             if (!waiters.empty()) {
@@ -311,14 +312,6 @@ unsigned long runner::ncpu() {
 
 runner runner::self() {
     mutex::scoped_lock l(*tmutex);
-    if (impl_ == NULL) {
-        ncpu();
-        signal(SIGPIPE, SIG_IGN);
-        runner::shared_impl i(new impl);
-        runner r = i->to_runner(l);
-        append_to_list(r, l);
-        impl_ = i.get();
-    }
     return impl_->to_runner(l);
 }
 
@@ -440,3 +433,24 @@ void runner::set_thread_timeout(unsigned int ms) {
     mutex::scoped_lock l(*tmutex);
     thread_timeout_ms = ms;
 }
+
+void runner::init() {
+    mutex::scoped_lock l(*tmutex);
+    if (impl_ == NULL) {
+        ncpu();
+        signal(SIGPIPE, SIG_IGN);
+        runner::shared_impl i(new impl);
+        runner r = i->to_runner(l);
+        append_to_list(r, l);
+        impl_ = i.get();
+    }
+}
+
+int runner::main() {
+    mutex::scoped_lock l(*tmutex);
+    runner r = impl_->to_runner(l);
+    l.unlock();
+    r.schedule();
+    return 0;
+}
+

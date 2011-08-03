@@ -30,8 +30,8 @@ void listen_task() {
 }
 
 int main(int argc, char *argv[]) {
+    runner::init();
     task::spawn(listen_task);
-    runner::self().schedule();
-    return 0;
+    return runner::main();
 }
 

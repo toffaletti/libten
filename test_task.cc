@@ -32,6 +32,7 @@ static void foo(thread p, semaphore &s) {
 }
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
+    runner::init();
     semaphore s;
     thread t = runner::self().get_thread();
     BOOST_CHECK(t.id);
@@ -46,12 +47,12 @@ static void co1(int &count) {
 }
 
 BOOST_AUTO_TEST_CASE(schedule_test) {
-    runner r = runner::self();
+    runner::init();
     int count = 0;
     for (int i=0; i<10; ++i) {
         task::spawn(boost::bind(co1, boost::ref(count)));
     }
-    r.schedule();
+    runner::main();
     BOOST_CHECK_EQUAL(20, count);
 }
 
@@ -67,6 +68,7 @@ static void mig_co(semaphore &s) {
 }
 
 BOOST_AUTO_TEST_CASE(runner_migrate) {
+    runner::init();
     semaphore s;
     runner r = runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
@@ -115,18 +117,18 @@ static void listen_co(bool multithread, semaphore &sm) {
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {
+    runner::init();
     semaphore s;
     task::spawn(boost::bind(listen_co, false, boost::ref(s)));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     s.wait();
 }
 
 BOOST_AUTO_TEST_CASE(socket_io_mt) {
+    runner::init();
     semaphore s;
     task::spawn(boost::bind(listen_co, true, boost::ref(s)));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     s.wait();
 }
 
@@ -145,10 +147,10 @@ static void sleeper(semaphore &s) {
 }
 
 BOOST_AUTO_TEST_CASE(task_sleep) {
+    runner::init();
     semaphore s;
     task::spawn(boost::bind(sleeper, boost::ref(s)));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     s.wait();
 }
 
@@ -181,10 +183,10 @@ static void listen_timeout_co(semaphore &sm) {
 }
 
 BOOST_AUTO_TEST_CASE(poll_timeout_io) {
+    runner::init();
     semaphore s;
     task::spawn(boost::bind(listen_timeout_co, boost::ref(s)));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     s.wait();
 }
 
@@ -197,12 +199,12 @@ static void sleep_many(atomic_count &count) {
 }
 
 BOOST_AUTO_TEST_CASE(many_timeouts) {
+    runner::init();
     atomic_count count(0);
     for (int i=0; i<1000; i++) {
         task::spawn(boost::bind(sleep_many, boost::ref(count)));
     }
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
@@ -212,13 +214,13 @@ static void long_timeout() {
 }
 
 BOOST_AUTO_TEST_CASE(too_many_runners) {
+    runner::init();
     atomic_count count(0);
     // lower timeout to make test run faster
     runner::set_thread_timeout(100);
 	for (int i=0; i<runner::ncpu()+5; ++i) {
         runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
 	}
-	task::spawn(long_timeout);
-	runner::self().schedule();
+    runner::main();
 	BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
 }

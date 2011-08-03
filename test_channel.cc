@@ -23,20 +23,20 @@ static void channel_send(channel<intptr_t> c) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_test) {
+    runner::init();
     channel<intptr_t> c(10);
     task::spawn(boost::bind(channel_recv, c));
     task::spawn(boost::bind(channel_send, c));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     BOOST_CHECK(c.empty());
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
+    runner::init();
     channel<intptr_t> c;
     task::spawn(boost::bind(channel_recv, c));
     task::spawn(boost::bind(channel_send, c));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     BOOST_CHECK(c.empty());
 }
 
@@ -49,6 +49,7 @@ static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
+    runner::init();
     semaphore s;
     channel<intptr_t> c;
     runner::spawn(boost::bind(channel_recv_mt, c, boost::ref(s)));
@@ -71,13 +72,13 @@ static void channel_multi_recv(channel<intptr_t> c) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
+    runner::init();
     channel<intptr_t> c(4);
     c.send(1234);
     task::spawn(boost::bind(channel_multi_recv, c));
     task::spawn(boost::bind(channel_multi_send, c));
     task::spawn(boost::bind(channel_multi_send, c));
-    runner r = runner::self();
-    r.schedule();
+    runner::main();
     BOOST_CHECK(c.empty());
 }
 
@@ -116,8 +117,9 @@ static void wait_on_io() {
 }
 
 BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
+    runner::init();
     task::spawn(wait_on_io);
-    runner::self().schedule();
+    runner::main();
 }
 
 static void channel_closer(channel<int> c, int &closed) {
@@ -135,11 +137,12 @@ static void channel_recv_close(channel<int> c, int &closed) {
 }
 
 BOOST_AUTO_TEST_CASE(channel_close_test) {
+    runner::init();
     channel<int> c;
     int closed=0;
     task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
     task::spawn(boost::bind(channel_recv_close, c, boost::ref(closed)));
     task::spawn(boost::bind(channel_closer, c, boost::ref(closed)));
-    runner::self().schedule();
+    runner::main();
     BOOST_CHECK_EQUAL(closed, 3);
 }

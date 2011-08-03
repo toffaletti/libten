@@ -23,6 +23,12 @@ public:
     //! \return the thread this runner is using
     thread get_thread();
 
+    //! init the main runner
+    static void init();
+
+    //! run the main scheduler
+    static int main();
+
     //! spawn a new runner with a task that will execute
     static runner spawn(const proc &f, bool force=true);
 
