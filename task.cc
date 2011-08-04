@@ -7,18 +7,21 @@
 atomic_count task::ntasks(0);
 
 struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
+    //! the runner this task is being executed in or migrated to
     runner in;
+    //! function for this task to execute
     proc f;
-    // TODO: allow user to set state and name
+    //! name and state are for future use, to make debugging easier
     std::string name;
     std::string state;
+    //! timeout value for this task
     timespec ts;
     coroutine co;
     uint32_t flags;
 
-    impl() : flags(_TASK_RUNNING) {}
+    impl() : name("maintask"), flags(_TASK_RUNNING) {}
     impl(const proc &f_, size_t stack_size=16*1024)
-        : co((coroutine::proc)task::start, this, stack_size),
+        : name("task"), co((coroutine::proc)task::start, this, stack_size),
         f(f_), flags(_TASK_SLEEP)
     {
         ++ntasks;
@@ -44,7 +47,8 @@ task::task(const proc &f_, size_t stack_size) {
 
 std::string task::str() const {
     std::stringstream ss;
-    ss << "task:" << (void*)m.get() << ":" << m->flags;
+    // TODO: replace the pointer with task "id" (atomicly incremented global counter)
+    ss << "[" << m->name << ":" << m->state << ":" << (void*)m.get() << ":" << m->flags << "]";
     return ss.str();
 }
 
@@ -198,9 +202,7 @@ coroutine *task::get_coroutine() {
     return &m->co;
 }
 
-
-
-/* task condition */
+/* task::condition */
 
 void task::condition::signal() {
     mutex::scoped_lock l(mm);
@@ -236,15 +238,14 @@ void task::condition::wait(mutex::scoped_lock &l) {
     t.suspend(l);
 }
 
+/* task::socket */
+
+task::socket::socket(int fd) throw (errno_error) : s(fd) {}
 
 task::socket::socket(int domain, int type, int protocol) throw (errno_error)
     : s(domain, type, protocol)
 {
     s.setnonblock();
-}
-
-void task::socket::bind(address &addr) throw (errno_error) {
-    s.bind(addr);
 }
 
 int task::socket::connect(address &addr, unsigned int timeout_ms) {

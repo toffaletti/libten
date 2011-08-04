@@ -150,9 +150,33 @@ public:
 public:
     class socket : boost::noncopyable {
     public:
+        socket(int fd) throw (errno_error);
+
         socket(int domain, int type, int protocol=0) throw (errno_error);
 
-        void bind(address &addr) throw (errno_error);
+        void bind(address &addr) throw (errno_error) { s.bind(addr); }
+        void listen(int backlog=128) throw (errno_error) { s.listen(backlog); }
+        bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {
+            return s.getpeername(addr);
+        }
+        void getsockname(address &addr) throw (errno_error) {
+            return s.getsockname(addr);
+        }
+        template <typename T> void getsockopt(int level, int optname,
+            T &optval, socklen_t &optlen) throw (errno_error)
+        {
+            return s.getsockopt(level, optname, optval, optlen);
+        }
+        template <typename T> void setsockopt(int level, int optname,
+            const T &optval, socklen_t optlen) throw (errno_error)
+        {
+            return s.setsockopt(level, optname, optval, optlen);
+        }
+        template <typename T> void setsockopt(int level, int optname,
+            const T &optval) throw (errno_error)
+        {
+            return s.setsockopt(level, optname, optval);
+        }
 
         int connect(address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 

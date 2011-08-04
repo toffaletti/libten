@@ -8,18 +8,20 @@
 
 __thread runner::impl *runner::impl_ = NULL;
 
-unsigned int runner::thread_timeout_ms = 5*1000;
+unsigned int runner::thread_timeout_ms = 60*1000;
 thread runner::main_thread_ = thread::self();
 unsigned long runner::ncpu_ = 0;
 runner::list *runner::runners = new runner::list;
 mutex *runner::tmutex = new mutex;
 
+// thrown when runner has no tasks for thread_timeout_ms
+// runner will then be removed from runners list
 struct runner_timeout_exit : std::exception {};
 
 typedef std::vector<task> task_heap;
 struct task_poll_state {
-    task::impl *t;
-    pollfd *pfd;
+    task::impl *t; // task to wake up when this fd has events
+    pollfd *pfd; // pointer to pollfd structure that is on the task's stack
     task_poll_state() : t(0), pfd(0) {}
     task_poll_state(task::impl *t_, pollfd *pfd_)
         : t(t_), pfd(pfd_) {}
@@ -27,6 +29,8 @@ struct task_poll_state {
 typedef std::vector<task_poll_state> poll_task_array;
 typedef std::vector<epoll_event> event_vector;
 
+// sort timeout heap in least > greatest > -1 order
+// so we can find the smallest timeout value to pass to epoll_wait
 struct task_timeout_heap_compare {
     bool operator ()(const task &a, const task &b) const {
         // handle -1 case, which we want at the end
@@ -64,25 +68,33 @@ static std::ostream &operator << (std::ostream &o, task::deque &l) {
 
 //! internal data members
 struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
+    //! pthread this runner is running in
     thread tt;
     mutex mut;
+    //! tasks that need to be run
     task::deque runq;
+    //! pipe used to wake up this runner
     pipe_fd pi;
+    //! the epoll fd used for io in this runner
     epoll_fd efd;
-    // tasks waiting with a timeout value set
+    //! tasks waiting with a timeout value set
     task_heap waiters;
+    //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
-    //! time calculated once through event loop
+    //! current time cached in a few places through the event loop
     timespec now;
-    //! task used for scheduling
-    task scheduler; // TODO: maybe this can just be a coroutine?
+    //! task used for scheduling (the "main" task, uses default stack)
+    task scheduler;
+    //! currently executing task
     task current_task;
 
+    //! constructor for main thread runner
     impl() : current_task(scheduler.m), pi(O_NONBLOCK) {
         add_pipe();
         tt=thread::self();
     }
 
+    //! constructor for runners that create a new thread
     impl(task &t) : current_task(scheduler.m), pi(O_NONBLOCK) {
         add_pipe();
         add_to_runqueue(t);
@@ -92,13 +104,6 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
     ~impl() {
         mutex::scoped_lock l(mut);
         current_task.m.reset();
-    }
-
-    void delete_from_runqueue(task &t) {
-        mutex::scoped_lock l(mut);
-        assert(t == runq.back());
-        runq.pop_back();
-        t.set_flag(_TASK_SLEEP);
     }
 
     void run_queued_tasks(runner &r) {
@@ -258,6 +263,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
         (void)nw;
     }
 
+    //! add task to the end of the run queue
     bool add_to_runqueue(task &t) {
         mutex::scoped_lock l(mut);
         assert(t.test_flag_not_set(_TASK_RUNNING));
@@ -273,6 +279,14 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             return true;
         }
         return false;
+    }
+
+    //! remove the last task from the runqueue
+    void delete_from_runqueue(task &t) {
+        mutex::scoped_lock l(mut);
+        assert(t == runq.back());
+        runq.pop_back();
+        t.set_flag(_TASK_SLEEP);
     }
 
     // tmutex must be held, shared_from_this is not thread safe
@@ -318,6 +332,7 @@ runner runner::self() {
 runner runner::spawn(const task::proc &f, bool force) {
     mutex::scoped_lock l(*tmutex);
     if (runners->size() >= ncpu() && !force) {
+        // reuse an existing runner
         runner r = runners->front();
         runners->pop_front();
         runners->push_back(r);
@@ -335,11 +350,16 @@ bool runner::operator == (const runner &r) const {
 }
 
 void runner::schedule() {
+    // check use_count because use could be holding onto this
+    // runner to add a task later. is there a use case for this?
     while (task::get_ntasks() > 0 || m.use_count() > 2) {
         m->run_queued_tasks(*this);
         m->check_io(*this);
     }
 
+    // spin waiting for other runners to exit
+    // this is mostly to prevent valgrind warnings
+    // about threads exiting while holding locks
     if (m->tt == main_thread_) {
         mutex::scoped_lock l(*tmutex);
         while (runners->size() > 1) {

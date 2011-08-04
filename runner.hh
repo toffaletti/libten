@@ -30,6 +30,9 @@ public:
     static int main();
 
     //! spawn a new runner with a task that will execute
+    //
+    //! if there is already a runner for every cpu then
+    //! this will reuse an existing runner unless force is true
     static runner spawn(const proc &f, bool force=true);
 
     //! \return the runner for this thread

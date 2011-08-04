@@ -210,6 +210,8 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
 
 static void long_timeout() {
 	task::sleep(200);
+    // there is a race here, test might fail.
+    // should mostly succeed though
 	BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
 }
 
