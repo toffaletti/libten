@@ -382,6 +382,7 @@ void runner::add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
         ev.events = fds[i].events;
         ev.data.fd = fd;
         assert(m->efd.add(fd, ev) == 0);
+        assert(m->pollfds[fd].t == 0);
         m->pollfds[fd] = task_poll_state(t.m.get(), &fds[i]);
     }
 }
