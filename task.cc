@@ -2,6 +2,7 @@
 #include "runner.hh"
 #include "channel.hh"
 #include <sstream>
+#include <netdb.h>
 
 // static
 atomic_count task::ntasks(0);
@@ -248,7 +249,26 @@ task::socket::socket(int domain, int type, int protocol) throw (errno_error)
     s.setnonblock();
 }
 
-int task::socket::connect(address &addr, unsigned int timeout_ms) {
+int task::socket::dial(const char *addr, uint16_t port, unsigned int timeout_ms) {
+    struct addrinfo *results = 0;
+    struct addrinfo *result = 0;
+    runner r = runner::self();
+    task::migrate();
+    int status = getaddrinfo(addr, NULL, NULL, &results);
+    if (status == 0) {
+        for (result = results; result != NULL; result = result->ai_next) {
+            address addr(result->ai_addr, result->ai_addrlen);
+            addr.port(port);
+            status = connect(addr, timeout_ms);
+            if (status == 0) break;
+        }
+    }
+    freeaddrinfo(results);
+    task::migrate(&r);
+    return status;
+}
+
+int task::socket::connect(const address &addr, unsigned int timeout_ms) {
     while (s.connect(addr) < 0) {
         if (errno == EINTR)
             continue;

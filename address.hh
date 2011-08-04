@@ -25,6 +25,11 @@ struct address {
         clear();
     }
 
+    address(struct sockaddr *a, socklen_t alen) {
+        clear();
+        memcpy(&addr.sa, a, alen);
+    }
+
     //! \param s address in string format for inet_pton
     //! \param p port in host byte order
     address(const char *s, uint16_t p=0) {
@@ -40,19 +45,20 @@ struct address {
     }
 
     //! \return sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6) depending on the value of family()
-    socklen_t addrlen() {
+    socklen_t addrlen() const {
         return family() == AF_INET ? sizeof(addr.sa_in) : sizeof(addr.sa_in6);
     }
 
     //! \return a struct sockaddr pointer to the backing storage
-    struct sockaddr *sockaddr() {
-        return &addr.sa;
+    struct sockaddr *sockaddr() const {
+        // cast away const cause i'm evil
+        return (struct sockaddr *)&addr.sa;
     }
 
     //! sets address family AF_INET or AF_INET6
     void family(int f) { addr.sa.sa_family = f; }
     //! \return AF_INET or AF_INET6
-    int family() { return addr.sa.sa_family; }
+    int family() const { return addr.sa.sa_family; }
 
     //! sets port
     //! \param p port in host by order
@@ -65,12 +71,12 @@ struct address {
     }
 
     //! returns port in host byte order
-    uint16_t port() {
+    uint16_t port() const {
         return ntohs(family() == AF_INET ? addr.sa_in.sin_port : addr.sa_in6.sin6_port);
     }
 
     //! wrapper around inet_ntop
-    const char *ntop(char *dst, socklen_t size) {
+    const char *ntop(char *dst, socklen_t size) const {
         const char *rvalue = NULL;
         if (family() == AF_INET) {
             rvalue = inet_ntop(family(), &addr.sa_in.sin_addr, dst, size);
@@ -95,7 +101,7 @@ struct address {
     }
 
     //! output address in addr:port format
-    friend std::ostream &operator<< (std::ostream &out, address &addr) {
+    friend std::ostream &operator<< (std::ostream &out, const address &addr) {
         char buf[INET6_ADDRSTRLEN];
         out << addr.ntop(buf, sizeof(buf)) << ":" << addr.port();
     }

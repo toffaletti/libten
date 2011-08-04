@@ -226,3 +226,15 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     runner::main();
 	BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
 }
+
+static void dial_google() {
+    task::socket s(AF_INET, SOCK_STREAM);
+    int status = s.dial("www.google.com", 80, 300);
+    BOOST_CHECK_EQUAL(status, 0);
+}
+
+BOOST_AUTO_TEST_CASE(task_socket_dial) {
+    runner::init();
+    task::spawn(dial_google);
+    runner::main();
+}

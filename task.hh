@@ -178,7 +178,9 @@ public:
             return s.setsockopt(level, optname, optval);
         }
 
-        int connect(address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
+        int dial(const char *addr, uint16_t port, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
+
+        int connect(const address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
         int accept(address &addr, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 

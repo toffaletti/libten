@@ -247,7 +247,7 @@ struct socket_fd : fd_base {
     }
 
     //! connects fd to the address specified by addr
-    int connect(address &addr) __attribute__((warn_unused_result)) {
+    int connect(const address &addr) __attribute__((warn_unused_result)) {
         return ::connect(fd, addr.sockaddr(), addr.addrlen());
     }
 
