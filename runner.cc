@@ -20,11 +20,12 @@ struct runner_timeout_exit : std::exception {};
 
 typedef std::vector<task> task_heap;
 struct task_poll_state {
-    task::impl *t; // task to wake up when this fd has events
-    pollfd *pfd; // pointer to pollfd structure that is on the task's stack
-    task_poll_state() : t(0), pfd(0) {}
-    task_poll_state(task::impl *t_, pollfd *pfd_)
-        : t(t_), pfd(pfd_) {}
+    task::impl *t_in; // POLLIN task
+    pollfd *p_in; // pointer to pollfd structure that is on the task's stack
+    task::impl *t_out; // POLLOUT task
+    pollfd *p_out; // pointer to pollfd structure that is on the task's stack
+    uint32_t events; // events this fd is registered for
+    task_poll_state() : t_in(0), p_in(0), t_out(0), p_out(0), events(0) {}
 };
 typedef std::vector<task_poll_state> poll_task_array;
 typedef std::vector<epoll_event> event_vector;
@@ -202,20 +203,32 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             for (event_vector::const_iterator i=events.begin();
                 i!=events.end();++i)
             {
-                task::impl *ti = pollfds[i->data.fd].t;
-                pollfd *pfd = pollfds[i->data.fd].pfd;
-                if (ti && pfd) {
-                    pfd->revents = i->events;
-                    task t = task::impl_to_task(ti);
+                // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+                // even if they arent asked for, so we must wake up the tasks on any event
+                // to avoid just spinning in epoll.
+                int fd = i->data.fd;
+                if (pollfds[fd].t_in) {
+                    pollfds[fd].p_in->revents = i->events;
+                    task t = task::impl_to_task(pollfds[fd].t_in);
                     add_to_runqueue(t);
                     wake_tasks.insert(t);
-                } else if (i->data.fd == pi.r.fd) {
+                }
+
+                // check to see if this is a different task
+                if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
+                    pollfds[fd].p_out->revents = i->events;
+                    task t = task::impl_to_task(pollfds[fd].t_out);
+                    add_to_runqueue(t);
+                    wake_tasks.insert(t);
+                }
+
+                if (i->data.fd == pi.r.fd) {
                     // our wake up pipe was written to
                     char buf[32];
                     // clear pipe
                     while (pi.read(buf, sizeof(buf)) > 0) {}
                     done = true;
-                } else {
+                } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
                     // TODO: otherwise we might want to remove fd from epoll
                     fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
                 }
@@ -379,21 +392,60 @@ void runner::add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
         if (m->pollfds.size() <= fd) {
             m->pollfds.resize(fd+1);
         }
-        ev.events = fds[i].events;
         ev.data.fd = fd;
-        assert(m->efd.add(fd, ev) == 0);
-        assert(m->pollfds[fd].t == 0);
-        m->pollfds[fd] = task_poll_state(t.m.get(), &fds[i]);
+        uint32_t events = m->pollfds[fd].events;
+
+        if (fds[i].events & EPOLLIN) {
+            assert(m->pollfds[fd].t_in == 0);
+            m->pollfds[fd].t_in = t.m.get();
+            m->pollfds[fd].p_in = &fds[i];
+            m->pollfds[fd].events |= EPOLLIN;
+        }
+
+        if (fds[i].events & EPOLLOUT) {
+            assert(m->pollfds[fd].t_out == 0);
+            m->pollfds[fd].t_out = t.m.get();
+            m->pollfds[fd].p_out = &fds[i];
+            m->pollfds[fd].events |= EPOLLOUT;
+        }
+
+        ev.events = m->pollfds[fd].events;
+
+        if (events == 0) {
+            THROW_ON_ERROR(m->efd.add(fd, ev));
+        } else if (events != m->pollfds[fd].events) {
+            THROW_ON_ERROR(m->efd.modify(fd, ev));
+        }
     }
 }
 
 int runner::remove_pollfds(pollfd *fds, nfds_t nfds) {
     int rvalue = 0;
     for (nfds_t i=0; i<nfds; ++i) {
+        int fd = fds[i].fd;
         if (fds[i].revents) rvalue++;
-        m->pollfds[fds[i].fd].t = 0;
-        m->pollfds[fds[i].fd].pfd = 0;
-        assert(m->efd.remove(fds[i].fd) == 0);
+
+        if (m->pollfds[fd].p_in == &fds[i]) {
+            m->pollfds[fd].t_in = 0;
+            m->pollfds[fd].p_in = 0;
+            m->pollfds[fd].events ^= EPOLLIN;
+        }
+
+        if (m->pollfds[fd].p_out == &fds[i]) {
+            m->pollfds[fd].t_out = 0;
+            m->pollfds[fd].p_out = 0;
+            m->pollfds[fd].events ^= EPOLLOUT;
+        }
+
+        if (m->pollfds[fd].events == 0) {
+            THROW_ON_ERROR(m->efd.remove(fd));
+        } else {
+            epoll_event ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.data.fd = fd;
+            ev.events = m->pollfds[fd].events;
+            THROW_ON_ERROR(m->efd.modify(fd, ev));
+        }
     }
     return rvalue;
 }
