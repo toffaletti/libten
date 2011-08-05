@@ -13,8 +13,6 @@
 // to close the channel if the reference count reaches 1 while in a blocking send/recv
 
 struct channel_closed_error : std::exception {};
-//! tried to block on a channel with no other references
-struct channel_unique_error : std::exception {};
 
 //! send and receive data between tasks in FIFO order
 //
@@ -61,7 +59,7 @@ public:
     typename impl::size_type send(T p) {
         mutex::scoped_lock l(m->mtx);
         typename impl::size_type unread = m->unread;
-        while (m->is_full() && !m.unique() && !m->closed) {
+        while (m->is_full() && !m->closed) {
             m->not_full.wait(l);
         }
         check_closed();
@@ -82,14 +80,11 @@ public:
             // unblock sender
             m->not_full.signal();
         }
-        while (m->is_empty() && !m.unique() && !m->closed) {
+        while (m->is_empty() && !m->closed) {
             m->not_empty.wait(l);
         }
         if (m->unread == 0) {
             check_closed();
-            if (m.unique()) {
-                throw channel_unique_error();
-            }
         }
 
         // we don't pop_back because the item will just get overwritten

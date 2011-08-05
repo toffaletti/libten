@@ -1,6 +1,6 @@
 #include "runner.hh"
 #include "task.hh"
-#include "descriptors.hh"
+#include "channel.hh"
 #include <boost/bind.hpp>
 #include <sstream>
 
@@ -14,15 +14,13 @@ typedef boost::shared_ptr<client> shared_client;
 typedef std::list<shared_client> client_list;
 
 static client_list clients;
+static channel<std::string> bchan(10);
 
 void broadcast(const shared_client &from, const std::string &msg) {
     std::stringstream ss;
     ss << from->nick << ": " << msg;
     std::string chat = ss.str();
-    for (client_list::iterator i=clients.begin(); i != clients.end(); ++i) {
-        if (*i == from) continue; // dont send to person who said it
-        (*i)->s.send(chat.c_str(), chat.size());
-    }
+    bchan.send(chat);
 }
 
 void chat_task(int sock) {
@@ -41,6 +39,15 @@ void chat_task(int sock) {
         }
     }
     clients.remove(c);
+}
+
+void broadcast_task() {
+    for (;;) {
+        std::string chat = bchan.recv();
+        for (client_list::iterator i=clients.begin(); i != clients.end(); ++i) {
+            (*i)->s.send(chat.c_str(), chat.size());
+        }
+    }
 }
 
 void listen_task() {
@@ -64,6 +71,7 @@ void listen_task() {
 
 int main(int argc, char *argv[]) {
     runner::init();
+    task::spawn(broadcast_task);
     task::spawn(listen_task);
     return runner::main();
 }
