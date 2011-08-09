@@ -165,6 +165,9 @@ void task::suspend(mutex::scoped_lock &l) {
     } catch (interrupt_unwind &e) {
         l.lock();
         throw;
+    } catch (std::exception &e) {
+        l.lock();
+        throw;
     }
     l.lock();
 }
@@ -268,7 +271,15 @@ void task::condition::wait(mutex::scoped_lock &l) {
             waiters.push_back(t);
         }
     }
-    t.suspend(l);
+    try {
+        t.suspend(l);
+    } catch (interrupt_unwind &e) {
+        // remove task from waiters so it won't get signaled
+        mutex::scoped_lock ll(mm);
+        task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
+        waiters.erase(nend, waiters.end());
+        throw;
+    }
 }
 
 /* task::socket */
