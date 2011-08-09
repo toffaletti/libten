@@ -517,7 +517,12 @@ void runner::init() {
     mutex::scoped_lock l(*tmutex);
     if (impl_ == NULL) {
         ncpu();
-        signal(SIGPIPE, SIG_IGN);
+        struct sigaction act;
+        assert(sigaction(SIGPIPE, NULL, &act) == 0);
+        if (act.sa_handler == SIG_DFL) {
+            act.sa_handler = SIG_IGN;
+            assert(sigaction(SIGPIPE, &act, NULL) == 0);
+        }
         runner::shared_impl i(new impl);
         runner r = i->to_runner(l);
         append_to_list(r, l);
