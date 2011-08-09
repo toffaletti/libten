@@ -116,7 +116,12 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
             runq.pop_front();
             l.unlock();
             task::swap(scheduler, current_task);
-            if (current_task.test_flag_set(_TASK_MIGRATE)) {
+            if (current_task.test_flag_set(_TASK_INTERRUPT)) {
+                // remove from waiters
+                task_heap::iterator nend = std::remove(waiters.begin(), waiters.end(), current_task);
+                waiters.erase(nend, waiters.end());
+                l.lock();
+            } else if (current_task.test_flag_set(_TASK_MIGRATE)) {
                 current_task.clear_flag(_TASK_MIGRATE);
                 current_task.set_flag(_TASK_SLEEP);
                 if (current_task.get_runner().m) {
@@ -214,7 +219,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
                     wake_tasks.insert(t);
                 }
 
-                // check to see if this is a different task
+                // check to see if pollout is a different task than pollin
                 if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
                     pollfds[fd].p_out->revents = i->events;
                     task t = task::impl_to_task(pollfds[fd].t_out);
@@ -255,6 +260,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
     }
 
     void add_pipe() {
+        // add the pipe used to wake up this runner from epoll_wait
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN | EPOLLET;
@@ -345,7 +351,7 @@ runner runner::self() {
 runner runner::spawn(const task::proc &f, bool force) {
     mutex::scoped_lock l(*tmutex);
     if (runners->size() >= ncpu() && !force) {
-        // reuse an existing runner
+        // reuse an existing runner, round robin
         runner r = runners->front();
         runners->pop_front();
         runners->push_back(r);

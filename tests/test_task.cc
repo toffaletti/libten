@@ -209,10 +209,10 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
 }
 
 static void long_timeout() {
-	task::sleep(200);
+    task::sleep(200);
     // there is a race here, test might fail.
     // should mostly succeed though
-	BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
+    BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
 }
 
 BOOST_AUTO_TEST_CASE(too_many_runners) {
@@ -220,11 +220,11 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     atomic_count count(0);
     // lower timeout to make test run faster
     runner::set_thread_timeout(100);
-	for (int i=0; i<runner::ncpu()+5; ++i) {
+    for (int i=0; i<runner::ncpu()+5; ++i) {
         runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
-	}
+    }
     runner::main();
-	BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
+    BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
 }
 
 static void dial_google() {
@@ -236,5 +236,76 @@ static void dial_google() {
 BOOST_AUTO_TEST_CASE(task_socket_dial) {
     runner::init();
     task::spawn(dial_google);
+    runner::main();
+}
+
+static void long_sleeper() {
+    task::sleep(10000);
+    BOOST_CHECK(false);
+}
+
+static void cancel_sleep() {
+    task t = task::spawn(long_sleeper);
+    task::sleep(10);
+    t.cancel();
+}
+
+BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
+    runner::init();
+    task::spawn(cancel_sleep);
+    runner::main();
+}
+
+static void channel_wait() {
+    channel<int> c;
+    int a = c.recv();
+    BOOST_CHECK(false);
+}
+
+static void cancel_channel() {
+    task t = task::spawn(channel_wait);
+    task::sleep(10);
+    t.cancel();
+}
+
+BOOST_AUTO_TEST_CASE(task_cancel_channel) {
+    runner::init();
+    task::spawn(cancel_channel);
+    runner::main();
+}
+
+static void io_wait() {
+    pipe_fd p;
+    task::poll(p.r.fd, EPOLLIN);
+    BOOST_CHECK(false);
+}
+
+static void cancel_io() {
+    task t = task::spawn(io_wait);
+    task::sleep(10);
+    t.cancel();
+}
+
+BOOST_AUTO_TEST_CASE(task_cancel_io) {
+    runner::init();
+    task::spawn(cancel_io);
+    runner::main();
+}
+
+static void migrate_task() {
+    task::migrate();
+    task::sleep(1000);
+    abort();
+}
+
+static void cancel_migrate() {
+    task t = task::spawn(migrate_task);
+    task::sleep(10);
+    t.cancel();
+}
+
+BOOST_AUTO_TEST_CASE(task_cancel_migrate) {
+    runner::init();
+    task::spawn(cancel_migrate);
     runner::main();
 }

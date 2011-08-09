@@ -20,6 +20,7 @@
 #define _TASK_RUNNING   (1<<1)
 #define _TASK_EXIT      (1<<2)
 #define _TASK_MIGRATE   (1<<3)
+#define _TASK_INTERRUPT (1<<4)
 
 class runner;
 
@@ -33,6 +34,8 @@ class task {
 public:
     typedef boost::function<void ()> proc;
     typedef std::deque<task> deque;
+    //! thrown when _TASK_INTERRUPT is set
+    struct interrupt_unwind : std::exception {};
 
     //! spawn a task and add it to a runners run queue
     static task spawn(const proc &f, runner *in=NULL);
@@ -55,6 +58,8 @@ public:
     //! put task to sleep
     static void sleep(unsigned int ms);
 
+    void cancel();
+
     std::string str() const;
 public: /* operators */
 
@@ -70,10 +75,7 @@ public: /* operators */
         return m.get() < t.m.get();
     }
 
-    friend std::ostream &operator << (std::ostream &o, const task &t) {
-        o << "task:" << t.str();
-        return o;
-    }
+    friend std::ostream &operator << (std::ostream &o, const task &t);
 
 private: /* implementation details */
     struct impl;

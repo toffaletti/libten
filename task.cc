@@ -18,7 +18,7 @@ struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<im
     //! timeout value for this task
     timespec ts;
     coroutine co;
-    uint32_t flags;
+    atomic_bits<uint32_t> flags;
 
     impl() : name("maintask"), flags(_TASK_RUNNING) {}
     impl(const proc &f_, size_t stack_size=16*1024)
@@ -46,15 +46,31 @@ task::task(const proc &f_, size_t stack_size) {
     m.reset(new impl(f_, stack_size));
 }
 
+
+std::ostream &operator << (std::ostream &o, const task &t) {
+    // TODO: replace the pointer with task "id" (atomicly incremented global counter)
+    o << "[" << t.m->name << ":" << t.m->state << ":" << (void*)t.m.get() << ":" << t.m->flags << "]";
+    return o;
+}
+
 std::string task::str() const {
     std::stringstream ss;
-    // TODO: replace the pointer with task "id" (atomicly incremented global counter)
-    ss << "[" << m->name << ":" << m->state << ":" << (void*)m.get() << ":" << m->flags << "]";
+    ss << *this;
     return ss.str();
 }
 
 task task::self() {
     return runner::self().get_task();
+}
+
+void task::cancel() {
+    m->flags |= _TASK_INTERRUPT;
+    m->in.add_to_runqueue(*this);
+    // order of operations:
+    // check for this flag in task::yield
+    // throw task::interrupt_unwind exception
+    // catch exception to remove pollfds, etc. rethrow
+    // remove from waiters inside runloop
 }
 
 void task::swap(task &from, task &to) {
@@ -85,12 +101,18 @@ task task::spawn(const proc &f, runner *in) {
 
 void task::yield() {
     runner::swap_to_scheduler();
+
+    if (task::self().m->flags & _TASK_INTERRUPT) {
+        throw interrupt_unwind();
+    }
 }
 
 void task::start(impl *i) {
     task t = i->to_task();
     try {
         t.m->f();
+    } catch (interrupt_unwind &e) {
+        // task was canceled
     } catch (channel_closed_error &e) {
         fprintf(stderr, "caught channel close error in task(%p)\n", t.m.get());
     } catch(std::exception &e) {
@@ -138,7 +160,12 @@ void task::suspend(mutex::scoped_lock &l) {
     // see note in task::condition::wait about race condition
     assert(m->flags & _TASK_SLEEP);
     l.unlock();
-    task::yield();
+    try {
+        task::yield();
+    } catch (interrupt_unwind &e) {
+        l.lock();
+        throw;
+    }
     l.lock();
 }
 
@@ -169,7 +196,12 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     r.add_pollfds(t, fds, nfds);
 
     // will be woken back up by epoll loop in runner::schedule()
-    task::yield();
+    try {
+        task::yield();
+    } catch (interrupt_unwind &e) {
+        r.remove_pollfds(fds, nfds);
+        throw;
+    }
 
     return r.remove_pollfds(fds, nfds);
 }
