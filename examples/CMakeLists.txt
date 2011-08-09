@@ -14,3 +14,6 @@ target_link_libraries(echo-server fw)
 
 add_executable(chat-server chat-server.cc)
 target_link_libraries(chat-server fw)
+
+add_executable(stack-guard stack-guard.cc)
+target_link_libraries(stack-guard fw)

@@ -38,7 +38,9 @@ public:
     struct interrupt_unwind : std::exception {};
 
     //! spawn a task and add it to a runners run queue
-    static task spawn(const proc &f, runner *in=NULL);
+    static task spawn(const proc &f,
+        runner *in=NULL,
+        size_t stack_size=DEFAULT_STACK_SIZE);
 
     //! yield the current task
     static void yield();
@@ -87,7 +89,7 @@ private: /* implementation details */
     shared_impl m;
 
     task(const shared_impl &m_) : m(m_) {}
-    task(const proc &f_, size_t stack_size=16*1024);
+    task(const proc &f_, size_t stack_size);
     static void start(impl *);
 
 private: /* runner interface */

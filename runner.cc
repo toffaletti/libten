@@ -348,7 +348,7 @@ runner runner::self() {
     return impl_->to_runner(l);
 }
 
-runner runner::spawn(const task::proc &f, bool force) {
+runner runner::spawn(const task::proc &f, bool force, size_t stack_size) {
     mutex::scoped_lock l(*tmutex);
     if (runners->size() >= ncpu() && !force) {
         // reuse an existing runner, round robin
@@ -358,7 +358,7 @@ runner runner::spawn(const task::proc &f, bool force) {
         task::spawn(f, &r);
         return r;
     }
-    task t(f);
+    task t(f, stack_size);
     runner r(t);
     append_to_list(r, l);
     return r;

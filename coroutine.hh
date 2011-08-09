@@ -20,35 +20,38 @@ public:
     typedef void (*proc)(void *);
 
     //! this represents the main coroutine
-    coroutine() : stack(0), stack_size(0) { ctxt.init(); }
+    coroutine() : stack_start(0), stack_end(0) { ctxt.init(); }
 
     //! create a new coroutine
     //
     //! allocates a stack and guard page
-    coroutine(proc f, void *arg=NULL, size_t stack_size_=4096)
-        : stack_size(stack_size_)
+    coroutine(proc f, void *arg=NULL, size_t stack_size=4096)
     {
         // add on size for a guard page
-        size_t real_size = stack_size + getpagesize();
-        int r = posix_memalign((void **)&stack, getpagesize(), real_size);
+        size_t pgs = getpagesize();
+        size_t real_size = stack_size + pgs;
+        int r = posix_memalign((void **)&stack_end, pgs, real_size);
         THROW_ON_NONZERO(r);
         // protect the guard page
-        // TODO: is this right? check which direction stack grows
-        THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_NONE));
+        THROW_ON_ERROR(mprotect(stack_end, pgs, PROT_NONE));
+        stack_end += pgs;
+        // stack grows down on x86 & x86_64
+        stack_start = stack_end + stack_size;
 #ifndef NVALGRIND
         valgrind_stack_id =
-            VALGRIND_STACK_REGISTER(stack, stack+stack_size);
+            VALGRIND_STACK_REGISTER(stack_start, stack_end);
 #endif
-        ctxt.init(f, arg, stack, stack_size);
+        ctxt.init(f, arg, stack_start, stack_size);
     }
 
     ~coroutine() {
-        if (stack) {
+        if (stack_end) {
 #ifndef NVALGRIND
             VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
 #endif
-            THROW_ON_ERROR(mprotect(stack+stack_size, getpagesize(), PROT_READ|PROT_WRITE));
-            free(stack);
+            size_t pgs = getpagesize();
+            THROW_ON_ERROR(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE));
+            free(stack_end-pgs);
         }
     }
 
@@ -58,15 +61,15 @@ public:
     }
 
     //! is this the main stack?
-    bool main() { return stack == 0; }
+    bool main() { return stack_start == 0; }
 
 private:
     //! saved state of this coroutine
     context ctxt;
-    //! pointer to stack memory
-    char *stack;
-    // TODO: probably not needed, can be retrieved from context?
-    size_t stack_size;
+    //! pointer to stack start
+    char *stack_start;
+    //! pointer to stack end
+    char *stack_end;
 #ifndef NVALGRIND
     //! stack id so valgrind doesn't freak when stack swapping happens
     int valgrind_stack_id;

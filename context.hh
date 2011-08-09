@@ -42,8 +42,9 @@ struct context : boost_fcontext_t {
     void init(proc f=0, void *arg=0, char *stack=0, size_t stack_size=0) {
         memset(this, 0, sizeof(context));
         if (f && stack && stack_size) {
-            fc_stack.ss_base = stack+stack_size;
-            fc_stack.ss_limit = stack;
+            fc_stack.ss_base = stack;
+            // stack grows down
+            fc_stack.ss_limit = stack-stack_size;
             boost_fcontext_make(this, f, arg);
         }
     }

@@ -89,8 +89,8 @@ void task::swap(task &from, task &to) {
     from.m->flags |= _TASK_RUNNING;
 }
 
-task task::spawn(const proc &f, runner *in) {
-    task t(f);
+task task::spawn(const proc &f, runner *in, size_t stack_size) {
+    task t(f, stack_size);
     if (in) {
         in->add_to_runqueue(t);
     } else {
