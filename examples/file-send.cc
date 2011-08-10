@@ -3,6 +3,7 @@
 #include "channel.hh"
 #include "buffer.hh"
 #include <boost/bind.hpp>
+#include <iostream>
 
 // sends a file over a tcp socket on port 5500
 // $ nc -l -p 5500 > out & ./file-send libfw.a
@@ -44,12 +45,14 @@ void file_sender(channel<buffer::slice> c) {
     address addr("127.0.0.1", 5500);
     task::socket s(AF_INET, SOCK_STREAM);
     s.connect(addr, 100);
+    size_t bytes_sent = 0;
     for (;;) {
         buffer::slice bs = c.recv();
         if (bs.size() == 0) break;
         ssize_t nw = s.send(bs, bs.size());
-        assert(nw == bs.size());
+        if (nw > 0) bytes_sent += nw;
     }
+    std::cout << "sent " << bytes_sent << " bytes\n";
 }
 
 int main(int argc, char *argv[]) {

@@ -3,6 +3,7 @@
 #include "channel.hh"
 #include <boost/bind.hpp>
 #include <sstream>
+#include <iostream>
 
 struct client {
     task::socket s;

@@ -2,6 +2,7 @@
 #include "task.hh"
 #include "descriptors.hh"
 #include <boost/bind.hpp>
+#include <iostream>
 
 void echo_task(int sock) {
     task::socket s(sock);

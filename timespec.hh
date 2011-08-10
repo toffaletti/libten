@@ -4,7 +4,6 @@
 #include <memory.h>
 #include <time.h>
 #include <ostream>
-#include <iostream>
 
 inline bool operator == (const timespec &a, const timespec &b) {
     return memcmp(&a, &b, sizeof(timespec)) == 0;
