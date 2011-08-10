@@ -174,7 +174,7 @@ void task::suspend(mutex::scoped_lock &l) {
 
 void task::resume() {
     task t = m->to_task();
-    assert(m->in.add_to_runqueue(t) == true);
+    assert(m->in.add_to_runqueue(t));
 }
 
 bool task::poll(int fd, short events, unsigned int ms) {
@@ -224,7 +224,6 @@ void task::set_state(const std::string &str) {
 void task::clear_flag(uint32_t f) { m->flags ^= f; }
 void task::set_flag(uint32_t f) { m->flags |= f; }
 bool task::test_flag_set(uint32_t f) const { return m->flags & f; }
-bool task::test_flag_not_set(uint32_t f) const { return m->flags ^ f; }
 
 const std::string &task::get_state() const { return m->state; }
 const timespec &task::get_timeout() const { return m->ts; }

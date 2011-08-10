@@ -309,3 +309,27 @@ BOOST_AUTO_TEST_CASE(task_cancel_migrate) {
     task::spawn(cancel_migrate);
     runner::main();
 }
+
+static void yield_loop(uint64_t &counter) {
+    for (;;) {
+        task::yield();
+        ++counter;
+    }
+}
+
+static void yield_timer() {
+    uint64_t counter = 0;
+    task t = task::spawn(boost::bind(yield_loop, boost::ref(counter)));
+    task::sleep(1000);
+    t.cancel();
+    // tight yield loop should take less than microsecond
+    // this test depends on hardware and will probably fail
+    // when run under debugging tools like valgrind/gdb
+    BOOST_CHECK(counter > 100000);
+}
+
+BOOST_AUTO_TEST_CASE(task_yield_timer) {
+    runner::init();
+    task::spawn(yield_timer);
+    runner::main();
+}

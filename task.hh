@@ -107,7 +107,6 @@ private: /* runner interface */
     void clear_flag(uint32_t f);
     void set_flag(uint32_t f);
     bool test_flag_set(uint32_t f) const;
-    bool test_flag_not_set(uint32_t f) const;
 
     const std::string &get_state() const;
     const timespec &get_timeout() const;

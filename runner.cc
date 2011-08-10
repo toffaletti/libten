@@ -111,6 +111,18 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
         mutex::scoped_lock l(mut);
         while (!runq.empty()) {
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            // still allow for io if a task is in a tight yield() loop
+            if (!waiters.empty()) {
+                std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
+                if (waiters.front().get_timeout().tv_sec > 0 &&
+                    waiters.front().get_timeout() <= now)
+                {
+                    l.unlock();
+                    check_io(r, true);
+                    l.lock();
+                }
+            }
+
             current_task = runq.front();
             current_task.set_runner(r);
             runq.pop_front();
@@ -144,10 +156,11 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
         current_task = scheduler;
     }
 
-    void check_io(runner &r) {
+    void check_io(runner &r, bool once=false) {
         event_vector events(efd.maxevents ? efd.maxevents : 1);
         bool done = false;
         while (!done) {
+            if (once) done = true;
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // sort heap to find the shortest timeout we can pass to epoll_wait
             std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
@@ -186,6 +199,9 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
                     }
                 }
             }
+
+            // don't block in epoll_wait if we're doing a quick once loop
+            if (once) timeout_ms = 0;
 
             efd.wait(events, timeout_ms);
 
@@ -285,10 +301,16 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
     //! add task to the end of the run queue
     bool add_to_runqueue(task &t) {
         mutex::scoped_lock l(mut);
-        assert(t.test_flag_not_set(_TASK_RUNNING));
-        assert(t.test_flag_set(_TASK_SLEEP));
+        return add_to_runqueue_nolock(t, l);
+    }
+
+    //! lock must have already been aquired
+    bool add_to_runqueue_nolock(task &t, mutex::scoped_lock &) {
+        // task can be in any state, for example a task might be running
+        // but still get added to the runqueue from a resume in another
+        // thread. this is perfectly valid, the important thing is that
+        // this task will get run the next time through the loop
         t.clear_flag(_TASK_SLEEP);
-        // TODO: might not need to check this anymore with flags
         task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
         // don't add multiple times
         // this is possible with io loop and timeout loop
