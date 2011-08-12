@@ -211,11 +211,23 @@ void *runner::start(void *arg) {
         r.schedule();
     } catch (abi::__forced_unwind&) {
         remove_from_list(r);
+        l.lock();
+        impl_ = NULL;
         throw;
     } catch (runner_timeout_exit &e) {
         // more runners than cpus and nothing to do
+    } catch (backtrace_exception &e) {
+        fprintf(stderr, "uncaught exception in runner: %s\n%s\n", e.what(), e.str().c_str());
+        remove_from_list(r);
+        l.lock();
+        impl_ = NULL;
+        throw;
     } catch (std::exception &e) {
         fprintf(stderr, "uncaught exception in runner: %s\n", e.what());
+        remove_from_list(r);
+        l.lock();
+        impl_ = NULL;
+        throw;
     }
     remove_from_list(r);
     l.lock();
@@ -250,7 +262,7 @@ void runner::set_thread_timeout(unsigned int ms) {
 }
 
 
-static void sigsegv_handler(int sig_num, siginfo_t *info, void *ctxt) {
+static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
     // http://stackoverflow.com/questions/77005/how-to-generate-a-stacktrace-when-my-gcc-c-app-crashes
     // TODO: maybe use the google logging demangler that doesn't alloc
     hack::ucontext *uc = (hack::ucontext *)ctxt;
@@ -339,13 +351,17 @@ void runner::init() {
         ss.ss_flags = 0;
         THROW_ON_ERROR(sigaltstack(&ss, NULL));
 
-        // install SIGSEGV handler
         struct sigaction act;
-        THROW_ON_ERROR(sigaction(SIGSEGV, NULL, &act));
-        act.sa_sigaction = sigsegv_handler;
+		memset(&act, 0, sizeof(act));
+        // install SIGSEGV handler
+        act.sa_sigaction = backtrace_handler;
         act.sa_flags = SA_RESTART | SA_SIGINFO;
         THROW_ON_ERROR(sigaction(SIGSEGV, &act, NULL));
-
+        // install SIGABRT handler
+        act.sa_sigaction = backtrace_handler;
+        act.sa_flags = SA_RESTART | SA_SIGINFO;
+        THROW_ON_ERROR(sigaction(SIGABRT, &act, NULL));
+        // ignore SIGPIPE
         THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
         if (act.sa_handler == SIG_DFL) {
             act.sa_handler = SIG_IGN;

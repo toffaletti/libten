@@ -134,10 +134,12 @@ void task::start(impl *i) {
         t.m->f();
     } catch (interrupt_unwind &e) {
         // task was canceled
-    } catch (channel_closed_error &e) {
-        fprintf(stderr, "caught channel close error in task(%p)\n", t.m.get());
+    } catch (backtrace_exception &e) {
+        fprintf(stderr, "uncaught exception in task(%p): %s\n%s\n",
+            t.m.get(), e.what(), e.str().c_str());
+        abort();
     } catch(std::exception &e) {
-        fprintf(stderr, "exception in task(%p): %s\n", t.m.get(), e.what());
+        fprintf(stderr, "uncaught exception in task(%p): %s\n", t.m.get(), e.what());
         abort();
     }
     // NOTE: the scheduler deletes tasks in exiting state

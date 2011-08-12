@@ -17,3 +17,6 @@ target_link_libraries(chat-server fw)
 
 add_executable(stack-guard stack-guard.cc)
 target_link_libraries(stack-guard fw)
+
+add_executable(backtrace backtrace.cc)
+target_link_libraries(backtrace fw)
