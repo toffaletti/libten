@@ -26,7 +26,7 @@ BOOST_AUTO_TEST_CASE(socketpair_cxx0x_test) {
 
 BOOST_AUTO_TEST_CASE(socketpair_test) {
     int sv[2];
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+    BOOST_CHECK_EQUAL(socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
     socket_fd sp1(sv[0]);
     socket_fd sp2(sv[1]);
     char a = 1;

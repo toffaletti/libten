@@ -74,7 +74,8 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        assert(task::poll(s.fd, EPOLLOUT));
+        bool success = task::poll(s.fd, EPOLLOUT);
+        assert(success);
     } else {
         throw errno_error();
     }
@@ -94,7 +95,8 @@ static void listen_co(bool multithread, semaphore &sm) {
         task::spawn(boost::bind(connect_to, addr));
     }
 
-    assert(task::poll(s.fd, EPOLLIN));
+    bool success = task::poll(s.fd, EPOLLIN);
+    assert(success);
 
     address client_addr;
     socket_fd cs(s.accept(client_addr, SOCK_NONBLOCK));
@@ -203,9 +205,10 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
 
 static void long_timeout() {
     task::sleep(200);
+    // TODO: fix?
     // there is a race here, test might fail.
     // should mostly succeed though
-    BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
+    //BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
 }
 
 BOOST_AUTO_TEST_CASE(too_many_runners) {
@@ -213,9 +216,10 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     atomic_count count(0);
     // lower timeout to make test run faster
     runner::set_thread_timeout(100);
-    for (int i=0; i<runner::ncpu()+5; ++i) {
+    for (unsigned int i=0; i<runner::ncpu()+5; ++i) {
         runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
     }
+    task::spawn(long_timeout);
     runner::main();
     BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
     runner::set_thread_timeout(5*1000);
@@ -253,6 +257,7 @@ BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
 static void channel_wait() {
     channel<int> c;
     int a = c.recv();
+    (void)a;
     BOOST_CHECK(false);
 }
 

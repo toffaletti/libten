@@ -23,8 +23,8 @@ struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<im
 
     impl() : name("maintask"), flags(_TASK_RUNNING) {}
     impl(const proc &f_, size_t stack_size=16*1024)
-        : name("task"), co((coroutine::proc)task::start, this, stack_size),
-        f(f_), flags(_TASK_SLEEP)
+        : f(f_), name("task"), co((coroutine::proc)task::start, this, stack_size),
+        flags(_TASK_SLEEP)
     {
         ++ntasks;
     }
@@ -374,7 +374,7 @@ ssize_t task::socket::recv(void *buf, size_t len, int flags, unsigned int timeou
 }
 
 ssize_t task::socket::send(const void *buf, size_t len, int flags, unsigned int timeout_ms) {
-    ssize_t total_sent=0;
+    size_t total_sent=0;
     while (total_sent < len) {
         ssize_t nw = s.send(&((const char *)buf)[total_sent], len-total_sent, flags);
         if (nw == -1) {
@@ -416,6 +416,7 @@ private:
 
     task_set timeouts;
     task_deque runq;
+    bool runq_dirty;
     //! current time cached in a few places through the event loop
     timespec now;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
@@ -435,15 +436,15 @@ private:
 
 public:
     round_robin_scheduler()
-        : timeouts(task_impl_timeout_compare()), current_task(me.m),
-        pi(O_NONBLOCK), npollfds(0)
+        : timeouts(task_impl_timeout_compare()), runq_dirty(false),
+        npollfds(0), pi(O_NONBLOCK), current_task(me.m)
     {
         // add the pipe used to wake up this runner from epoll_wait
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN | EPOLLET;
         ev.data.fd = pi.r.fd;
-        if (pollfds.size() <= pi.r.fd) {
+        if (pollfds.size() <= (size_t)pi.r.fd) {
             pollfds.resize(pi.r.fd+1);
         }
         efd.add(pi.r.fd, ev);
@@ -455,7 +456,7 @@ public:
             memset(&ev, 0, sizeof(ev));
             int fd = fds[i].fd;
             // make room for the highest fd number
-            if (pollfds.size() <= fd) {
+            if (pollfds.size() <= (size_t)fd) {
                 pollfds.resize(fd+1);
             }
             ev.data.fd = fd;
@@ -525,13 +526,14 @@ public:
         // thread. this is perfectly valid, the important thing is that
         // this task will get run the next time through the loop
         t.clear_flag(_TASK_SLEEP);
-        task_deque::iterator i = std::find(runq.begin(), runq.end(), t.m.get());
-        // don't add multiple times
-        // this is possible with io loop and timeout loop
-        //printf("add to runq (%s): %i\n", t.str().c_str(), (bool)(i == runq.end()));
-        if (i == runq.end()) {
+
+        // runq will be uniqued in schedule()
+        runq_dirty = true;
+        if (runq.empty()) {
             runq.push_back(t.m.get());
             wakeup();
+        } else {
+            runq.push_back(t.m.get());
         }
     }
 
@@ -553,8 +555,16 @@ public:
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         task_deque q;
         q.swap(runq);
+        // remove duplicates
+        task_deque::iterator nend;
+        if (runq_dirty) {
+            runq_dirty = false;
+            nend = std::unique(q.begin(), q.end());
+        } else {
+            nend = q.end();
+        }
 
-        for (task_deque::iterator i=q.begin(); i!=q.end(); ++i) {
+        for (task_deque::iterator i=q.begin(); i!=nend; ++i) {
             current_task = (*i)->to_task();
             l.unlock();
             {

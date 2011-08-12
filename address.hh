@@ -40,7 +40,7 @@ struct address {
 
     //! zeros out the address
     void clear() {
-        memset(&addr, sizeof(addr), 0);
+        memset(&addr, 0, sizeof(addr));
         addr.sa.sa_family = AF_INET; // get rid of valgrind warning about unitialized memory
     }
 
@@ -104,6 +104,7 @@ struct address {
     friend std::ostream &operator<< (std::ostream &out, const address &addr) {
         char buf[INET6_ADDRSTRLEN];
         out << addr.ntop(buf, sizeof(buf)) << ":" << addr.port();
+        return out;
     }
 };
 

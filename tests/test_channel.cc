@@ -98,7 +98,8 @@ static void delayed_channel(address addr) {
     if (s.connect(addr) == 0) {
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        assert(task::poll(s.fd, EPOLLOUT));
+        bool success = task::poll(s.fd, EPOLLOUT);
+        assert(success);
     } else {
         throw errno_error();
     }
