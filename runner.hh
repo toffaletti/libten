@@ -12,6 +12,7 @@
 #define DEFAULT_STACK_SIZE (16*1024)
 
 class task;
+class scheduler;
 
 //! scheduler for tasks
 
@@ -20,7 +21,9 @@ class task;
 class runner {
 public:
     typedef boost::function<void ()> proc;
+    typedef void (*unspecified_bool_type);
 
+    operator unspecified_bool_type() const;
     bool operator == (const runner &r) const;
 
     //! \return the thread this runner is using
@@ -40,6 +43,9 @@ public:
         bool force=true,
         size_t stack_size=DEFAULT_STACK_SIZE);
 
+    //! spawn a new runner for this task
+    static runner spawn(task &t);
+
     //! \return the runner for this thread
     static runner self();
 
@@ -56,6 +62,13 @@ public:
     //! amount of time a runner with no tasks will wait for work before exiting
     static void set_thread_timeout(unsigned int ms);
 
+    scheduler &get_scheduler();
+
+    //! add task to run queue.
+    //! will wakeup runner if it was sleeping.
+    // NOTE: used internally by scheduler for migrate
+    void add_to_runqueue(task &t);
+
 private: /* task interface */
     friend class task;
 
@@ -70,10 +83,6 @@ private: /* task interface */
 
     //! remove fds from epoll fd
     int remove_pollfds(pollfd *fds, nfds_t nfds);
-
-    //! add task to run queue.
-    //! will wakeup runner if it was sleeping.
-    bool add_to_runqueue(task &t);
 
     //! add task to wait list.
     //! used for io and timeouts

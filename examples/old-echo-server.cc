@@ -2,6 +2,9 @@
 #include "task.hh"
 #include "descriptors.hh"
 #include <boost/bind.hpp>
+#include <iostream>
+
+// this uses task::poll directly instead of task::socket
 
 void echo_task(socket_fd &_s) {
     address client_addr;
@@ -21,6 +24,7 @@ void listen_task() {
     address addr("127.0.0.1", 0);
     s.bind(addr);
     s.getsockname(addr);
+    std::cout << "listening on: " << addr << "\n";
     s.listen();
 
     for (;;) {

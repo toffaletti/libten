@@ -8,6 +8,7 @@
 #include "descriptors.hh"
 
 #include <deque>
+#include <set>
 #include <utility>
 #include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
@@ -34,6 +35,7 @@ class task {
 public:
     typedef boost::function<void ()> proc;
     typedef std::deque<task> deque;
+    typedef std::set<task> set;
     //! thrown when _TASK_INTERRUPT is set
     struct interrupt_unwind : std::exception {};
 
@@ -60,7 +62,11 @@ public:
     //! put task to sleep
     static void sleep(unsigned int ms);
 
+    //! the current task
+    static task self();
+
     void cancel();
+    bool done() const;
 
     std::string str() const;
 public: /* operators */
@@ -81,6 +87,7 @@ public: /* operators */
 
 private: /* implementation details */
     struct impl;
+    friend std::ostream &operator << (std::ostream &o, const impl *t);
     typedef boost::shared_ptr<impl> shared_impl;
 
     //! number of tasks currently existing across all runners
@@ -96,9 +103,6 @@ private: /* runner interface */
     friend class runner;
     friend struct task_poll_state;
     friend struct task_timeout_heap_compare;
-
-    void set_runner(runner &i);
-    runner &get_runner() const;
 
     static task impl_to_task(task::impl *);
 
@@ -117,7 +121,6 @@ private: /* runner interface */
 
     static void swap(task &from, task &to);
 private: /* condition interface */
-    static task self();
     //! suspend the task while the condition is false
     void suspend(mutex::scoped_lock &l);
     //! resume the task in the same runner where it was suspended
@@ -194,6 +197,26 @@ public:
     private:
         socket_fd s;
     };
+
+    friend class round_robin_scheduler;
+};
+
+//! task scheduler interface
+class scheduler : public boost::noncopyable {
+public:
+    virtual void add_pollfds(task &t, pollfd *fds, nfds_t nfds) = 0;
+    virtual int remove_pollfds(pollfd *fds, nfds_t nfds) = 0;
+    virtual void add_to_runqueue(task &t) = 0;
+    virtual void add_waiter(task &t) = 0;
+    virtual void wakeup() = 0;
+    // TODO: maybe unique the runq in schedule
+    // instead of searching every add_to_runqueue
+    virtual void schedule(runner &r, mutex::scoped_lock &l, unsigned int thread_timeout_ms) = 0;
+    virtual task get_current_task() = 0;
+    virtual void swap_to_scheduler() = 0;
+    virtual ~scheduler() {}
+
+    static scheduler *create();
 };
 
 #endif // TASK_HH

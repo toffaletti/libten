@@ -9,16 +9,6 @@
 
 #include <iostream>
 
-#if 0
-BOOST_AUTO_TEST_CASE(task_size) {
-    printf("sizeof(context) == %ju\n", sizeof(context));
-    printf("sizeof(int) = %ju\n", sizeof(int));
-    printf("sizeof(coroutine) = %ju\n", sizeof(coroutine));
-    printf("sizeof(timespec) = %ju\n", sizeof(timespec));
-    printf("sizeof(task) = %ju\n", sizeof(task));
-}
-#endif
-
 static void bar(thread p) {
     // cant use BOOST_CHECK in multi-threaded tests :(
     assert(runner::self().get_thread() != p);
@@ -28,6 +18,7 @@ static void bar(thread p) {
 static void foo(thread p, semaphore &s) {
     assert(runner::self().get_thread() != p);
     task::spawn(boost::bind(bar, p));
+    task::yield();
     s.post();
 }
 
@@ -38,6 +29,7 @@ BOOST_AUTO_TEST_CASE(constructor_test) {
     BOOST_CHECK(t.id);
     runner::spawn(boost::bind(foo, t, boost::ref(s)));
     s.wait();
+    runner::main();
 }
 
 static void co1(int &count) {
@@ -70,8 +62,9 @@ static void mig_co(semaphore &s) {
 BOOST_AUTO_TEST_CASE(runner_migrate) {
     runner::init();
     semaphore s;
-    runner r = runner::spawn(boost::bind(mig_co, boost::ref(s)));
+    runner::spawn(boost::bind(mig_co, boost::ref(s)));
     s.wait();
+    runner::main();
 }
 
 static void connect_to(address addr) {
@@ -225,6 +218,7 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     }
     runner::main();
     BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
+    runner::set_thread_timeout(5*1000);
 }
 
 static void dial_google() {
@@ -325,7 +319,7 @@ static void yield_timer() {
     // tight yield loop should take less than microsecond
     // this test depends on hardware and will probably fail
     // when run under debugging tools like valgrind/gdb
-    BOOST_CHECK(counter > 100000);
+    BOOST_CHECK_MESSAGE(counter > 100000, "counter(" << counter << ") > 100000");
 }
 
 BOOST_AUTO_TEST_CASE(task_yield_timer) {

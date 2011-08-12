@@ -2,9 +2,26 @@
 #include "task.hh"
 #include <cxxabi.h>
 
+#include <execinfo.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+namespace hack {
+// hack to avoid redefinition of ucontext
+// by including it in a namespace
+#include <asm-generic/ucontext.h>
+}
+
+#include <unistd.h>
+
 #include <stdexcept>
 #include <algorithm>
 #include <set>
+
+// TODO: replace std::cerr with better (thread safe) logging
+#include <iostream>
 
 __thread runner::impl *runner::impl_ = NULL;
 
@@ -18,28 +35,6 @@ mutex *runner::tmutex = new mutex;
 // runner will then be removed from runners list
 struct runner_timeout_exit : std::exception {};
 
-typedef std::vector<task> task_heap;
-struct task_poll_state {
-    task::impl *t_in; // POLLIN task
-    pollfd *p_in; // pointer to pollfd structure that is on the task's stack
-    task::impl *t_out; // POLLOUT task
-    pollfd *p_out; // pointer to pollfd structure that is on the task's stack
-    uint32_t events; // events this fd is registered for
-    task_poll_state() : t_in(0), p_in(0), t_out(0), p_out(0), events(0) {}
-};
-typedef std::vector<task_poll_state> poll_task_array;
-typedef std::vector<epoll_event> event_vector;
-
-// sort timeout heap in least > greatest > -1 order
-// so we can find the smallest timeout value to pass to epoll_wait
-struct task_timeout_heap_compare {
-    bool operator ()(const task &a, const task &b) const {
-        // handle -1 case, which we want at the end
-        if (a.get_timeout().tv_sec < 0) return true;
-        return a.get_timeout() > b.get_timeout();
-    }
-};
-
 template <typename SetT> struct in_set {
     SetT &set;
 
@@ -49,14 +44,6 @@ template <typename SetT> struct in_set {
         return set.count(k) > 0;
     }
 };
-
-static unsigned int timespec_to_milliseconds(const timespec &ts) {
-    // convert timespec to milliseconds
-    unsigned int ms = ts.tv_sec * 1000;
-    // 1 millisecond is 1 million nanoseconds
-    ms += ts.tv_nsec / 1000000;
-    return ms;
-}
 
 static std::ostream &operator << (std::ostream &o, task::deque &l) {
     o << "[";
@@ -72,262 +59,41 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
     //! pthread this runner is running in
     thread tt;
     mutex mut;
-    //! tasks that need to be run
-    task::deque runq;
-    //! pipe used to wake up this runner
-    pipe_fd pi;
-    //! the epoll fd used for io in this runner
-    epoll_fd efd;
-    //! tasks waiting with a timeout value set
-    task_heap waiters;
-    //! array of tasks waiting on fds, indexed by the fd for speedy lookup
-    poll_task_array pollfds;
-    //! current time cached in a few places through the event loop
-    timespec now;
-    //! task used for scheduling (the "main" task, uses default stack)
-    task scheduler;
-    //! currently executing task
-    task current_task;
+    scheduler *s;
 
     //! constructor for main thread runner
-    impl() : current_task(scheduler.m), pi(O_NONBLOCK) {
-        add_pipe();
+    impl() : s(NULL) {
+        s = scheduler::create();
         tt=thread::self();
     }
 
     //! constructor for runners that create a new thread
-    impl(task &t) : current_task(scheduler.m), pi(O_NONBLOCK) {
-        add_pipe();
+    impl(task &t) : s(NULL) {
+        s = scheduler::create();
         add_to_runqueue(t);
         thread::create(tt, runner::start, this);
     }
 
     ~impl() {
         mutex::scoped_lock l(mut);
-        current_task.m.reset();
-    }
-
-    void run_queued_tasks(runner &r) {
-        mutex::scoped_lock l(mut);
-        while (!runq.empty()) {
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-            // still allow for io if a task is in a tight yield() loop
-            if (!waiters.empty()) {
-                std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-                if (waiters.front().get_timeout().tv_sec > 0 &&
-                    waiters.front().get_timeout() <= now)
-                {
-                    l.unlock();
-                    check_io(r, true);
-                    l.lock();
-                }
-            }
-
-            current_task = runq.front();
-            current_task.set_runner(r);
-            runq.pop_front();
-            l.unlock();
-            task::swap(scheduler, current_task);
-            if (current_task.test_flag_set(_TASK_INTERRUPT)) {
-                // remove from waiters
-                task_heap::iterator nend = std::remove(waiters.begin(), waiters.end(), current_task);
-                waiters.erase(nend, waiters.end());
-                l.lock();
-            } else if (current_task.test_flag_set(_TASK_MIGRATE)) {
-                current_task.clear_flag(_TASK_MIGRATE);
-                current_task.set_flag(_TASK_SLEEP);
-                if (current_task.get_runner().m) {
-                    current_task.get_runner().add_to_runqueue(current_task);
-                } else {
-                    mutex::scoped_lock ll(*tmutex);
-                    runner rr(current_task);
-                    append_to_list(rr, ll);
-                }
-                l.lock();
-            } else if (current_task.test_flag_set(_TASK_SLEEP)) {
-                l.lock();
-            } else if (current_task.test_flag_set(_TASK_EXIT)) {
-                l.lock();
-            } else {
-                runq.push_back(current_task);
-                l.lock();
-            }
-        }
-        current_task = scheduler;
-    }
-
-    void check_io(runner &r, bool once=false) {
-        event_vector events(efd.maxevents ? efd.maxevents : 1);
-        bool done = false;
-        while (!done) {
-            if (once) done = true;
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-            // sort heap to find the shortest timeout we can pass to epoll_wait
-            std::make_heap(waiters.begin(), waiters.end(), task_timeout_heap_compare());
-            int timeout_ms = -1;
-            if (!waiters.empty()) {
-                if (waiters.front().get_timeout().tv_sec > 0) {
-                    if (waiters.front().get_timeout() <= now) {
-                        // epoll_wait must return immediately
-                        timeout_ms = 0;
-                    } else {
-                        timeout_ms = timespec_to_milliseconds(waiters.front().get_timeout() - now);
-                        // help avoid spinning on timeouts smaller than 1 ms
-                        if (timeout_ms <= 0) timeout_ms = 1;
-                    }
-                }
-            }
-
-            if (events.empty()) {
-                // need at least 1 spot for events
-                events.resize(efd.maxevents ? efd.maxevents : 1);
-            }
-
-            if (task::get_ntasks() == 0) {
-                wakeup_all_runners();
-                return;
-            }
-
-            // check to see if this runner might be able to exit
-            if (r.m.use_count() <= 2) {
-                mutex::scoped_lock ll(mut);
-                if (runq.empty() && waiters.empty() && timeout_ms == -1) {
-                    ll.unlock();
-                    mutex::scoped_lock l(*tmutex);
-                    if (runners->size() > ncpu()) {
-                        timeout_ms = thread_timeout_ms;
-                    }
-                }
-            }
-
-            // don't block in epoll_wait if we're doing a quick once loop
-            if (once) timeout_ms = 0;
-
-            efd.wait(events, timeout_ms);
-
-            // check to see if we can exit this runner
-            if (r.m.use_count() <= 2) {
-                mutex::scoped_lock ll(mut);
-                if (runq.empty() && waiters.empty() && events.empty() && tt != main_thread_) {
-                    ll.unlock();
-                    mutex::scoped_lock l(*tmutex);
-                    if (runners->size() > ncpu()) {
-                        runners->remove(to_runner(l));
-                        throw runner_timeout_exit();
-                    }
-                }
-            }
-
-            // create the set of tasks we need to wake up
-            std::set<task> wake_tasks;
-            // wake up io tasks
-            for (event_vector::const_iterator i=events.begin();
-                i!=events.end();++i)
-            {
-                // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
-                // even if they arent asked for, so we must wake up the tasks on any event
-                // to avoid just spinning in epoll.
-                int fd = i->data.fd;
-                if (pollfds[fd].t_in) {
-                    pollfds[fd].p_in->revents = i->events;
-                    task t = task::impl_to_task(pollfds[fd].t_in);
-                    add_to_runqueue(t);
-                    wake_tasks.insert(t);
-                }
-
-                // check to see if pollout is a different task than pollin
-                if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
-                    pollfds[fd].p_out->revents = i->events;
-                    task t = task::impl_to_task(pollfds[fd].t_out);
-                    add_to_runqueue(t);
-                    wake_tasks.insert(t);
-                }
-
-                if (i->data.fd == pi.r.fd) {
-                    // our wake up pipe was written to
-                    char buf[32];
-                    // clear pipe
-                    while (pi.read(buf, sizeof(buf)) > 0) {}
-                    done = true;
-                } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
-                    // TODO: otherwise we might want to remove fd from epoll
-                    fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
-                }
-            }
-
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-            // wake up timeouts tasks
-            for (task_heap::iterator i=waiters.begin(); i!=waiters.end(); ++i) {
-                if (i->get_timeout().tv_sec > 0 && i->get_timeout() <= now) {
-                    // task might have been added to wake_tasks earlier in io loop
-                    if (wake_tasks.insert(*i).second) {
-                        add_to_runqueue(*i);
-                    }
-                }
-            }
-
-            // remove wake up tasks from waiters
-            task_heap::iterator nend =
-                std::remove_if(waiters.begin(), waiters.end(), in_set<std::set<task> >(wake_tasks));
-            waiters.erase(nend, waiters.end());
-            // there are tasks to wake up!
-            if (!wake_tasks.empty()) done = true;
-        }
-    }
-
-    void add_pipe() {
-        // add the pipe used to wake up this runner from epoll_wait
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;
-        ev.data.fd = pi.r.fd;
-        if (pollfds.size() <= pi.r.fd) {
-            pollfds.resize(pi.r.fd+1);
-        }
-        efd.add(pi.r.fd, ev);
+        //current_task.m.reset();
+        delete s;
     }
 
     void wakeup() {
         mutex::scoped_lock l(mut);
-        wakeup_nolock();
+        s->wakeup();
     }
 
     //! lock must already be held before calling this
     void wakeup_nolock() {
-        ssize_t nw = pi.write("\1", 1);
-        (void)nw;
+        s->wakeup();
     }
 
     //! add task to the end of the run queue
-    bool add_to_runqueue(task &t) {
+    void add_to_runqueue(task &t) {
         mutex::scoped_lock l(mut);
-        return add_to_runqueue_nolock(t, l);
-    }
-
-    //! lock must have already been aquired
-    bool add_to_runqueue_nolock(task &t, mutex::scoped_lock &) {
-        // task can be in any state, for example a task might be running
-        // but still get added to the runqueue from a resume in another
-        // thread. this is perfectly valid, the important thing is that
-        // this task will get run the next time through the loop
-        t.clear_flag(_TASK_SLEEP);
-        task::deque::iterator i = std::find(runq.begin(), runq.end(), t);
-        // don't add multiple times
-        // this is possible with io loop and timeout loop
-        if (i == runq.end()) {
-            runq.push_back(t);
-            wakeup_nolock();
-            return true;
-        }
-        return false;
-    }
-
-    //! remove the last task from the runqueue
-    void delete_from_runqueue(task &t) {
-        mutex::scoped_lock l(mut);
-        assert(t == runq.back());
-        runq.pop_back();
-        t.set_flag(_TASK_SLEEP);
+        s->add_to_runqueue(t);
     }
 
     // tmutex must be held, shared_from_this is not thread safe
@@ -336,9 +102,7 @@ struct runner::impl : boost::noncopyable, boost::enable_shared_from_this<impl> {
 
 runner::runner() {}
 runner::runner(const shared_impl &m_) : m(m_) {}
-runner::runner(task &t) {
-    m.reset(new impl(t));
-}
+runner::runner(task &t) : m(new impl(t)) {}
 
 void runner::append_to_list(runner &r, mutex::scoped_lock &l) {
     runners->push_back(r);
@@ -370,6 +134,13 @@ runner runner::self() {
     return impl_->to_runner(l);
 }
 
+runner runner::spawn(task &t) {
+    mutex::scoped_lock l(*tmutex);
+    runner r(t);
+    append_to_list(r, l);
+    return r;
+}
+
 runner runner::spawn(const task::proc &f, bool force, size_t stack_size) {
     mutex::scoped_lock l(*tmutex);
     if (runners->size() >= ncpu() && !force) {
@@ -386,6 +157,10 @@ runner runner::spawn(const task::proc &f, bool force, size_t stack_size) {
     return r;
 }
 
+runner::operator unspecified_bool_type() const {
+    return m.get();
+}
+
 bool runner::operator == (const runner &r) const {
     return m.get() == r.m.get();
 }
@@ -394,15 +169,17 @@ void runner::schedule() {
     // check use_count because use could be holding onto this
     // runner to add a task later. is there a use case for this?
     while (task::get_ntasks() > 0 || m.use_count() > 2) {
-        m->run_queued_tasks(*this);
-        m->check_io(*this);
+        mutex::scoped_lock l(m->mut);
+        m->s->schedule(*this, l, thread_timeout_ms);
     }
+
+    wakeup_all_runners();
 
     // spin waiting for other runners to exit
     // this is mostly to prevent valgrind warnings
     // about threads exiting while holding locks
+    mutex::scoped_lock l(*tmutex);
     if (m->tt == main_thread_) {
-        mutex::scoped_lock l(*tmutex);
         while (runners->size() > 1) {
             l.unlock();
             thread::yield();
@@ -412,74 +189,15 @@ void runner::schedule() {
 }
 
 void runner::add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
-    for (nfds_t i=0; i<nfds; ++i) {
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        int fd = fds[i].fd;
-        // make room for the highest fd number
-        if (m->pollfds.size() <= fd) {
-            m->pollfds.resize(fd+1);
-        }
-        ev.data.fd = fd;
-        uint32_t events = m->pollfds[fd].events;
-
-        if (fds[i].events & EPOLLIN) {
-            assert(m->pollfds[fd].t_in == 0);
-            m->pollfds[fd].t_in = t.m.get();
-            m->pollfds[fd].p_in = &fds[i];
-            m->pollfds[fd].events |= EPOLLIN;
-        }
-
-        if (fds[i].events & EPOLLOUT) {
-            assert(m->pollfds[fd].t_out == 0);
-            m->pollfds[fd].t_out = t.m.get();
-            m->pollfds[fd].p_out = &fds[i];
-            m->pollfds[fd].events |= EPOLLOUT;
-        }
-
-        ev.events = m->pollfds[fd].events;
-
-        if (events == 0) {
-            THROW_ON_ERROR(m->efd.add(fd, ev));
-        } else if (events != m->pollfds[fd].events) {
-            THROW_ON_ERROR(m->efd.modify(fd, ev));
-        }
-    }
+    m->s->add_pollfds(t, fds, nfds);
 }
 
 int runner::remove_pollfds(pollfd *fds, nfds_t nfds) {
-    int rvalue = 0;
-    for (nfds_t i=0; i<nfds; ++i) {
-        int fd = fds[i].fd;
-        if (fds[i].revents) rvalue++;
-
-        if (m->pollfds[fd].p_in == &fds[i]) {
-            m->pollfds[fd].t_in = 0;
-            m->pollfds[fd].p_in = 0;
-            m->pollfds[fd].events ^= EPOLLIN;
-        }
-
-        if (m->pollfds[fd].p_out == &fds[i]) {
-            m->pollfds[fd].t_out = 0;
-            m->pollfds[fd].p_out = 0;
-            m->pollfds[fd].events ^= EPOLLOUT;
-        }
-
-        if (m->pollfds[fd].events == 0) {
-            THROW_ON_ERROR(m->efd.remove(fd));
-        } else {
-            epoll_event ev;
-            memset(&ev, 0, sizeof(ev));
-            ev.data.fd = fd;
-            ev.events = m->pollfds[fd].events;
-            THROW_ON_ERROR(m->efd.modify(fd, ev));
-        }
-    }
-    return rvalue;
+    return m->s->remove_pollfds(fds, nfds);
 }
 
-bool runner::add_to_runqueue(task &t) {
-    return m->add_to_runqueue(t);
+void runner::add_to_runqueue(task &t) {
+    m->add_to_runqueue(t);
 }
 
 void *runner::start(void *arg) {
@@ -506,23 +224,19 @@ void *runner::start(void *arg) {
 }
 
 void runner::add_waiter(task &t) {
-    timespec to = t.get_timeout();
-    if (to.tv_sec != -1) {
-        t.set_abs_timeout(to + m->now);
-    }
-    t.set_flag(_TASK_SLEEP);
-    assert(std::find(m->waiters.begin(), m->waiters.end(), t) == m->waiters.end());
-    m->waiters.push_back(t);
+    m->s->add_waiter(t);
 }
 
 thread runner::get_thread() { return thread(m->tt); }
 
 task runner::get_task() {
-    return m->current_task;
+    return m->s->get_current_task();
 }
 
+scheduler &runner::get_scheduler() { return *(m->s); }
+
 void runner::swap_to_scheduler() {
-    impl_->current_task.get_coroutine()->swap(impl_->scheduler.get_coroutine());
+    impl_->s->swap_to_scheduler();
 }
 
 unsigned long runner::count() {
@@ -535,15 +249,107 @@ void runner::set_thread_timeout(unsigned int ms) {
     thread_timeout_ms = ms;
 }
 
+
+static void sigsegv_handler(int sig_num, siginfo_t *info, void *ctxt) {
+    // http://stackoverflow.com/questions/77005/how-to-generate-a-stacktrace-when-my-gcc-c-app-crashes
+    // TODO: maybe use the google logging demangler that doesn't alloc
+    hack::ucontext *uc = (hack::ucontext *)ctxt;
+
+    // Get the address at the time the signal was raised from the instruction pointer
+#if __i386__
+    void *caller_address = (void *) uc->uc_mcontext.eip;
+#elif __amd64__
+    void *caller_address = (void *) uc->uc_mcontext.rip;
+#else
+    #error "arch not supported"
+#endif
+
+    fprintf(stderr, "signal %d (%s), address is %p from %p\n",
+        sig_num, strsignal(sig_num), info->si_addr,
+        (void *)caller_address);
+
+    void *array[50];
+    int size = backtrace(array, 50);
+
+    // overwrite sigaction with caller's address
+    array[1] = caller_address;
+
+    char **messages = backtrace_symbols(array, size);
+
+    // skip first stack frame (points here)
+    for (int i = 1; i < size && messages != NULL; ++i) {
+        char *mangled_name = 0, *offset_begin = 0, *offset_end = 0;
+
+        // find parantheses and +address offset surrounding mangled name
+        for (char *p = messages[i]; *p; ++p) {
+            if (*p == '(') {
+                mangled_name = p;
+            } else if (*p == '+') {
+                offset_begin = p;
+            } else if (*p == ')') {
+                offset_end = p;
+                break;
+            }
+        }
+
+        // if the line could be processed, attempt to demangle the symbol
+        if (mangled_name && offset_begin && offset_end &&
+            mangled_name < offset_begin)
+        {
+            *mangled_name++ = '\0';
+            *offset_begin++ = '\0';
+            *offset_end++ = '\0';
+
+            int status;
+            char * real_name = abi::__cxa_demangle(mangled_name, 0, 0, &status);
+
+            if (status == 0) {
+                // if demangling is successful, output the demangled function name
+                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
+                    << real_name << "+" << offset_begin << offset_end
+                    << std::endl;
+
+            } else {
+                // otherwise, output the mangled function name
+                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
+                    << mangled_name << "+" << offset_begin << offset_end
+                    << std::endl;
+            }
+            free(real_name);
+        } else {
+            // otherwise, print the whole line
+            std::cerr << "[bt]: (" << i << ") " << messages[i] << std::endl;
+        }
+    }
+    std::cerr << std::endl;
+
+    free(messages);
+
+    exit(EXIT_FAILURE);
+}
+
 void runner::init() {
     mutex::scoped_lock l(*tmutex);
     if (impl_ == NULL) {
         ncpu();
+        // create alternate stack for signal handlers
+        stack_t ss;
+        ss.ss_sp = malloc(SIGSTKSZ);
+        ss.ss_size = SIGSTKSZ;
+        ss.ss_flags = 0;
+        THROW_ON_ERROR(sigaltstack(&ss, NULL));
+
+        // install SIGSEGV handler
         struct sigaction act;
-        assert(sigaction(SIGPIPE, NULL, &act) == 0);
+        THROW_ON_ERROR(sigaction(SIGSEGV, NULL, &act));
+        act.sa_sigaction = sigsegv_handler;
+        act.sa_flags = SA_RESTART | SA_SIGINFO;
+        THROW_ON_ERROR(sigaction(SIGSEGV, &act, NULL));
+
+        THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
         if (act.sa_handler == SIG_DFL) {
             act.sa_handler = SIG_IGN;
-            assert(sigaction(SIGPIPE, &act, NULL) == 0);
+            THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
         }
         runner::shared_impl i(new impl);
         runner r = i->to_runner(l);
