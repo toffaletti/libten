@@ -1,9 +1,10 @@
 #define BOOST_TEST_MODULE descriptor test
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
-
 #include "descriptors.hh"
 #include "timespec.hh"
+
+using namespace fw;
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 BOOST_AUTO_TEST_CASE(fd_move_test) {

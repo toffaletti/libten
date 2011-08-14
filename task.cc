@@ -4,6 +4,8 @@
 #include <sstream>
 #include <netdb.h>
 
+namespace fw {
+
 // static
 atomic_count task::ntasks(0);
 
@@ -709,3 +711,4 @@ scheduler *scheduler::create() {
     return new round_robin_scheduler();
 }
 
+} // end namespace fw

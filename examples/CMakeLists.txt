@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
-add_executable(prime_sieve prime_sieve.cc)
-target_link_libraries(prime_sieve fw)
+add_executable(prime-sieve prime-sieve.cc)
+target_link_libraries(prime-sieve fw)
 
 add_executable(file-send file-send.cc)
 target_link_libraries(file-send fw)

@@ -8,6 +8,11 @@
 #include <string.h>
 #include <errno.h>
 
+namespace fw {
+
+//! captures the backtrace in the constructor
+//
+//! useful for coroutines because the stack is lost switching contexts
 class backtrace_exception : public std::exception {
 public:
     backtrace_exception();
@@ -69,6 +74,8 @@ struct errorx : backtrace_exception {
         int _rv = (exp); \
         if (_rv != 0) throw errno_error(_rv); \
     }
+
+} // end namespace fw
 
 #endif // ERROR_HH
 

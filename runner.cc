@@ -23,6 +23,8 @@ namespace hack {
 // TODO: replace std::cerr with better (thread safe) logging
 #include <iostream>
 
+namespace fw {
+
 __thread runner::impl *runner::impl_ = NULL;
 
 unsigned int runner::thread_timeout_ms = 60*1000;
@@ -385,4 +387,7 @@ int runner::main() {
     r.schedule();
     return 0;
 }
+
+} // end namespace fw
+
 

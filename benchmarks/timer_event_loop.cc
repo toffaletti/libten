@@ -4,6 +4,8 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+using namespace fw;
+
 static void sleeper() {
     task::sleep(100 + random());
 }

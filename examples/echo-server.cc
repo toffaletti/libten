@@ -4,6 +4,8 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+using namespace fw;
+
 void echo_task(int sock) {
     task::socket s(sock);
     char buf[4096];

@@ -1,13 +1,12 @@
 #define BOOST_TEST_MODULE channel test
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
-
 #include "runner.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"
 
-#include <iostream>
+using namespace fw;
 
 static void channel_recv(channel<intptr_t> c) {
     intptr_t d = c.recv();

@@ -5,6 +5,8 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+using namespace fw;
+
 // sends a file over a tcp socket on port 5500
 // $ nc -l -p 5500 > out & ./file-send libfw.a
 // $ md5sum out libfw.a                                                                                                                                                                                                

@@ -1,8 +1,9 @@
 #include "runner.hh"
 #include "channel.hh"
-
 #include <boost/bind.hpp>
 #include <iostream>
+
+using namespace fw;
 
 // adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 

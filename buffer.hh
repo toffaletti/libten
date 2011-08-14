@@ -1,7 +1,9 @@
 #ifndef BUFFER_HH
 #define BUFFER_HH
 
-//! reference counted buffer
+namespace fw {
+
+//! reference counted buffer, slices hold reference
 class buffer {
 private:
     struct impl {
@@ -84,6 +86,8 @@ public:
         return slice(m, pos, len);
     }
 };
+
+} // end namespace fw
 
 #endif // BUFFER_HH
 

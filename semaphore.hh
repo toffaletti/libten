@@ -5,6 +5,8 @@
 #include <boost/utility.hpp>
 #include <semaphore.h>
 
+namespace fw {
+
 //! wrapper around anonymous POSIX semaphore
 class semaphore : boost::noncopyable {
 public:
@@ -32,5 +34,7 @@ public:
 protected:
     sem_t s;
 };
+
+} // end namespace fw
 
 #endif // UB_SEMA_HH

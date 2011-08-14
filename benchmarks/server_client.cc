@@ -5,6 +5,8 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+using namespace fw;
+
 static void connecter(address &addr, channel<bool> ch) {
     task::socket s(AF_INET, SOCK_STREAM);
     if (s.connect(addr, 100) == 0) {

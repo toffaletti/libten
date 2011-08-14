@@ -7,6 +7,8 @@
 #include <string.h>
 #include <ostream>
 
+namespace fw {
+
 //! union of sockaddr structs
 union address_u {
     struct sockaddr sa;
@@ -107,6 +109,8 @@ struct address {
         return out;
     }
 };
+
+} // end namespace fw
 
 #endif // ADDRESS_HH
 

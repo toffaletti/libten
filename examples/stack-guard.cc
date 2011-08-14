@@ -1,6 +1,8 @@
 #include "runner.hh"
 #include "task.hh"
 
+using namespace fw;
+
 static void stack_overflow() {
     char buf[4*1024];
     // this will attempt to write to the guard page

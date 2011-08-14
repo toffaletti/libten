@@ -5,6 +5,8 @@
 #include <sstream>
 #include <iostream>
 
+using namespace fw;
+
 struct client {
     task::socket s;
     std::string nick;

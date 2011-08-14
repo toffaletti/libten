@@ -1,6 +1,7 @@
 #ifndef CONTEXT_HH
 #define CONTEXT_HH
 
+
 //! \file
 //! context handles switching stacks
 //
@@ -12,6 +13,9 @@
 
 #ifdef USE_UCONTEXT
 #include <ucontext.h>
+
+namespace fw {
+
 struct context : ucontext_t {
     typedef void (*proc)(void *);
 
@@ -33,8 +37,13 @@ struct context : ucontext_t {
         swapcontext(this, other);
     }
 };
+
+} // end namespace fw
+
 #elif USE_BOOST_FCONTEXT
 #include "boost/context/fcontext.hpp"
+
+namespace fw {
 
 struct context : boost_fcontext_t {
     typedef void (*proc)(void *);
@@ -53,9 +62,13 @@ struct context : boost_fcontext_t {
         boost_fcontext_jump(this, other);
     }
 };
+
+} // end namespace fw
+
 #else
 #error "no context implementation chosen"
 #endif
+
 
 #endif // CONTEXT_HH
 

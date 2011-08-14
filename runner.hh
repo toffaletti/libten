@@ -8,6 +8,8 @@
 #include <list>
 #include <poll.h>
 
+namespace fw {
+
 #define DEFAULT_STACK_SIZE (8*1024)
 
 class task;
@@ -113,5 +115,7 @@ private: /* internal */
 
     static void *start(void *arg);
 };
+
+} // end namespace fw
 
 #endif // RUNNER_HH

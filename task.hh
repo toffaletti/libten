@@ -16,6 +16,8 @@
 
 #include "runner.hh"
 
+namespace fw {
+
 // flags for task state
 #define _TASK_SLEEP     (1<<0)
 #define _TASK_RUNNING   (1<<1)
@@ -212,6 +214,8 @@ public:
 
     static scheduler *create();
 };
+
+} // end namespace fw
 
 #endif // TASK_HH
 

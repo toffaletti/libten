@@ -1,13 +1,12 @@
 #define BOOST_TEST_MODULE task test
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
-
 #include "runner.hh"
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"
 
-#include <iostream>
+using namespace fw;
 
 static void bar(thread p) {
     // cant use BOOST_CHECK in multi-threaded tests :(

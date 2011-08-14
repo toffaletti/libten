@@ -16,6 +16,9 @@
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
 #include <signal.h>
+#include <vector>
+
+namespace fw {
 
 #if EAGAIN != EWOULDBLOCK
 #define IO_NOT_READY_ERROR  ((errno == EAGAIN) || (errno == EWOULDBLOCK))
@@ -25,8 +28,6 @@
 
 //! \file
 //! contains wrappers around most fd based apis
-
-#include <vector>
 
 //! base class for other file descriptors
 //
@@ -376,6 +377,8 @@ struct signal_fd : fd_base {
         THROW_ON_ERROR(r);
     }
 };
+
+} // end namespace fw
 
 #endif // DESCRIPTORS_HH
 

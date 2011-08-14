@@ -11,6 +11,8 @@
 #include <valgrind/valgrind.h>
 #endif
 
+namespace fw {
+
 //! lightweight cooperatively scheduled threads of execution
 //
 //! each coroutine allocates it own stack with a guard page.
@@ -76,5 +78,7 @@ private:
 #endif
 
 };
+
+} // end namespace fw
 
 #endif // COROUTINE_HH

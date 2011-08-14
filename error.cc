@@ -5,6 +5,7 @@
 #include <sstream>
 #include <stdlib.h>
 
+namespace fw {
 
 backtrace_exception::backtrace_exception() {
     size = backtrace(array, 50);
@@ -62,4 +63,6 @@ std::string backtrace_exception::str() {
     free(messages);
     return ss.str();
 }
+
+} // end namespace fw
 

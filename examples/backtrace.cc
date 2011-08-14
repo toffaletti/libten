@@ -2,6 +2,8 @@
 #include "task.hh"
 #include "error.hh"
 
+using namespace fw;
+
 void go_crazy() {
     throw errorx("weee!");
 }

@@ -4,6 +4,8 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+using namespace fw;
+
 // this uses task::poll directly instead of task::socket
 
 void echo_task(socket_fd &_s) {

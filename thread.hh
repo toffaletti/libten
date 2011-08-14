@@ -7,6 +7,8 @@
 #include <boost/utility.hpp>
 #include "error.hh"
 
+namespace fw {
+
 //! wrapper around pthread_mutex
 class mutex : boost::noncopyable {
 public:
@@ -173,6 +175,8 @@ struct thread {
         THROW_ON_NONZERO(pthread_create(&t.id, attr, start_routine, arg));
     }
 };
+
+} // end namespace fw
 
 #endif // THREAD_HH
 

@@ -6,11 +6,10 @@
 #include "thread.hh"
 #include "task.hh"
 
+namespace fw {
+
 // based on bounded_buffer example
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
-
-// TODO: use http://www.boost.org/doc/libs/1_47_0/libs/smart_ptr/intrusive_ptr.html
-// to close the channel if the reference count reaches 1 while in a blocking send/recv
 
 struct channel_closed_error : std::exception {};
 
@@ -126,6 +125,8 @@ private:
         if (m->closed) throw channel_closed_error();
     }
 };
+
+} // end namespace fw
 
 #endif // CHANNEL_HH
 

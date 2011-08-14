@@ -4,6 +4,8 @@
 #include <ext/atomicity.h>
 #include <ostream>
 
+namespace fw {
+
 #if defined(__GLIBCXX__) // g++ 3.4+
 using __gnu_cxx::__atomic_add;
 using __gnu_cxx::__exchange_and_add;
@@ -70,6 +72,8 @@ private:
 
     mutable T value_;
 };
+
+} // end namesapce fw
 
 #endif // ATOMIC_HH
 
