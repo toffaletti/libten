@@ -233,7 +233,8 @@ static void dial_google() {
 
 BOOST_AUTO_TEST_CASE(task_socket_dial) {
     runner::init();
-    task::spawn(dial_google);
+    // getaddrinfo requires a rather large stack
+    task::spawn(dial_google, 0, 8*1024*1024);
     runner::main();
 }
 

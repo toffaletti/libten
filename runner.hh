@@ -8,8 +8,7 @@
 #include <list>
 #include <poll.h>
 
-// default of 16k because getaddrinfo() requires it
-#define DEFAULT_STACK_SIZE (16*1024)
+#define DEFAULT_STACK_SIZE (8*1024)
 
 class task;
 class scheduler;
@@ -40,7 +39,7 @@ public:
     //! if there is already a runner for every cpu then
     //! this will reuse an existing runner unless force is true
     static runner spawn(const proc &f,
-        bool force=true,
+        bool force=false,
         size_t stack_size=DEFAULT_STACK_SIZE);
 
     //! spawn a new runner for this task
@@ -87,6 +86,8 @@ private: /* task interface */
     //! add task to wait list.
     //! used for io and timeouts
     void add_waiter(task &t);
+    //! remove task from wait list
+    void remove_waiter(task &t);
 
     static void swap_to_scheduler();
 

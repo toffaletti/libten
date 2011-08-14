@@ -239,6 +239,10 @@ void runner::add_waiter(task &t) {
     m->s->add_waiter(t);
 }
 
+void runner::remove_waiter(task &t) {
+    m->s->remove_waiter(t);
+}
+
 thread runner::get_thread() { return thread(m->tt); }
 
 task runner::get_task() {

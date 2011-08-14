@@ -226,10 +226,12 @@ int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
     try {
         task::yield();
     } catch (interrupt_unwind &e) {
+        if (timeout) r.remove_waiter(t);
         r.remove_pollfds(fds, nfds);
         throw;
     }
 
+    if (timeout) r.remove_waiter(t);
     return r.remove_pollfds(fds, nfds);
 }
 
@@ -288,9 +290,8 @@ void task::condition::wait(mutex::scoped_lock &l) {
 task::socket::socket(int fd) throw (errno_error) : s(fd) {}
 
 task::socket::socket(int domain, int type, int protocol) throw (errno_error)
-    : s(domain, type, protocol)
+    : s(domain, type | SOCK_NONBLOCK, protocol)
 {
-    s.setnonblock();
 }
 
 int task::socket::dial(const char *addr, uint16_t port, unsigned int timeout_ms) {
@@ -329,9 +330,8 @@ int task::socket::connect(const address &addr, unsigned int timeout_ms) {
 }
 
 int task::socket::accept(address &addr, int flags, unsigned int timeout_ms) {
-    flags |= SOCK_NONBLOCK;
     int fd;
-    while ((fd = s.accept(addr, flags)) < 0) {
+    while ((fd = s.accept(addr, flags | SOCK_NONBLOCK)) < 0) {
         if (errno == EINTR)
             continue;
         if (!IO_NOT_READY_ERROR)
@@ -533,6 +533,10 @@ public:
         }
         t.m->flags |= _TASK_SLEEP;
         timeouts.insert(t.m.get());
+    }
+
+    void remove_waiter(task &t) {
+        timeouts.erase(t.m.get());
     }
 
     void wakeup() {

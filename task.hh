@@ -178,6 +178,7 @@ public:
             return s.setsockopt(level, optname, optval);
         }
 
+        //! dial requires a large 8MB stack size for getaddrinfo
         int dial(const char *addr, uint16_t port, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
 
         int connect(const address &addr, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
@@ -202,6 +203,7 @@ public:
     virtual int remove_pollfds(pollfd *fds, nfds_t nfds) = 0;
     virtual void add_to_runqueue(task &t) = 0;
     virtual void add_waiter(task &t) = 0;
+    virtual void remove_waiter(task &t) = 0;
     virtual void wakeup() = 0;
     virtual void schedule(runner &r, mutex::scoped_lock &l, unsigned int thread_timeout_ms) = 0;
     virtual task get_current_task() = 0;
