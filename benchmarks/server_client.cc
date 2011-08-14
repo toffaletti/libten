@@ -4,15 +4,16 @@
 #include "channel.hh"
 #include <boost/bind.hpp>
 #include <iostream>
+#include <map>
 
 using namespace fw;
 
-static void connecter(address &addr, channel<bool> ch) {
+static void connecter(address &addr, channel<int> ch) {
     task::socket s(AF_INET, SOCK_STREAM);
     if (s.connect(addr, 100) == 0) {
-        ch.send(true);
+        ch.send(0);
     } else {
-        ch.send(false);
+        ch.send(errno);
     }
 }
 
@@ -35,24 +36,26 @@ static void listener(task::socket &sock) {
     }
 }
 
-static void collecter(channel<bool> ch) {
-    int success = 0;
-    int failure = 0;
-    for (;;) {
-        bool result = ch.recv();
-        if (result)
-            ++success;
-        else
-            ++failure;
-        if (success + failure == 1000) break;
+static void collecter(channel<int> ch) {
+    std::map<int, unsigned int> results;
+    for (int i=0; i<1000; ++i) {
+        int result = ch.recv();
+        results[result] += 1;
     }
-    std::cout << "success: " << success << " failure: " << failure << std::endl;
+    for (std::map<int, unsigned int>::iterator i=results.begin(); i!=results.end(); ++i) {
+        if (i->first == 0) {
+            std::cout << "success: " << i->second << "\n";
+        } else {
+            std::cout << strerror(i->first) << ": " << i->second << "\n";
+        }
+    }
+    std::cout << std::endl;
     exit(0);
 }
 
 int main(int argc, char *argv[]) {
     runner::init();
-    channel<bool> ch(1000);
+    channel<int> ch(1000);
     address addr;
     task::socket s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
     s.bind(addr);
