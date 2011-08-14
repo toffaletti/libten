@@ -237,21 +237,7 @@ void task::set_state(const std::string &str) {
     m->state = str;
 }
 
-void task::clear_flag(uint32_t f) { m->flags ^= f; }
-void task::set_flag(uint32_t f) { m->flags |= f; }
-bool task::test_flag_set(uint32_t f) const { return m->flags & f; }
-
 const std::string &task::get_state() const { return m->state; }
-const timespec &task::get_timeout() const { return m->ts; }
-void task::set_abs_timeout(const timespec &abs) { m->ts = abs; }
-
-task task::impl_to_task(task::impl *i) {
-    return i->to_task();
-}
-
-coroutine *task::get_coroutine() {
-    return &m->co;
-}
 
 /* task::condition */
 
@@ -279,7 +265,7 @@ void task::condition::wait(mutex::scoped_lock &l) {
     // must set the flag before adding to waiters
     // because another thread could resume()
     // before this calls suspend()
-    t.set_flag(_TASK_SLEEP);
+    t.m->flags |= _TASK_SLEEP;
     {
         mutex::scoped_lock ll(mm);
         if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
@@ -433,12 +419,15 @@ private:
     task current_task;
     //! all tasks belonging to this scheduler 
     task::set all;
+    //! epoll events
+    event_vector events;
 
 public:
     round_robin_scheduler()
         : timeouts(task_impl_timeout_compare()), runq_dirty(false),
         npollfds(0), pi(O_NONBLOCK), current_task(me.m)
     {
+        events.reserve(1000);
         // add the pipe used to wake up this runner from epoll_wait
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
@@ -525,7 +514,7 @@ public:
         // but still get added to the runqueue from a resume in another
         // thread. this is perfectly valid, the important thing is that
         // this task will get run the next time through the loop
-        t.clear_flag(_TASK_SLEEP);
+        t.m->flags ^= _TASK_SLEEP;
 
         // runq will be uniqued in schedule()
         runq_dirty = true;
@@ -538,11 +527,11 @@ public:
     }
 
     void add_waiter(task &t) {
-        timespec to = t.get_timeout();
+        timespec to = t.m->ts;
         if (to.tv_sec != -1) {
-            t.set_abs_timeout(to + now);
+            t.m->ts += (to + now);
         }
-        t.set_flag(_TASK_SLEEP);
+        t.m->flags |= _TASK_SLEEP;
         timeouts.insert(t.m.get());
     }
 
@@ -554,6 +543,8 @@ public:
     void schedule(runner &r, mutex::scoped_lock &l, unsigned int thread_timeout_ms) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         task_deque q;
+        // TODO: maybe a better way to do this to avoid mallocs, make q class level?
+        // would then need to clear() it before swap.
         q.swap(runq);
         // remove duplicates
         task_deque::iterator nend;
@@ -573,13 +564,13 @@ public:
             }
             task::swap(me, current_task);
             l.lock();
-            if (current_task.test_flag_set(_TASK_INTERRUPT)) {
+            if (current_task.m->flags & _TASK_INTERRUPT) {
                 // remove from waiters
                 timeouts.erase(*i);
                 all.erase(current_task);
-            } else if (current_task.test_flag_set(_TASK_MIGRATE)) {
-                current_task.clear_flag(_TASK_MIGRATE);
-                current_task.set_flag(_TASK_SLEEP);
+            } else if (current_task.m->flags & _TASK_MIGRATE) {
+                current_task.m->flags ^= _TASK_MIGRATE;
+                current_task.m->flags |= _TASK_SLEEP;
                 l.unlock();
                 mutex::scoped_lock rl(current_task.m->mut);
                 if (current_task.m->in) {
@@ -591,9 +582,9 @@ public:
                 }
                 l.lock();
                 all.erase(current_task);
-            } else if (current_task.test_flag_set(_TASK_SLEEP)) {
+            } else if (current_task.m->flags & _TASK_SLEEP) {
                 // do nothing
-            } else if (current_task.test_flag_set(_TASK_EXIT)) {
+            } else if (current_task.m->flags & _TASK_EXIT) {
                 all.erase(current_task);
             } else {
                 runq.push_back(*i);
@@ -633,7 +624,6 @@ public:
             return;
         }
 
-        event_vector events;
         if (timeout_ms != 0 || npollfds > 0) {
             // only process 1000 events each time through the event loop
             // to keep things moving along
@@ -707,7 +697,7 @@ public:
     task get_current_task() { return current_task; }
 
     void swap_to_scheduler() {
-        current_task.get_coroutine()->swap(me.get_coroutine());
+        current_task.m->co.swap(&me.m->co);
     }
 };
 

@@ -104,17 +104,9 @@ private: /* runner interface */
     friend struct task_poll_state;
     friend struct task_timeout_heap_compare;
 
-    static task impl_to_task(task::impl *);
-
-    coroutine *get_coroutine();
     void set_state(const std::string &str);
-    void clear_flag(uint32_t f);
-    void set_flag(uint32_t f);
-    bool test_flag_set(uint32_t f) const;
 
     const std::string &get_state() const;
-    const timespec &get_timeout() const;
-    void set_abs_timeout(const timespec &abs);
     static int get_ntasks() { return ntasks; }
 
     task();
@@ -146,6 +138,8 @@ public:
 
         //! wait for condition to be signaled
         void wait(mutex::scoped_lock &l);
+
+        // TODO: timed wait, so channels can have timeouts
     private:
         //! mutex used to ensure thread safety
         mutex mm;
@@ -209,8 +203,6 @@ public:
     virtual void add_to_runqueue(task &t) = 0;
     virtual void add_waiter(task &t) = 0;
     virtual void wakeup() = 0;
-    // TODO: maybe unique the runq in schedule
-    // instead of searching every add_to_runqueue
     virtual void schedule(runner &r, mutex::scoped_lock &l, unsigned int thread_timeout_ms) = 0;
     virtual task get_current_task() = 0;
     virtual void swap_to_scheduler() = 0;

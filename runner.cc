@@ -352,7 +352,7 @@ void runner::init() {
         THROW_ON_ERROR(sigaltstack(&ss, NULL));
 
         struct sigaction act;
-		memset(&act, 0, sizeof(act));
+        memset(&act, 0, sizeof(act));
         // install SIGSEGV handler
         act.sa_sigaction = backtrace_handler;
         act.sa_flags = SA_RESTART | SA_SIGINFO;
