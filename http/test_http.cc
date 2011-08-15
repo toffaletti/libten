@@ -2,6 +2,8 @@
 #include <boost/test/unit_test.hpp>
 
 #include "http_message.hh"
+#include "http_request_parser.h"
+#include "http_response_parser.h"
 
 BOOST_AUTO_TEST_CASE(http_request_constructor) {
     http_request req;

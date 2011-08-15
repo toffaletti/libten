@@ -2,50 +2,51 @@
 #include "task.hh"
 #include "buffer.hh"
 #include "http/http_message.hh"
+#include "uri/uri_parser.hh"
+#include <boost/bind.hpp>
 
 #include <iostream>
 
 using namespace fw;
 
-static void do_get() {
+static void do_get(uri u) {
     task::socket s(AF_INET, SOCK_STREAM);
-    s.dial("www.google.com", 80);
+    u.normalize();
+    s.dial(u.host.c_str(), 80);
 
-    http_request r("GET", "/");
+    http_request r("GET", u.compose(true));
+    // HTTP/1.1 requires host header
+    r.append_header("Host", u.host);
     std::string data = r.data();
+    std::cout << "Request:\n" << "--------------\n";
+    std::cout << data;
     ssize_t nw = s.send(data.c_str(), data.size());
 
     buffer buf(4*1024*1024);
     buffer::slice rb = buf(0);
 
-    http_response_parser p;
-    memset(&p, 0, sizeof(p));
     http_response resp;
 
     ssize_t pos = 0;
-    while (!http_response_parser_is_finished(&p)) {
-        resp.parser_init(&p);
+    for (;;) {
         ssize_t nr = s.recv(rb.data(pos), rb.size()-pos);
         if (nr <= 0) break;
-        http_response_parser_execute(&p, rb.data(), pos+nr, 0);
         pos += nr;
-        if (http_response_parser_has_error(&p)) break;
-
-        if (!http_response_parser_is_finished(&p)) {
-            resp.clear();
-        }
+        if (resp.parse(rb.data(), pos)) break;
     }
 
-    if (http_response_parser_is_finished(&p) && !http_response_parser_has_error(&p)) {
-        std::cout << resp.data();
-    }
+    std::cout << "Response:\n" << "--------------\n";
+    std::cout << resp.data();
 
     if (resp.header_string("Transfer-Encoding") == "chunked") {
     }
 }
 
 int main(int argc, char *argv[]) {
+    if (argc < 2) return -1;
     runner::init();
-    task::spawn(do_get, 0, 4*1024*1024);
+
+    uri u(argv[1]);
+    task::spawn(boost::bind(do_get, u), 0, 4*1024*1024);
     return runner::main();
 }

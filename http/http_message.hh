@@ -3,9 +3,9 @@
 
 #include <string>
 #include <vector>
+#include <stdexcept>
 
-#include "http_request_parser.h"
-#include "http_response_parser.h"
+// TODO: define exceptions
 
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
@@ -49,7 +49,8 @@ struct http_request : http_base {
         body_length = 0;
     }
 
-    void parser_init(http_request_parser *p);
+    void parser_init(struct http_request_parser *p);
+    bool parse(const char *data, size_t len, size_t off=0);
 
     std::string data();
 };
@@ -82,7 +83,8 @@ struct http_response : http_base {
         last_chunk = false;
     }
 
-    void parser_init(http_response_parser *p);
+    void parser_init(struct http_response_parser *p);
+    bool parse(const char *data, size_t len, size_t off=0);
 
     std::string data();
 

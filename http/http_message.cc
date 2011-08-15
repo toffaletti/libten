@@ -1,3 +1,5 @@
+#include "http_request_parser.h"
+#include "http_response_parser.h"
 #include "http_message.hh"
 #include <sstream>
 #include <boost/lexical_cast.hpp>
@@ -121,17 +123,29 @@ static void _http_field(void *data, const char *field,
   req->append_header(std::string(field, flen), std::string(value, vlen));
 }
 
-void http_request::parser_init(http_request_parser *p) {
-  http_request_parser_init(p);
-  p->data = this;
-  p->http_field = _http_field;
-  p->request_method = _request_method;
-  p->request_uri = _request_uri;
-  p->fragment = _fragment;
-  p->request_path = _request_path;
-  p->query_string = _query_string;
-  p->http_version = _http_version;
-  p->header_done = _header_done;
+void http_request::parser_init(struct http_request_parser *p) {
+    http_request_parser_init(p);
+    p->data = this;
+    p->http_field = _http_field;
+    p->request_method = _request_method;
+    p->request_uri = _request_uri;
+    p->fragment = _fragment;
+    p->request_path = _request_path;
+    p->query_string = _query_string;
+    p->http_version = _http_version;
+    p->header_done = _header_done;
+}
+
+bool http_request::parse(const char *data, size_t len, size_t off) {
+    http_request_parser p;
+    parser_init(&p);
+    clear();
+    http_request_parser_execute(&p, data, len, off);
+    if (http_request_parser_has_error(&p)) {
+        // TODO: show where parse failed
+        throw std::runtime_error("http_request_parser error");
+    }
+    return http_request_parser_is_finished(&p);
 }
 
 std::string http_request::data() {
@@ -194,16 +208,28 @@ static void last_chunk_cl(void *data, const char *at, size_t length) {
   resp->last_chunk = true;
 }
 
-void http_response::parser_init(http_response_parser *p) {
-  http_response_parser_init(p);
-  p->data = this;
-  p->http_field = http_field_cl;
-  p->reason_phrase = reason_phrase_cl;
-  p->status_code = status_code_cl;
-  p->chunk_size = chunk_size_cl;
-  p->http_version = http_version_cl;
-  p->header_done = header_done_cl;
-  p->last_chunk = last_chunk_cl;
+void http_response::parser_init(struct http_response_parser *p) {
+    http_response_parser_init(p);
+    p->data = this;
+    p->http_field = http_field_cl;
+    p->reason_phrase = reason_phrase_cl;
+    p->status_code = status_code_cl;
+    p->chunk_size = chunk_size_cl;
+    p->http_version = http_version_cl;
+    p->header_done = header_done_cl;
+    p->last_chunk = last_chunk_cl;
+}
+
+bool http_response::parse(const char *data, size_t len, size_t off) {
+    http_response_parser p;
+    parser_init(&p);
+    clear();
+    http_response_parser_execute(&p, data, len, off);
+    if (http_response_parser_has_error(&p)) {
+        // TODO: show where parse failed
+        throw std::runtime_error("http_response_parser error");
+    }
+    return http_response_parser_is_finished(&p);
 }
 
 
