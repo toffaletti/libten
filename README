@@ -1,0 +1,12 @@
+C++ library for network services on modern x86-64 Linux.
+Heavily inspired by python-gevent, state-threads, plan9, and go-lang.
+
+boost.fcontext taken from boost.context 0.7.3
+
+TODO
+----
+C++0x support (use std::shared_ptr, and possibly mutex and thread)
+Optimizations (memory pool for stacks, etc. lots of room for improvement here)
+Thread-safe lightweight logging library like Google glog.
+Better debugging support, need to be able to get backtrace for all coroutines.
+More tests and documentation and examples
