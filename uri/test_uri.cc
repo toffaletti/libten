@@ -2,7 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <stdio.h>
 
-#include "uri_parser.hh"
+#include "uri.hh"
 
 /* TODO: test uris from:
  * http://code.google.com/p/google-url/source/browse/trunk/src/gurl_unittest.cc

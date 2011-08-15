@@ -2,7 +2,7 @@
 #include "task.hh"
 #include "buffer.hh"
 #include "http/http_message.hh"
-#include "uri/uri_parser.hh"
+#include "uri/uri.hh"
 #include <boost/bind.hpp>
 
 #include <iostream>

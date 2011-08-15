@@ -1,4 +1,4 @@
-#include "uri_parser.hh"
+#include "uri.hh"
 #include <boost/algorithm/string.hpp>
 #include <list>
 #include <sstream>
