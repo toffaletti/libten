@@ -1,6 +1,22 @@
 cmake_minimum_required(VERSION 2.8)
 enable_testing()
 
+find_program(RAGEL "ragel")
+
+function(ragel_gen in_rl)
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${in_rl}.cc
+    COMMAND ${RAGEL} -o ${CMAKE_CURRENT_BINARY_DIR}/${in_rl}.cc ${CMAKE_CURRENT_SOURCE_DIR}/${in_rl}.rl -I ${CMAKE_CURRENT_SOURCE_DIR} ${ARGN}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${in_rl}.rl
+    )
+endfunction(ragel_gen)
+
+if(RAGEL)
+    message(STATUS "ragel found at: ${RAGEL}")
+else(RAGEL)
+    message(FATAL_ERROR "ragel not found")
+endif(RAGEL)
+
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
@@ -52,3 +68,6 @@ target_link_libraries(fw rt)
 add_subdirectory(examples)
 add_subdirectory(tests)
 add_subdirectory(benchmarks)
+
+add_subdirectory(uri)
+add_subdirectory(http)
