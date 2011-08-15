@@ -29,7 +29,7 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
         // create a 4096 byte slice of the buffer
         buffer::slice bs = buf(bufp*4096, 4096);
         // read block from file
-        ssize_t nr = f.read(bs, bs.size());
+        ssize_t nr = f.read(bs.data(), bs.size());
         if (nr <= 0) break;
         bs.resize(nr);
         // send block on channel to file_sender task
@@ -51,7 +51,7 @@ void file_sender(channel<buffer::slice> c) {
     for (;;) {
         buffer::slice bs = c.recv();
         if (bs.size() == 0) break;
-        ssize_t nw = s.send(bs, bs.size());
+        ssize_t nw = s.send(bs.data(), bs.size());
         if (nw > 0) bytes_sent += nw;
     }
     std::cout << "sent " << bytes_sent << " bytes\n";

@@ -56,10 +56,9 @@ public:
             return p[pos];
         }
 
-        //! dangerous, but useful cast to char *
-        operator char *() const {
+        char *data(size_t pos=0) const {
             assert(p);
-            return p;
+            return &p[pos];
         }
 
         size_t size() const { return len; }

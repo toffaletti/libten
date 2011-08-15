@@ -20,3 +20,6 @@ target_link_libraries(stack-guard fw)
 
 add_executable(backtrace backtrace.cc)
 target_link_libraries(backtrace fw)
+
+add_executable(http-get http-get.cc)
+target_link_libraries(http-get fw http uri)
