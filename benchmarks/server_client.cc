@@ -44,7 +44,7 @@ static void collecter(channel<int> ch) {
     }
     for (std::map<int, unsigned int>::iterator i=results.begin(); i!=results.end(); ++i) {
         if (i->first == 0) {
-            std::cout << "success: " << i->second << "\n";
+            std::cout << "Success: " << i->second << "\n";
         } else {
             std::cout << strerror(i->first) << ": " << i->second << "\n";
         }

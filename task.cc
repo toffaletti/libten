@@ -637,11 +637,11 @@ public:
 #if 0
             printf("%p timeout_ms: %d waiters: %ju runq: %ju ntasks: %u npollfds: %ju\n",
                 this, timeout_ms, timeouts.size(), runq.size(), (int)task::ntasks, npollfds);
-            if (timeouts.size() > 1) {
-                std::cout << "now: " << now << "\n";
-                std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(std::cout, " "));
-                std::cout << std::endl;
-            }
+            //if (timeouts.size() > 1) {
+            //    std::cout << "now: " << now << "\n";
+            //    std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(std::cout, " "));
+            //    std::cout << std::endl;
+            //}
 #endif
 
             // unlock around epoll
@@ -649,38 +649,37 @@ public:
             efd.wait(events, timeout_ms);
             // lock to protect runq
             l.lock();
-        }
 
+            // wake up io tasks
+            for (event_vector::const_iterator i=events.begin();
+                i!=events.end();++i)
+            {
+                // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+                // even if they arent asked for, so we must wake up the tasks on any event
+                // to avoid just spinning in epoll.
+                int fd = i->data.fd;
+                if (pollfds[fd].t_in) {
+                    pollfds[fd].p_in->revents = i->events;
+                    task t = pollfds[fd].t_in->to_task();
+                    add_to_runqueue(t);
+                }
 
-        // wake up io tasks
-        for (event_vector::const_iterator i=events.begin();
-            i!=events.end();++i)
-        {
-            // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
-            // even if they arent asked for, so we must wake up the tasks on any event
-            // to avoid just spinning in epoll.
-            int fd = i->data.fd;
-            if (pollfds[fd].t_in) {
-                pollfds[fd].p_in->revents = i->events;
-                task t = pollfds[fd].t_in->to_task();
-                add_to_runqueue(t);
-            }
+                // check to see if pollout is a different task than pollin
+                if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
+                    pollfds[fd].p_out->revents = i->events;
+                    task t = pollfds[fd].t_out->to_task();
+                    add_to_runqueue(t);
+                }
 
-            // check to see if pollout is a different task than pollin
-            if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
-                pollfds[fd].p_out->revents = i->events;
-                task t = pollfds[fd].t_out->to_task();
-                add_to_runqueue(t);
-            }
-
-            if (i->data.fd == pi.r.fd) {
-                // our wake up pipe was written to
-                char buf[32];
-                // clear pipe
-                while (pi.read(buf, sizeof(buf)) > 0) {}
-            } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
-                // TODO: otherwise we might want to remove fd from epoll
-                fprintf(stderr, "event for fd: %i but has no task\n", i->data.fd);
+                if (i->data.fd == pi.r.fd) {
+                    // our wake up pipe was written to
+                    char buf[32];
+                    // clear pipe
+                    while (pi.read(buf, sizeof(buf)) > 0) {}
+                } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
+                    // TODO: otherwise we might want to remove fd from epoll
+                    fprintf(stderr, "event %u for fd: %i but has no task\n", i->events, i->data.fd);
+                }
             }
         }
 
