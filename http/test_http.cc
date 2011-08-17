@@ -2,8 +2,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include "http_message.hh"
-#include "http_request_parser.h"
-#include "http_response_parser.h"
 
 BOOST_AUTO_TEST_CASE(http_request_constructor) {
     http_request req;
@@ -12,7 +10,7 @@ BOOST_AUTO_TEST_CASE(http_request_constructor) {
 
 BOOST_AUTO_TEST_CASE(http_request_parser_init_test) {
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(parser.data, &req);
@@ -43,12 +41,11 @@ BOOST_AUTO_TEST_CASE(http_request_make_parse) {
     req.append_header("accept", "*/*");
     std::string data = req.data();
 
+    http_parser parser;
     http_request req2;
-    http_request_parser parser;
     req2.parser_init(&parser);
-    http_request_parser_execute(&parser, data.c_str(), data.size(), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(!req2.complete);
+    BOOST_CHECK(req2.parse(&parser, data.c_str(), data.size()));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
@@ -59,22 +56,19 @@ BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
     "ACCEPT: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
 
     char *data = strdupa(sdata);
     char *p = data;
-    while (!http_request_parser_is_finished(&parser) &&
-        !http_request_parser_has_error(&parser) &&
-        *p != 0)
-    {
+    while (*p != 0 && !req.complete) {
+        req.parse(&parser, p, 1);
         p+=1; /* feed parser 1 byte at a time */
-        http_request_parser_execute(&parser, data, p-data, p-data-1);
     }
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
-}
 
+    BOOST_CHECK(req.complete);
+    BOOST_MESSAGE("Request: \n" << req.data());
+}
 
 BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
     static const char *sdata =
@@ -84,16 +78,12 @@ BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
     "ACCEPT: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL("/test/this", req.path);
-    BOOST_CHECK_EQUAL("thing=1&stuff=2&fun&good", req.query_string);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -116,11 +106,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_headers) {
     "\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
@@ -140,11 +128,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_unicode_escape) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
@@ -164,11 +150,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_percents) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
@@ -190,11 +174,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_bad_percents) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
@@ -214,16 +196,12 @@ BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL("/test/this", req.path);
-    BOOST_CHECK_EQUAL("thing=1&stuff=2&fun&good", req.query_string);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -234,19 +212,16 @@ BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_no_headers) {
-    static const char *sdata = "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n";
+    // technically not valid because HTTP/1.1 requires a Host header
+    static const char *sdata = "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(!http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL("/test/this", req.path);
-    BOOST_CHECK_EQUAL("thing=1&stuff=2&fun&good", req.query_string);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -256,11 +231,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_garbage) {
     static const char *sdata = "\x01\xff 83949475dsf--==\x45 dsfsdfds";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(http_request_parser_has_error(&parser));
-    BOOST_CHECK(!http_request_parser_is_finished(&parser));
+    BOOST_CHECK_THROW(req.parse(&parser, sdata, strlen(sdata)), fw::errorx);
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {
@@ -271,16 +244,12 @@ BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK(req.path.empty());
-    BOOST_CHECK(req.query_string.empty());
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -298,16 +267,12 @@ BOOST_AUTO_TEST_CASE(http_request_clear) {
     "Accept: */*\r\n\r\n";
 
     http_request req;
-    http_request_parser parser;
+    http_parser parser;
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL("/test/this", req.path);
-    BOOST_CHECK_EQUAL("thing=1&stuff=2&fun&good", req.query_string);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -320,21 +285,15 @@ BOOST_AUTO_TEST_CASE(http_request_clear) {
 
     BOOST_CHECK(req.method.empty());
     BOOST_CHECK(req.uri.empty());
-    BOOST_CHECK(req.path.empty());
-    BOOST_CHECK(req.query_string.empty());
     BOOST_CHECK(req.http_version.empty());
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
 
     req.parser_init(&parser);
-    http_request_parser_execute(&parser, sdata, strlen(sdata), 0);
-    BOOST_CHECK(!http_request_parser_has_error(&parser));
-    BOOST_CHECK(http_request_parser_is_finished(&parser));
+    BOOST_CHECK(req.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL("GET", req.method);
     BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL("/test/this", req.path);
-    BOOST_CHECK_EQUAL("thing=1&stuff=2&fun&good", req.query_string);
     BOOST_CHECK_EQUAL("HTTP/1.1", req.http_version);
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
@@ -419,7 +378,7 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
 
 BOOST_AUTO_TEST_CASE(http_response_parser_init_test) {
     http_response resp;
-    http_response_parser parser;
+    http_parser parser;
 
     resp.parser_init(&parser);
     BOOST_CHECK(resp.body.empty());
@@ -435,22 +394,18 @@ BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
     "this is a test.\r\nthis is only a test.";
 
     http_response resp;
-    http_response_parser parser;
+    http_parser parser;
 
     resp.parser_init(&parser);
     char *data = strdupa(sdata);
     char *p = data;
 
-    while (!http_response_parser_is_finished(&parser) &&
-        !http_response_parser_has_error(&parser) &&
-        *p != 0)
-    {
+    while (*p != 0 && !resp.complete) {
+        resp.parse(&parser, p, 1);
         p += 1; /* feed parser 1 byte at a time */
-        http_response_parser_execute(&parser, data, p-data, p-data-1);
     }
 
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
+    BOOST_CHECK(resp.complete);
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason);
@@ -458,8 +413,8 @@ BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
     BOOST_CHECK_EQUAL("37", resp.header_string("content-length"));
     BOOST_CHECK_EQUAL(37, resp.header_ull("content-length"));
     BOOST_CHECK_EQUAL("text/plain", resp.header_string("content-type"));
-    //BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
-    //BOOST_CHECK_EQUAL(37, resp.body_length);
+    BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
+    BOOST_CHECK_EQUAL(37, resp.body_length);
 }
 
 BOOST_AUTO_TEST_CASE(http_response_parser_normalize_header_names) {
@@ -471,13 +426,10 @@ BOOST_AUTO_TEST_CASE(http_response_parser_normalize_header_names) {
     "this is a test.\r\nthis is only a test.";
 
     http_response resp;
-    http_response_parser parser;
+    http_parser parser;
 
     resp.parser_init(&parser);
-    http_response_parser_execute(&parser, sdata, strlen(sdata), 0);
-
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
+    BOOST_CHECK(resp.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason);
@@ -505,62 +457,19 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     "sequence\r\n"
     "0\r\n"
     "\r\n";
-    char *data = strdupa(sdata);
 
     http_response resp;
-    http_response_parser parser;
+    http_parser parser;
 
     resp.parser_init(&parser);
-    http_response_parser_execute(&parser, data, strlen(data), 0);
-
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
+    BOOST_CHECK(resp.parse(&parser, sdata, strlen(sdata)));
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason);
     BOOST_CHECK_EQUAL("HTTP/1.1", resp.http_version);
     BOOST_CHECK_EQUAL("text/plain", resp.header_string("Content-Type"));
     BOOST_CHECK_EQUAL("chunked", resp.header_string("Transfer-Encoding"));
+    BOOST_CHECK_EQUAL(resp.body_length, 76);
 
-    const char *mark = resp.body.c_str();
-    /* reset the parse for the chunked part */
-    http_response_parser_init(&parser);
-    http_response_parser_execute(&parser, mark, strlen(mark), 0);
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
-    BOOST_CHECK_EQUAL(37, resp.chunk_size);
-    BOOST_CHECK_EQUAL(false, resp.last_chunk);
-
-    mark = resp.body.c_str()+resp.chunk_size+2;
-    http_response_parser_init(&parser);
-    http_response_parser_execute(&parser, mark, strlen(mark), 0);
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
-    BOOST_CHECK_EQUAL(28, resp.chunk_size);
-    BOOST_CHECK_EQUAL(false, resp.last_chunk);
-
-    mark = resp.body.c_str()+resp.chunk_size+2;
-    http_response_parser_init(&parser);
-    http_response_parser_execute(&parser, mark, strlen(mark), 0);
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
-    BOOST_CHECK_EQUAL(3, resp.chunk_size);
-    BOOST_CHECK_EQUAL(false, resp.last_chunk);
-
-    mark = resp.body.c_str()+resp.chunk_size+2;
-    http_response_parser_init(&parser);
-    http_response_parser_execute(&parser, mark, strlen(mark), 0);
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
-    BOOST_CHECK_EQUAL(8, resp.chunk_size);
-    BOOST_CHECK_EQUAL(false, resp.last_chunk);
-
-    mark = resp.body.c_str()+resp.chunk_size+2;
-    http_response_parser_init(&parser);
-    http_response_parser_execute(&parser, mark, strlen(mark), 0);
-    BOOST_CHECK(!http_response_parser_has_error(&parser));
-    BOOST_CHECK(http_response_parser_is_finished(&parser));
-    BOOST_CHECK_EQUAL(0, resp.chunk_size);
-    BOOST_CHECK_EQUAL(true, resp.last_chunk);
+    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 }
-

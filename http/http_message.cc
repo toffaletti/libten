@@ -1,32 +1,28 @@
-#include "http_request_parser.h"
-#include "http_response_parser.h"
 #include "http_message.hh"
 #include <sstream>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 
-/*
- * normalize http11 message header field names.
- */
+// normalize message header field names.
 static std::string normalize_header_name(const std::string &field) {
-  bool first_letter = true;
-  std::stringstream ss;
-  for (std::string::const_iterator i = field.begin(); i!=field.end(); ++i) {
-    if (!first_letter) {
-        char c = tolower(*i);
-        if (c == '_') {
-            c = '-';
-            first_letter = true;
-        } else if (c == '-') {
-            first_letter = true;
+    bool first_letter = true;
+    std::stringstream ss;
+    for (std::string::const_iterator i = field.begin(); i!=field.end(); ++i) {
+        if (!first_letter) {
+            char c = tolower(*i);
+            if (c == '_') {
+                c = '-';
+                first_letter = true;
+            } else if (c == '-') {
+                first_letter = true;
+            }
+            ss << c;
+        } else {
+            ss << (char)toupper(*i);
+            first_letter = false;
         }
-        ss << c;
-    } else {
-        ss << (char)toupper(*i);
-        first_letter = false;
     }
-  }
-  return ss.str();
+    return ss.str();
 }
 
 struct is_header {
@@ -76,76 +72,87 @@ unsigned long long http_base::header_ull(const std::string &field) {
     return 0;
 }
 
-static void _request_method(void *data, const char *at, size_t length) {
-  http_request *msg = (http_request *)data;
-  msg->method.assign(at, length);
-}
-
-static void _request_uri(void *data, const char *at, size_t length) {
-  http_request *msg = (http_request *)data;
-  msg->uri.assign(at, length);
-}
-
-static void _fragment(void *data, const char *at, size_t length) {
-  http_request *msg = (http_request *)data;
-  msg->fragment.assign(at, length);
-}
-
-static void _request_path(void *data, const char *at, size_t length) {
-  http_request *msg = (http_request *)data;
-  msg->path.assign(at, length);
-}
-
-static void _query_string(void *data, const char *at, size_t length) {
-  http_request *msg = (http_request *)data;
-  msg->query_string.assign(at, length);
-}
-
-static void _http_version(void *data, const char *at, size_t length) {
-  http_request *req = (http_request *)data;
-  req->http_version.assign(at, length);
-}
-
-static void _header_done(void *data, const char *at, size_t length) {
-  http_request *req = (http_request *)data;
-  /* set body */
-  /* TODO: not sure this logic is right. length might be wrong */
-  if (length) {
-    req->body.assign(at, length);
-    req->body_length = length;
-  }
-}
-
-static void _http_field(void *data, const char *field,
-  size_t flen, const char *value, size_t vlen)
-{
-  http_request *req = (http_request *)data;
-  req->append_header(std::string(field, flen), std::string(value, vlen));
-}
-
-void http_request::parser_init(struct http_request_parser *p) {
-    http_request_parser_init(p);
-    p->data = this;
-    p->http_field = _http_field;
-    p->request_method = _request_method;
-    p->request_uri = _request_uri;
-    p->fragment = _fragment;
-    p->request_path = _request_path;
-    p->query_string = _query_string;
-    p->http_version = _http_version;
-    p->header_done = _header_done;
-}
-
-bool http_request::parse(const char *data, size_t len, size_t off) {
-    http_request_parser p;
-    parser_init(&p);
-    clear();
-    http_request_parser_execute(&p, data, len, off);
-    if (http_request_parser_has_error(&p)) {
-        // TODO: show where parse failed
-        throw std::runtime_error("http_request_parser error");
+void http_base::normalize_headers() {
+    for (header_list::iterator i=headers.begin(); i!=headers.end(); ++i) {
+        i->first.assign(normalize_header_name(i->first));
     }
-    return http_request_parser_is_finished(&p);
+}
+
+static int _request_on_url(http_parser *p, const char *at, size_t length) {
+    http_request *m = (http_request *)p->data;
+    m->uri.append(at, length);
+    return 0;
+}
+
+static int _on_header_field(http_parser *p, const char *at, size_t length) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    if (m->headers.empty()) {
+        m->headers.push_back(std::make_pair("", ""));
+    } else if (!m->headers.back().second.empty()) {
+        m->headers.push_back(std::make_pair("", ""));
+    }
+    m->headers.back().first.append(at, length);
+    return 0;
+}
+
+static int _on_header_value(http_parser *p, const char *at, size_t length) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    m->headers.back().second.append(at, length);
+    return 0;
+}
+
+static int _on_body(http_parser *p, const char *at, size_t length) {
+    http_response *m = reinterpret_cast<http_response *>(p->data);
+    m->body.append(at, length);
+    return 0;
+}
+
+static int _request_on_headers_complete(http_parser *p) {
+    http_request *m = reinterpret_cast<http_request*>(p->data);
+    m->normalize_headers();
+    m->method = http_method_str((http_method)p->method);
+    std::stringstream ss;
+    ss << "HTTP/" << p->http_major << "." << p->http_minor;
+    m->http_version = ss.str();
+
+    if (p->content_length > 0) {
+        m->body.reserve(p->content_length);
+    }
+
+    return 0;
+}
+
+static int _on_message_complete(http_parser *p) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    m->complete = true;
+    m->body_length = m->body.size();
+    return 0;
+}
+
+void http_request::parser_init(struct http_parser *p) {
+    http_parser_init(p, HTTP_REQUEST);
+    p->data = this;
+    clear();
+}
+
+bool http_request::parse(struct http_parser *p, const char *data, size_t len) {
+    http_parser_settings s;
+    s.on_message_begin = NULL;
+    s.on_url = _request_on_url;
+    s.on_reason = NULL;
+    s.on_header_field = _on_header_field;
+    s.on_header_value = _on_header_value;
+    s.on_headers_complete = _request_on_headers_complete;
+    s.on_body = _on_body;
+    s.on_message_complete = _on_message_complete;
+
+    ssize_t nparsed = http_parser_execute(p, &s, data, len);
+    if (nparsed != (ssize_t)len) {
+        throw fw::errorx("%s: %s",
+            http_errno_name((http_errno)p->http_errno),
+            http_errno_description((http_errno)p->http_errno));
+    }
+    return complete;
 }
 
 std::string http_request::data() {
@@ -160,78 +167,55 @@ std::string http_request::data() {
 
 /* http_response_t */
 
-static void http_field_cl(void *data, const char *field,
-  size_t flen, const char *value, size_t vlen)
-{
-  http_response *resp = (http_response *)data;
-  resp->append_header(std::string(field, flen), std::string(value, vlen));
+static int _response_on_reason(http_parser *p, const char *at, size_t length) {
+    http_response *m = (http_response *)p->data;
+    m->reason.append(at, length);
+    return 0;
 }
 
-static void reason_phrase_cl(void *data, const char *at, size_t length) {
-  http_response *resp = (http_response *)data;
-  resp->reason.assign(at, length);
-}
+static int _response_on_headers_complete(http_parser *p) {
+    http_response *m = reinterpret_cast<http_response *>(p->data);
+    m->normalize_headers();
+    m->status_code = p->status_code;
+    std::stringstream ss;
+    ss << "HTTP/" << p->http_major << "." << p->http_minor;
+    m->http_version = ss.str();
 
-static void status_code_cl(void *data, const char *at, size_t length) {
-  http_response *resp = (http_response *)data;
-  std::string tmp(at, length);
-  resp->status_code = boost::lexical_cast<unsigned long>(tmp);
-}
-
-static void chunk_size_cl(void *data, const char *at, size_t length) {
-  http_response *resp = (http_response *)data;
-  std::string tmp(at, length);
-  // NOTE: size is in base 16
-  resp->chunk_size = strtoull(tmp.c_str(), NULL, 16);
-}
-
-static void http_version_cl(void *data, const char *at, size_t length) {
-  http_response *resp = (http_response *)data;
-  resp->http_version.assign(at, length);
-}
-
-static void header_done_cl(void *data, const char *at, size_t length) {
-  http_response *resp = (http_response *)data;
-  /* set body */
-  /* TODO: the length is not right here */
-  /* printf("HEADER DONE: %zu [%s]\n", length, at); */
-  if (at || length) {
-    resp->body.assign(at, length);
-    resp->body_length = length;
-  }
-}
-
-static void last_chunk_cl(void *data, const char *at, size_t length) {
-  (void)at;
-  (void)length;
-  http_response *resp = (http_response *)data;
-  resp->last_chunk = true;
-}
-
-void http_response::parser_init(struct http_response_parser *p) {
-    http_response_parser_init(p);
-    p->data = this;
-    p->http_field = http_field_cl;
-    p->reason_phrase = reason_phrase_cl;
-    p->status_code = status_code_cl;
-    p->chunk_size = chunk_size_cl;
-    p->http_version = http_version_cl;
-    p->header_done = header_done_cl;
-    p->last_chunk = last_chunk_cl;
-}
-
-bool http_response::parse(const char *data, size_t len, size_t off) {
-    http_response_parser p;
-    parser_init(&p);
-    clear();
-    http_response_parser_execute(&p, data, len, off);
-    if (http_response_parser_has_error(&p)) {
-        // TODO: show where parse failed
-        throw std::runtime_error("http_response_parser error");
+    if (p->content_length > 0) {
+        m->body.reserve(p->content_length);
     }
-    return http_response_parser_is_finished(&p);
+
+    // TODO: if this is a response to a HEAD
+    // we need to return 1 here. figure that out...
+    // maybe have responses link to their request
+    return 0;
 }
 
+void http_response::parser_init(struct http_parser *p) {
+    http_parser_init(p, HTTP_RESPONSE);
+    p->data = this;
+    clear();
+}
+
+bool http_response::parse(struct http_parser *p, const char *data, size_t len) {
+    http_parser_settings s;
+    s.on_message_begin = NULL;
+    s.on_url = NULL;
+    s.on_reason = _response_on_reason;
+    s.on_header_field = _on_header_field;
+    s.on_header_value = _on_header_value;
+    s.on_headers_complete = _response_on_headers_complete;
+    s.on_body = _on_body;
+    s.on_message_complete = _on_message_complete;
+
+    ssize_t nparsed = http_parser_execute(p, &s, data, len);
+    if (nparsed != (ssize_t)len) {
+        throw fw::errorx("%s: %s",
+            http_errno_name((http_errno)p->http_errno),
+            http_errno_description((http_errno)p->http_errno));
+    }
+    return complete;
+}
 
 std::string http_response::data() {
     std::stringstream ss;

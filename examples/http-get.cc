@@ -22,24 +22,22 @@ static void do_get(uri u) {
     std::cout << data;
     ssize_t nw = s.send(data.c_str(), data.size());
 
-    buffer buf(4*1024*1024);
+    buffer buf(4*1024);
     buffer::slice rb = buf(0);
 
+    http_parser parser;
     http_response resp;
+    resp.parser_init(&parser);
 
-    ssize_t pos = 0;
     for (;;) {
-        ssize_t nr = s.recv(rb.data(pos), rb.size()-pos);
-        if (nr <= 0) break;
-        pos += nr;
-        if (resp.parse(rb.data(), pos)) break;
+        ssize_t nr = s.recv(rb.data(), rb.size());
+        if (nr <= 0) { std::cerr << "Error: " << strerror(errno) << "\n"; break; }
+        if (resp.parse(&parser, rb.data(), nr)) break;
     }
 
     std::cout << "Response:\n" << "--------------\n";
     std::cout << resp.data();
-
-    if (resp.header_string("Transfer-Encoding") == "chunked") {
-    }
+    std::cout << "Body size: " << resp.body.size() << "\n";
 }
 
 int main(int argc, char *argv[]) {
