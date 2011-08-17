@@ -4,15 +4,15 @@
   machine uri_grammar;
 
 # adding broken edge cases. see "escape" grammar in http11_parser_common.rl
-  pct_encoded = "%%" | ("%" xdigit xdigit?) | ("%u" xdigit xdigit xdigit xdigit);
+  pct_encoded = "%%" | ("%" xdigit xdigit?) | ("%u" xdigit xdigit xdigit xdigit) | "%";
   unreserved = alnum | "-" | "." | "_" | "~";
   sub_delims = "!" | "$" | "&" | "'" | "(" | ")"
                    | "*" | "+" | "," | ";" | "=";
   gen_delims = ":" | "/" | "?" | "#" | "[" | "]" | "@";
   reserved = gen_delims | sub_delims;
-# people use |, [, ], :, ^ and @ in path/query even though they're not in RFC
+# people use |, [, ], {, }, :, ^ and @ in path/query even though they're not in RFC
 # which is why they are appended to pchar
-  pchar = unreserved | pct_encoded | sub_delims | ":" | "@" | '[' | ']' | '|' | '^';
+  pchar = unreserved | pct_encoded | sub_delims | ":" | "@" | '[' | ']' | '{' | '}' | '|' | '^';
   query = (pchar | "/" | "?")* %query;
   fragment = (pchar | "/" | "?")* %fragment;
 

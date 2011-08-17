@@ -44,6 +44,11 @@ BOOST_AUTO_TEST_CASE(uri_parse_double_percent) {
     uri u(uri1);
 }
 
+BOOST_AUTO_TEST_CASE(uri_parse_percent_amp) {
+    static const char uri1[] = "http://b.scorecardresearch.com/foo=1&cr=2%&c9=thing";
+    uri u(uri1);
+}
+
 BOOST_AUTO_TEST_CASE(uri_parse_badencode) {
     static const char uri1[] = "http://b.scorecardresearch.com/b?c1=2&c2=6035223rn=1404429288&c7=http%3A%2F%2Fdetnews.com%2Farticle%2F20110121%2FMETRO01%2F101210376%2FDetroit-women-get-no-help-in-arrest-of-alleged-car-thief&c8=Detroit%20women%20get%20no%20help%20in%20arrest%20of%20alleged%2&cv=2.2&cs=js";
     uri u(uri1);
