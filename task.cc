@@ -374,8 +374,9 @@ ssize_t task::socket::send(const void *buf, size_t len, int flags, unsigned int 
                 errno = ETIMEDOUT;
                 return total_sent;
             }
+        } else {
+            total_sent += nw;
         }
-        total_sent += nw;
     }
     return total_sent;
 }

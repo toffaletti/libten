@@ -78,12 +78,6 @@ void http_base::normalize_headers() {
     }
 }
 
-static int _request_on_url(http_parser *p, const char *at, size_t length) {
-    http_request *m = (http_request *)p->data;
-    m->uri.append(at, length);
-    return 0;
-}
-
 static int _on_header_field(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
     if (m->headers.empty()) {
@@ -102,8 +96,21 @@ static int _on_header_value(http_parser *p, const char *at, size_t length) {
 }
 
 static int _on_body(http_parser *p, const char *at, size_t length) {
-    http_response *m = reinterpret_cast<http_response *>(p->data);
+    http_base *m = reinterpret_cast<http_base *>(p->data);
     m->body.append(at, length);
+    return 0;
+}
+
+static int _on_message_complete(http_parser *p) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    m->complete = true;
+    m->body_length = m->body.size();
+    return 0;
+}
+
+static int _request_on_url(http_parser *p, const char *at, size_t length) {
+    http_request *m = (http_request *)p->data;
+    m->uri.append(at, length);
     return 0;
 }
 
@@ -119,13 +126,6 @@ static int _request_on_headers_complete(http_parser *p) {
         m->body.reserve(p->content_length);
     }
 
-    return 0;
-}
-
-static int _on_message_complete(http_parser *p) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    m->complete = true;
-    m->body_length = m->body.size();
     return 0;
 }
 

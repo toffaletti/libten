@@ -23,3 +23,6 @@ target_link_libraries(backtrace fw)
 
 add_executable(http-get http-get.cc)
 target_link_libraries(http-get fw http uri)
+
+add_executable(http-proxy http-proxy.cc)
+target_link_libraries(http-proxy fw http uri)
