@@ -18,7 +18,8 @@ void stack_overflow() {
 
 int main(int argc, char *argv[]) {
     runner::init();
-    task::spawn(stack_overflow);
+    // need 16k stack for fprintf of the backtrace
+    task::spawn(stack_overflow, 0, 16*1024);
     runner::main();
     return 0;
 }
