@@ -12,7 +12,9 @@ using namespace fw;
 static void do_get(uri u) {
     task::socket s(AF_INET, SOCK_STREAM);
     u.normalize();
-    s.dial(u.host.c_str(), 80);
+    if (u.scheme != "http") return;
+    if (u.port == 0) u.port = 80;
+    s.dial(u.host.c_str(), u.port);
 
     http_request r("GET", u.compose(true));
     // HTTP/1.1 requires host header
