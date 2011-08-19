@@ -33,10 +33,6 @@ unsigned long runner::ncpu_ = 0;
 runner::list *runner::runners = new runner::list;
 mutex *runner::tmutex = new mutex;
 
-// thrown when runner has no tasks for thread_timeout_ms
-// runner will then be removed from runners list
-struct runner_timeout_exit : std::exception {};
-
 template <typename SetT> struct in_set {
     SetT &set;
 
@@ -138,6 +134,16 @@ runner runner::self() {
 
 runner runner::spawn(task &t) {
     mutex::scoped_lock l(*tmutex);
+    // find an empty runner that is not this runner
+    for (runner::list::iterator i=runners->begin(); i!=runners->end(); ++i) {
+        if (i->m.get() == impl_) continue;
+        mutex::scoped_lock ll(i->m->mut);
+        if (i->m->s->empty()) {
+            i->m->s->add_to_runqueue(t);
+            return *i;
+        }
+    }
+    // didn't find an empty runner, spawn a new one for this migrated task
     runner r(t);
     append_to_list(r, l);
     return r;
@@ -172,7 +178,8 @@ void runner::schedule() {
     // runner to add a task later. is there a use case for this?
     while (task::get_ntasks() > 0 || m.use_count() > 2) {
         mutex::scoped_lock l(m->mut);
-        m->s->schedule(*this, l, thread_timeout_ms);
+        // don't timeout the main thread
+        m->s->schedule(*this, l, m->tt == main_thread_ ? -1 : thread_timeout_ms);
     }
 
     wakeup_all_runners();
@@ -216,7 +223,7 @@ void *runner::start(void *arg) {
         l.lock();
         impl_ = NULL;
         throw;
-    } catch (runner_timeout_exit &e) {
+    } catch (timeout_exit &e) {
         // more runners than cpus and nothing to do
     } catch (backtrace_exception &e) {
         fprintf(stderr, "uncaught exception in runner: %s\n%s\n", e.what(), e.str().c_str());

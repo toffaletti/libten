@@ -68,13 +68,17 @@ struct http_response : http_base {
     std::string http_version;
     unsigned long status_code;
     std::string reason;
+    http_request *req;
+
+    http_response(http_request *req_) : req(req_) {}
 
     http_response(unsigned long status_code_ = 200,
         const std::string &reason_ = "OK",
         const std::string &http_version_ = "HTTP/1.1")
         : http_version(http_version_),
         status_code(status_code_),
-        reason(reason_)
+        reason(reason_),
+        req(NULL)
         {}
 
     void clear() {

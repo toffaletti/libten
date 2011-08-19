@@ -62,8 +62,8 @@ BOOST_AUTO_TEST_CASE(runner_migrate) {
     runner::init();
     semaphore s;
     runner::spawn(boost::bind(mig_co, boost::ref(s)));
-    s.wait();
     runner::main();
+    s.wait();
 }
 
 static void connect_to(address addr) {

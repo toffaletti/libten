@@ -23,6 +23,9 @@ class runner {
 public:
     typedef boost::function<void ()> proc;
     typedef void (*unspecified_bool_type);
+    // thrown when runner has no tasks for thread_timeout_ms
+    // runner will then be removed from runners list
+    struct timeout_exit : std::exception {};
 
     operator unspecified_bool_type() const;
     bool operator == (const runner &r) const;
@@ -44,7 +47,7 @@ public:
         bool force=false,
         size_t stack_size=DEFAULT_STACK_SIZE);
 
-    //! spawn a new runner for this task
+    //! spawn a new runner for this task or reuse an empty one
     static runner spawn(task &t);
 
     //! \return the runner for this thread

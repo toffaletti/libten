@@ -447,6 +447,7 @@ public:
             epoll_event ev;
             memset(&ev, 0, sizeof(ev));
             int fd = fds[i].fd;
+            fds[i].revents = 0;
             // make room for the highest fd number
             if (pollfds.size() <= (size_t)fd) {
                 pollfds.resize(fd+1);
@@ -512,6 +513,8 @@ public:
     }
 
     void add_to_runqueue(task &t) {
+        if (t.m->flags & _TASK_EXIT) return;
+
         all.insert(t);
         // task can be in any state, for example a task might be running
         // but still get added to the runqueue from a resume in another
@@ -547,7 +550,14 @@ public:
         (void)nw;
     }
 
-    void schedule(runner &r, mutex::scoped_lock &l, unsigned int thread_timeout_ms) {
+    void erase_task(task &t) {
+        task_deque::iterator i = std::remove(runq.begin(), runq.end(), t.m.get());
+        runq.erase(i, runq.end());
+        timeouts.erase(t.m.get());
+        all.erase(t);
+    }
+
+    void schedule(runner &r, mutex::scoped_lock &l, int thread_timeout_ms) {
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         task_deque q;
         // TODO: maybe a better way to do this to avoid mallocs, make q class level?
@@ -572,9 +582,7 @@ public:
             task::swap(me, current_task);
             l.lock();
             if (current_task.m->flags & _TASK_INTERRUPT) {
-                // remove from waiters
-                timeouts.erase(*i);
-                all.erase(current_task);
+                erase_task(current_task);
             } else if (current_task.m->flags & _TASK_MIGRATE) {
                 current_task.m->flags ^= _TASK_MIGRATE;
                 current_task.m->flags |= _TASK_SLEEP;
@@ -588,11 +596,11 @@ public:
                     runner::spawn(current_task);
                 }
                 l.lock();
-                all.erase(current_task);
+                erase_task(current_task);
             } else if (current_task.m->flags & _TASK_SLEEP) {
                 // do nothing
             } else if (current_task.m->flags & _TASK_EXIT) {
-                all.erase(current_task);
+                erase_task(current_task);
             } else {
                 runq.push_back(*i);
             }
@@ -627,7 +635,7 @@ public:
             timeout_ms = thread_timeout_ms;
         }
 
-        if (timeout_ms == -1 && timeouts.empty() && runq.empty()) {
+        if (timeout_ms == -1 && timeouts.empty() && runq.empty() && npollfds == 0) {
             return;
         }
 
@@ -650,6 +658,10 @@ public:
             efd.wait(events, timeout_ms);
             // lock to protect runq
             l.lock();
+
+            if (events.empty() && timeout_ms > 0 && timeout_ms == thread_timeout_ms) {
+                throw runner::timeout_exit();
+            }
 
             // wake up io tasks
             for (event_vector::const_iterator i=events.begin();
@@ -705,6 +717,8 @@ public:
     void swap_to_scheduler() {
         current_task.m->co.swap(&me.m->co);
     }
+
+    bool empty() { return all.empty(); }
 };
 
 scheduler *scheduler::create() {

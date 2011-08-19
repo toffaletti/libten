@@ -95,6 +95,7 @@ struct fd_base : boost::noncopyable {
                     throw errno_error();
             }
         }
+        fd = -1;
     }
 
     //! attempts to close fd if it is valid

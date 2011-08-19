@@ -185,9 +185,12 @@ static int _response_on_headers_complete(http_parser *p) {
         m->body.reserve(p->content_length);
     }
 
-    // TODO: if this is a response to a HEAD
-    // we need to return 1 here. figure that out...
-    // maybe have responses link to their request
+    // if this is a response to a HEAD
+    // we need to return 1 here so the
+    // parser knowns not to expect a body
+    if (m->req && m->req->method == "HEAD") {
+        return 1;
+    }
     return 0;
 }
 
