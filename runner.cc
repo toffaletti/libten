@@ -26,20 +26,6 @@ namespace hack {
 
 namespace fw {
 
-struct NullLogger : public google::base::Logger {
-  virtual void Write(bool should_flush,
-                     time_t timestamp,
-                     const char* message,
-                     int length) {
-  }
-
-  virtual void Flush() { }
-
-  virtual uint32_t LogSize() { return 0; }
-};
-
-NullLogger null_logger;
-
 __thread runner::impl *runner::impl_ = NULL;
 
 unsigned int runner::thread_timeout_ms = 60*1000;
@@ -383,13 +369,7 @@ void runner::init() {
         umask(0);
         google::InitGoogleLogging("log");
         google::InstallFailureSignalHandler();
-        FLAGS_alsologtostderr = true;
-
-        // turn off log files for every level but INFO
-        // INFO will hold all the messages for other levels
-        for (google::LogSeverity s = google::WARNING; s < google::NUM_SEVERITIES; s++) {
-            google::base::SetLogger(s, &null_logger);
-        }
+        FLAGS_logtostderr = true;
 
         struct sigaction act;
         memset(&act, 0, sizeof(act));
