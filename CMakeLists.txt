@@ -1,20 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 enable_testing()
 
-find_program(RAGEL "ragel")
-
-function(ragel_gen in_rl)
-  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${in_rl}.cc
-    COMMAND ${RAGEL} -o ${CMAKE_CURRENT_BINARY_DIR}/${in_rl}.cc ${CMAKE_CURRENT_SOURCE_DIR}/${in_rl}.rl -I ${CMAKE_CURRENT_SOURCE_DIR} ${ARGN}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${in_rl}.rl
-    )
-endfunction(ragel_gen)
-
-if(RAGEL)
-    message(STATUS "ragel found at: ${RAGEL}")
-else(RAGEL)
-    message(FATAL_ERROR "ragel not found")
-endif(RAGEL)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ragel.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure.cmake)
+include_directories(${PROJECT_BINARY_DIR}/include)
+link_directories(${PROJECT_BINARY_DIR}/lib)
 
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -59,11 +49,19 @@ add_definitions(-DUSE_BOOST_FCONTEXT)
 
 #include_directories(../boost.context-0.7.3)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}) # for boost.context
+
+configure_make_install(libglog
+  glog-0.3.1
+  ${CMAKE_CURRENT_BINARY_DIR}/include/glog/logging.h
+  --prefix=${CMAKE_CURRENT_BINARY_DIR} --disable-shared --enable-static
+)
+
 set(ASM asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 add_library(fw error.cc task.cc runner.cc ${ASM})
-target_link_libraries(fw rt)
+add_dependencies(fw libglog)
+target_link_libraries(fw rt glog)
 
 add_subdirectory(examples)
 add_subdirectory(tests)
