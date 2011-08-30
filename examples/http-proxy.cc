@@ -3,10 +3,9 @@
 #include "buffer.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
+#include "logging.hh"
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
-
-#include <iostream>
 
 using namespace fw;
 
@@ -61,7 +60,7 @@ void proxy_task(int sock) {
     try {
         uri u(req.uri);
         u.normalize();
-        std::cout << req.method << " " << u.compose() << "\n";
+        LOG(INFO) << req.method << " " << u.compose();
 
         task::socket cs(AF_INET, SOCK_STREAM);
 
@@ -134,26 +133,26 @@ void proxy_task(int sock) {
             return;
         }
     } catch (std::exception &e) {
-        std::cerr << "exception error: " << req.uri << " : " << e.what() << "\n";
+        LOG(ERROR) << "exception error: " << req.uri << " : " << e.what();
         return;
     }
 request_read_error:
-    std::cerr << "request read error: " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "request read error";
     return;
 request_connect_error:
-    std::cerr << "request connect error: " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "request connect error " << req.method << " " << req.uri;
     send_503_reply(s);
     return;
 request_send_error:
-    std::cerr << "request send error: " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "request send error: " << req.method << " " << req.uri;
     send_503_reply(s);
     return;
 response_read_error:
-    std::cerr << "response read error: " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "response read error: " << req.method << " " << req.uri;
     send_503_reply(s);
     return;
 response_send_error:
-    std::cerr << "response send error: " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "response send error: " << req.method << " " << req.uri;
     return;
 }
 
@@ -163,7 +162,7 @@ void listen_task() {
     address addr("0.0.0.0", 8080);
     s.bind(addr);
     s.getsockname(addr);
-    std::cout << "listening on: " << addr << "\n";
+    LOG(INFO) << "listening on: " << addr;
     s.listen();
 
     for (;;) {
