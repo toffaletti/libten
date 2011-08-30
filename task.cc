@@ -641,12 +641,14 @@ public:
             // only process 1000 events each time through the event loop
             // to keep things moving along
             events.resize(1000);
+#ifndef NDEBUG
             DVLOG(5) << (void *)this << " timeout_ms: " << timeout_ms << " waiters: " << timeouts.size() <<
                 " runq: " << runq.size() << " tasks: " << (int)task::ntasks << " npollfds: " << npollfds;
-            if (VLOG_IS_ON(5)) {
+            if (VLOG_IS_ON(5) && !timeouts.empty()) {
                 DVLOG(5) << "now: " << now;
-                std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(LOG(INFO), " "));
+                std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(LOG(INFO), "\n"));
             }
+#endif // DEBUG OFF
 
             // unlock around epoll
             l.unlock();
