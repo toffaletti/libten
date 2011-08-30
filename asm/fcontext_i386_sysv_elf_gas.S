@@ -83,6 +83,8 @@ boost_fcontext_make:
     movl   %ecx,           0x4(%eax)    /* save the address of the next context */
     movl   0xc(%esp),      %ecx         /* load the address of the void pointer */
     movl   %ecx,           0x4(%edx)    /* save the address of the void pointer */
+    stmxcsr  0x18(%eax)                 /* save SSE2 control and status word */
+    fnstcw   0x1c(%eax)                 /* save x87 control word */
 #ifdef __PIC__
 	call	1f
 1:	popl	%ecx						/* address of label 1 */

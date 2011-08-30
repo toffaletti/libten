@@ -1,3 +1,4 @@
+#include "logging.hh"
 #include "task.hh"
 #include "runner.hh"
 #include "channel.hh"
@@ -137,12 +138,9 @@ void task::start(impl *i) {
     } catch (interrupt_unwind &e) {
         // task was canceled
     } catch (backtrace_exception &e) {
-        fprintf(stderr, "uncaught exception in task(%p): %s\n%s\n",
-            t.m.get(), e.what(), e.str().c_str());
-        abort();
+        LOG(FATAL) << "uncaught exception in task(" << t << "): " << e.what() << "\n" << e.str();
     } catch(std::exception &e) {
-        fprintf(stderr, "uncaught exception in task(%p): %s\n", t.m.get(), e.what());
-        abort();
+        LOG(FATAL) << "uncaught exception in task(" << t << "): " << e.what();
     }
     // NOTE: the scheduler deletes tasks in exiting state
     // so this function won't ever return. don't expect
@@ -643,15 +641,12 @@ public:
             // only process 1000 events each time through the event loop
             // to keep things moving along
             events.resize(1000);
-#if 0
-            printf("%p timeout_ms: %d waiters: %ju runq: %ju ntasks: %u npollfds: %ju\n",
-                this, timeout_ms, timeouts.size(), runq.size(), (int)task::ntasks, npollfds);
-            //if (timeouts.size() > 1) {
-            //    std::cout << "now: " << now << "\n";
-            //    std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(std::cout, " "));
-            //    std::cout << std::endl;
-            //}
-#endif
+            DVLOG(5) << (void *)this << " timeout_ms: " << timeout_ms << " waiters: " << timeouts.size() <<
+                " runq: " << runq.size() << " tasks: " << (int)task::ntasks << " npollfds: " << npollfds;
+            if (VLOG_IS_ON(5)) {
+                DVLOG(5) << "now: " << now;
+                std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(LOG(INFO), " "));
+            }
 
             // unlock around epoll
             l.unlock();
@@ -691,7 +686,7 @@ public:
                     while (pi.read(buf, sizeof(buf)) > 0) {}
                 } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
                     // TODO: otherwise we might want to remove fd from epoll
-                    fprintf(stderr, "event %u for fd: %i but has no task\n", i->events, i->data.fd);
+                    LOG(ERROR) << "event " << i->events << " for fd: " << i->data.fd << " but has no task";
                 }
             }
         }

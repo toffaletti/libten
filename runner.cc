@@ -1,3 +1,4 @@
+#include "logging.hh"
 #include "runner.hh"
 #include "task.hh"
 #include <cxxabi.h>
@@ -24,6 +25,20 @@ namespace hack {
 #include <iostream>
 
 namespace fw {
+
+struct NullLogger : public google::base::Logger {
+  virtual void Write(bool should_flush,
+                     time_t timestamp,
+                     const char* message,
+                     int length) {
+  }
+
+  virtual void Flush() { }
+
+  virtual uint32_t LogSize() { return 0; }
+};
+
+NullLogger null_logger;
 
 __thread runner::impl *runner::impl_ = NULL;
 
@@ -226,13 +241,13 @@ void *runner::start(void *arg) {
     } catch (timeout_exit &e) {
         // more runners than cpus and nothing to do
     } catch (backtrace_exception &e) {
-        fprintf(stderr, "uncaught exception in runner: %s\n%s\n", e.what(), e.str().c_str());
+        LOG(ERROR) << "uncaught exception in runner: " << e.what() << "\n" << e.str();
         remove_from_list(r);
         l.lock();
         impl_ = NULL;
         throw;
     } catch (std::exception &e) {
-        fprintf(stderr, "uncaught exception in runner: %s\n", e.what());
+        LOG(ERROR) << "uncaught exception in runner: " << e.what();
         remove_from_list(r);
         l.lock();
         impl_ = NULL;
@@ -364,8 +379,21 @@ void runner::init() {
         ss.ss_flags = 0;
         THROW_ON_ERROR(sigaltstack(&ss, NULL));
 
+        // allow log files and message queues to be created group writable
+        umask(0);
+        google::InitGoogleLogging("log");
+        google::InstallFailureSignalHandler();
+        FLAGS_alsologtostderr = true;
+
+        // turn off log files for every level but INFO
+        // INFO will hold all the messages for other levels
+        for (google::LogSeverity s = google::WARNING; s < google::NUM_SEVERITIES; s++) {
+            google::base::SetLogger(s, &null_logger);
+        }
+
         struct sigaction act;
         memset(&act, 0, sizeof(act));
+#if 0
         // install SIGSEGV handler
         act.sa_sigaction = backtrace_handler;
         act.sa_flags = SA_RESTART | SA_SIGINFO;
@@ -375,6 +403,7 @@ void runner::init() {
         act.sa_flags = SA_RESTART | SA_SIGINFO;
         THROW_ON_ERROR(sigaction(SIGABRT, &act, NULL));
         // ignore SIGPIPE
+#endif
         THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
         if (act.sa_handler == SIG_DFL) {
             act.sa_handler = SIG_IGN;
