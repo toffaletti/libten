@@ -155,10 +155,10 @@ bool http_request::parse(struct http_parser *p, const char *data, size_t len) {
     return complete;
 }
 
-std::string http_request::data() {
+std::string http_request::data() const {
     std::stringstream ss;
     ss << method << " " << uri << " " << http_version << "\r\n";
-    for (header_list::iterator i = headers.begin(); i!=headers.end(); ++i) {
+    for (header_list::const_iterator i = headers.begin(); i!=headers.end(); ++i) {
         ss << i->first << ": " << i->second << "\r\n";
     }
     ss << "\r\n";
@@ -220,10 +220,10 @@ bool http_response::parse(struct http_parser *p, const char *data, size_t len) {
     return complete;
 }
 
-std::string http_response::data() {
+std::string http_response::data() const {
     std::stringstream ss;
     ss << http_version << " " << status_code << " " << reason << "\r\n";
-    for (header_list::iterator i = headers.begin(); i!=headers.end(); ++i) {
+    for (header_list::const_iterator i = headers.begin(); i!=headers.end(); ++i) {
         ss << i->first << ": " << i->second << "\r\n";
     }
     ss << "\r\n";

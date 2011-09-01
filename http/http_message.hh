@@ -61,7 +61,7 @@ struct http_request : http_base {
     void parser_init(struct http_parser *p);
     bool parse(struct http_parser *p, const char *data, size_t len);
 
-    std::string data();
+    std::string data() const;
 };
 
 struct http_response : http_base {
@@ -93,7 +93,7 @@ struct http_response : http_base {
     void parser_init(struct http_parser *p);
     bool parse(struct http_parser *p, const char *data, size_t len);
 
-    std::string data();
+    std::string data() const;
 };
 
 #endif // HTTP_HH

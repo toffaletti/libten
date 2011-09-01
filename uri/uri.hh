@@ -1,7 +1,8 @@
 #include <string>
 #include <utility>
-#include <map>
+#include <vector>
 #include <stdexcept>
+#include <algorithm>
 
 /* TODO:
  * Normalization and Comparison
@@ -50,7 +51,20 @@ struct uri {
     static std::string encode(const std::string& src);
     static std::string decode(const std::string& src);
 
-    typedef std::map<std::string, std::string> query_params;
+    template <typename T> struct query_match {
+        query_match(const T &k_) : k(k_) {}
+
+        const T &k;
+
+        bool operator()(const std::pair<T, T> &i) {
+            return i.first == k;
+        }
+    };
+
+    typedef std::vector<std::pair<std::string, std::string> > query_params;
+    static query_params::iterator find_param(query_params &p, const std::string &k) {
+        return std::find_if(p.begin(), p.end(), query_match<std::string>(k));
+    }
     query_params parse_query();
 };
 

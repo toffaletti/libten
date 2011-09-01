@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(uri_parse_query) {
     uri::query_params params = u.parse_query();
     // NOTE: the string below should appear as russian
     BOOST_CHECK_EQUAL(params.size(), 1);
-    BOOST_CHECK_EQUAL(params["q"], "путин");
+    BOOST_CHECK_EQUAL(uri::find_param(params, "q")->second, "путин");
 }
 
 BOOST_AUTO_TEST_CASE(uri_parse_dups) {
