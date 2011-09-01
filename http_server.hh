@@ -40,7 +40,21 @@ public:
         ssize_t send_response(const http_response &resp) {
             if (resp_sent) return 0;
             resp_sent = true;
-            std::string data = resp.data();
+            std::string data;
+            // TODO: Content-Length might be another good one to add here
+            // but only if Transfer-Encoding isn't chunked?
+            // HTTP/1.1 requires Date, so lets add it
+            if (resp.header_string("Date").empty()) {
+                http_response tmp_resp = resp;
+                char buf[128];
+                struct tm tm;
+                time_t now = time(NULL);
+                strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
+                tmp_resp.set_header("Date", buf);
+                data = tmp_resp.data();
+            } else {
+                data = resp.data();
+            }
             ssize_t nw = sock.send(data.data(), data.size());
             // TODO: send body?
             return nw;
@@ -76,7 +90,10 @@ public:
 
         ~request() {
             // ensure a response is sent
-            send_response(http_response(404, "Not Found"));
+            http_response resp(404, "Not Found");
+            resp.append_header("Connection", "close");
+            resp.append_header("Content-Length", "0");
+            send_response(resp);
         }
 
         http_request &req;

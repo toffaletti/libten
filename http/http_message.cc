@@ -34,6 +34,21 @@ struct is_header {
     }
 };
 
+void http_base::set_header(const std::string &field, const std::string &value) {
+    std::string normal_field = normalize_header_name(field);
+    header_list::iterator i = std::find_if(headers.begin(),
+        headers.end(), is_header(normal_field));
+    if (i != headers.end()) {
+        i->second = value;
+    } else {
+        headers.push_back(std::make_pair(normal_field, value));
+    }
+}
+
+void http_base::set_header(const std::string &field, unsigned long long value) {
+    set_header(field, boost::lexical_cast<std::string>(value));
+}
+
 void http_base::append_header(const std::string &field, const std::string &value) {
     std::string normal_field = normalize_header_name(field);
     headers.push_back(std::make_pair(normal_field, value));
@@ -54,8 +69,8 @@ bool http_base::remove_header(const std::string &field) {
     return false;
 }
 
-std::string http_base::header_string(const std::string &field) {
-    header_list::iterator i = std::find_if(headers.begin(),
+std::string http_base::header_string(const std::string &field) const {
+    header_list::const_iterator i = std::find_if(headers.begin(),
         headers.end(), is_header(normalize_header_name(field)));
     if (i != headers.end()) {
         return i->second;
@@ -63,8 +78,8 @@ std::string http_base::header_string(const std::string &field) {
     return "";
 }
 
-unsigned long long http_base::header_ull(const std::string &field) {
-    header_list::iterator i = std::find_if(headers.begin(),
+unsigned long long http_base::header_ull(const std::string &field) const {
+    header_list::const_iterator i = std::find_if(headers.begin(),
         headers.end(), is_header(normalize_header_name(field)));
     if (i != headers.end()) {
         return boost::lexical_cast<unsigned long long>(i->second);

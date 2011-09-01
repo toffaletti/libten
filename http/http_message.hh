@@ -21,12 +21,14 @@ struct http_base {
 
     http_base() : complete(false), body_length(0) {}
 
+    void set_header(const std::string &field, const std::string &value);
+    void set_header(const std::string &field, unsigned long long value);
     void append_header(const std::string &field, const std::string &value);
     void append_header(const std::string &field, unsigned long long value);
     header_list::iterator find_header(const std::string &field);
     bool remove_header(const std::string &field);
-    std::string header_string(const std::string &field);
-    unsigned long long header_ull(const std::string &field);
+    std::string header_string(const std::string &field) const;
+    unsigned long long header_ull(const std::string &field) const;
 
     void normalize_headers();
     void set_body(const std::string &body_) {
