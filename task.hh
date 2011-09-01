@@ -18,6 +18,8 @@
 
 namespace fw {
 
+#define SEC2MS(s) (s*1000)
+
 // flags for task state
 #define _TASK_SLEEP     (1<<0)
 #define _TASK_RUNNING   (1<<1)
