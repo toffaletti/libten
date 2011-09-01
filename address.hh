@@ -6,8 +6,17 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <ostream>
+#include <boost/lexical_cast.hpp>
 
 namespace fw {
+
+inline void parse_host_port(std::string &host, unsigned short &port) {
+    size_t pos = host.rfind(':');
+    if (pos != std::string::npos) {
+        port = boost::lexical_cast<unsigned short>(host.substr(pos+1, -1));
+        host = host.substr(0, pos);
+    }
+}
 
 //! union of sockaddr structs
 union address_u {
