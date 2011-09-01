@@ -4,9 +4,9 @@
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
 
-#include "fw/runner.hh"
-#include "fw/task.hh"
-#include "fw/logging.hh"
+#include "runner.hh"
+#include "task.hh"
+#include "logging.hh"
 
 namespace fw {
 
