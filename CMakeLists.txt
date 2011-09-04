@@ -26,3 +26,5 @@ add_subdirectory(benchmarks)
 
 add_subdirectory(uri)
 add_subdirectory(http)
+
+add_subdirectory(jansson)
