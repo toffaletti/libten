@@ -1,5 +1,6 @@
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/bind.hpp>
 
@@ -16,13 +17,18 @@ public:
     //! wrapper around an http request/response
     struct request {
         request(http_request &req_, task::socket &sock_)
-            : req(req_), sock(sock_), resp_sent(false) {}
+            : req(req_), sock(sock_),
+            start(boost::posix_time::microsec_clock::universal_time()),
+            resp_sent(false) {}
 
         //! compose a uri from the request uri
-        uri get_uri() {
-            std::string host = req.header_string("Host");
-            if (boost::starts_with(req.uri, "http://")) {
-                return req.uri;
+        uri get_uri(std::string host="") {
+            if (host.empty()) {
+                host = req.header_string("Host");
+                // TODO: transform to preserve passed in host
+                if (boost::starts_with(req.uri, "http://")) {
+                    return req.uri;
+                }
             }
 
             if (host.empty()) {
@@ -37,7 +43,7 @@ public:
         }
 
         //! send response to this request
-        ssize_t send_response(const http_response &resp) {
+        ssize_t send_response() {
             if (resp_sent) return 0;
             resp_sent = true;
             std::string data;
@@ -45,16 +51,13 @@ public:
             // but only if Transfer-Encoding isn't chunked?
             // HTTP/1.1 requires Date, so lets add it
             if (resp.header_string("Date").empty()) {
-                http_response tmp_resp = resp;
                 char buf[128];
                 struct tm tm;
                 time_t now = time(NULL);
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
-                tmp_resp.set_header("Date", buf);
-                data = tmp_resp.data();
-            } else {
-                data = resp.data();
+                resp.set_header("Date", buf);
             }
+            data = resp.data();
             ssize_t nw = sock.send(data.data(), data.size());
             // TODO: send body?
             return nw;
@@ -62,7 +65,7 @@ public:
 
         //! the ip of the host making the request
         //! might use the X-Forwarded-For header
-        std::string request_ip(bool use_xff=false) const {
+        std::string agent_ip(bool use_xff=false) const {
             if (use_xff) {
                 std::string xffs = req.header_string("X-Forwarded-For");
                 const char *xff = xffs.c_str();
@@ -90,14 +93,16 @@ public:
 
         ~request() {
             // ensure a response is sent
-            http_response resp(404, "Not Found");
+            resp = http_response(404, "Not Found");
             resp.append_header("Connection", "close");
-            resp.append_header("Content-Length", "0");
-            send_response(resp);
+            resp.append_header("Content-Length", 0);
+            send_response();
         }
 
         http_request &req;
+        http_response resp;
         task::socket &sock;
+        boost::posix_time::ptime start;
         bool resp_sent;
     };
 
@@ -117,6 +122,11 @@ public:
       _map.push_back(tuple_type(pattern, f));
     }
 
+    //! set logging function, called after every request
+    void set_log_callback(const func_type &f) {
+        _log_func = f;
+    }
+
     //! spawn the listening task
     void serve(const std::string &ipaddr, uint16_t port) {
         address baddr(ipaddr.c_str(), port);
@@ -131,6 +141,7 @@ private:
     map_type _map;
     size_t stack_size;
     int timeout_ms;
+    func_type _log_func;
 
     void listen_task() {
         sock.listen();
@@ -171,8 +182,11 @@ private:
             DVLOG(5) << "matching pattern: " << i->get<0>();
             if (fnmatch(i->get<0>().c_str(), req.uri.c_str(), 0) == 0) {
                 i->get<1>()(r);
-                return;
+                break;
             }
+        }
+        if (_log_func) {
+            _log_func(r);
         }
     }
 };
