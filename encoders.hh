@@ -9,3 +9,9 @@
 #include "stringencoders/modp_burl.h"
 #include "stringencoders/modp_mainpage.h"
 #include "stringencoders/modp_numtoa.h"
+
+#include "stlencoders/base16.hpp"
+#include "stlencoders/base32.hpp"
+#include "stlencoders/base64.hpp"
+#include "stlencoders/decstr.hpp"
+#include "stlencoders/dectbl.hpp"
