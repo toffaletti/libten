@@ -5,6 +5,7 @@ include(${CWD}/flags.cmake)
 add_definitions(-DUSE_BOOST_FCONTEXT)
 
 include_directories(${CWD}/..) # for boost.context
+include_directories(${CWD}/../jansson)
 
 file(RELATIVE_PATH REL ${CMAKE_CURRENT_SOURCE_DIR} ${CWD}/..)
 get_filename_component(FW_INC ${CMAKE_CURRENT_BINARY_DIR}/${REL}/include ABSOLUTE)
