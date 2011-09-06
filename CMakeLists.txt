@@ -28,3 +28,4 @@ add_subdirectory(uri)
 add_subdirectory(http)
 
 add_subdirectory(jansson)
+add_subdirectory(stringencoders)

@@ -4,6 +4,7 @@ Heavily inspired by python-gevent, state-threads, plan9, and go-lang.
 boost.context-0.7.6 parts from https://github.com/olk/boost.context
 http_parser from https://github.com/ry/http-parser
 glog-0.3.1 from http://code.google.com/p/google-glog/
+stringencoders from http://code.google.com/p/stringencoders/
 
 TODO
 ----
