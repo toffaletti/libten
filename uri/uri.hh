@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <sstream>
 
 /* TODO:
  * Normalization and Comparison
@@ -62,9 +63,32 @@ struct uri {
     };
 
     typedef std::vector<std::pair<std::string, std::string> > query_params;
+
+    query_params parse_query();
+
     static query_params::iterator find_param(query_params &p, const std::string &k) {
         return std::find_if(p.begin(), p.end(), query_match<std::string>(k));
     }
-    query_params parse_query();
+
+    static void remove_param(query_params &p, const std::string &k) {
+        query_params::iterator nend = std::remove_if(p.begin(), p.end(), query_match<std::string>(k));
+        p.erase(nend, p.end());
+    }
+
+    static std::string params_to_query(const query_params &pms) {
+        if (pms.empty()) return "";
+        std::stringstream ss;
+        ss << "?";
+        query_params::const_iterator it = pms.begin();
+        while (it!=pms.end()) {
+            ss << it->first << "=" << it->second;
+            ++it;
+            if (it != pms.end()) {
+                ss << "&";
+            }
+        }
+        return ss.str();
+    }
+
 };
 
