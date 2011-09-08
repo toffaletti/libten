@@ -91,6 +91,9 @@ void task::cancel() {
     // throw task::interrupt_unwind exception
     // catch exception to remove pollfds, etc. rethrow
     // remove from waiters inside runloop
+
+    // reset the shared_ptr so the task can be freed
+    m.reset();
 }
 
 bool task::done() const {

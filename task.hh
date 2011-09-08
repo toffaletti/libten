@@ -69,6 +69,7 @@ public:
     //! the current task
     static task self();
 
+    task();
     void cancel();
     bool done() const;
 
@@ -113,7 +114,6 @@ private: /* runner interface */
     const std::string &get_state() const;
     static int get_ntasks() { return ntasks; }
 
-    task();
 
     static void swap(task &from, task &to);
 private: /* condition interface */
