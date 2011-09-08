@@ -65,7 +65,7 @@ std::ostream &operator << (std::ostream &o, const task::impl *t) {
 
 std::ostream &operator << (std::ostream &o, const task &t) {
     // TODO: replace the pointer with task "id" (atomicly incremented global counter)
-    o << "[" << t.m->name << ":" << t.m->state << ":" << (void*)t.m.get() << ":" << t.m->flags << "]";
+    o << "[" << t.m->name << ":" << t.m->state << ":" << (void*)t.m.get() << ":" << t.m->flags << ":" << t.m->ts << ":" << t.m.use_count() << "]";
     return o;
 }
 
@@ -286,6 +286,42 @@ void task::condition::wait(mutex::scoped_lock &l) {
         waiters.erase(nend, waiters.end());
         throw;
     }
+}
+
+bool task::condition::timed_wait(mutex::scoped_lock &l, unsigned int ms) {
+    task t = task::self();
+    runner r = runner::self();
+    milliseconds_to_timespec(ms, t.m->ts);
+    // must set the flag before adding to waiters
+    // because another thread could resume()
+    // before this calls suspend()
+    t.m->flags |= _TASK_SLEEP;
+    {
+        mutex::scoped_lock ll(mm);
+        if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
+            waiters.push_back(t);
+        }
+    }
+    try {
+        r.add_waiter(t);
+        t.suspend(l);
+    } catch (interrupt_unwind &e) {
+        r.remove_waiter(t);
+        // remove task from waiters so it won't get signaled
+        mutex::scoped_lock ll(mm);
+        task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
+        waiters.erase(nend, waiters.end());
+        throw;
+    }
+
+    // XXX: do the remove here because timeout might have triggered
+    // in which case the task would still be in waiters because signal() didn't remove
+    // remove task from waiters so it won't get signaled
+    mutex::scoped_lock ll(mm);
+    task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
+    waiters.erase(nend, waiters.end());
+
+    return r.remove_waiter(t);
 }
 
 /* task::socket */
@@ -542,8 +578,8 @@ public:
         timeouts.insert(t.m.get());
     }
 
-    void remove_waiter(task &t) {
-        timeouts.erase(t.m.get());
+    bool remove_waiter(task &t) {
+        return timeouts.erase(t.m.get()) > 0;
     }
 
     void wakeup() {
@@ -650,6 +686,11 @@ public:
             if (VLOG_IS_ON(5) && !timeouts.empty()) {
                 DVLOG(5) << "now: " << now;
                 std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(LOG(INFO), "\n"));
+            }
+
+            if (VLOG_IS_ON(6) && !all.empty()) {
+                DVLOG(6) << "ALL: ";
+                std::copy(all.begin(), all.end(), std::ostream_iterator<task>(LOG(INFO), "\n"));
             }
 #endif // DEBUG OFF
 

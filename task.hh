@@ -144,6 +144,7 @@ public:
         void wait(mutex::scoped_lock &l);
 
         // TODO: timed wait, so channels can have timeouts
+        bool timed_wait(mutex::scoped_lock &l, unsigned int ms);
     private:
         //! mutex used to ensure thread safety
         mutex mm;
@@ -208,7 +209,7 @@ public:
     virtual int remove_pollfds(pollfd *fds, nfds_t nfds) = 0;
     virtual void add_to_runqueue(task &t) = 0;
     virtual void add_waiter(task &t) = 0;
-    virtual void remove_waiter(task &t) = 0;
+    virtual bool remove_waiter(task &t) = 0;
     virtual void wakeup() = 0;
     virtual void schedule(runner &r, mutex::scoped_lock &l, int thread_timeout_ms) = 0;
     virtual task get_current_task() = 0;

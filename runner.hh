@@ -92,7 +92,7 @@ private: /* task interface */
     //! used for io and timeouts
     void add_waiter(task &t);
     //! remove task from wait list
-    void remove_waiter(task &t);
+    bool remove_waiter(task &t);
 
     static void swap_to_scheduler();
 

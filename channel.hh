@@ -99,6 +99,36 @@ public:
         return item;
     }
 
+    //! timed receive data
+    bool timed_recv(T &item, unsigned int ms) {
+        mutex::scoped_lock l(m->mtx);
+        bool unbuffered = m->capacity == 0;
+        if (unbuffered) {
+            // grow the capacity for a single item
+            m->capacity = 1;
+            // unblock sender
+            m->not_full.signal();
+        }
+        while (m->is_empty() && !m->closed) {
+            if (!m->not_empty.timed_wait(l, ms)) return false;
+        }
+        if (m->unread == 0) {
+            check_closed();
+        }
+
+        // we don't pop_back because the item will just get overwritten
+        // when the circular buffer wraps around
+        item = m->container[--m->unread];
+        if (unbuffered) {
+            // shrink capacity again so sends will block
+            // waiting for recv
+            m->capacity = 0;
+        } else {
+            m->not_full.signal();
+        }
+        return true;
+    }
+
     bool empty() {
         return unread() == 0;
     }
