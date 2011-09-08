@@ -43,7 +43,7 @@
  */
 
 #include "modp_ascii.h"
-#include "modp_stdint.h"
+#include <stdint.h>
 #include "modp_ascii_data.h"
 
 void modp_toupper_copy(char* dest, const char* str, int len)

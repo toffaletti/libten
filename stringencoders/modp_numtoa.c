@@ -5,8 +5,7 @@
 
 #include <stdio.h>
 #include <math.h>
-
-#include "modp_stdint.h"
+#include <stdint.h>
 
 // other interesting references on num to string convesion
 // http://www.jb.man.ac.uk/~slowe/cpp/itoa.html
@@ -288,9 +287,6 @@ void modp_dtoa2(double value, char* str, int prec)
     *wstr='\0';
     strreverse(str, wstr-1);
 }
-
-
-#include "config.h"
 
 /* You can get rid of the include, but adding... */
 /* if on motoral, sun, ibm; uncomment this */

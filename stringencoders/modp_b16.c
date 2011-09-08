@@ -41,9 +41,8 @@
  * http://www.opensource.org/licenses/bsd-license.php
  * </PRE>
  */
-#include "config.h"
+#include <stdint.h>
 #include "modp_b16.h"
-#include "modp_stdint.h"
 #include "modp_b16_data.h"
 
 int modp_b16_encode(char* dest, const char* str, int len)

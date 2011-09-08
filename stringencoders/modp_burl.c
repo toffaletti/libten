@@ -42,7 +42,7 @@
  * </PRE>
  */
 #include "modp_burl.h"
-#include "modp_stdint.h"
+#include <stdint.h>
 #include "modp_burl_data.h"
 
 int modp_burl_encode(char* dest, const char* src, int len)

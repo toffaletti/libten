@@ -34,7 +34,7 @@
 
 BEGIN_C
 
-#include "modp_stdint.h"
+#include <stdint.h>
 
 /** \brief convert an signed integer to char buffer
  *

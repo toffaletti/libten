@@ -44,12 +44,6 @@
 /* public header */
 #include "modp_b64.h"
 
-/*
- * If you are ripping this out of the library, comment out the next
- * line and uncomment the next lines as approrpiate
- */
-#include "config.h"
-
 /* if on motoral, sun, ibm; uncomment this */
 /* #define WORDS_BIGENDIAN 1 */
 /* else for Intel, Amd; uncomment this */

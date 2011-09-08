@@ -42,9 +42,8 @@
  * </PRE>
  */
 #include <string.h>
-#include "config.h"
 #include "modp_b2.h"
-#include "modp_stdint.h"
+#include <stdint.h>
 #include "modp_b2_data.h"
 
 
