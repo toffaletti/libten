@@ -177,10 +177,12 @@ private:
 
     void handle_request(http_request &req, task::socket &s) {
         request r(req, s);
+        uri u = r.get_uri();
+        DVLOG(5) << "path: " << u.path;
         // not super efficient, but good enough
         for (map_type::const_iterator i= _map.begin(); i!= _map.end(); i++) {
             DVLOG(5) << "matching pattern: " << i->get<0>();
-            if (fnmatch(i->get<0>().c_str(), req.uri.c_str(), 0) == 0) {
+            if (fnmatch(i->get<0>().c_str(), u.path.c_str(), 0) == 0) {
                 i->get<1>()(r);
                 break;
             }
