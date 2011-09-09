@@ -570,9 +570,8 @@ public:
     }
 
     void add_waiter(task &t) {
-        timespec to = t.m->ts;
-        if (to.tv_sec != -1) {
-            t.m->ts += (to + now);
+        if (t.m->ts.tv_sec != -1) {
+            t.m->ts += now; // make timeout into absolute time
         }
         t.m->flags |= _TASK_SLEEP;
         timeouts.insert(t.m.get());
