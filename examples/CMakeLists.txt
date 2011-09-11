@@ -26,3 +26,6 @@ target_link_libraries(http-get fw http uri)
 
 add_executable(http-proxy http-proxy.cc)
 target_link_libraries(http-proxy fw http uri)
+
+add_executable(msg-pack msgpack.cc)
+target_link_libraries(msg-pack fw msgpack)

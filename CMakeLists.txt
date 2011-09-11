@@ -29,3 +29,4 @@ add_subdirectory(http)
 
 add_subdirectory(jansson)
 add_subdirectory(stringencoders)
+add_subdirectory(msgpack)
