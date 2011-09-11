@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <stdarg.h>
 
 #include "http_parser.h"
 #include "error.hh"
@@ -76,12 +77,23 @@ struct http_response : http_base {
 
     http_response(unsigned long status_code_ = 200,
         const std::string &reason_ = "OK",
-        const std::string &http_version_ = "HTTP/1.1")
+        const std::string &http_version_ = "HTTP/1.1",
+        unsigned int nheaders = 0,
+        ...) // headers
         : http_version(http_version_),
         status_code(status_code_),
         reason(reason_),
         req(NULL)
-        {}
+    {
+        va_list ap;
+        va_start(ap, nheaders);
+        for (;nheaders > 0;--nheaders) {
+            const char *header_name = va_arg(ap, const char *);
+            const char *header_value = va_arg(ap, const char *);
+            append_header(header_name, header_value);
+        }
+        va_end(ap);
+    }
 
     void clear() {
         headers.clear();
