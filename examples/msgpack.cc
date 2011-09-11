@@ -32,16 +32,17 @@ int main(int argc, char *argv[]) {
     msgpack::unpack_return r =
         msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
     assert(r == msgpack::UNPACK_EXTRA_BYTES);
-
-    myclass m2 = obj.as<myclass>();
-    std::cout << m2 << "\n";
+    std::cout << "obj: " << obj << "\n";
+    std::cout << obj.as<myclass>() << "\n";
 
     r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
     assert(r == msgpack::UNPACK_EXTRA_BYTES);
+    std::cout << "obj: " << obj << "\n";
     std::cout << obj.as<int>() << "\n";
 
     r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
     assert(r == msgpack::UNPACK_SUCCESS);
+    std::cout << "obj: " << obj << "\n";
     std::cout << obj.as<std::string>() << "\n";
     return 0;
 }
