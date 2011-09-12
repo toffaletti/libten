@@ -23,7 +23,9 @@ int main(int argc, char *argv[]) {
     size_t offset = 0;
 
     msgpack::pack(sbuf, m);
-    msgpack::pack(sbuf, 1234);
+    msgpack::pack(sbuf, -1234);
+    msgpack::pack(sbuf, -1.5);
+    msgpack::pack(sbuf, 3.58);
     msgpack::pack(sbuf, std::string("cool pack"));
 
     msgpack::zone z;
@@ -39,6 +41,16 @@ int main(int argc, char *argv[]) {
     assert(r == msgpack::UNPACK_EXTRA_BYTES);
     std::cout << "obj: " << obj << "\n";
     std::cout << obj.as<int>() << "\n";
+
+    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == msgpack::UNPACK_EXTRA_BYTES);
+    std::cout << "obj: " << obj << "\n";
+    std::cout << obj.as<float>() << "\n";
+
+    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == msgpack::UNPACK_EXTRA_BYTES);
+    std::cout << "obj: " << obj << "\n";
+    std::cout << obj.as<double>() << "\n";
 
     r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
     assert(r == msgpack::UNPACK_SUCCESS);
