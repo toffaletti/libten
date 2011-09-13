@@ -20,6 +20,8 @@ struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<im
     std::string state;
     //! timeout value for this task
     timespec ts;
+    //! deadline timeout for this task
+    timespec dl;
     coroutine co;
     mutex mut;
     atomic_bits<uint32_t> flags;
@@ -49,6 +51,22 @@ static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
     // convert milliseconds to seconds and nanoseconds
     ts.tv_sec = ms / 1000;
     ts.tv_nsec = (ms % 1000) * 1000000;
+}
+
+task::deadline::deadline(uint64_t milliseconds) {
+    task t = task::self();
+    if (t.m->flags & _TASK_HAS_DEADLINE) {
+        throw errorx("trying to set deadline on task that already has a deadline");
+    }
+    mutex::scoped_lock lk(t.m->mut);
+    milliseconds_to_timespec(milliseconds, t.m->dl);
+    t.m->dl += runner::self().get_scheduler().cached_now();
+    t.m->flags |= _TASK_HAS_DEADLINE;
+}
+
+task::deadline::~deadline() {
+    task t = task::self();
+    t.m->flags ^= _TASK_HAS_DEADLINE;
 }
 
 task::task() { m.reset(new impl); }
@@ -129,8 +147,15 @@ task task::spawn(const proc &f, runner *in, size_t stack_size) {
 void task::yield() {
     runner::swap_to_scheduler();
 
-    if (task::self().m->flags & _TASK_INTERRUPT) {
+    task t = task::self();
+    if (t.m->flags & _TASK_INTERRUPT) {
         throw interrupt_unwind();
+    }
+
+    if (t.m->flags & _TASK_HAS_DEADLINE &&
+        runner::self().get_scheduler().cached_now() >= t.m->dl)
+    {
+        throw deadline_reached();
     }
 }
 
@@ -479,6 +504,10 @@ public:
         efd.add(pi.r.fd, ev);
     }
 
+    timespec cached_now() {
+        return now;
+    }
+
     void add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
         for (nfds_t i=0; i<nfds; ++i) {
             epoll_event ev;
@@ -572,6 +601,12 @@ public:
     void add_waiter(task &t) {
         if (t.m->ts.tv_sec != -1) {
             t.m->ts += now; // make timeout into absolute time
+        }
+        if (t.m->flags & _TASK_HAS_DEADLINE) {
+            if (t.m->ts > t.m->dl) {
+                // don't sleep past the deadline!
+                t.m->ts = t.m->dl;
+            }
         }
         t.m->flags |= _TASK_SLEEP;
         timeouts.insert(t.m.get());

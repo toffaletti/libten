@@ -22,6 +22,14 @@ inline bool operator > (const timespec &a, const timespec &b) {
     return false;
 }
 
+inline bool operator >= (const timespec &a, const timespec &b) {
+    if (a.tv_sec > b.tv_sec) return true;
+    if (a.tv_sec == b.tv_sec) {
+        if (a.tv_nsec >= b.tv_nsec) return true;
+    }
+    return false;
+}
+
 inline bool operator < (const timespec &a, const timespec &b) {
     if (a.tv_sec < b.tv_sec) return true;
     if (a.tv_sec == b.tv_sec) {

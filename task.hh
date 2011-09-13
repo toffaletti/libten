@@ -21,11 +21,12 @@ namespace fw {
 #define SEC2MS(s) (s*1000)
 
 // flags for task state
-#define _TASK_SLEEP     (1<<0)
-#define _TASK_RUNNING   (1<<1)
-#define _TASK_EXIT      (1<<2)
-#define _TASK_MIGRATE   (1<<3)
-#define _TASK_INTERRUPT (1<<4)
+#define _TASK_SLEEP        (1<<0)
+#define _TASK_RUNNING      (1<<1)
+#define _TASK_EXIT         (1<<2)
+#define _TASK_MIGRATE      (1<<3)
+#define _TASK_INTERRUPT    (1<<4)
+#define _TASK_HAS_DEADLINE (1<<5)
 
 class runner;
 
@@ -42,6 +43,13 @@ public:
     typedef std::set<task> set;
     //! thrown when _TASK_INTERRUPT is set
     struct interrupt_unwind : std::exception {};
+
+    struct deadline_reached : std::exception {};
+    struct deadline {
+        deadline(uint64_t milliseconds);
+        ~deadline();
+    };
+    friend struct deadline;
 
     //! spawn a task and add it to a runners run queue
     static task spawn(const proc &f,
@@ -215,6 +223,7 @@ public:
     virtual task get_current_task() = 0;
     virtual void swap_to_scheduler() = 0;
     virtual bool empty() = 0;
+    virtual timespec cached_now() = 0;
     virtual ~scheduler() {}
 
     static scheduler *create();

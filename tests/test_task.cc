@@ -332,3 +332,32 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
     task::spawn(yield_timer);
     runner::main();
 }
+
+static void deadline_timer() {
+    try {
+        task::deadline deadline(100);
+        task::sleep(200);
+        BOOST_CHECK(false);
+    } catch (task::deadline_reached &e) {
+        BOOST_CHECK(true);
+    }
+}
+
+static void deadline_not_reached() {
+    try {
+        task::deadline deadline(100);
+        task::sleep(50);
+        BOOST_CHECK(true);
+    } catch (task::deadline_reached &e) {
+        BOOST_CHECK(false);
+    }
+    task::sleep(100);
+    BOOST_CHECK(true);
+}
+
+BOOST_AUTO_TEST_CASE(task_deadline_timer) {
+    runner::init();
+    task::spawn(deadline_timer);
+    task::spawn(deadline_not_reached);
+    runner::main();
+}
