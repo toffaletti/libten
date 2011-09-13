@@ -92,11 +92,17 @@ public:
         }
 
         ~request() {
-            // ensure a response is sent
-            resp = http_response(404, "Not Found");
-            resp.append_header("Connection", "close");
-            resp.append_header("Content-Length", 0);
-            send_response();
+            if (!resp_sent) {
+                // ensure a response is sent
+                resp = http_response(404, "Not Found");
+                resp.append_header("Connection", "close");
+                resp.append_header("Content-Length", 0);
+                send_response();
+            }
+
+            if (resp.header_string("Connection") == "close") {
+                sock.close();
+            }
         }
 
         http_request &req;

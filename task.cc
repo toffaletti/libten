@@ -232,9 +232,14 @@ void task::resume() {
     m->in.add_to_runqueue(t);
 }
 
-bool task::poll(int fd, short events, unsigned int ms) {
-    pollfd fds = {fd, events, 0};
-    return task::poll(&fds, 1, ms);
+bool task::poll(int fd, short event, unsigned int ms) {
+    pollfd fds = {fd, event, 0};
+    task::poll(&fds, 1, ms);
+    // HUP & ERR are returned when a connection fails
+    if (fds.revents & EPOLLHUP || fds.revents & EPOLLERR) {
+        return false;
+    }
+    return fds.revents & event;
 }
 
 int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
@@ -382,9 +387,10 @@ int task::socket::connect(const address &addr, unsigned int timeout_ms) {
         if (errno == EINTR)
             continue;
         if (errno == EINPROGRESS || errno == EADDRINUSE) {
+            errno = 0;
             if (task::poll(s.fd, EPOLLOUT, timeout_ms)) {
                 return 0;
-            } else {
+            } else if (errno == 0) {
                 errno = ETIMEDOUT;
             }
         }

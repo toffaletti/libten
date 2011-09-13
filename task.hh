@@ -66,8 +66,8 @@ public:
     //! when it is about to make a blocking call
     //! so it does not block any other tasks
     static void migrate(runner *to=NULL);
-    //! wrapper around poll for single fd
-    static bool poll(int fd, short events, unsigned int ms=0);
+    //! wrapper around poll for single fd and single event
+    static bool poll(int fd, short event, unsigned int ms=0);
     //! task aware poll, for waiting on io. task will
     //! go to sleep until epoll events or timeout
     static int poll(pollfd *fds, nfds_t nfds, int timeout=0);
