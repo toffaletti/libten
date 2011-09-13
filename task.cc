@@ -210,6 +210,7 @@ void task::resume() {
 bool task::poll(int fd, short event, unsigned int ms) {
     pollfd fds = {fd, event, 0};
     task::poll(&fds, 1, ms);
+    // HUP & ERR are returned when a connection fails
     if (fds.revents & EPOLLHUP || fds.revents & EPOLLERR) {
         return false;
     }
