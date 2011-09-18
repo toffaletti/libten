@@ -1,3 +1,6 @@
+#ifndef JSON_HH
+#define JSON_HH
+
 #include "jansson/jansson.h"
 #include <boost/shared_ptr.hpp>
 
@@ -20,3 +23,5 @@ struct json_deleter
 typedef boost::shared_ptr<json_t> json_ptr;
 
 } // end namespace fw
+
+#endif // JSON_HH
