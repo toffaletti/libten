@@ -17,7 +17,7 @@ public:
     //! wrapper around an http request/response
     struct request {
         request(http_request &req_, task::socket &sock_)
-            : req(req_), sock(sock_),
+            : req(req_), resp(404, "Not Found"), sock(sock_),
             start(boost::posix_time::microsec_clock::universal_time()),
             resp_sent(false) {}
 
