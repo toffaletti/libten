@@ -59,7 +59,10 @@ public:
             }
             data = resp.data();
             ssize_t nw = sock.send(data.data(), data.size());
-            // TODO: send body?
+            // TODO: handle nw error
+            if (!resp.body.empty()) {
+                nw = sock.send(resp.body.data(), resp.body.size());
+            }
             return nw;
         }
 
@@ -113,7 +116,7 @@ public:
     };
 
     typedef boost::function<void (request &)> func_type;
-    typedef boost::tuple<std::string, func_type> tuple_type;
+    typedef boost::tuple<std::string, int, func_type> tuple_type;
     typedef std::vector<tuple_type> map_type;
 
 public:
@@ -124,8 +127,8 @@ public:
     }
 
     //! add a callback for a uri with an fnmatch pattern
-    void add_callback(const std::string &pattern, const func_type &f) {
-      _map.push_back(tuple_type(pattern, f));
+    void add_callback(const std::string &pattern, const func_type &f, int fnmatch_flags = 0) {
+      _map.push_back(tuple_type(pattern, fnmatch_flags, f));
     }
 
     //! set logging function, called after every request
@@ -188,8 +191,8 @@ private:
         // not super efficient, but good enough
         for (map_type::const_iterator i= _map.begin(); i!= _map.end(); i++) {
             DVLOG(5) << "matching pattern: " << i->get<0>();
-            if (fnmatch(i->get<0>().c_str(), u.path.c_str(), 0) == 0) {
-                i->get<1>()(r);
+            if (fnmatch(i->get<0>().c_str(), u.path.c_str(), i->get<1>()) == 0) {
+                i->get<2>()(r);
                 break;
             }
         }

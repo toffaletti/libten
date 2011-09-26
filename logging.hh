@@ -2,6 +2,7 @@
 #define LOGGING_HH
 
 #include <glog/logging.h>
+#include <glog/stl_logging.h>
 #include <sstream>
 
 namespace fw {

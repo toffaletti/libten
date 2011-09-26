@@ -1,5 +1,4 @@
 #include "uri.hh"
-#include <boost/algorithm/string.hpp>
 #include <list>
 #include <sstream>
 #include <boost/smart_ptr/scoped_array.hpp>
@@ -157,14 +156,6 @@ static void normalize_pct_encoded(std::string &str) {
   str.resize(strlen(str.data()));
 }
 
-typedef std::list<std::string> string_splits;
-
-struct match_char {
-  char c;
-  match_char(char c) : c(c) {}
-  bool operator()(char x) const { return x == c; }
-};
-
 static void remove_dot_segments(uri &u) {
   if (u.path.empty()) {
     u.path = "/";
@@ -173,9 +164,9 @@ static void remove_dot_segments(uri &u) {
     return;
   }
 
-  string_splits splits;
-  boost::split(splits, u.path, match_char('/'));
-  for (string_splits::iterator i = splits.begin(); i!=splits.end(); ++i) {
+  uri::split_vector splits;
+  boost::split(splits, u.path, uri::match_char('/'));
+  for (uri::split_vector::iterator i = splits.begin(); i!=splits.end(); ++i) {
     // use clear instead of erase to help preserve trailing slashes
     if (*i == ".") {
       i->clear();
@@ -191,7 +182,7 @@ static void remove_dot_segments(uri &u) {
 
   /* reassemble path from segments */
   std::stringstream ss;
-  for (string_splits::iterator i = splits.begin(); i!=splits.end(); ++i) {
+  for (uri::split_vector::iterator i = splits.begin(); i!=splits.end(); ++i) {
     if (!i->empty()) {
       ss << "/" << *i;
     }
@@ -445,11 +436,11 @@ std::string uri::decode(const std::string& src)
 uri::query_params uri::parse_query() {
   query_params result;
   if (query.size() <= 1) return result;
-  string_splits splits;
+  uri::split_vector splits;
   // skip the ? at the start of query
   std::string query_ = query.substr(1);
-  boost::split(splits, query_, match_char('&'));
-  for (string_splits::iterator i = splits.begin(); i!=splits.end(); ++i) {
+  boost::split(splits, query_, uri::match_char('&'));
+  for (uri::split_vector::iterator i = splits.begin(); i!=splits.end(); ++i) {
     size_t pos = i->find_first_of('=');
     if (pos != std::string::npos) {
       result.push_back(std::make_pair(i->substr(0, pos), decode(i->substr(pos+1))));

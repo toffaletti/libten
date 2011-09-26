@@ -1,9 +1,13 @@
+#ifndef URI_HH
+#define URI_HH
+
 #include <string>
 #include <utility>
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
 #include <sstream>
+#include <boost/algorithm/string.hpp>
 
 /* TODO:
  * Normalization and Comparison
@@ -90,5 +94,17 @@ struct uri {
         return ss.str();
     }
 
+    struct match_char {
+        char c;
+        match_char(char c) : c(c) {}
+        bool operator()(char x) const { return x == c; }
+    };
+    typedef std::vector<std::string> split_vector;
+    split_vector path_splits() {
+        split_vector splits;
+        boost::split(splits, path, match_char('/'));
+        return splits;
+    }
 };
 
+#endif // URI_HH
