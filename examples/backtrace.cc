@@ -1,8 +1,8 @@
-#include "runner.hh"
 #include "task.hh"
 #include "error.hh"
 
 using namespace fw;
+size_t default_stacksize=4096;
 
 void go_crazy() {
     throw errorx("weee!");
@@ -17,9 +17,8 @@ void stack_overflow() {
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
+    procmain p;
     // need 16k stack for fprintf of the backtrace
-    task::spawn(stack_overflow, 0, 16*1024);
-    runner::main();
-    return 0;
+    taskspawn(stack_overflow, 16*1024);
+    return p.main(argc, argv);
 }

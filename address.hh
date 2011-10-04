@@ -1,7 +1,7 @@
 #ifndef ADDRESS_HH
 #define ADDRESS_HH
 
-#include "error.h"
+#include "error.hh"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>

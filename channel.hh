@@ -1,10 +1,9 @@
 #ifndef CHANNEL_HH
 #define CHANNEL_HH
 
-#include <boost/shared_ptr.hpp>
-#include <boost/circular_buffer.hpp>
-#include "thread.hh"
 #include "task.hh"
+#include <boost/circular_buffer.hpp>
+#include <memory>
 
 namespace fw {
 
@@ -37,10 +36,9 @@ private:
         size_type capacity;
         size_type unread;
         container_type container;
-        mutex mtx;
-        // using task-aware conditions
-        task::condition not_empty;
-        task::condition not_full;
+        qutex qtx;
+        rendez not_empty;
+        rendez not_full;
         bool closed;
 
         bool is_empty() const { return unread == 0; }
@@ -56,31 +54,31 @@ public:
 
     //! send data
     typename impl::size_type send(T p) {
-        mutex::scoped_lock l(m->mtx);
+        std::unique_lock<qutex> l(m->qtx);
         typename impl::size_type unread = m->unread;
         while (m->is_full() && !m->closed) {
-            m->not_full.wait(l);
+            m->not_full.sleep(l);
         }
         check_closed();
         m->container.push_front(p);
         ++m->unread;
-        m->not_empty.signal();
+        m->not_empty.wakeup();
         return unread;
     }
 
     //! receive data
     T recv() {
         T item;
-        mutex::scoped_lock l(m->mtx);
+        std::unique_lock<qutex> l(m->qtx);
         bool unbuffered = m->capacity == 0;
         if (unbuffered) {
             // grow the capacity for a single item
             m->capacity = 1;
             // unblock sender
-            m->not_full.signal();
+            m->not_full.wakeup();
         }
         while (m->is_empty() && !m->closed) {
-            m->not_empty.wait(l);
+            m->not_empty.sleep(l);
         }
         if (m->unread == 0) {
             check_closed();
@@ -94,20 +92,20 @@ public:
             // waiting for recv
             m->capacity = 0;
         } else {
-            m->not_full.signal();
+            m->not_full.wakeup();
         }
         return item;
     }
 
     //! timed receive data
     bool timed_recv(T &item, unsigned int ms) {
-        mutex::scoped_lock l(m->mtx);
+        std::unique_lock<qutex> l(m->qtx);
         bool unbuffered = m->capacity == 0;
         if (unbuffered) {
             // grow the capacity for a single item
             m->capacity = 1;
             // unblock sender
-            m->not_full.signal();
+            m->not_full.wakeup();
         }
         while (m->is_empty() && !m->closed) {
             if (!m->not_empty.timed_wait(l, ms)) return false;
@@ -135,19 +133,19 @@ public:
 
     //! \return number of unread items
     size_t unread() {
-        mutex::scoped_lock lock(m->mtx);
+        std::unique_lock<qutex> lock(m->qtx);
         return m->unread;
     }
 
     void close() {
-        mutex::scoped_lock l(m->mtx);
+        std::unique_lock<qutex> l(m->qtx);
         m->closed = true;
         // wake up all users of channel
-        m->not_empty.broadcast();
-        m->not_full.broadcast();
+        m->not_empty.wakeupall();
+        m->not_full.wakeupall();
     }
 private:
-    boost::shared_ptr<impl> m;
+    std::shared_ptr<impl> m;
 
     void check_closed() {
         // i dont like throwing an exception for this

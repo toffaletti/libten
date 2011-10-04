@@ -1,9 +1,9 @@
-#include "runner.hh"
 #include "channel.hh"
 #include <boost/bind.hpp>
 #include <iostream>
 
 using namespace fw;
+size_t default_stacksize = 4096;
 
 // adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 
@@ -24,19 +24,19 @@ void filter(channel<int> in, channel<int> out, int prime) {
 
 void primes() {
     channel<int> ch;
-    task::spawn(boost::bind(generate, ch));
+    taskspawn(boost::bind(generate, ch));
     for (int i=0; i<100; ++i) {
         int prime = ch.recv();
         std::cout << prime << "\n";
         channel<int> out;
-        task::spawn(boost::bind(filter, ch, out, prime));
+        taskspawn(boost::bind(filter, ch, out, prime));
         ch = out;
     }
     exit(0);
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(primes);
-    return runner::main();
+    procmain p;
+    taskspawn(primes);
+    return p.main(argc, argv);
 }

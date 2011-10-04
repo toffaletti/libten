@@ -16,7 +16,7 @@ configure_make_install(libglog
 set(ASM asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
-add_library(fw error.cc task.cc runner.cc ${ASM})
+add_library(fw error.cc task.cc ioproc.cc net.cc ${ASM})
 add_dependencies(fw libglog)
 target_link_libraries(fw rt glog)
 
@@ -30,3 +30,8 @@ add_subdirectory(http)
 add_subdirectory(jansson)
 add_subdirectory(stringencoders)
 add_subdirectory(msgpack)
+
+#add_library(fw2 error.cc proc.cc ${ASM})
+#add_executable(play error.cc proc.cc ${ASM})
+#add_dependencies(play libglog)
+#target_link_libraries(play glog)

@@ -1,10 +1,10 @@
-#include "runner.hh"
 #include "task.hh"
 #include "descriptors.hh"
 #include <boost/bind.hpp>
 #include <iostream>
 
 using namespace fw;
+size_t default_stacksize=4096*2;
 
 // this uses task::poll directly instead of task::socket
 
@@ -13,7 +13,7 @@ void echo_task(socket_fd &_s) {
     socket_fd s(_s.accept(client_addr, SOCK_NONBLOCK));
     char buf[4096];
     for (;;) {
-        task::poll(s.fd, EPOLLIN);
+        fdwait(s.fd, 'r');
         ssize_t nr = s.recv(buf, sizeof(buf));
         if (nr <= 0) break;
         ssize_t nw = s.send(buf, nr);
@@ -30,14 +30,14 @@ void listen_task() {
     s.listen();
 
     for (;;) {
-        task::poll(s.fd, EPOLLIN);
-        task::spawn(boost::bind(echo_task, boost::ref(s)));
+        fdwait(s.fd, 'r');
+        taskspawn(std::bind(echo_task, std::ref(s)));
     }
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(listen_task);
-    return runner::main();
+    procmain p;
+    taskspawn(listen_task);
+    return p.main(argc, argv);
 }
 

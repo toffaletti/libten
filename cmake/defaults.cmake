@@ -7,9 +7,8 @@ if (NOT GCC_FLAGS)
     set(GCC_FLAGS "-pthread -march=core2")
     set(GCC_FLAGS "${GCC_FLAGS} -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter")
     set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings")
-    #set(GXX_FLAGS "-std=gnu++0x ${GCC_FLAGS}")
-    set(GXX_FLAGS "-std=gnu++98 ${GCC_FLAGS}")
-    set(GCC_FLAGS "${GCC_FLAGS} -Wstrict-prototypes -Wmissing-prototypes")
+    set(GXX_FLAGS "-std=gnu++0x ${GCC_FLAGS}")
+    set(GCC_FLAGS "${GCC_FLAGS} -std=gnu99 -Wstrict-prototypes -Wmissing-prototypes")
 
     # profile guided optimization
     if (WITH_PGO STREQUAL "generate")
@@ -21,6 +20,8 @@ if (NOT GCC_FLAGS)
     endif (WITH_PGO STREQUAL "use")
 
     add_definitions(-D_REENTRANT -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -D_GNU_SOURCE)
+    # needed for std::thread features
+    add_definitions(-D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD)
 
     # release- and debug-specific flags for gcc
     set(DEBUG_FLAGS   "-O0 -ggdb -D_DEBUG -rdynamic")

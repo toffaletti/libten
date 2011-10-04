@@ -1,7 +1,7 @@
-#include "runner.hh"
 #include "task.hh"
 
 using namespace fw;
+size_t default_stacksize=4096;
 
 static void stack_overflow() {
     char buf[4*1024];
@@ -15,8 +15,7 @@ static void stack_overflow() {
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(stack_overflow, NULL, 4*1024);
-    runner::main();
-    return 0;
+    procmain p;
+    taskspawn(stack_overflow, 4*1024);
+    return p.main(argc, argv);
 }

@@ -1,11 +1,12 @@
-#include "runner.hh"
 #include "task.hh"
 #include "channel.hh"
 #include "buffer.hh"
-#include <boost/bind.hpp>
+#include "net.hh"
 #include <iostream>
+#include <functional>
 
 using namespace fw;
+size_t default_stacksize=4096;
 
 // sends a file over a tcp socket on port 5500
 // $ nc -l -p 5500 > out & ./file-send libfw.a
@@ -45,7 +46,7 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
 
 void file_sender(channel<buffer::slice> c) {
     address addr("127.0.0.1", 5500);
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     s.connect(addr, 100);
     size_t bytes_sent = 0;
     for (;;) {
@@ -59,11 +60,11 @@ void file_sender(channel<buffer::slice> c) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return 1;
-    runner::init();
+    procmain p;
     file_fd f(argv[1], 0, 0);
     channel<buffer::slice> c(channel_cap);
-    task::spawn(boost::bind(file_sender, c));
+    taskspawn(std::bind(file_sender, c));
     // start a new OS-thread for file_reader
-    runner::spawn(boost::bind(file_reader, c, boost::ref(f)));
-    return runner::main();
+    procspawn(std::bind(file_reader, c, std::ref(f)));
+    return p.main(argc, argv);
 }

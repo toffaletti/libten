@@ -2,7 +2,7 @@
 #define JSON_HH
 
 #include "jansson/jansson.h"
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 namespace fw {
 
@@ -20,7 +20,7 @@ struct json_deleter
     }
 };
 
-typedef boost::shared_ptr<json_t> json_ptr;
+typedef std::shared_ptr<json_t> json_ptr;
 
 } // end namespace fw
 

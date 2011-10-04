@@ -1,8 +1,8 @@
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/tuple/tuple.hpp>
-#include <boost/bind.hpp>
+#include <functional>
+#include <tuple>
 
 #include "logging.hh"
 #include "task.hh"
@@ -115,8 +115,8 @@ public:
         bool resp_sent;
     };
 
-    typedef boost::function<void (request &)> func_type;
-    typedef boost::tuple<std::string, int, func_type> tuple_type;
+    typedef std::function<void (request &)> func_type;
+    typedef std::tuple<std::string, int, func_type> tuple_type;
     typedef std::vector<tuple_type> map_type;
 
 public:
@@ -142,7 +142,7 @@ public:
         sock.bind(baddr);
         sock.getsockname(baddr);
         LOG(INFO) << "listening on: " << baddr;
-        task::spawn(boost::bind(&http_server::listen_task, this));
+        task::spawn(std::bind(&http_server::listen_task, this));
     }
 
 private:
@@ -159,7 +159,7 @@ private:
             address client_addr;
             int fd;
             while ((fd = sock.accept(client_addr, 0)) > 0) {
-                task::spawn(boost::bind(&http_server::client_task, this, fd), 0, stack_size);
+                task::spawn(std::bind(&http_server::client_task, this, fd), 0, stack_size);
             }
         }
     }

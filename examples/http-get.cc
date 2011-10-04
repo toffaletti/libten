@@ -1,16 +1,16 @@
-#include "runner.hh"
 #include "task.hh"
 #include "buffer.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
-#include <boost/bind.hpp>
+#include "net.hh"
 
 #include <iostream>
 
 using namespace fw;
+size_t default_stacksize=4096;
 
 static void do_get(uri u) {
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     u.normalize();
     if (u.scheme != "http") return;
     if (u.port == 0) u.port = 80;
@@ -44,9 +44,9 @@ static void do_get(uri u) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
-    runner::init();
+    procmain p;
 
     uri u(argv[1]);
-    task::spawn(boost::bind(do_get, u), 0, 4*1024*1024);
-    return runner::main();
+    taskspawn(std::bind(do_get, u));
+    return p.main(argc, argv);
 }

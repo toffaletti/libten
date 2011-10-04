@@ -1,69 +1,71 @@
 #define BOOST_TEST_MODULE task test
 #include <boost/test/unit_test.hpp>
-#include <boost/bind.hpp>
-#include "runner.hh"
+#include <thread>
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"
+#include "timespec.hh"
+#include "task.hh"
 
 using namespace fw;
+// needed a larger stack for socket_io_mt
+size_t default_stacksize=4096*2;
 
-static void bar(thread p) {
+static void bar(std::thread::id p) {
     // cant use BOOST_CHECK in multi-threaded tests :(
-    assert(runner::self().get_thread() != p);
-    task::yield();
+    assert(std::this_thread::get_id() != p);
+    taskyield();
 }
 
-static void foo(thread p, semaphore &s) {
-    assert(runner::self().get_thread() != p);
-    task::spawn(boost::bind(bar, p));
-    task::yield();
+static void foo(std::thread::id p, semaphore &s) {
+    assert(std::this_thread::get_id() != p);
+    taskspawn(std::bind(bar, p));
+    taskyield();
     s.post();
 }
 
 BOOST_AUTO_TEST_CASE(constructor_test) {
-    runner::init();
+    procmain p;
     semaphore s;
-    thread t = runner::self().get_thread();
-    BOOST_CHECK(t.id);
-    runner::spawn(boost::bind(foo, t, boost::ref(s)));
+    procspawn(std::bind(foo, std::this_thread::get_id(), boost::ref(s)));
     s.wait();
-    runner::main();
+    p.main();
 }
 
 static void co1(int &count) {
     count++;
-    task::yield();
+    taskyield();
     count++;
 }
 
 BOOST_AUTO_TEST_CASE(schedule_test) {
-    runner::init();
+    procmain p;
     int count = 0;
     for (int i=0; i<10; ++i) {
-        task::spawn(boost::bind(co1, boost::ref(count)));
+        taskspawn(std::bind(co1, boost::ref(count)));
     }
-    runner::main();
+    p.main();
     BOOST_CHECK_EQUAL(20, count);
 }
 
-static void mig_co(semaphore &s) {
-    runner start_runner = runner::self();
-    thread start_thread = start_runner.get_thread();
-    task::migrate();
-    thread end_thread = runner::self().get_thread();
-    assert(start_thread != end_thread);
-    task::migrate(&start_runner);
-    assert(start_thread == runner::self().get_thread());
-    s.post();
+static void pipe_write(pipe_fd &p) {
+    BOOST_CHECK_EQUAL(p.write("test", 4), 4);
 }
 
-BOOST_AUTO_TEST_CASE(runner_migrate) {
-    runner::init();
-    semaphore s;
-    runner::spawn(boost::bind(mig_co, boost::ref(s)));
-    runner::main();
-    s.wait();
+static void pipe_wait(size_t &bytes) {
+    pipe_fd p(O_NONBLOCK);
+    taskspawn(std::bind(pipe_write, std::ref(p)));
+    fdwait(p.r.fd, 'r');
+    char buf[64];
+    bytes = p.read(buf, sizeof(buf));
+}
+
+BOOST_AUTO_TEST_CASE(fdwait_test) {
+    procmain p;
+    size_t bytes = 0;
+    taskspawn(std::bind(pipe_wait, std::ref(bytes)));
+    p.main();
+    BOOST_CHECK_EQUAL(bytes, 4);
 }
 
 static void connect_to(address addr) {
@@ -73,7 +75,7 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        bool success = task::poll(s.fd, EPOLLOUT);
+        bool success = fdwait(s.fd, 'w');
         assert(success);
     } else {
         throw errno_error();
@@ -89,17 +91,17 @@ static void listen_co(bool multithread, semaphore &sm) {
     s.listen();
 
     if (multithread) {
-        runner::spawn(boost::bind(connect_to, addr));
+        procspawn(std::bind(connect_to, addr));
     } else {
-        task::spawn(boost::bind(connect_to, addr));
+        taskspawn(std::bind(connect_to, addr));
     }
 
-    bool success = task::poll(s.fd, EPOLLIN);
+    bool success = fdwait(s.fd, 'r');
     assert(success);
 
     address client_addr;
     socket_fd cs(s.accept(client_addr, SOCK_NONBLOCK));
-    task::poll(cs.fd, EPOLLIN);
+    fdwait(cs.fd, 'r');
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
 
@@ -111,25 +113,25 @@ static void listen_co(bool multithread, semaphore &sm) {
 }
 
 BOOST_AUTO_TEST_CASE(socket_io) {
-    runner::init();
+    procmain p;
     semaphore s;
-    task::spawn(boost::bind(listen_co, false, boost::ref(s)));
-    runner::main();
+    taskspawn(std::bind(listen_co, false, std::ref(s)));
+    p.main();
     s.wait();
 }
 
 BOOST_AUTO_TEST_CASE(socket_io_mt) {
-    runner::init();
+    procmain p;
     semaphore s;
-    task::spawn(boost::bind(listen_co, true, boost::ref(s)));
-    runner::main();
+    taskspawn(std::bind(listen_co, true, std::ref(s)));
+    p.main();
     s.wait();
 }
 
 static void sleeper(semaphore &s) {
     timespec start;
     THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &start));
-    task::sleep(10);
+    tasksleep(10);
     timespec end;
     THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &end));
 
@@ -141,10 +143,10 @@ static void sleeper(semaphore &s) {
 }
 
 BOOST_AUTO_TEST_CASE(task_sleep) {
-    runner::init();
+    procmain p;
     semaphore s;
-    task::spawn(boost::bind(sleeper, boost::ref(s)));
-    runner::main();
+    taskspawn(std::bind(sleeper, boost::ref(s)));
+    p.main();
     s.wait();
 }
 
@@ -171,37 +173,38 @@ static void listen_timeout_co(semaphore &sm) {
     s.getsockname(addr);
     s.listen();
 
-    bool timeout = !task::poll(s.fd, EPOLLIN, 5);
+    bool timeout = !fdwait(s.fd, 'r', 5);
     BOOST_CHECK(timeout);
     sm.post();
 }
 
 BOOST_AUTO_TEST_CASE(poll_timeout_io) {
-    runner::init();
+    procmain p;
     semaphore s;
-    task::spawn(boost::bind(listen_timeout_co, boost::ref(s)));
-    runner::main();
+    taskspawn(std::bind(listen_timeout_co, std::ref(s)));
+    p.main();
     s.wait();
 }
 
-static void sleep_many(atomic_count &count) {
+static void sleep_many(uint64_t &count) {
     ++count;
-    task::sleep(5);
+    tasksleep(5);
     ++count;
-    task::sleep(10);
+    tasksleep(10);
     ++count;
 }
 
 BOOST_AUTO_TEST_CASE(many_timeouts) {
-    runner::init();
-    atomic_count count(0);
+    procmain p;
+    uint64_t count(0);
     for (int i=0; i<1000; i++) {
-        task::spawn(boost::bind(sleep_many, boost::ref(count)));
+        taskspawn(std::bind(sleep_many, std::ref(count)));
     }
-    runner::main();
+    p.main();
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
+#if 0
 static void long_timeout() {
     task::sleep(200);
     // TODO: fix?
@@ -211,30 +214,17 @@ static void long_timeout() {
 }
 
 BOOST_AUTO_TEST_CASE(too_many_runners) {
-    runner::init();
+    procmain p;
     atomic_count count(0);
     // lower timeout to make test run faster
     runner::set_thread_timeout(100);
     for (unsigned int i=0; i<runner::ncpu()+5; ++i) {
-        runner::spawn(boost::bind(sleep_many, boost::ref(count)), true);
+        procspawn(std::bind(sleep_many, boost::ref(count)), true);
     }
-    task::spawn(long_timeout);
-    runner::main();
+    taskspawn(long_timeout);
+    p.main();
     BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
     runner::set_thread_timeout(5*1000);
-}
-
-static void dial_google() {
-    task::socket s(AF_INET, SOCK_STREAM);
-    int status = s.dial("www.google.com", 80, 300);
-    BOOST_CHECK_EQUAL(status, 0);
-}
-
-BOOST_AUTO_TEST_CASE(task_socket_dial) {
-    runner::init();
-    // getaddrinfo requires a rather large stack
-    task::spawn(dial_google, 0, 8*1024*1024);
-    runner::main();
 }
 
 static void long_sleeper() {
@@ -243,15 +233,15 @@ static void long_sleeper() {
 }
 
 static void cancel_sleep() {
-    task t = task::spawn(long_sleeper);
+    task t = taskspawn(long_sleeper);
     task::sleep(10);
     t.cancel();
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
-    runner::init();
-    task::spawn(cancel_sleep);
-    runner::main();
+    procmain p;
+    taskspawn(cancel_sleep);
+    p.main();
 }
 
 static void channel_wait() {
@@ -262,15 +252,15 @@ static void channel_wait() {
 }
 
 static void cancel_channel() {
-    task t = task::spawn(channel_wait);
-    task::sleep(10);
+    task t = taskspawn(channel_wait);
+    tasksleep(10);
     t.cancel();
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_channel) {
-    runner::init();
-    task::spawn(cancel_channel);
-    runner::main();
+    procmain p;
+    taskspawn(cancel_channel);
+    p.main();
 }
 
 static void io_wait() {
@@ -280,33 +270,15 @@ static void io_wait() {
 }
 
 static void cancel_io() {
-    task t = task::spawn(io_wait);
+    task t = taskspawn(io_wait);
     task::sleep(10);
     t.cancel();
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_io) {
-    runner::init();
-    task::spawn(cancel_io);
-    runner::main();
-}
-
-static void migrate_task() {
-    task::migrate();
-    task::sleep(1000);
-    abort();
-}
-
-static void cancel_migrate() {
-    task t = task::spawn(migrate_task);
-    task::sleep(10);
-    t.cancel();
-}
-
-BOOST_AUTO_TEST_CASE(task_cancel_migrate) {
-    runner::init();
-    task::spawn(cancel_migrate);
-    runner::main();
+    procmain p;
+    taskspawn(cancel_io);
+    p.main();
 }
 
 static void yield_loop(uint64_t &counter) {
@@ -318,7 +290,7 @@ static void yield_loop(uint64_t &counter) {
 
 static void yield_timer() {
     uint64_t counter = 0;
-    task t = task::spawn(boost::bind(yield_loop, boost::ref(counter)));
+    task t = taskspawn(std::bind(yield_loop, boost::ref(counter)));
     task::sleep(1000);
     t.cancel();
     // tight yield loop should take less than microsecond
@@ -328,9 +300,9 @@ static void yield_timer() {
 }
 
 BOOST_AUTO_TEST_CASE(task_yield_timer) {
-    runner::init();
-    task::spawn(yield_timer);
-    runner::main();
+    procmain p;
+    taskspawn(yield_timer);
+    p.main();
 }
 
 static void deadline_timer() {
@@ -356,8 +328,37 @@ static void deadline_not_reached() {
 }
 
 BOOST_AUTO_TEST_CASE(task_deadline_timer) {
-    runner::init();
-    task::spawn(deadline_timer);
-    task::spawn(deadline_not_reached);
-    runner::main();
+    procmain p;
+    taskspawn(deadline_timer);
+    taskspawn(deadline_not_reached);
+    p.main();
 }
+#endif
+
+void qlocker(qutex &q, rendez &r, int &x) {
+    std::unique_lock<qutex> lk(q);
+    ++x;
+    r.wakeup();
+}
+
+bool is_twenty(int &x) { return x == 20; }
+
+void qutex_task_spawn() {
+    qutex q;
+    rendez r;
+    int x = 0;
+    for (int i=0; i<20; ++i) {
+        procspawn(std::bind(qlocker, std::ref(q), std::ref(r), std::ref(x)));
+        taskyield();
+    }
+    std::unique_lock<qutex> lk(q);
+    r.sleep(lk, std::bind(is_twenty, std::ref(x)));
+    BOOST_CHECK_EQUAL(x, 20);
+}
+
+BOOST_AUTO_TEST_CASE(qutex_test) {
+    procmain p;
+    taskspawn(qutex_task_spawn);
+    p.main();
+}
+

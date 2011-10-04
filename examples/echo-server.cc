@@ -1,13 +1,13 @@
-#include "runner.hh"
 #include "task.hh"
 #include "descriptors.hh"
-#include <boost/bind.hpp>
+#include "net.hh"
 #include <iostream>
 
 using namespace fw;
+size_t default_stacksize=4096*2;
 
 void echo_task(int sock) {
-    task::socket s(sock);
+    netsock s(sock);
     char buf[4096];
     for (;;) {
         ssize_t nr = s.recv(buf, sizeof(buf));
@@ -17,7 +17,7 @@ void echo_task(int sock) {
 }
 
 void listen_task() {
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("127.0.0.1", 0);
     s.bind(addr);
@@ -29,15 +29,15 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0, 60*1000)) > 0) {
-            task::spawn(boost::bind(echo_task, sock));
+            taskspawn(std::bind(echo_task, sock));
         }
         std::cout << "accept timeout reached\n";
     }
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(listen_task);
-    return runner::main();
+    procmain p;
+    taskspawn(listen_task);
+    return p.main(argc, argv);
 }
 

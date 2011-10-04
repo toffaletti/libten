@@ -1,43 +1,32 @@
+#include <thread>
+#include <condition_variable>
+#include <cassert>
+#include <algorithm>
+#include <stdatomic.h>
+#include "timespec.hh"
+#include "coroutine.hh"
 #include "logging.hh"
 #include "task.hh"
-#include "runner.hh"
-#include "channel.hh"
-#include <sstream>
-#include <netdb.h>
+#include "descriptors.hh"
+
+#include <cxxabi.h>
+#include <execinfo.h>
+#include <iostream>
+namespace hack {
+// hack to avoid redefinition of ucontext
+// by including it in a namespace
+#include <asm-generic/ucontext.h>
+}
 
 namespace fw {
 
-// static
-atomic_count task::ntasks(0);
+struct io_scheduler;
 
-struct task::impl : boost::noncopyable, public boost::enable_shared_from_this<impl> {
-    //! the runner this task is being executed in or migrated to
-    runner in;
-    //! function for this task to execute
-    proc f;
-    //! name and state are for future use, to make debugging easier
-    std::string name;
-    std::string state;
-    //! timeout value for this task
-    timespec ts;
-    //! deadline timeout for this task
-    timespec dl;
-    coroutine co;
-    mutex mut;
-    atomic_bits<uint32_t> flags;
-
-    impl() : name("maintask"), flags(_TASK_RUNNING) {}
-    impl(const proc &f_, size_t stack_size=16*1024)
-        : f(f_), name("task"), co((coroutine::proc)task::start, this, stack_size),
-        flags(_TASK_SLEEP)
-    {
-        ++ntasks;
-    }
-
-    ~impl() { if (!co.main()) { --ntasks; } }
-
-    task to_task() { return shared_from_this(); }
-};
+static std::atomic<uint64_t> taskidgen(0);
+static __thread proc *_this_proc = 0;
+static std::mutex procsmutex;
+static proclist procs;
+static std::once_flag init_flag;
 
 static unsigned int timespec_to_milliseconds(const timespec &ts) {
     // convert timespec to milliseconds
@@ -53,757 +42,625 @@ static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
     ts.tv_nsec = (ms % 1000) * 1000000;
 }
 
-task::deadline::deadline(uint64_t milliseconds) {
+struct task {
+    char name[256];
+    char state[256];
+    std::function<void ()> fn;
+    coroutine co;
+    uint64_t id;
+    proc *cproc;
+    timespec *timeout;
+    timespec *deadline;
+    bool exiting;
+    bool systask;
+    
+    task(const std::function<void ()> &f, size_t stacksize);
+    ~task() {
+        delete timeout;
+        delete deadline;
+    }
+
+    void ready();
+    void swap();
+
+    void exit() {
+        exiting = true;
+        swap();
+    }
+
+    static void start(void *arg) {
+        task *t = (task *)arg;
+        t->fn();
+        t->exit();
+    }
+};
+
+#if 0
+deadline::deadline(uint64_t milliseconds) {
     task t = task::self();
     if (t.m->flags & _TASK_HAS_DEADLINE) {
         throw errorx("trying to set deadline on task that already has a deadline");
     }
-    mutex::scoped_lock lk(t.m->mut);
+    std::unique_lock<std::mutex> lk(t.m->mut);
     milliseconds_to_timespec(milliseconds, t.m->dl);
     t.m->dl += runner::self().get_scheduler().cached_now();
     t.m->flags |= _TASK_HAS_DEADLINE;
 }
 
-task::deadline::~deadline() {
+deadline::~deadline() {
     task t = task::self();
     t.m->flags ^= _TASK_HAS_DEADLINE;
 }
+#endif
 
-task::task() { m.reset(new impl); }
+struct proc {
+    io_scheduler *sched;
+    std::thread *thread;
+    std::mutex mutex;
+    uint64_t nswitch;
+    task *ctask;
+    tasklist runqueue;
+    tasklist alltasks;
+    std::condition_variable runcv;
+    coroutine co;
+    std::atomic<uint64_t> taskcount;
 
-task::task(const proc &f_, size_t stack_size) {
-    m.reset(new impl(f_, stack_size));
-}
-
-std::ostream &operator << (std::ostream &o, const task::impl *t) {
-    // TODO: replace the pointer with task "id" (atomicly incremented global counter)
-    o << "[" << t->name << ":" << t->state << ":" << (void*)t << ":" << t->flags << ":" << t->ts << "]";
-    return o;
-}
-
-std::ostream &operator << (std::ostream &o, const task &t) {
-    // TODO: replace the pointer with task "id" (atomicly incremented global counter)
-    o << "[" << t.m->name << ":" << t.m->state << ":" << (void*)t.m.get() << ":" << t.m->flags << ":" << t.m->ts << ":" << t.m.use_count() << "]";
-    return o;
-}
-
-std::string task::str() const {
-    std::stringstream ss;
-    ss << *this;
-    return ss.str();
-}
-
-task task::self() {
-    return runner::self().get_task();
-}
-
-void task::cancel() {
-    mutex::scoped_lock rl(m->mut);
-    m->flags |= _TASK_INTERRUPT;
-    // if this task isn't in a runner
-    // it either will be soon (migrate)
-    // or its exiting
-    if (m->in) m->in.add_to_runqueue(*this);
-    // order of operations:
-    // check for this flag in task::yield
-    // throw task::interrupt_unwind exception
-    // catch exception to remove pollfds, etc. rethrow
-    // remove from waiters inside runloop
-
-    // reset the shared_ptr so the task can be freed
-    m.reset();
-}
-
-bool task::done() const {
-    return m->flags & _TASK_EXIT;
-}
-
-void task::swap(task &from, task &to) {
-    assert(!(to.m->flags & _TASK_RUNNING));
-    to.m->flags |= _TASK_RUNNING;
-
-    assert(from.m->flags & _TASK_RUNNING);
-    from.m->flags ^= _TASK_RUNNING;
-
-    from.m->co.swap(&to.m->co);
-
-    assert(to.m->flags & _TASK_RUNNING);
-    to.m->flags ^= _TASK_RUNNING;
-
-    assert(!(from.m->flags & _TASK_RUNNING));
-    from.m->flags |= _TASK_RUNNING;
-}
-
-task task::spawn(const proc &f, runner *in, size_t stack_size) {
-    task t(f, stack_size);
-    if (in) {
-        in->add_to_runqueue(t);
-    } else {
-        runner::self().add_to_runqueue(t);
-    }
-    return t;
-}
-
-void task::yield() {
-    runner::swap_to_scheduler();
-
-    task t = task::self();
-    if (t.m->flags & _TASK_INTERRUPT) {
-        throw interrupt_unwind();
-    }
-
-    if (t.m->flags & _TASK_HAS_DEADLINE &&
-        runner::self().get_scheduler().cached_now() >= t.m->dl)
+    proc()
+        : sched(0), thread(0), nswitch(0), ctask(0), taskcount(0)
     {
-        throw deadline_reached();
+        _this_proc = this;
+        add(this);
     }
-}
 
-void task::start(impl *i) {
-    task t = i->to_task();
-    try {
-        t.m->f();
-    } catch (interrupt_unwind &e) {
-        // task was canceled
-    } catch (backtrace_exception &e) {
-        LOG(FATAL) << "uncaught exception in task(" << t << "): " << e.what() << "\n" << e.str();
-    } catch(std::exception &e) {
-        LOG(FATAL) << "uncaught exception in task(" << t << "): " << e.what();
-    }
-    // NOTE: the scheduler deletes tasks in exiting state
-    // so this function won't ever return. don't expect
-    // objects on this stack to have the destructor called
-    t.m->flags |= _TASK_EXIT;
-    t.m.reset();
-    // this is a dangerous bit of code, the shared_ptr is reset
-    // potentially freeing the impl *, however the scheduler
-    // should always be holding a reference, so it is "safe"
-
-    runner::swap_to_scheduler();
-}
-
-void task::migrate(runner *to) {
-    task t = task::self();
-    assert(t.m->co.main() == false);
-    // if "to" is NULL, first available runner is used
-    // or a new one is spawned
-    // logic is in schedule()
+    proc(struct task *t)
+        : sched(0), nswitch(0), ctask(0), taskcount(0)
     {
-        mutex::scoped_lock l(t.m->mut);
-        if (to)
-            t.m->in = *to;
-        else
-            t.m->in.m.reset();
-        t.m->flags |= _TASK_MIGRATE;
-    }
-    task::yield();
-    // will resume in other runner
-}
 
-void task::sleep(unsigned int ms) {
-    task t = task::self();
-    assert(t.m->co.main() == false);
-    milliseconds_to_timespec(ms, t.m->ts);
-    runner::self().add_waiter(t);
-    task::yield();
-}
-
-void task::suspend(mutex::scoped_lock &l) {
-    assert(m->co.main() == false);
-    // sleep flag must be set before calling suspend
-    // see note in task::condition::wait about race condition
-    assert(m->flags & _TASK_SLEEP);
-    l.unlock();
-    try {
-        task::yield();
-    } catch (interrupt_unwind &e) {
-        l.lock();
-        throw;
-    } catch (std::exception &e) {
-        l.lock();
-        throw;
-    }
-    l.lock();
-}
-
-void task::resume() {
-    mutex::scoped_lock rl(m->mut);
-    task t = m->to_task();
-    m->in.add_to_runqueue(t);
-}
-
-bool task::poll(int fd, short event, unsigned int ms) {
-    pollfd fds = {fd, event, 0};
-    task::poll(&fds, 1, ms);
-    // HUP & ERR are returned when a connection fails
-    if (fds.revents & EPOLLHUP || fds.revents & EPOLLERR) {
-        return false;
-    }
-    return fds.revents & event;
-}
-
-int task::poll(pollfd *fds, nfds_t nfds, int timeout) {
-    task t = task::self();
-    assert(t.m->co.main() == false);
-    runner r = runner::self();
-    // TODO: maybe make a state for waiting io?
-    //t.m->flags |= _TASK_POLL;
-    t.m->flags |= _TASK_SLEEP;
-    if (timeout) {
-        milliseconds_to_timespec(timeout, t.m->ts);
-        r.add_waiter(t);
-    }
-    r.add_pollfds(t, fds, nfds);
-
-    // will be woken back up by epoll loop in runner::schedule()
-    try {
-        task::yield();
-    } catch (interrupt_unwind &e) {
-        if (timeout) r.remove_waiter(t);
-        r.remove_pollfds(fds, nfds);
-        throw;
+        add(this);
+        std::unique_lock<std::mutex> lk(mutex);
+        thread = new std::thread(proc::startproc, this, t);
+        thread->detach();
     }
 
-    if (timeout) r.remove_waiter(t);
-    return r.remove_pollfds(fds, nfds);
-}
+    ~proc();
 
-void task::set_state(const std::string &str) {
-    m->state = str;
-}
+    void schedule();
 
-const std::string &task::get_state() const { return m->state; }
-
-/* task::condition */
-
-void task::condition::signal() {
-    mutex::scoped_lock l(mm);
-    if (!waiters.empty()) {
-        task t = waiters.front();
-        waiters.pop_front();
-        t.resume();
+    bool is_ready() {
+        return !runqueue.empty();
     }
-}
 
-void task::condition::broadcast() {
-    mutex::scoped_lock l(mm);
-    for (task::deque::iterator i=waiters.begin();
-        i!=waiters.end(); ++i)
-    {
-        i->resume();
+    void wakeupandunlock(std::unique_lock<std::mutex> &lk);
+
+    void addtaskinproc(struct task *t) {
+        ++taskcount;
+        alltasks.push_back(t);
+        t->cproc = this;
     }
-    waiters.clear();
-}
 
-void task::condition::wait(mutex::scoped_lock &l) {
-    task t = task::self();
-    // must set the flag before adding to waiters
-    // because another thread could resume()
-    // before this calls suspend()
-    t.m->flags |= _TASK_SLEEP;
-    {
-        mutex::scoped_lock ll(mm);
-        if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
-            waiters.push_back(t);
+    void deltaskinproc(struct task *t) {
+        if (!t->systask) {
+            --taskcount;
         }
+        auto i = std::find(alltasks.begin(), alltasks.end(), t);
+        alltasks.erase(i);
+        t->cproc = 0;
+        delete t;
     }
-    try {
-        t.suspend(l);
-    } catch (interrupt_unwind &e) {
-        // remove task from waiters so it won't get signaled
-        mutex::scoped_lock ll(mm);
-        task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
-        waiters.erase(nend, waiters.end());
-        throw;
+
+    static void add(proc *p) {
+        std::unique_lock<std::mutex> lk(procsmutex);
+        procs.push_back(p);
+    }
+
+    static void del(proc *p) {
+        std::unique_lock<std::mutex> lk(procsmutex);
+        auto i = std::find(procs.begin(), procs.end(), p);
+        procs.erase(i);
+    }
+
+    static void startproc(proc *p_, task *t) {
+        //std::unique_lock<std::mutex> lk(p_->mutex);
+        _this_proc = p_;
+        std::unique_ptr<proc> p(p_);
+        p->addtaskinproc(t);
+        t->ready();
+        DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
+        p->schedule();
+        DVLOG(5) << "proc done: " << std::this_thread::get_id();
+        _this_proc = 0;
+    }
+
+};
+
+uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
+    task *t = new task(f, stacksize);
+    new proc(t);
+    return t->id;
+}
+
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
+    task *t = new task(f, stacksize);
+    _this_proc->addtaskinproc(t);
+    t->ready();
+    return t->id;
+}
+
+int64_t taskyield() {
+    proc *p = _this_proc;
+    uint64_t n = p->nswitch;
+    task *t = p->ctask;
+    t->ready();
+    tasksetstate("yield");
+    t->swap();
+    return p->nswitch - n - 1;
+}
+
+void tasksystem() {
+    proc *p = _this_proc;
+    if (!p->ctask->systask) {
+        p->ctask->systask = true;
+        --p->taskcount;
     }
 }
 
-bool task::condition::timed_wait(mutex::scoped_lock &l, unsigned int ms) {
-    task t = task::self();
-    runner r = runner::self();
-    milliseconds_to_timespec(ms, t.m->ts);
-    // must set the flag before adding to waiters
-    // because another thread could resume()
-    // before this calls suspend()
-    t.m->flags |= _TASK_SLEEP;
-    {
-        mutex::scoped_lock ll(mm);
-        if (std::find(waiters.begin(), waiters.end(), t) == waiters.end()) {
-            waiters.push_back(t);
-        }
-    }
-    try {
-        r.add_waiter(t);
-        t.suspend(l);
-    } catch (interrupt_unwind &e) {
-        r.remove_waiter(t);
-        // remove task from waiters so it won't get signaled
-        mutex::scoped_lock ll(mm);
-        task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
-        waiters.erase(nend, waiters.end());
-        throw;
-    }
-
-    // XXX: do the remove here because timeout might have triggered
-    // in which case the task would still be in waiters because signal() didn't remove
-    // remove task from waiters so it won't get signaled
-    mutex::scoped_lock ll(mm);
-    task::deque::iterator nend = std::remove(waiters.begin(), waiters.end(), t);
-    waiters.erase(nend, waiters.end());
-
-    return r.remove_waiter(t);
-}
-
-/* task::socket */
-
-task::socket::socket(int fd) throw (errno_error) : s(fd) {}
-
-task::socket::socket(int domain, int type, int protocol) throw (errno_error)
-    : s(domain, type | SOCK_NONBLOCK, protocol)
+void tasksetname(const char *fmt, ...)
 {
+	va_list arg;
+	task *t = _this_proc->ctask;
+	va_start(arg, fmt);
+	vsnprintf(t->name, sizeof(t->name), fmt, arg);
+	va_end(arg);
 }
 
-int task::socket::dial(const char *addr, uint16_t port, unsigned int timeout_ms) {
-    struct addrinfo *results = 0;
-    struct addrinfo *result = 0;
-    runner r = runner::self();
-    task::migrate();
-    int status = getaddrinfo(addr, NULL, NULL, &results);
-    if (status == 0) {
-        for (result = results; result != NULL; result = result->ai_next) {
-            address addr(result->ai_addr, result->ai_addrlen);
-            addr.port(port);
-            status = connect(addr, timeout_ms);
-            if (status == 0) break;
-        }
+const char *taskgetname() {
+    return _this_proc->ctask->name;
+}
+
+void tasksetstate(const char *fmt, ...)
+{
+	va_list arg;
+	task *t = _this_proc->ctask;
+	va_start(arg, fmt);
+	vsnprintf(t->state, sizeof(t->state), fmt, arg);
+	va_end(arg);
+}
+
+const char *taskgetstate() {
+    return _this_proc->ctask->state;
+}
+
+
+task::task(const std::function<void ()> &f, size_t stacksize)
+    : fn(f), co(task::start, this, stacksize), cproc(0), 
+    timeout(0), deadline(0),
+    exiting(false), systask(false)
+{
+    id = ++taskidgen;
+}
+
+void task::swap() {
+    co.swap(&_this_proc->co);
+}
+
+void task::ready() {
+    proc *p = cproc;
+    std::unique_lock<std::mutex> lk(p->mutex);
+    p->runqueue.push_back(this);
+    if (p != _this_proc) {
+        p->wakeupandunlock(lk);
     }
-    freeaddrinfo(results);
-    task::migrate(&r);
-    return status;
 }
 
-int task::socket::connect(const address &addr, unsigned int timeout_ms) {
-    while (s.connect(addr) < 0) {
-        if (errno == EINTR)
-            continue;
-        if (errno == EINPROGRESS || errno == EADDRINUSE) {
-            errno = 0;
-            if (task::poll(s.fd, EPOLLOUT, timeout_ms)) {
-                return 0;
-            } else if (errno == 0) {
-                errno = ETIMEDOUT;
-            }
-        }
-        return -1;
-    }
-    return 0;
-}
-
-int task::socket::accept(address &addr, int flags, unsigned int timeout_ms) {
-    int fd;
-    while ((fd = s.accept(addr, flags | SOCK_NONBLOCK)) < 0) {
-        if (errno == EINTR)
-            continue;
-        if (!IO_NOT_READY_ERROR)
-            return -1;
-        if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
-            errno = ETIMEDOUT;
-            return -1;
-        }
-    }
-    return fd;
-}
-
-ssize_t task::socket::recv(void *buf, size_t len, int flags, unsigned int timeout_ms) {
-    ssize_t nr;
-    while ((nr = s.recv(buf, len, flags)) < 0) {
-        if (errno == EINTR)
-            continue;
-        if (!IO_NOT_READY_ERROR)
-            break;
-        if (!task::poll(s.fd, EPOLLIN, timeout_ms)) {
-            errno = ETIMEDOUT;
-            break;
-        }
-    }
-    return nr;
-}
-
-ssize_t task::socket::send(const void *buf, size_t len, int flags, unsigned int timeout_ms) {
-    size_t total_sent=0;
-    while (total_sent < len) {
-        ssize_t nw = s.send(&((const char *)buf)[total_sent], len-total_sent, flags);
-        if (nw == -1) {
-            if (errno == EINTR)
-                continue;
-            if (!IO_NOT_READY_ERROR)
-                return -1;
-            if (!task::poll(s.fd, EPOLLOUT, timeout_ms)) {
-                errno = ETIMEDOUT;
-                return total_sent;
-            }
-        } else {
-            total_sent += nw;
-        }
-    }
-    return total_sent;
-}
-
-class round_robin_scheduler : public scheduler {
-private:
-    struct task_poll_state {
-        task::impl *t_in; // POLLIN task
-        pollfd *p_in; // pointer to pollfd structure that is on the task's stack
-        task::impl *t_out; // POLLOUT task
-        pollfd *p_out; // pointer to pollfd structure that is on the task's stack
-        uint32_t events; // events this fd is registered for
-        task_poll_state() : t_in(0), p_in(0), t_out(0), p_out(0), events(0) {}
-    };
-    typedef std::vector<task_poll_state> poll_task_array;
-    typedef std::vector<epoll_event> event_vector;
-
-    struct task_impl_timeout_compare {
-        bool operator ()(const task::impl *a, const task::impl *b) const {
-            return a->ts < b->ts;
-        }
-    };
-
-    typedef std::multiset<task::impl *, task_impl_timeout_compare> task_set;
-    typedef std::deque<task::impl *> task_deque;
-
-    task_set timeouts;
-    task_deque runq;
-    bool runq_dirty;
-    //! current time cached in a few places through the event loop
-    timespec now;
-    //! array of tasks waiting on fds, indexed by the fd for speedy lookup
-    poll_task_array pollfds;
-    //! number of pollfds
-    size_t npollfds;
-    //! pipe used to wake up this runner
-    pipe_fd pi;
-    //! the epoll fd used for io in this runner
-    epoll_fd efd;
-    //! task used for scheduling (the "main" task, uses default stack)
-    task me;
-    //! currently executing task
-    task current_task;
-    //! all tasks belonging to this scheduler 
-    task::set all;
-    //! epoll events
-    event_vector events;
-
-public:
-    round_robin_scheduler()
-        : timeouts(task_impl_timeout_compare()), runq_dirty(false),
-        npollfds(0), pi(O_NONBLOCK), current_task(me.m)
+void qutex::lock() {
+    task *t = _this_proc->ctask;
     {
-        events.reserve(1000);
-        // add the pipe used to wake up this runner from epoll_wait
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;
-        ev.data.fd = pi.r.fd;
-        if (pollfds.size() <= (size_t)pi.r.fd) {
-            pollfds.resize(pi.r.fd+1);
-        }
-        efd.add(pi.r.fd, ev);
-    }
-
-    timespec cached_now() {
-        return now;
-    }
-
-    void add_pollfds(task &t, pollfd *fds, nfds_t nfds) {
-        for (nfds_t i=0; i<nfds; ++i) {
-            epoll_event ev;
-            memset(&ev, 0, sizeof(ev));
-            int fd = fds[i].fd;
-            fds[i].revents = 0;
-            // make room for the highest fd number
-            if (pollfds.size() <= (size_t)fd) {
-                pollfds.resize(fd+1);
-            }
-            ev.data.fd = fd;
-            uint32_t events = pollfds[fd].events;
-
-            if (fds[i].events & EPOLLIN) {
-                assert(pollfds[fd].t_in == 0);
-                pollfds[fd].t_in = t.m.get();
-                pollfds[fd].p_in = &fds[i];
-                pollfds[fd].events |= EPOLLIN;
-            }
-
-            if (fds[i].events & EPOLLOUT) {
-                assert(pollfds[fd].t_out == 0);
-                pollfds[fd].t_out = t.m.get();
-                pollfds[fd].p_out = &fds[i];
-                pollfds[fd].events |= EPOLLOUT;
-            }
-
-            ev.events = pollfds[fd].events;
-
-            if (events == 0) {
-                THROW_ON_ERROR(efd.add(fd, ev));
-            } else if (events != pollfds[fd].events) {
-                THROW_ON_ERROR(efd.modify(fd, ev));
-            }
-            ++npollfds;
-        }
-    }
-
-    int remove_pollfds(pollfd *fds, nfds_t nfds) {
-        int rvalue = 0;
-        for (nfds_t i=0; i<nfds; ++i) {
-            int fd = fds[i].fd;
-            if (fds[i].revents) rvalue++;
-
-            if (pollfds[fd].p_in == &fds[i]) {
-                pollfds[fd].t_in = 0;
-                pollfds[fd].p_in = 0;
-                pollfds[fd].events ^= EPOLLIN;
-            }
-
-            if (pollfds[fd].p_out == &fds[i]) {
-                pollfds[fd].t_out = 0;
-                pollfds[fd].p_out = 0;
-                pollfds[fd].events ^= EPOLLOUT;
-            }
-
-            if (pollfds[fd].events == 0) {
-                THROW_ON_ERROR(efd.remove(fd));
-            } else {
-                epoll_event ev;
-                memset(&ev, 0, sizeof(ev));
-                ev.data.fd = fd;
-                ev.events = pollfds[fd].events;
-                THROW_ON_ERROR(efd.modify(fd, ev));
-            }
-            --npollfds;
-        }
-        return rvalue;
-    }
-
-    void add_to_runqueue(task &t) {
-        if (t.m->flags & _TASK_EXIT) return;
-
-        all.insert(t);
-        // task can be in any state, for example a task might be running
-        // but still get added to the runqueue from a resume in another
-        // thread. this is perfectly valid, the important thing is that
-        // this task will get run the next time through the loop
-        t.m->flags ^= _TASK_SLEEP;
-
-        // runq will be uniqued in schedule()
-        runq_dirty = true;
-        if (runq.empty()) {
-            runq.push_back(t.m.get());
-            wakeup();
-        } else {
-            runq.push_back(t.m.get());
-        }
-    }
-
-    void add_waiter(task &t) {
-        if (t.m->ts.tv_sec != -1) {
-            t.m->ts += now; // make timeout into absolute time
-        }
-        if (t.m->flags & _TASK_HAS_DEADLINE) {
-            if (t.m->ts > t.m->dl) {
-                // don't sleep past the deadline!
-                t.m->ts = t.m->dl;
-            }
-        }
-        t.m->flags |= _TASK_SLEEP;
-        timeouts.insert(t.m.get());
-    }
-
-    bool remove_waiter(task &t) {
-        return timeouts.erase(t.m.get()) > 0;
-    }
-
-    void wakeup() {
-        ssize_t nw = pi.write("\1", 1);
-        (void)nw;
-    }
-
-    void erase_task(task &t) {
-        task_deque::iterator i = std::remove(runq.begin(), runq.end(), t.m.get());
-        runq.erase(i, runq.end());
-        timeouts.erase(t.m.get());
-        all.erase(t);
-    }
-
-    void schedule(runner &r, mutex::scoped_lock &l, int thread_timeout_ms) {
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-        task_deque q;
-        // TODO: maybe a better way to do this to avoid mallocs, make q class level?
-        // would then need to clear() it before swap.
-        q.swap(runq);
-        // remove duplicates
-        task_deque::iterator nend;
-        if (runq_dirty) {
-            runq_dirty = false;
-            nend = std::unique(q.begin(), q.end());
-        } else {
-            nend = q.end();
-        }
-
-        for (task_deque::iterator i=q.begin(); i!=nend; ++i) {
-            current_task = (*i)->to_task();
-            l.unlock();
-            {
-                mutex::scoped_lock rl(current_task.m->mut);
-                current_task.m->in = r;
-            }
-            task::swap(me, current_task);
-            l.lock();
-            if (current_task.m->flags & _TASK_INTERRUPT) {
-                erase_task(current_task);
-            } else if (current_task.m->flags & _TASK_MIGRATE) {
-                current_task.m->flags ^= _TASK_MIGRATE;
-                current_task.m->flags |= _TASK_SLEEP;
-                l.unlock();
-                mutex::scoped_lock rl(current_task.m->mut);
-                if (current_task.m->in) {
-                    current_task.m->in.add_to_runqueue(current_task);
-                } else {
-                    // TODO: might make more sense to
-                    // do the spawn inside of ::migrate?
-                    runner::spawn(current_task);
-                }
-                l.lock();
-                erase_task(current_task);
-            } else if (current_task.m->flags & _TASK_SLEEP) {
-                // do nothing
-            } else if (current_task.m->flags & _TASK_EXIT) {
-                erase_task(current_task);
-            } else {
-                runq.push_back(*i);
-            }
-        }
-        current_task = me;
-
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-        int timeout_ms = -1;
-
-        if (!timeouts.empty()) {
-            if ((*timeouts.begin())->ts <= now) {
-                // epoll_wait must return asap
-                timeout_ms = 0;
-            } else {
-                timeout_ms = timespec_to_milliseconds((*timeouts.begin())->ts - now);
-                // avoid spinning on timeouts smaller than 1ms
-                if (timeout_ms <= 0) timeout_ms = 1;
-            }
-        }
-
-        if (!runq.empty()) {
-            // don't block if there are tasks to run
-            timeout_ms = 0;
-        }
-
-        if (!runq.empty() && timeouts.empty() && npollfds == 0) {
-            // tasks to run, no need to epoll
+        std::unique_lock<std::mutex> lk(m);
+        if (owner == 0) {
+            owner = t;
             return;
         }
+        waiting.push_back(t);
+    }
+    t->swap();
+    assert(owner == _this_proc->ctask);
+}
 
-        if (timeout_ms == -1 && task::get_ntasks() > 0) {
-            timeout_ms = thread_timeout_ms;
+void qutex::unlock() {
+    task *t = 0;
+    {
+        std::unique_lock<std::mutex> lk(m);
+        if (!waiting.empty()) {
+            t = owner = waiting.front();
+            waiting.pop_front();
+        } else {
+            owner = 0;
         }
+        DVLOG(5) << "UNLOCK qutex: " << this << " owner: " << owner << " waiting: " << waiting.size();
+    }
+    if (t) t->ready();
+}
 
-        if (timeout_ms == -1 && timeouts.empty() && runq.empty() && npollfds == 0) {
-            return;
-        }
+void rendez::sleep(std::unique_lock<qutex> &lk) {
+    task *t = _this_proc->ctask;
+    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+        DVLOG(5) << "RENDEZ PUSH BACK: " << t;
+        waiting.push_back(t);
+    }
+    lk.unlock();
+    t->swap(); 
+    lk.lock();
+}
 
-        if (timeout_ms != 0 || npollfds > 0) {
-            // only process 1000 events each time through the event loop
-            // to keep things moving along
-            events.resize(1000);
-#ifndef NDEBUG
-            DVLOG(5) << (void *)this << " timeout_ms: " << timeout_ms << " waiters: " << timeouts.size() <<
-                " runq: " << runq.size() << " tasks: " << (int)task::ntasks << " npollfds: " << npollfds;
-            if (VLOG_IS_ON(5) && !timeouts.empty()) {
-                DVLOG(5) << "now: " << now;
-                std::copy(timeouts.begin(), timeouts.end(), std::ostream_iterator<task::impl *>(LOG(INFO), "\n"));
-            }
+void rendez::wakeup() {
+    if (!waiting.empty()) {
+        task *t = waiting.front();
+        waiting.pop_front();
+        t->ready();
+    }
+}
 
-            if (VLOG_IS_ON(6) && !all.empty()) {
-                DVLOG(6) << "ALL: ";
-                std::copy(all.begin(), all.end(), std::ostream_iterator<task>(LOG(INFO), "\n"));
-            }
-#endif // DEBUG OFF
+void rendez::wakeupall() {
+    while (!waiting.empty()) {
+        task *t = waiting.front();
+        waiting.pop_front();
+        t->ready();
+    }
+}
 
-            // unlock around epoll
-            l.unlock();
-            efd.wait(events, timeout_ms);
-            // lock to protect runq
-            l.lock();
+static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
+    // http://stackoverflow.com/questions/77005/how-to-generate-a-stacktrace-when-my-gcc-c-app-crashes
+    // TODO: maybe use the google logging demangler that doesn't alloc
+    hack::ucontext *uc = (hack::ucontext *)ctxt;
 
-            if (events.empty() && timeout_ms > 0 && timeout_ms == thread_timeout_ms) {
-                throw runner::timeout_exit();
-            }
+    // Get the address at the time the signal was raised from the instruction pointer
+#if __i386__
+    void *caller_address = (void *) uc->uc_mcontext.eip;
+#elif __amd64__
+    void *caller_address = (void *) uc->uc_mcontext.rip;
+#else
+    #error "arch not supported"
+#endif
 
-            // wake up io tasks
-            for (event_vector::const_iterator i=events.begin();
-                i!=events.end();++i)
-            {
-                // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
-                // even if they arent asked for, so we must wake up the tasks on any event
-                // to avoid just spinning in epoll.
-                int fd = i->data.fd;
-                if (pollfds[fd].t_in) {
-                    pollfds[fd].p_in->revents = i->events;
-                    task t = pollfds[fd].t_in->to_task();
-                    add_to_runqueue(t);
-                }
+    fprintf(stderr, "signal %d (%s), address is %p from %p\n",
+        sig_num, strsignal(sig_num), info->si_addr,
+        (void *)caller_address);
 
-                // check to see if pollout is a different task than pollin
-                if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
-                    pollfds[fd].p_out->revents = i->events;
-                    task t = pollfds[fd].t_out->to_task();
-                    add_to_runqueue(t);
-                }
+    void *array[50];
+    int size = backtrace(array, 50);
 
-                if (i->data.fd == pi.r.fd) {
-                    // our wake up pipe was written to
-                    char buf[32];
-                    // clear pipe
-                    while (pi.read(buf, sizeof(buf)) > 0) {}
-                } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
-                    // TODO: otherwise we might want to remove fd from epoll
-                    LOG(ERROR) << "event " << i->events << " for fd: " << i->data.fd << " but has no task";
-                }
-            }
-        }
+    // overwrite sigaction with caller's address
+    array[1] = caller_address;
 
-        // TODO: maybe use set_(symetric_?)difference instead of erase here
-        //task_set to_copy = timeouts;
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
-        // wake up timeouts tasks
-        task_set::iterator i=timeouts.begin();
-        for (; i!=timeouts.end(); ++i) {
-            if ((*i)->ts <= now) {
-                task t = (*i)->to_task();
-                add_to_runqueue(t);
-            } else {
+    char **messages = backtrace_symbols(array, size);
+
+    // skip first stack frame (points here)
+    for (int i = 1; i < size && messages != NULL; ++i) {
+        char *mangled_name = 0, *offset_begin = 0, *offset_end = 0;
+
+        // find parantheses and +address offset surrounding mangled name
+        for (char *p = messages[i]; *p; ++p) {
+            if (*p == '(') {
+                mangled_name = p;
+            } else if (*p == '+') {
+                offset_begin = p;
+            } else if (*p == ')') {
+                offset_end = p;
                 break;
             }
         }
-        timeouts.erase(timeouts.begin(), i);
+
+        // if the line could be processed, attempt to demangle the symbol
+        if (mangled_name && offset_begin && offset_end &&
+            mangled_name < offset_begin)
+        {
+            *mangled_name++ = '\0';
+            *offset_begin++ = '\0';
+            *offset_end++ = '\0';
+
+            int status;
+            char * real_name = abi::__cxa_demangle(mangled_name, 0, 0, &status);
+
+            if (status == 0) {
+                // if demangling is successful, output the demangled function name
+                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
+                    << real_name << "+" << offset_begin << offset_end
+                    << std::endl;
+
+            } else {
+                // otherwise, output the mangled function name
+                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
+                    << mangled_name << "+" << offset_begin << offset_end
+                    << std::endl;
+            }
+            free(real_name);
+        } else {
+            // otherwise, print the whole line
+            std::cerr << "[bt]: (" << i << ") " << messages[i] << std::endl;
+        }
+    }
+    std::cerr << std::endl;
+
+    free(messages);
+
+    exit(EXIT_FAILURE);
+}
+
+static void procmain_init() {
+    //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
+    stack_t ss;
+    ss.ss_sp = malloc(SIGSTKSZ);
+    ss.ss_size = SIGSTKSZ;
+    ss.ss_flags = 0;
+    THROW_ON_ERROR(sigaltstack(&ss, NULL));
+
+    // allow log files and message queues to be created group writable
+    umask(0);
+    google::InitGoogleLogging(program_invocation_short_name);
+    google::InstallFailureSignalHandler();
+    FLAGS_logtostderr = true;
+
+    struct sigaction act;
+#if 0
+    // install SIGSEGV handler
+    act.sa_sigaction = backtrace_handler;
+    act.sa_flags = SA_RESTART | SA_SIGINFO;
+    THROW_ON_ERROR(sigaction(SIGSEGV, &act, NULL));
+    // install SIGABRT handler
+    act.sa_sigaction = backtrace_handler;
+    act.sa_flags = SA_RESTART | SA_SIGINFO;
+    THROW_ON_ERROR(sigaction(SIGABRT, &act, NULL));
+#endif
+    // ignore SIGPIPE
+    memset(&act, 0, sizeof(act));
+    THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
+    if (act.sa_handler == SIG_DFL) {
+        act.sa_handler = SIG_IGN;
+        THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
     }
 
-    task get_current_task() { return current_task; }
+    new proc();
+}
 
-    void swap_to_scheduler() {
-        current_task.m->co.swap(&me.m->co);
+procmain::procmain() {
+    std::call_once(init_flag, procmain_init);
+}
+
+int procmain::main(int argc, char *argv[]) {
+    _this_proc->schedule();
+    return EXIT_SUCCESS;
+}
+
+void proc::schedule() {
+    DVLOG(5) << "p: " << this << " entering proc::schedule";
+    for (;;) {
+        if (taskcount == 0) break;
+        std::unique_lock<std::mutex> lk(mutex);
+        if (runqueue.empty()) {
+            runcv.wait(lk, std::bind(&proc::is_ready, this));
+        }
+        struct task *t = runqueue.front();
+        runqueue.pop_front();
+        ctask = t;
+        ++nswitch;
+        DVLOG(5) << "p: " << this << " swapping to: " << t;
+        lk.unlock();
+        co.swap(&t->co);
+        lk.lock();
+        ctask = 0;
+        if (t->exiting) {
+            deltaskinproc(t);
+        }
+    }
+}
+
+struct io_scheduler {
+    struct task_timeout_compare {
+        bool operator ()(const task *a, const task *b) const {
+            return *a->timeout < *b->timeout;
+        }
+    };
+    typedef std::vector<epoll_event> event_vector;
+    typedef std::multiset<task *, task_timeout_compare> timeoutset;
+    //! tasks with timeouts set
+    timeoutset timeouts;
+    //! epoll events
+    event_vector events;
+    //! current time cached in a few places through the event loop
+    timespec now;
+    //! the epoll fd used for io in this runner
+    epoll_fd efd;
+    //! number of fds we've been asked to wait on
+    size_t npollfds;
+    //! pipe used to wake up from epoll_wait
+    pipe_fd pi;
+
+    io_scheduler() : npollfds(0), pi(O_NONBLOCK) {
+        events.reserve(1000);
+        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+        // add the pipe used to wake up
+        epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLIN | EPOLLET;
+        efd.add(pi.r.fd, ev);
+        taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
-    bool empty() { return all.empty(); }
+    void add_timeout(task *t, uint64_t ms) {
+        if (t->timeout == 0) {
+            t->timeout = new timespec();
+        }
+        milliseconds_to_timespec(ms, *t->timeout);
+        (*t->timeout) += now;
+        if (t->deadline) {
+            if (*t->timeout > *t->deadline) {
+                // don't sleep past the deadline
+                *t->timeout = *t->deadline;
+            }
+        }
+        timeouts.insert(t);
+    }
+
+    void sleep(uint64_t ms) {
+        task *t = _this_proc->ctask;
+        add_timeout(t, ms);
+        t->swap();
+    }
+
+    bool fdwait(int fd, int rw, uint64_t ms) {
+        task *t = _this_proc->ctask;
+        epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.data.ptr = t;
+        const char *msg = "error";
+        switch (rw) {
+            case 'r':
+                ev.events |= EPOLLIN;
+                msg = "read";
+                break;
+            case 'w':
+                ev.events |= EPOLLOUT;
+                msg = "write";
+                break;
+        }
+        efd.add(fd, ev);
+        ++npollfds;
+        if (ms) {
+            add_timeout(t, ms);
+        }
+        tasksetstate("fdwait for %i %s", fd, msg);
+        t->swap();
+
+        if (ms) {
+            timeouts.erase(t);
+            int s = efd.remove(fd);
+            // if remove succeeds, then an event did not occur on the fd
+            // which means the timeout was reached
+            if (s == 0) return false;
+        }
+        return true;
+    }
+
+private:
+    void fdtask() {
+        tasksetname("fdtask");
+        tasksystem();
+        for (;;) {
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            // let everyone else run
+            taskyield();
+
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+
+            int ms = -1;
+            if (!timeouts.empty()) {
+                task *front = *timeouts.begin();
+                if (*front->timeout <= now) {
+                    // epoll_wait must return asap
+                    ms = 0;
+                } else {
+                    ms = timespec_to_milliseconds(*front->timeout - now);
+                    // avoid spinning on timeouts smaller than 1ms
+                    if (ms <= 0) ms = 1;
+                }
+            }
+
+            if (ms != 0) {
+                proc *p = _this_proc;
+                std::unique_lock<std::mutex> lk(p->mutex);
+                if (!p->runqueue.empty()) {
+                    // don't block on epoll if tasks are ready to run
+                    ms = 0;
+                }
+            }
+
+            if (ms != 0 || npollfds > 0) {
+                tasksetstate("epoll");
+                // only process 1000 events each iteration to keep it fair
+                events.resize(1000);
+                efd.wait(events, ms);
+                for (auto i=events.cbegin(); i!=events.cend(); ++i) {
+                    task *t = (task *)i->data.ptr;
+                    if (t) {
+                        --npollfds;
+                        t->ready();
+                    } else {
+                        // our wakeup pipe was written to
+                        char buf[32];
+                        // clear pipe
+                        while (pi.read(buf, sizeof(buf)) > 0) {}
+                    }
+                }
+            }
+
+            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            // wake up sleeping tasks
+            auto i = timeouts.begin();
+            for (; i != timeouts.end(); ++i) {
+                task *t = *i;
+                if (*t->timeout <= now) {
+                    t->ready();
+                } else {
+                    break;
+                }
+            }
+            timeouts.erase(timeouts.begin(), i);
+        }
+    }
 };
 
-scheduler *scheduler::create() {
-    return new round_robin_scheduler();
+void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
+    if (sched) {
+        ssize_t nw = sched->pi.write("\1", 1);
+        (void)nw;
+    } else {
+        runcv.notify_one();
+    }
+    lk.unlock();
+}
+
+proc::~proc() {
+    std::unique_lock<std::mutex> lk(mutex);
+    delete sched;
+    if (thread == 0) {
+        for (;;) {
+            {
+                // TODO: count non-system procs
+                std::unique_lock<std::mutex> lk(procsmutex);
+                size_t np = procs.size();
+                if (np == 1)
+                    break;
+            }
+            std::this_thread::yield();
+        }
+        DVLOG(5) << "procs empty";
+    } else {
+        delete thread;
+    }
+    // clean up system tasks
+    while (!alltasks.empty()) {
+        deltaskinproc(alltasks.front());
+    }
+    lk.unlock();
+    del(this);
+    DVLOG(5) << "proc freed: " << this;
+}
+
+
+void tasksleep(uint64_t ms) {
+    proc *p = _this_proc;
+    if (p->sched == 0) {
+        p->sched = new io_scheduler();
+    }
+    p->sched->sleep(ms);
+}
+
+bool fdwait(int fd, int rw, uint64_t ms) {
+    proc *p = _this_proc;
+    if (p->sched == 0) {
+        p->sched = new io_scheduler();
+    }
+    return p->sched->fdwait(fd, rw, ms);
 }
 
 } // end namespace fw

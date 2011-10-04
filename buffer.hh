@@ -1,6 +1,9 @@
 #ifndef BUFFER_HH
 #define BUFFER_HH
 
+#include <memory>
+#include <cassert>
+
 namespace fw {
 
 //! reference counted buffer, slices hold reference
@@ -13,7 +16,7 @@ private:
         impl(size_t bytes=0) : p(bytes ? new char[bytes] : 0), n(bytes) {}
         ~impl() { delete[] p; }
     };
-    typedef boost::shared_ptr<impl> shared_impl;
+    typedef std::shared_ptr<impl> shared_impl;
 
     shared_impl m;
 

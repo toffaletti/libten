@@ -181,8 +181,7 @@ struct epoll_fd : fd_base {
 
     //! register the target file descriptor with the epoll instance
     int add(int fd_, struct epoll_event &event) {
-        int s = ::epoll_ctl(fd, EPOLL_CTL_ADD, fd_, &event);
-        return s;
+        return ::epoll_ctl(fd, EPOLL_CTL_ADD, fd_, &event);
     }
 
     //! change the event associated with the target file descriptor
@@ -193,8 +192,7 @@ struct epoll_fd : fd_base {
     //! deregister the target file descriptor from the epoll instance
     //! NOTE: closing a file descriptor will automatically remove it from all epoll instances
     int remove(int fd_) {
-        int s = ::epoll_ctl(fd, EPOLL_CTL_DEL, fd_, NULL);
-        return s;
+        return ::epoll_ctl(fd, EPOLL_CTL_DEL, fd_, NULL);
     }
 
     //! \param events an array of epoll_events structs to contain events available to the caller

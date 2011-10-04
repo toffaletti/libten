@@ -1,9 +1,9 @@
-#include "runner.hh"
 #include "task.hh"
 #include "buffer.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
 #include "logging.hh"
+#include "net.hh"
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -11,7 +11,7 @@ using namespace fw;
 
 #define SEC2MS(s) (s*1000)
 
-void sock_copy(task::socket &a, task::socket &b, buffer::slice rb) {
+void sock_copy(netsock &a, netsock &b, buffer::slice rb) {
     for (;;) {
         pollfd fds[2];
         fds[0].events = EPOLLIN;
@@ -35,7 +35,7 @@ void sock_copy(task::socket &a, task::socket &b, buffer::slice rb) {
     }
 }
 
-void send_503_reply(task::socket &s) {
+void send_503_reply(netsock &s) {
     http_response resp(503, "Gateway Timeout");
     std::string data = resp.data();
     ssize_t nw = s.send(data.data(), data.size());
@@ -43,7 +43,7 @@ void send_503_reply(task::socket &s) {
 }
 
 void proxy_task(int sock) {
-    task::socket s(sock);
+    netsock s(sock);
     buffer buf(4*1024);
     http_parser parser;
     http_request req;
@@ -62,7 +62,7 @@ void proxy_task(int sock) {
         u.normalize();
         LOG(INFO) << req.method << " " << u.compose();
 
-        task::socket cs(AF_INET, SOCK_STREAM);
+        netsock cs(AF_INET, SOCK_STREAM);
 
         if (req.method == "CONNECT") {
             ssize_t pos = u.path.find(':');
@@ -157,7 +157,7 @@ response_send_error:
 }
 
 void listen_task() {
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("0.0.0.0", 8080);
     s.bind(addr);
@@ -169,13 +169,13 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0)) > 0) {
-            task::spawn(boost::bind(proxy_task, sock), 0, 4*1024*1024);
+            taskspawn(std::bind(proxy_task, sock), 0, 4*1024*1024);
         }
     }
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(listen_task);
-    return runner::main();
+    procmain p;
+    taskspawn(listen_task);
+    return p.main(argc, argv);
 }

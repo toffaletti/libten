@@ -41,6 +41,7 @@ struct context : ucontext_t {
 } // end namespace fw
 
 #elif USE_BOOST_FCONTEXT
+#include <string.h>
 #include "boost/context/fcontext.hpp"
 
 namespace fw {

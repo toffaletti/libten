@@ -7,8 +7,6 @@
 
 #include <boost/call_traits.hpp>
 #include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/bind/bind.hpp>
 #include <set>
 #include <deque>
 

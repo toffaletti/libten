@@ -1,5 +1,5 @@
 get_filename_component(CWD ${CMAKE_CURRENT_LIST_FILE} PATH)
-include(${CWD}/flags.cmake)
+include(${CWD}/defaults.cmake)
 
 #add_definitions(-DUSE_UCONTEXT)
 add_definitions(-DUSE_BOOST_FCONTEXT)

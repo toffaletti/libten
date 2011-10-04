@@ -1,19 +1,20 @@
-#include "runner.hh"
 #include "task.hh"
 #include "channel.hh"
-#include <boost/bind.hpp>
+#include "net.hh"
 #include <sstream>
 #include <iostream>
+#include <list>
 
 using namespace fw;
+size_t default_stacksize=4096*2;
 
 struct client {
-    task::socket s;
+    netsock s;
     std::string nick;
 
     client(int sock) : s(sock), nick("unnamed") { }
 };
-typedef boost::shared_ptr<client> shared_client;
+typedef std::shared_ptr<client> shared_client;
 typedef std::list<shared_client> client_list;
 
 static client_list clients;
@@ -54,7 +55,7 @@ void broadcast_task() {
 }
 
 void listen_task() {
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr("127.0.0.1", 0);
     s.bind(addr);
@@ -66,16 +67,16 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0, 60*1000)) > 0) {
-            task::spawn(boost::bind(chat_task, sock));
+            taskspawn(std::bind(chat_task, sock));
         }
         std::cout << "accept timeout reached\n";
     }
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    task::spawn(broadcast_task);
-    task::spawn(listen_task);
-    return runner::main();
+    procmain p;
+    taskspawn(broadcast_task);
+    taskspawn(listen_task);
+    return p.main(argc, argv);
 }
 

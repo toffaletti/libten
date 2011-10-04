@@ -1,6 +1,5 @@
 #ifndef COROUTINE_HH
 #define COROUTINE_HH
-#include <boost/function.hpp>
 #include <boost/utility.hpp>
 #include <vector>
 #include <sys/mman.h>
