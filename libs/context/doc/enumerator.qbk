@@ -15,10 +15,10 @@ With `yield_break()` the control is unconditionally returned to the caller to si
         template< typename T >
         class enumerator {
         private:
-            boost::contexts::context<>          ctx_;
-            T                       const*      result_;
+            boost::contexts::context            ctx_;
             bool                                complete_;
             bool                                do_unwind_;
+            bool                                started_;
 
             static void run( enumerator * self)
             { self->enumerate(); }
@@ -28,27 +28,25 @@ With `yield_break()` the control is unconditionally returned to the caller to si
 
             void yield_return( T const& v)
             {
-                result_ = & v; // set address of local value
-                ctx_.suspend(); // return tocaller
-                result_ = 0; // reset pointer
+                void * vp = ( void *) & v;
+                ctx_.suspend( vp);
             }
 
             void yield_break()
             {
-                result_ = 0; // reset pointer
-                complete_ = true; // signal end of iteration
-                ctx_.suspend(); // return to caller
+                complete_ = true;
+                ctx_.suspend();
             }
 
         public:
             enumerator( bool do_unwind = true): 
                 ctx_(
                     & enumerator::run, this,
-                    boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-                    false),
-                result_( 0),
+                    boost::contexts::default_stacksize(),
+                    boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
                 complete_( false),
-                do_unwind_( do_unwind)
+                do_unwind_( do_unwind),
+                started_( false)
             {}
 
             ~enumerator()
@@ -59,9 +57,18 @@ With `yield_break()` the control is unconditionally returned to the caller to si
 
             bool get( T & result)
             {
-                ctx_.resume(); // jump to implementation of enumerate()
-                if ( result_) result = * result_; // set return value
-                return ! ( complete_ || ctx_.is_complete() ); // check for next item
+                void * vp = 0;
+                if ( ! started_)
+                {
+                    started_ = true;
+                    vp = ctx_.start();
+                }
+                else
+                {
+                    vp = ctx_.resume();
+                }
+                if ( vp) result = * static_cast< T * >( vp);
+                return ! ( complete_ || ctx_.is_complete() );
             }
         };
 

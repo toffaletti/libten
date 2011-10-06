@@ -19,11 +19,11 @@ extern "C" {
 #include <boost/assert.hpp>
 #include <boost/config.hpp>
 #include <boost/intrusive_ptr.hpp>
-#include <boost/move/move.hpp>
 #include <boost/utility.hpp>
 
 #include <boost/context/detail/config.hpp>
-#include <boost/context/protected_stack.hpp>
+#include <boost/context/detail/icontext.hpp>
+#include <boost/context/flags.hpp>
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -60,141 +60,163 @@ void trampoline( void * vp)
     {
         // FXIXME: swapping ucontext_t might not be correct
         // because of that copy-operation for ucontext_t is
-        // not defined for POSIXi (== structure of ucontext_t
+        // not defined for POSIX (== structure of ucontext_t
         // is not defined by POSIX)
-        std::swap( ctx->nxt_->ctx_caller_, ctx->ctx_caller_);
-        if ( 0 != ( ctx->nxt_->flags_ & Ctx::flag_do_return) )
-            ctx->nxt_->ctx_callee_.uc_link = & ctx->nxt_->ctx_caller_;
-        ctx->nxt_->flags_ |= Ctx::flag_running;
-        ctx->nxt_->flags_ |= Ctx::flag_resumed;
+		Ctx * nxt( dynamic_cast< Ctx * >( ctx->nxt_.get() ) );
+		BOOST_ASSERT( nxt);
+        std::swap( nxt->ctx_caller_, ctx->ctx_caller_);
+        if ( 0 != ( nxt->flags_ & Ctx::flag_do_return) )
+            nxt->ctx_callee_.uc_link = & nxt->ctx_caller_;
+        nxt->flags_ |= Ctx::flag_running;
+        nxt->flags_ |= Ctx::flag_started;
     }
 }
 
-template< typename StackT >
-class context_base : private noncopyable
+template< typename Allocator >
+class context_base : public icontext
 {
-public:
-    typedef intrusive_ptr< context_base >   ptr_t;
-
 private:
     enum flag_t
     {
-        flag_resumed                = 1 << 1,
-        flag_running                = 1 << 2,
-        flag_complete               = 1 << 3,
-        flag_unwind_stack           = 1 << 4,
-        flag_force_unwind           = 1 << 5,
-        flag_dont_force_unwind      = 1 << 6,
-        flag_do_return              = 1 << 7,
+        flag_started                = 1 << 1,
+        flag_resumed                = 1 << 2,
+        flag_running                = 1 << 3,
+        flag_complete               = 1 << 4,
+        flag_unwind_stack           = 1 << 5,
+        flag_force_unwind           = 1 << 6,
+        flag_dont_force_unwind      = 1 << 7,
+        flag_do_return              = 1 << 8,
     };
 
     template< typename T >
     friend void trampoline( void * vp);
 
-    StackT                  stack_;
+    Allocator               alloc_;
     ucontext_t              ctx_caller_;
     ucontext_t              ctx_callee_;
     ptr_t                   nxt_;
     short                   flags_;
-    std::size_t             use_count_;
+	void				*	vp_;
 
 public:
-    context_base( BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        stack_( boost::move( stack) ), ctx_caller_(), ctx_callee_(), nxt_(),
-        flags_( do_unwind ? flag_force_unwind : flag_dont_force_unwind), use_count_( 0)
+    context_base( Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        alloc_( alloc), ctx_caller_(), ctx_callee_(), nxt_(),
+        flags_( stack_unwind == do_unwind ? flag_force_unwind : flag_dont_force_unwind), vp_( 0)
     {
-        BOOST_ASSERT( stack_);
-
-        void * base( stack_.address() );
+		void * base( alloc_.allocate( size) );
         BOOST_ASSERT( base);
 
         std::memset( & ctx_caller_, 0, sizeof( ctx_caller_) );
         std::memset( & ctx_callee_, 0, sizeof( ctx_callee_) );
         getcontext( & ctx_callee_);
-        ctx_callee_.uc_stack.ss_size = stack_.size();
-        ctx_callee_.uc_stack.ss_sp = static_cast< char * >( base) - stack_.size();
+        ctx_callee_.uc_stack.ss_size = size;
+        ctx_callee_.uc_stack.ss_sp = static_cast< char * >( base) - size;
 
-        if ( do_return)
+        if ( return_to_caller == do_return)
         {
             flags_ |= flag_do_return;
             ctx_callee_.uc_link = & ctx_caller_;
         }
 
         typedef void fn_type( void *);
-        fn_type * fn_ptr( trampoline< context_base< StackT > >);
+        fn_type * fn_ptr( trampoline< context_base< Allocator > >);
 
         makecontext( & ctx_callee_, ( void(*)() )( fn_ptr), 1, this);
     }
 
-    context_base( BOOST_RV_REF( StackT) stack, bool do_unwind, ptr_t nxt) :
-        stack_( boost::move( stack) ), ctx_caller_(), ctx_callee_(), nxt_( nxt),
-        flags_( do_unwind ? flag_force_unwind : flag_dont_force_unwind), use_count_( 0)
+    context_base( Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, ptr_t nxt) :
+        alloc_( alloc), ctx_caller_(), ctx_callee_(), nxt_( nxt),
+        flags_( stack_unwind == do_unwind ? flag_force_unwind : flag_dont_force_unwind), vp_( 0)
     {
-        BOOST_ASSERT( stack_);
-        BOOST_ASSERT( ! nxt->is_complete() );
+        BOOST_ASSERT( ! nxt_->is_complete() );
 
-        void * base( stack_.address() );
+		void * base( alloc_.allocate( size) );
         BOOST_ASSERT( base);
 
         std::memset( & ctx_caller_, 0, sizeof( ctx_caller_) );
         std::memset( & ctx_callee_, 0, sizeof( ctx_callee_) );
         getcontext( & ctx_callee_);
-        ctx_callee_.uc_stack.ss_size = stack_.size();
-        ctx_callee_.uc_stack.ss_sp = static_cast< char * >( base) - stack_.size();
-        ctx_callee_.uc_link = & nxt->ctx_callee_;
+        ctx_callee_.uc_stack.ss_size = size;
+        ctx_callee_.uc_stack.ss_sp = static_cast< char * >( base) - size;
+        ctx_callee_.uc_link = & dynamic_pointer_cast< context_base< Allocator > >( nxt_)->ctx_callee_;
 
         typedef void fn_type( void *);
-        fn_type * fn_ptr( trampoline< context_base< StackT > >);
+        fn_type * fn_ptr( trampoline< context_base< Allocator > >);
 
         makecontext( & ctx_callee_, ( void(*)() )( fn_ptr), 1, this);
     }
 
     virtual ~context_base()
     {
-        if ( owns_stack() && ! is_complete()
-                && ( 0 != ( flags_ & flag_resumed) )
-                && ( 0 != ( flags_ & flag_force_unwind) ) )
+        if ( ! is_complete()
+                && ( is_started() || is_resumed() )
+                && ( unwind_requested() ) )
             unwind_stack();
+		void * base( 
+            static_cast< char * >( ctx_callee_.uc_stack.ss_sp) +
+			ctx_callee_.uc_stack.ss_size);
+		alloc_.deallocate(
+			base, ctx_callee_.uc_stack.ss_size);
     }
+
+    bool unwind_requested() const
+    { return 0 != ( flags_ & flag_force_unwind); }
 
     bool is_complete() const
     { return 0 != ( flags_ & flag_complete); }
 
+    bool is_started() const
+    { return 0 != ( flags_ & flag_started); }
+
+    bool is_resumed() const
+    { return 0 != ( flags_ & flag_started); }
+
     bool is_running() const
     { return 0 != ( flags_ & flag_running); }
 
-    bool owns_stack() const
-    { return static_cast< bool >( stack_); }
-
-    StackT release_stack()
-    { return boost::move( stack_); }
-
-    void resume()
+    void * start()
     {
-        BOOST_ASSERT( owns_stack() );
+        BOOST_ASSERT( ! is_complete() );
+        BOOST_ASSERT( ! is_started() );
+        BOOST_ASSERT( ! is_running() );
+
+        flags_ |= flag_started;
+        flags_ |= flag_running;
+        swapcontext( & ctx_caller_, & ctx_callee_);
+
+		return vp_;
+    }
+
+    void * resume( void * vp)
+    {
+        BOOST_ASSERT( is_started() );
         BOOST_ASSERT( ! is_complete() );
         BOOST_ASSERT( ! is_running() );
 
         flags_ |= flag_resumed;
         flags_ |= flag_running;
+		vp_ = vp;
         swapcontext( & ctx_caller_, & ctx_callee_);
+
+		return vp_;
     }
 
-    void suspend()
+    void * suspend( void * vp)
     {
-        BOOST_ASSERT( owns_stack() );
         BOOST_ASSERT( ! is_complete() );
         BOOST_ASSERT( is_running() );
 
         flags_ &= ~flag_running;
+		vp_ = vp;
         swapcontext( & ctx_callee_, & ctx_caller_);
         if ( 0 != ( flags_ & flag_unwind_stack) )
             throw ex_unwind_stack();
+
+		return vp_;
     }
 
     void unwind_stack()
     {
-        BOOST_ASSERT( owns_stack() );
         BOOST_ASSERT( ! is_complete() );
         BOOST_ASSERT( ! is_running() );
 
@@ -203,14 +225,6 @@ public:
         flags_ &= ~flag_unwind_stack;
         BOOST_ASSERT( is_complete() );
     }
-
-    virtual void exec() = 0;
-
-    friend inline void intrusive_ptr_add_ref( context_base * p)
-    { ++p->use_count_; }
-
-    friend inline void intrusive_ptr_release( context_base * p)
-    { if ( --p->use_count_ == 0) delete p; }
 };
 
 }}}

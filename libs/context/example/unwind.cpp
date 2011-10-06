@@ -10,7 +10,7 @@
 
 #include <boost/context/all.hpp>
 
-boost::contexts::context<> ctx;
+boost::contexts::context ctx;
 
 struct X
 {
@@ -34,11 +34,12 @@ void fn()
 
 int main( int argc, char * argv[])
 {
-    ctx = boost::contexts::context<>(
+    ctx = boost::contexts::context(
             fn,
-            boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-            false, true);
-    for ( int i = 0; i < 5; ++i)
+            boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
+    ctx.start();
+    for ( int i = 0; i < 4; ++i)
     {
         ctx.resume();
     }

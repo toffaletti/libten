@@ -21,6 +21,5 @@ project boost/context/test
     ;
 
 test-suite "context" :
-    [ run test_protected_stack.cpp ]
     [ run test_context.cpp ]
     ;

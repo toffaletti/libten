@@ -46,6 +46,27 @@
  * *****************************************************************/
 
 .text
+.globl boost_fcontext_start
+.align 2
+.type boost_fcontext_start,%function
+boost_fcontext_start:
+    stmia   a1, {v1-v8,sp-lr}       @ save V1-V8,SP-LR
+    str     lr, [a1,#40]            @ save LR as PC
+#if (defined(__VFP_FP__) && !defined(__SOFTFP__))
+    ldr     a4, [a1,#48]
+    stmia   a4, {s16-s31}           @ save S16-S31
+#endif
+
+    ldr     a1, [a2,#44]            @ restore A1 as first arg
+#if (defined(__VFP_FP__) && !defined(__SOFTFP__))
+    ldr     a4, [a2,#48]
+    ldmia   a4, {s16-s31}           @ restore S16-S31
+#endif
+	
+    ldmia   a2, {v1-v8,sp-pc}       @ restore v1-V8,SP-PC
+.size boost_fcontext_start,.-boost_fcontext_start
+
+.text
 .globl boost_fcontext_jump
 .align 2
 .type boost_fcontext_jump,%function
@@ -53,15 +74,16 @@ boost_fcontext_jump:
     stmia   a1, {v1-v8,sp-lr}       @ save V1-V8,SP-LR
     str     lr, [a1,#40]            @ save LR as PC
 #if (defined(__VFP_FP__) && !defined(__SOFTFP__))
-    ldr     a3, [a1,#48]
-    stmia   a3, {s16-s31}           @ save s16-S31
+    ldr     a4, [a1,#48]
+    stmia   a4, {s16-s31}           @ save S16-S31
 #endif
 
-    ldr     a1, [a2,#44]            @ restore A1
+	mov		a1, a3                  @ use thrid arg as return value after jump
 #if (defined(__VFP_FP__) && !defined(__SOFTFP__))
-    ldr     a3, [a2,#48]
-    ldmia   a3, {s16-s31}           @ restore S16-S31
+    ldr     a4, [a2,#48]
+    ldmia   a4, {s16-s31}           @ restore S16-S31
 #endif
+
     ldmia   a2, {v1-v8,sp-pc}       @ restore v1-V8,SP-PC
 .size boost_fcontext_jump,.-boost_fcontext_jump
 
@@ -74,6 +96,17 @@ boost_fcontext_make:
     str     a2, [a1,#40]        @ save address of the function supposed to be run
     str     a3, [a1,#44]        @ save void pointer
     ldr     a2, [a1,#112]       @ load the stack base
+
+	push    {a1,lr}				@ save pointer to fcontext_t
+	mov     a1, a2				@ stack pointer as arg for boost_fcontext_align
+#ifdef __PIC__
+	bl		boost_fcontext_align@PLT @ align stack
+#else
+	bl		boost_fcontext_align     @ align stack
+#endif
+	mov		a2, a1				@ begin of aligned stack 
+	pop     {a1,lr}				@ restore pointer to boost_fcontext_t
+
     str     a2, [a1,#32]        @ save the stack base
     ldr     a2, [a1,#120]       @ load the address of the next context
     str     a2, [a1,#4]         @ save the address of the next context
@@ -88,12 +121,12 @@ link_fcontext:
     teq     a2, #0              @ test if the address of the next context is a null pointer
 
 #ifdef __PIC__
-    bne     boost_fcontext_jump@PLT    @ install next context
+    bne     boost_fcontext_start@PLT   @ install next context
 
     mov     a1, #0
     bl      _exit@PLT                  @ exit application
 #else
-    bne     boost_fcontext_jump        @ install next context
+    bne     boost_fcontext_start       @ install next context
 
     mov     a1, #0
     bl      _exit                      @ exit application

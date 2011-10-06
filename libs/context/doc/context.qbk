@@ -27,10 +27,9 @@
 
 [template context_link[link_text] [link context.context.context [link_text]]]
 [template stack_link[link_text] [link context.stack [link_text]]]
-[template release_stack_link[link_text] [link context.context.release_stack [link_text]]]
 [template preformance_link[link_text] [link context.performance [link_text]]]
 
-[def __context_fn__ ['context function]]
+[def __context_fn__ ['context-function]]
 [def __coroutine__ ['coroutine]]
 [def __coroutines__ ['coroutines]]
 [def __fiber__ ['fiber]]
@@ -38,11 +37,11 @@
 [def __fls__ ['fiber-local-storage]]
 [def __guard_page__ ['guard-page]]
 [def __not_a_context__ ['not-a-context]]
-[def __not_a_stack__ ['not-a-stack]]
 [def __stack__ [stack_link ['stack]]]
 [def __thread__ ['thread]]
 [def __threads__ ['threads]]
 [def __tls__ ['thread-local-storage]]
+[def __stack_allocator_concept__ [stack_link ['stack-allocator]]]
 
 [def __fcontext__ ['fcontext_t]]
 [def __ucontext__ ['ucontext_t]]
@@ -52,13 +51,16 @@
 
 [def __bad_alloc__ ['std::bad_alloc]]
 [def __context__ [context_link ['context]]]
+[def __context_start__ ['context::start()]]
 [def __context_resume__ ['context::resume()]]
 [def __context_suspend__ ['context::suspend()]]
 [def __context_unwind__ ['context::unwind_stack()]]
-[def __context_release__ ['context::release_stack()]]
 [def __invalid_argument__ ['std::invalid_argument]]
-[def __protected_stack__ ['protected_stack]]
-[def __stack_helper__ ['stack_helper]]
+[def __stack_allocator__ [stack_link ['stack_allocator]]]
+[def __stack_alloc__ ['allocate()]]
+[def __stack_dealloc__ ['deallocate()]]
+
+[def __context_ns__ ['boost::contexts]]
 
 [include overview.qbk]
 [include config.qbk]
@@ -68,7 +70,7 @@
 [include examples.qbk]
 [include performance.qbk]
 [include tested.qbk]
-[include rational.qbk]
+[include rationale.qbk]
 [include reference.qbk]
 [include todo.qbk]
 [include acknowledgements.qbk]

@@ -48,8 +48,10 @@
 # endif
 #endif
 
-extern "C" BOOST_CONTEXT_DECL int BOOST_CONTEXT_CALLDECL boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
-extern "C" BOOST_CONTEXT_DECL int BOOST_CONTEXT_CALLDECL boost_fcontext_make( boost_fcontext_t * fc, void (* fn)( void *), void * p);
+extern "C" BOOST_CONTEXT_DECL void * BOOST_CONTEXT_CALLDECL boost_fcontext_align( void * vp);
+extern "C" BOOST_CONTEXT_DECL void * BOOST_CONTEXT_CALLDECL boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
+extern "C" BOOST_CONTEXT_DECL void * BOOST_CONTEXT_CALLDECL boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
+extern "C" BOOST_CONTEXT_DECL void BOOST_CONTEXT_CALLDECL boost_fcontext_make( boost_fcontext_t * fc, void (* fn)( void *), void * p);
 
 #ifdef BOOST_HAS_ABI_HEADERS
 # include BOOST_ABI_SUFFIX

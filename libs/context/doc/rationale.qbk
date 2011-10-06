@@ -5,69 +5,46 @@
           http://www.boost.org/LICENSE_1_0.txt
 ]
 
-[section:rational Rational]
+[section:rationale Rationale]
 
 [heading NoThrow guarantee]
 
 Member functions of __context__ do not thow exceptions but require that certain
 preconditions are fulfilled.
-Context swapps can only be made by instances which are not a __not_a_context__,
-the __context_fn__ has not returned and the context still owns the stack.
+Context jumps can only be made by instances which are not a __not_a_context__,
+the __context_fn__ has not returned.
 
-
-[heading Stack as template argument]
-
-A context must own stack because it must control the life time of the stack, for
-instance if the destructor of __context__ has to unwind the stack the nthe stack
-must be still valid. For reusage of the stack it can be released - unwinding
-will not be done and the __context__ can not be used anymore.
-In orde to release the stack its type must be known by __context__ therefore
-__context__ takes the stack type as template argument.
-Usualy an application uses instances of __contexts__ with the same stack type
-instead of mixing contexts with with different stack types.
 
 [heading Pimpl idiom]
 
 In order to support move semantics and context switching operations it was
 required to separate both features in separat classes via pimpl idiom.
-A nice featre is that a __context__ has the size of a pointer, so it fits into a
-register.
+A nice feature is that a __context__ has the size of a pointer, so it fits into
+a register.
 
 With the current design the constructor accepts functors and its arguments+
 similiar to __thread__.
 
-What if pimpl idom wouldn't be used?
-Because stack unwinding is required a reference to control structures (like
-fcontext_t) is required inside the trampoline function (on top of stack).
-If the context object was moved the refernces to the control structures on the
-top of the stack pointing to invalid control structures.
-
-Why not putting all the context control structures on top of the stack?
-If the control structures reside on top of the stack (inside the function body
-of the trampoline function) the context control structures would be destructed
-if the trampoline function returns (that happens if the functor passed to the 
-constructor of__context__ returns == the context is complete). If the control
-structures are destructed informations about the state of the context are lost.
+With the pimpl idiom the type of the __stack_allocator_context__ can be erased.
 
 
 [heading Unwinding]
 
-In order to release resource allocated on the stack unwinding the stack must be
+In order to release resource allocated on the stack, unwinding the stack must be
 supported.
 The current implementation throws a exception in order to unwind the stack (jump
-back to invocation of `suspend()`). The special exception is catched inside the
+back to invocation of `suspend()`). The special exception is caught inside the
 trampoline function (first function on top of stack).
-usage of exception handler framework (.eh_frame), based on the DWARF CFI (Call Frame Information)
-* depending on architecture and language being compiled might not be available at all
 
-[heading Protection]
+
+[heading Protecting the stack]
 
 Because the size of the stack is fixed (no support for split-stacks) it is essential
 to establish a protection against exceeding the stack otherwise in best case a
-segmentation fault/access violation is generated (or worst meory of the own application
+segmentation fault/access violation is generated (or worst memory of the own application
 is overwritten).
-__protected_stack__ appends on each stack a guard page which doesn't consume
-pyhsical memory but generate segmentation fault/access violation if virtual addresses
+__stack_allocator__ appends on each stack a guard page which doesn't consume
+physical memory but generates segmentation fault/access violation if virtual addresses
 are accessed from within.
 
 
@@ -77,6 +54,7 @@ __boost_context__ provides the low leve lAPI boost_fcontext_t which is implement
 to provide context swapping operations. boost_fcontext_t is the default implementation used by 
 __context__. Other low level APIs and their caveats are described in the following sections.
 
+
 [heading setjmp()/longjmp()]
 
 The C99 defines `setjmp()`/`longjmp()` to provide non-local jumps but it does not require that
@@ -84,9 +62,10 @@ The C99 defines `setjmp()`/`longjmp()` to provide non-local jumps but it does no
 via a call to ['longjmp()] is undefined [footnote [@boost:/libs/context/doc/pdf/iso_c99.pdf
 ISO/IEC 9899:1999, 2005], 7.13.2.1:2].
 
+[/
 [heading ucontext_t]
 
-Since POSIX.1-2008 `ucontext_t` is deprecated!
+Since POSIX.1-2003 `ucontext_t` is deprecated and was removed in POSIX.1-2008!
 The function signature of `makecontext()`:
 
     void makecontext(ucontext_t *ucp, void (*func)(), int argc, ...);
@@ -104,10 +83,11 @@ is not guarantied to work, especially it will fail for architectures where point
 than integers.
 
 `ucontext_t` preserves signal mask between context switches which involes system calls consuming
-a lot of CPU cycles (ucontext_t is slower by perfomance_link[factor 13x] related to `boost_fcontext_t`).
+a lot of CPU cycles (ucontext_t is slower by perfomance_link[factor 13x] relative to `boost_fcontext_t`).
 
 If desired `boost_fcontext_t` can be replaced by `ucontext_t` by applying -DBOOST_CONTEXT_UCTX at
 commandline.
+
 
 [heading Windows fibers]
 
@@ -131,5 +111,6 @@ in order to detect if the current thread was already converted. Unfortunately Wi
 
 If desired `boost_fcontext_t` can be replaced by Windows Fibers by applying -DBOOST_CONTEXT_FIBER at
 commandline.
+]
 
 [endsect]

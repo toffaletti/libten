@@ -15,7 +15,7 @@ void fn1()
     std::cout << "inside fn1(): when fn1() returns fn2() of next context (linked) will be entered"  << std::endl;
 }
 
-boost::contexts::context<> ctx2;
+boost::contexts::context ctx2;
 
 void fn2()
 {
@@ -27,18 +27,17 @@ void fn2()
 int main( int argc, char * argv[])
 {
     {
-        ctx2 = boost::contexts::context<>(
+        ctx2 = boost::contexts::context(
             fn2, 
-            boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-            false,
-            true);
-        boost::contexts::context<> ctx1(
+            boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
+        boost::contexts::context ctx1(
             fn1, 
-            boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-            false,
+            boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind,
             ctx2);
 
-        ctx1.resume();
+        ctx1.start();
     }
 
     std::cout << "main(): ctx1 is destructed\n";

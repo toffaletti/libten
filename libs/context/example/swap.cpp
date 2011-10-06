@@ -14,8 +14,7 @@
 int x = 7;
 void fn( int);
 
-boost::contexts::protected_stack stack( boost::contexts::stack_helper::default_stacksize());
-boost::contexts::context<> ctx( fn, x, boost::move( stack), false);
+boost::contexts::context ctx( fn, x, boost::contexts::default_stacksize(), boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
 
 void fn( int j)
 {
@@ -28,6 +27,8 @@ void fn( int j)
 
 int main( int argc, char * argv[])
 {
+    std::cout << "main() calls context ctx" << std::endl;
+    ctx.start();
     while ( ! ctx.is_complete() )
     {
         std::cout << "main() calls context ctx" << std::endl;

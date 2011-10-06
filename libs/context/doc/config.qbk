@@ -8,13 +8,13 @@
 [section:installtion How to build and install]
 
 * download the sources from
-[@http://www.boost-consulting.com/vault/index.php?directory=Concurrent%20Programming Boost Vault]
+[@https://github.com/olk/boost.context GitHub]
 * extract the archive into the boost-source directory
 
-Only gcc, intel and msvc are supported compilers. On POSIX systems GNU as and on Windows MASM
-are required for assembler.
+The only supported compilers are GCC, Intel and MSVC. On POSIX and Windows systems, GNU AS and MASM
+are respectively required for the assembler implementation of __boost_context__.
 
-[note Because __boost_build__ provides the properties architecture, instruction-set and
+[note Because __boost_build__ provides the architecture, instruction-set and
 address-model as optional properites (not set by __boost_build__) you have to specify them at bjam command-line.]
 
 [table
@@ -62,14 +62,14 @@ address-model as optional properites (not set by __boost_build__) you have to sp
         [bjam toolset = msvc-10.0 architecture = x86 instruction-set = yorksfield address-model = 64]
     ]
 ]
-
-If desired you can use the native implementation provided by the operating system by applying a
-special preprcoessor macro:
+[/
+If desired you can use the native implementation provided by the operating system by defining a
+special preprocoessor macro:
 
 [table
     [[]]
     [
-        [POSIX (deprecated ucontext_t)]
+        [POSIX (ucontext_t is obsolete since POSIX 2003, removed in POSIX 2008)]
         [bjam toolset = gcc ... cxxflags = "-DBOOST_CONTEXT_UCTX"]
     ]
     [
@@ -77,5 +77,5 @@ special preprcoessor macro:
         [bjam toolset = msvc-10.0 ... cxxflags = "-DBOOST_CONTEXT_FIBER"]
     ]
 ]
-
+]
 [endsect]

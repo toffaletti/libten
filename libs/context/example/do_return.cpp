@@ -19,10 +19,12 @@ void fn()
 int main( int argc, char * argv[])
 {
     {
-        boost::contexts::protected_stack stack( boost::contexts::stack_helper::default_stacksize());
-        boost::contexts::context<> ctx( fn, boost::move( stack), false, true);
+        boost::contexts::context ctx(
+			fn,
+        	boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
 
-        ctx.resume();
+        ctx.start();
     }
 
     std::cout << "Done" << std::endl;

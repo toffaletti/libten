@@ -51,10 +51,6 @@ exe base_api
     : base_api.cpp
     ;
 
-exe fcontext
-    : fcontext.cpp
-    ;
-
 exe exit
     : exit.cpp
     ;
@@ -77,6 +73,10 @@ exe unwind
 
 exe float
     : float.cpp
+    ;
+
+exe transfer
+    : transfer.cpp
     ;
 
 exe enumerate_string

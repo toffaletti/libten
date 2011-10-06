@@ -18,7 +18,8 @@
 
 #include <boost/context/detail/context_base.hpp>
 #include <boost/context/detail/context_object.hpp>
-#include <boost/context/protected_stack.hpp>
+#include <boost/context/flags.hpp>
+#include <boost/context/stack_allocator.hpp>
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -27,89 +28,90 @@
 namespace boost {
 namespace contexts {
 
-template< typename StackT = protected_stack >
 class context
 {
 private:
-    typedef typename detail::context_base< StackT >::ptr_t  base_ptr_t;
+    typedef detail::icontext::ptr_t  base_ptr_t;
 
     base_ptr_t  impl_;
 
     BOOST_MOVABLE_BUT_NOT_COPYABLE( context);
 
 #ifndef BOOST_NO_RVALUE_REFERENCES
+    template< typename Allocator >
     static base_ptr_t make_context_(
-        void( * fn)(), StackT && stack, bool do_unwind, bool do_return)
+        void( * fn)(), std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc)
     {
         return base_ptr_t(
-            new detail::context_object< void(*)(), StackT >(
-                fn, boost::move( stack), do_unwind, do_return) );
+            new detail::context_object< void(*)(), Allocator >(
+                fn, alloc, size, do_unwind, do_return) );
     }
 
+    template< typename Allocator >
     static base_ptr_t make_context_(
-        void( * fn)(), StackT && stack, bool do_unwind, context & nxt)
+        void( * fn)(), std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc)
     {
         BOOST_ASSERT( nxt);
         return base_ptr_t(
-            new detail::context_object< void(*)(), StackT >(
-                fn, boost::move( stack), do_unwind, nxt.impl_) );
+            new detail::context_object< void(*)(), Allocator >(
+                fn, alloc, size, do_unwind, nxt.impl_) );
     }
 
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        Fn && fn, StackT && stack, bool do_unwind, bool do_return)
+        Fn && fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc)
     {
         return base_ptr_t(
-            new detail::context_object< typename remove_reference< Fn >::type, StackT >(
-                fn, boost::move( stack), do_unwind, do_return) );
+            new detail::context_object< typename remove_reference< Fn >::type, Allocator >(
+                fn, alloc, size, do_unwind, do_return) );
     }
 
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        Fn && fn, StackT && stack, bool do_unwind, context & nxt)
+        Fn && fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc)
     {
         BOOST_ASSERT( nxt);
         return base_ptr_t(
-            new detail::context_object< typename remove_reference< Fn >::type, StackT >(
-                fn, boost::move( stack), do_unwind, nxt.impl_) );
+            new detail::context_object< typename remove_reference< Fn >::type, Allocator >(
+                fn, alloc, size, do_unwind, nxt.impl_) );
     }
 #else
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return)
+        Fn fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc)
     {
         return base_ptr_t(
-            new detail::context_object< Fn, StackT >(
-                fn, boost::move( stack), do_unwind, do_return) );
+            new detail::context_object< Fn, Allocator >(
+                fn, alloc, size, do_unwind, do_return) );
     }
 
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, context & nxt)
+        Fn fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc)
     {
         BOOST_ASSERT( nxt);
         return base_ptr_t(
-            new detail::context_object< Fn, StackT >(
-                fn, boost::move( stack), do_unwind, nxt.impl_) );
+            new detail::context_object< Fn, Allocator >(
+                fn, alloc, size, do_unwind, nxt.impl_) );
     }
 
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return)
+        BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc)
     {
         return base_ptr_t(
-            new detail::context_object< Fn, StackT >(
-                fn, boost::move( stack), do_unwind, do_return) );
+            new detail::context_object< Fn, Allocator >(
+                fn, alloc, size, do_unwind, do_return) );
     }
 
-    template< typename Fn >
+    template< typename Fn, typename Allocator >
     static base_ptr_t make_context_(
-        BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, context & nxt)
+        BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc)
     {
         BOOST_ASSERT( nxt);
         return base_ptr_t(
-            new detail::context_object< Fn, StackT >(
-                fn, boost::move( stack), do_unwind, nxt.impl_) );
+            new detail::context_object< Fn, Allocator >(
+                fn, alloc, size, do_unwind, nxt.impl_) );
     }
 #endif
 
@@ -125,43 +127,83 @@ public:
 #ifndef BOOST_NO_RVALUE_REFERENCES
 # ifdef BOOST_MSVC
     template< typename Fn >
-    context( Fn & fn, StackT && stack, bool do_unwind, bool do_return = true) :
-        impl_( make_context_( static_cast< Fn & >( fn), boost::move( stack), do_unwind, do_return) )
+    context( Fn & fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        impl_( make_context_( static_cast< Fn & >( fn), size, do_unwind, do_return, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn & fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc) :
+        impl_( make_context_( static_cast< Fn & >( fn), size, do_unwind, do_return, alloc) )
     {}
 
     template< typename Fn >
-    context( Fn & fn, StackT && stack, bool do_unwind, context & nxt) :
-        impl_( make_context_( static_cast< Fn & >( fn), boost::move( stack), do_unwind, nxt) )
+    context( Fn & fn, std::size_t size, flag_unwind_t do_unwind, context & nxt) :
+        impl_( make_context_( static_cast< Fn & >( fn), size, do_unwind, nxt, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn & fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc) :
+        impl_( make_context_( static_cast< Fn & >( fn), size, do_unwind, nxt, alloc) )
     {}
 # endif
     template< typename Fn >
-    context( Fn && fn, StackT && stack, bool do_unwind, bool do_return = true) :
-        impl_( make_context_( static_cast< Fn && >( fn), boost::move( stack), do_unwind, do_return) )
+    context( Fn && fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        impl_( make_context_( static_cast< Fn && >( fn), size, do_unwind, do_return, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn && fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc) :
+        impl_( make_context_( static_cast< Fn && >( fn), size, do_unwind, do_return, alloc) )
     {}
 
     template< typename Fn >
-    context( Fn && fn, StackT && stack, bool do_unwind, context & nxt) :
-        impl_( make_context_( static_cast< Fn && >( fn), boost::move( stack), do_unwind, nxt) )
+    context( Fn && fn, std::size_t size, flag_unwind_t do_unwind, context & nxt) :
+        impl_( make_context_( static_cast< Fn && >( fn), size, do_unwind, nxt, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn && fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc) :
+        impl_( make_context_( static_cast< Fn && >( fn), size, do_unwind, nxt, alloc) )
     {}
 #else
     template< typename Fn >
-    context( Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return = true) :
-        impl_( make_context_( fn, boost::move( stack), do_unwind, do_return) )
+    context( Fn fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        impl_( make_context_( fn, size, do_unwind, do_return, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc) :
+        impl_( make_context_( fn, size, do_unwind, do_return, alloc) )
     {}
 
     template< typename Fn >
-    context( Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, context & nxt) :
-        impl_( make_context_( fn, boost::move( stack), do_unwind, nxt) )
+    context( Fn fn, std::size_t size, flag_unwind_t do_unwind, context & nxt) :
+        impl_( make_context_( fn, size, do_unwind, nxt, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( Fn fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc) :
+        impl_( make_context_( fn, size, do_unwind, nxt, alloc) )
     {}
 
     template< typename Fn >
-    context( BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return = true) :
-        impl_( make_context_( fn, boost::move( stack), do_unwind, do_return) )
+    context( BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        impl_( make_context_( fn, size, do_unwind, do_return, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc) :
+        impl_( make_context_( fn, size, do_unwind, do_return, alloc) )
     {}
 
     template< typename Fn >
-    context( BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, context & nxt) :
-        impl_( make_context_( fn, boost::move( stack), do_unwind, nxt) )
+    context( BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, context & nxt) :
+        impl_( make_context_( fn, size, do_unwind, nxt, stack_allocator() ) )
+    {}
+
+    template< typename Fn, typename Allocator >
+    context( BOOST_RV_REF( Fn) fn, std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc) :
+        impl_( make_context_( fn, size, do_unwind, nxt, alloc) )
     {}
 #endif
 
@@ -171,19 +213,35 @@ public:
 
 #define BOOST_CONTEXT_CTOR(z, n, unused) \
     template< typename Fn, BOOST_PP_ENUM_PARAMS(n, typename A) > \
-    context( Fn fn, BOOST_CONTEXT_ARGS(n), BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return = true) : \
+    context( Fn fn, BOOST_CONTEXT_ARGS(n), std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) : \
         impl_( \
             make_context_( \
                 boost::bind( boost::type< void >(), fn, BOOST_PP_ENUM_PARAMS(n, a) ), \
-                boost::move( stack), do_unwind, do_return) ) \
+                size, do_unwind, do_return, stack_allocator() ) ) \
+    {} \
+    \
+    template< typename Fn, typename Allocator, BOOST_PP_ENUM_PARAMS(n, typename A) > \
+    context( Fn fn, BOOST_CONTEXT_ARGS(n), std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return, Allocator const& alloc) : \
+        impl_( \
+            make_context_( \
+                boost::bind( boost::type< void >(), fn, BOOST_PP_ENUM_PARAMS(n, a) ), \
+                size, do_unwind, do_return, alloc) ) \
     {} \
     \
     template< typename Fn, BOOST_PP_ENUM_PARAMS(n, typename A) > \
-    context( Fn fn, BOOST_CONTEXT_ARGS(n), BOOST_RV_REF( StackT) stack, bool do_unwind, context & nxt) : \
+    context( Fn fn, BOOST_CONTEXT_ARGS(n), std::size_t size, flag_unwind_t do_unwind, context & nxt) : \
         impl_( \
             make_context_( \
                 boost::bind( boost::type< void >(), fn, BOOST_PP_ENUM_PARAMS(n, a) ), \
-                boost::move( stack), do_unwind, nxt) ) \
+                size, do_unwind, nxt, stack_allocator() ) ) \
+    {} \
+    \
+    template< typename Fn, typename Allocator, BOOST_PP_ENUM_PARAMS(n, typename A) > \
+    context( Fn fn, BOOST_CONTEXT_ARGS(n), std::size_t size, flag_unwind_t do_unwind, context & nxt, Allocator const& alloc) : \
+        impl_( \
+            make_context_( \
+                boost::bind( boost::type< void >(), fn, BOOST_PP_ENUM_PARAMS(n, a) ), \
+                size, do_unwind, nxt, alloc) ) \
     {} \
 
 #ifndef BOOST_CONTEXT_ARITY
@@ -217,16 +275,22 @@ BOOST_PP_REPEAT_FROM_TO( 1, BOOST_CONTEXT_ARITY, BOOST_CONTEXT_CTOR, ~)
     void swap( context & other)
     { impl_.swap( other.impl_); }
 
-    void resume()
+    void * start()
     {
         BOOST_ASSERT( impl_);
-        return impl_->resume();
+        return impl_->start();
     }
 
-    void suspend()
+    void * resume( void * vp = 0)
     {
         BOOST_ASSERT( impl_);
-        return impl_->suspend();
+        return impl_->resume( vp);
+    }
+
+    void * suspend( void * vp = 0)
+    {
+        BOOST_ASSERT( impl_);
+        return impl_->suspend( vp);
     }
 
     void unwind_stack()
@@ -240,22 +304,10 @@ BOOST_PP_REPEAT_FROM_TO( 1, BOOST_CONTEXT_ARITY, BOOST_CONTEXT_CTOR, ~)
         BOOST_ASSERT( impl_);
         return impl_->is_complete();
     }
-
-    bool owns_stack() const
-    {
-        BOOST_ASSERT( impl_);
-        return impl_->owns_stack();
-    }
-
-    StackT release_stack()
-    {
-        BOOST_ASSERT( impl_);
-        return impl_->release_stack();
-    }
 };
 
-template< typename StackT >
-void swap( context< StackT > & l, context< StackT > & r)
+inline
+void swap( context & l, context & r)
 { l.swap( r); }
 
 }}

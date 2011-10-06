@@ -9,7 +9,8 @@
 
 #include <boost/context/context.hpp>
 #include <boost/context/fcontext.hpp>
-#include <boost/context/protected_stack.hpp>
-#include <boost/context/stack_helper.hpp>
+#include <boost/context/flags.hpp>
+#include <boost/context/stack_allocator.hpp>
+#include <boost/context/stack_utils.hpp>
 
 #endif // BOOST_CONTEXTS_ALL_H

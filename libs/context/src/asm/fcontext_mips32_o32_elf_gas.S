@@ -91,6 +91,8 @@ boost_fcontext_jump:
     l.d     $f30, 152($a1)  # restore F30
 #endif
 
+    move    $v0, $a2        # use third arg as return value after jump
+
     lw      $t9, 96($a1)    # load PC
     jr      $t9             # jump to context
 .end boost_fcontext_jump
@@ -112,15 +114,28 @@ boost_fcontext_make:
     sw      $a1, 96($a0)        # save the address of the function supposed to be run
     sw      $a2, 104($a0)       # save void pointer
     lw      $t0, 160($a0)       # load the stack base
-    addiu   $t0, $t0, -16       # reserve 16 byte of argument space
+
+    sub     $sp, $sp, 28
+    sw      $ra, 24($sp)
+    sw      $a0, 20($sp)
+    move    $a0, $t0            # stack pointer as arg for boost_fcontext_align
+#ifdef __PIC__
+    lw      $t9, %call16(boost_fcontext_align)($gp) # align stack
+    jalr    $t9
+#else
+    jal     boost_fcontext_align                    # align stack
+#endif
+    nop
+    move    $t0, $v0            # begin of aligned stack 
+    lw      $ra, 24($sp)
+    lw      $a0, 20($sp)
+    addi    $sp, $sp, 28
+
+    sub     $t0, $t0, 16        # reserve 16 byte of argument space
     sw      $t0, 72($a0)        # save the stack base
     lw      $t0, 168($a0)       # load address of next user context
     sw      $t0, 8($a0)         # save the next context
-#ifdef __PIC__
-    addiu   $t9, link_fcontext - boost_fcontext_make # get address of link_fcontext
-#else
     la      $t9, link_fcontext  # get address of link_fcontext
-#endif
     sw      $t9, 88($a0)        # save address of link_fcontext
 
     move    $v0, $zero
@@ -133,10 +148,10 @@ link_fcontext:
 
     move    $a0, $s0            # set A0 to address of current context
 #ifdef __PIC__
-    lw      $t9, %call16(boost_fcontext_jump)($gp)   # install next context
+    lw      $t9, %call16(boost_fcontext_start)($gp)  # install next context
     jr      $t9
 #else
-    j       boost_fcontext_jump        # install next context
+    j       boost_fcontext_start       # install next context
 #endif
 
 2:

@@ -19,7 +19,7 @@
 
 namespace po = boost::program_options;
 
-boost::contexts::context<> c;
+boost::contexts::context c;
 
 void fn()
 { c.suspend(); }
@@ -32,15 +32,19 @@ void test_creation( unsigned int iterations)
 
     // cache warm-up
     {
-        boost::contexts::protected_stack stack( 2 * 1024 * 1024);
-        c = boost::contexts::context<>( fn, boost::move( stack), false);
+        c = boost::contexts::context(
+				fn,
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
     }
 
     for ( unsigned int i = 0; i < iterations; ++i)
     {
-        boost::contexts::protected_stack stack( 2 * 1024 * 1024);
         cycle_t start( get_cycles() );
-        c = boost::contexts::context<>( fn, boost::move( stack), false);
+        c = boost::contexts::context(
+				fn,
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
         cycle_t diff( get_cycles() - start);
         diff -= overhead;
         BOOST_ASSERT( diff >= 0);
@@ -57,18 +61,22 @@ void test_switching( unsigned int iterations)
 
     // cache warum-up
     {
-        boost::contexts::protected_stack stack( 2 * 1024 * 1024);
-        c = boost::contexts::context<>( fn, boost::move( stack), false);
-        c.resume();
+        c = boost::contexts::context(
+				fn,
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
+        c.start();
         c.resume();
     }
 
     for ( unsigned int i = 0; i < iterations; ++i)
     {
-        boost::contexts::protected_stack stack( 2 * 1024 * 1024);
-        c = boost::contexts::context<>( fn, boost::move( stack), false);
+        c = boost::contexts::context(
+				fn,
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
         cycle_t start( get_cycles() );
-        c.resume();
+        c.start();
         cycle_t diff( get_cycles() - start);
 
         // we have two jumps and two measuremt-overheads

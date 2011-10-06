@@ -16,6 +16,7 @@
 
 #include <boost/context/detail/config.hpp>
 #include <boost/context/detail/context_base.hpp>
+#include <boost/context/flags.hpp>
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -25,8 +26,8 @@ namespace boost {
 namespace contexts {
 namespace detail {
 
-template< typename Fn, typename StackT >
-class context_object : public context_base< StackT >
+template< typename Fn, typename Allocator >
+class context_object : public context_base< Allocator >
 {
 private:
     Fn  fn_;
@@ -36,43 +37,43 @@ private:
 
 public:
 #ifndef BOOST_NO_RVALUE_REFERENCES
-    context_object( Fn & fn, StackT && stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( Fn & fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( fn)
     {}
 
-    context_object( Fn & fn, StackT && stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( Fn & fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( fn)
     {}
 
-    context_object( Fn && fn, StackT && stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( static_cast< Fn && >( fn) )
     {}
 
-    context_object( Fn && fn, StackT && stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( static_cast< Fn && >( fn) )
     {}
 #else
-    context_object( Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( Fn fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( fn)
     {}
 
-    context_object( Fn fn, BOOST_RV_REF( StackT) stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( Fn fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( fn)
     {}
 
-    context_object( BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( BOOST_RV_REF( Fn) fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( fn)
     {}
 
-    context_object( BOOST_RV_REF( Fn) fn, BOOST_RV_REF( StackT) stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( BOOST_RV_REF( Fn) fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( fn)
     {}
 #endif
@@ -81,8 +82,8 @@ public:
     { fn_(); }
 };
 
-template< typename Fn, typename StackT >
-class context_object< reference_wrapper< Fn >, StackT > : public context_base< StackT >
+template< typename Fn, typename Allocator >
+class context_object< reference_wrapper< Fn >, Allocator > : public context_base< Allocator >
 {
 private:
     Fn  &   fn_;
@@ -91,13 +92,13 @@ private:
     context_object & operator=( context_object const&);
 
 public:
-    context_object( reference_wrapper< Fn > fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( fn)
     {}
 
-    context_object( reference_wrapper< Fn > fn, BOOST_RV_REF( StackT) stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( fn)
     {}
 
@@ -105,8 +106,8 @@ public:
     { fn_(); }
 };
 
-template< typename Fn, typename StackT >
-class context_object< const reference_wrapper< Fn >, StackT > : public context_base< StackT >
+template< typename Fn, typename Allocator >
+class context_object< const reference_wrapper< Fn >, Allocator > : public context_base< Allocator >
 {
 private:
     Fn  &   fn_;
@@ -115,13 +116,13 @@ private:
     context_object & operator=( context_object const&);
 
 public:
-    context_object( const reference_wrapper< Fn > fn, BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        context_base< StackT >( boost::move( stack), do_unwind, do_return),
+    context_object( const reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        context_base< Allocator >( alloc, size, do_unwind, do_return),
         fn_( fn)
     {}
 
-    context_object( const reference_wrapper< Fn > fn, BOOST_RV_REF( StackT) stack, bool do_unwind, typename context_base< StackT >::ptr_t nxt) :
-        context_base< StackT >( boost::move( stack), do_unwind, nxt),
+    context_object( const reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
+        context_base< Allocator >( alloc, size, do_unwind, nxt),
         fn_( fn)
     {}
 

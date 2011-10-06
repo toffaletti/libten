@@ -20,10 +20,10 @@
 template< typename T >
 class enumerator {
 private:
-    boost::contexts::context<>          ctx_;
-    T                       const*      result_;
+    boost::contexts::context          ctx_;
     bool                                complete_;
     bool                                do_unwind_;
+    bool                                started_;
 
     static void run( enumerator * self)
     { self->enumerate(); }
@@ -33,14 +33,12 @@ protected:
 
     void yield_return( T const& v)
     {
-        result_ = & v;
-        ctx_.suspend();
-        result_ = 0;
+        void * vp = ( void *) & v;
+        ctx_.suspend( vp);
     }
 
     void yield_break()
     {
-        result_ = 0;
         complete_ = true;
         ctx_.suspend();
     }
@@ -49,11 +47,11 @@ public:
     enumerator( bool do_unwind = true): 
         ctx_(
             & enumerator::run, this,
-            boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-            false),
-        result_( 0),
+            boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
         complete_( false),
-        do_unwind_( do_unwind)
+        do_unwind_( do_unwind),
+        started_( false)
     {}
 
     ~enumerator()
@@ -64,8 +62,17 @@ public:
 
     bool get( T & result)
     {
-        ctx_.resume();
-        if ( result_) result = * result_;
+        void * vp = 0;
+        if ( ! started_)
+        {
+            started_ = true;
+            vp = ctx_.start();
+        }
+        else
+        {
+            vp = ctx_.resume();
+        }
+        if ( vp) result = * static_cast< T * >( vp);
         return ! ( complete_ || ctx_.is_complete() );
     }
 };

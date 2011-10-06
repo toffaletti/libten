@@ -21,8 +21,9 @@
 class continuation
 {
 private:
-    boost::contexts::context<>                  ctx_;
+    boost::contexts::context                  ctx_;
     boost::function< void( continuation &) >    fn_;
+    bool                                        started_;
 
     void trampoline_()
     { fn_( * this); }
@@ -31,13 +32,20 @@ public:
     continuation( boost::function< void( continuation &) > const& fn) :
         ctx_(
             & continuation::trampoline_, this,
-            boost::contexts::protected_stack( boost::contexts::stack_helper::default_stacksize()),
-            false),
-        fn_( fn)
+            boost::contexts::default_stacksize(),
+			boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
+        fn_( fn), started_( false)
     {}
 
     void resume()
-    { ctx_.resume(); }
+    {
+        if ( ! started_)
+        {
+            started_ = true;
+            ctx_.start();
+        }
+        else ctx_.resume();
+    }
 
     void suspend()
     { ctx_.suspend(); }

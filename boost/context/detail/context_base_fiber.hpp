@@ -21,11 +21,11 @@ extern "C" {
 #include <boost/assert.hpp>
 #include <boost/config.hpp>
 #include <boost/intrusive_ptr.hpp>
-#include <boost/move/move.hpp>
 #include <boost/utility.hpp>
 
 #include <boost/context/detail/config.hpp>
-#include <boost/context/protected_stack.hpp>
+#include <boost/context/detail/icontext.hpp>
+#include <boost/context/flags.hpp>
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -70,12 +70,14 @@ void CALLBACK trampoline( void * vp)
     {
         ctx->exec();
         ctx->flags_ |= Ctx::flag_complete;
-        if ( ctx->nxt_)
+		Ctx * nxt( dynamic_cast< Ctx * >( ctx->nxt_.get() ) );
+		BOOST_ASSERT( nxt);
+        if ( nxt)
         {
-            std::swap( ctx->nxt_->ctx_caller_, ctx->ctx_caller_);
-            ctx->nxt_->flags_ |= Ctx::flag_running;
-            ctx->nxt_->flags_ |= Ctx::flag_resumed;
-            ::SwitchToFiber( ctx->nxt_->ctx_callee_);
+            std::swap( nxt->ctx_caller_, ctx->ctx_caller_);
+            nxt->flags_ |= Ctx::flag_running;
+            nxt->flags_ |= Ctx::flag_started;
+            ::SwitchToFiber( nxt->ctx_callee_);
         }
         if ( 0 != ( ctx->flags_ & Ctx::flag_do_return) ) ::SwitchToFiber( ctx->ctx_caller_);
     }
@@ -88,92 +90,89 @@ void CALLBACK trampoline( void * vp)
     { std::terminate(); }
 }
 
-template< typename StackT >
-class context_base : private noncopyable
+template< typename Allocator >
+class context_base : public icontext
 {
-public:
-    typedef intrusive_ptr< context_base >   ptr_t;
-
 private:
     enum flag_t
     {
-        flag_resumed                = 1 << 1,
-        flag_running                = 1 << 2,
-        flag_complete               = 1 << 3,
-        flag_unwind_stack           = 1 << 4,
-        flag_force_unwind           = 1 << 5,
-        flag_dont_force_unwind      = 1 << 6,
-        flag_do_return              = 1 << 7,
+        flag_started                = 1 << 1,
+        flag_resumed                = 1 << 2,
+        flag_running                = 1 << 3,
+        flag_complete               = 1 << 4,
+        flag_unwind_stack           = 1 << 5,
+        flag_force_unwind           = 1 << 6,
+        flag_dont_force_unwind      = 1 << 7,
+        flag_do_return              = 1 << 8,
     };
 
     template< typename T >
     friend void CALLBACK trampoline( void * vp);
 
-    StackT              stack_;
     LPVOID              ctx_caller_;
     LPVOID              ctx_callee_;
     ptr_t               nxt_;
     short               flags_;
-    std::size_t         use_count_;
+	void			*	vp_;
 
 public:
-    context_base( BOOST_RV_REF( StackT) stack, bool do_unwind, bool do_return) :
-        stack_( boost::move( stack) ), ctx_caller_( 0), ctx_callee_( 0), nxt_(),
-        flags_( do_unwind ? flag_force_unwind : flag_dont_force_unwind), use_count_( 0)
+    context_base( Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
+        ctx_caller_( 0), ctx_callee_( 0), nxt_(),
+        flags_( stack_unwind == do_unwind ? flag_force_unwind : flag_dont_force_unwind), vp_( 0)
     {
-        BOOST_ASSERT( stack_);
-
-        if ( do_return) flags_ |= flag_do_return;
+        if ( return_to_caller == do_return) flags_ |= flag_do_return;
 
         ctx_callee_ = ::CreateFiber(
-            stack_.size(),
-            trampoline< context_base< StackT > >,
+            size,
+            trampoline< context_base< Allocator > >,
             static_cast< LPVOID >( this) );
         BOOST_ASSERT( ctx_callee_);
     }
 
-    context_base( BOOST_RV_REF( StackT) stack, bool do_unwind, ptr_t nxt) :
-        stack_( boost::move( stack) ), ctx_caller_( 0), ctx_callee_( 0), nxt_( nxt),
-        flags_( do_unwind ? flag_force_unwind : flag_dont_force_unwind), use_count_( 0)
+    context_base( Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, ptr_t nxt) :
+        ctx_caller_( 0), ctx_callee_( 0), nxt_( nxt),
+        flags_( stack_unwind == do_unwind ? flag_force_unwind : flag_dont_force_unwind), vp_( 0)
     {
-        BOOST_ASSERT( stack_);
         BOOST_ASSERT( ! nxt_->is_complete() );
 
         ctx_callee_ = ::CreateFiber(
-            stack_.size(),
-            trampoline< context_base< StackT > >,
+            size,
+            trampoline< context_base< Allocator > >,
             static_cast< LPVOID >( this) );
         BOOST_ASSERT( ctx_callee_);
     }
 
     virtual ~context_base()
     {
-        if ( owns_stack() && ! is_complete()
-                && ( 0 != ( flags_ & flag_resumed) )
-                && ( 0 != ( flags_ & flag_force_unwind) ) )
+        if ( ! is_complete()
+                && ( is_started() || is_resumed() )
+                && ( unwind_requested() ) )
             unwind_stack();
         if ( ctx_callee_) DeleteFiber( ctx_callee_);
     }
 
+    bool unwind_requested() const
+    { return 0 != ( flags_ & flag_force_unwind); }
+
     bool is_complete() const
     { return 0 != ( flags_ & flag_complete); }
+
+    bool is_started() const
+    { return 0 != ( flags_ & flag_started); }
+
+    bool is_resumed() const
+    { return 0 != ( flags_ & flag_started); }
 
     bool is_running() const
     { return 0 != ( flags_ & flag_running); }
 
-    bool owns_stack() const
-    { return static_cast< bool >( stack_); }
-
-    StackT release_stack()
-    { return boost::move( stack_); }
-
-    void resume()
+    void * start()
     {
-        BOOST_ASSERT( owns_stack() );
         BOOST_ASSERT( ! is_complete() );
+        BOOST_ASSERT( ! is_started() );
         BOOST_ASSERT( ! is_running() );
 
-        flags_ |= flag_resumed;
+        flags_ |= flag_started;
         flags_ |= flag_running;
         if ( ! is_a_fiber() )
         {
@@ -195,24 +194,60 @@ public:
 
             if ( is_main) ctx_caller_ = 0;
         }
+
+		return vp_;
     }
 
-    void suspend()
+    void * resume( void * vp)
     {
-        BOOST_ASSERT( owns_stack() );
+        BOOST_ASSERT( is_started() );
+        BOOST_ASSERT( ! is_complete() );
+        BOOST_ASSERT( ! is_running() );
+
+        flags_ |= flag_resumed;
+        flags_ |= flag_running;
+		vp_ = vp;
+        if ( ! is_a_fiber() )
+        {
+            ctx_caller_ = ConvertThreadToFiber( 0);
+            BOOST_ASSERT( ctx_caller_);
+
+            SwitchToFiber( ctx_callee_);
+
+            BOOL result = ConvertFiberToThread();
+            BOOST_ASSERT( result);
+            ctx_caller_ = 0;
+        }
+        else
+        {
+            bool is_main = 0 == ctx_caller_;
+            if ( is_main) ctx_caller_ = GetCurrentFiber();
+
+            SwitchToFiber( ctx_callee_);
+
+            if ( is_main) ctx_caller_ = 0;
+        }
+
+		return vp_;
+    }
+
+    void * suspend( void * vp)
+    {
         BOOST_ASSERT( ! is_complete() );
         BOOST_ASSERT( is_running() );
         BOOST_ASSERT( ctx_caller_); 
 
         flags_ &= ~flag_running;
+		vp_ = vp;
         SwitchToFiber( ctx_caller_);
         if ( 0 != ( flags_ & flag_unwind_stack) )
             throw ex_unwind_stack();
+
+		return vp_;
     }
 
     void unwind_stack()
     {
-        BOOST_ASSERT( owns_stack() );
         BOOST_ASSERT( ! is_complete() );
         BOOST_ASSERT( ! is_running() );
 
@@ -240,14 +275,6 @@ public:
         flags_ &= ~flag_unwind_stack;
         BOOST_ASSERT( is_complete() );
     }
-
-    virtual void exec() = 0;
-
-    friend inline void intrusive_ptr_add_ref( context_base * p)
-    { ++p->use_count_; }
-
-    friend inline void intrusive_ptr_release( context_base * p)
-    { if ( --p->use_count_ == 0) delete p; }
 };
 
 }}}

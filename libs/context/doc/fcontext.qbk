@@ -9,10 +9,8 @@
 
 __boost_context__ uses and provides a low level API which implements the
 execution control transfer mechanism. The boost_fcontext_t API provides a
-similar interface like ucontext_t.
-
-[important The stack used by boost_fcontext_t must be aligned to 16 bytes
-border.]
+similar interface like ucontext_t. boost_fcontext_t and its functions are
+located in the global namespace and the functions are declared as extern "C". 
 
 [important Win64 requires for floating point registers space (512 bytes) on the
 freestore aligned to 16 bytes border.]
@@ -30,8 +28,8 @@ freestore aligned to 16 bytes border.]
     {
             (void) p;
             fprintf(stderr,"f1() stated\n");
-            fprintf(stderr,"f1: call boost_fcontext_jump( & fc1, & fc2)\n");
-            boost_fcontext_jump( & fc1, & fc2);
+            fprintf(stderr,"f1: call boost_fcontext_jump( & fc1, & fc2, 0)\n");
+            boost_fcontext_jump( & fc1, & fc2, 0);
             fprintf(stderr,"f1() returns\n");
     }
 
@@ -39,8 +37,8 @@ freestore aligned to 16 bytes border.]
     {
             (void) p;
             fprintf(stderr,"f2() stated\n");
-            fprintf(stderr,"f2: call boost_fcontext_jump( & fc2, & fc1)\n");
-            boost_fcontext_jump( & fc2, & fc1);
+            fprintf(stderr,"f2: call boost_fcontext_jump( & fc2, & fc1, 0)\n");
+            boost_fcontext_jump( & fc2, & fc1, 0);
             fprintf(stderr,"f2() returns\n");
     }
 
@@ -77,8 +75,8 @@ freestore aligned to 16 bytes border.]
     #endif
             boost_fcontext_make( & fc2, f2, NULL);
 
-            fprintf(stderr,"main: call boost_fcontext_jump( & fcm, & fc1)\n");
-            boost_fcontext_jump( & fcm, & fc1);
+            fprintf(stderr,"main: call boost_fcontext_start( & fcm, & fc1)\n");
+            boost_fcontext_start( & fcm, & fc1);
 
             fprintf( stderr, "main() returns\n");
             return EXIT_SUCCESS;
@@ -124,23 +122,32 @@ freestore aligned to 16 bytes border.]
 [[Member:] [Address of successor context.]]
 ]
 
+        void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
+        void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
+        void boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
 
-        int boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
-        int boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
-
-[heading `int boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t * nfc)`]
+[heading `void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t * nfc)`]
 [variablelist
 [[Effects:] [Stores the current context data like stack pointer, instruction
 pointer and CPU registers to `*ofc` and restores the data from `*nfc` which
-means jumping to the execution context of `*nfc`.]]
+means jumping to the execution context of `*nfc`. The function returns a void pointer provided
+by `boost_function_jump()`. This function must be called first in order to enter the context.]]
 ]
 
-[heading `int boost_fcontext_make( boost_fcontext_t * fc, void(*fn)(void*), void * p)`]
+[heading `void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t * nfc, void * vp)`]
 [variablelist
-[[Precondition:] [A stack, aligned to 16 byte border, is applied to `*fc` before
-`boost_fcontext_make()` is called. If a successor context should be executed
-after `*fc` finished the address of the successor context must be stored inside
-`fc->fc_link`. The application exits otherwise.]]
+[[Effects:] [Stores the current context data like stack pointer, instruction
+pointer and CPU registers to `*ofc` and restores the data from `*nfc` which
+means jumping to the execution context of `*nfc`. The void pointer `vp` can be passed to
+the other context and will be returned by `boost_fcontext_start()` or `boost_fcontext_jump()`.]]
+]
+
+[heading `void boost_fcontext_make( boost_fcontext_t * fc, void(*fn)(void*), void * p)`]
+[variablelist
+[[Precondition:] [A stack is applied to `*fc` before `boost_fcontext_make()` is
+called. If a successor context should be executed after `*fc` finished the
+address of the successor context must be stored inside `fc->fc_link`. The
+application exits otherwise.]]
 [[Effects:] [Modifies `*fc` in order to execute `fn` with argument `p` if the context
 is activated next time.]]
 ]

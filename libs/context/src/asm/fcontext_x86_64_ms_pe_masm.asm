@@ -41,11 +41,13 @@
 ;  ----------------------------------------------------------------------------------
 
 EXTERN  _exit:PROC                  ; standard C library function
-EXTERN  boost_fcontext_seh:PROC		; exception handler
+EXTERN  boost_fcontext_align:PROC   ; stack alignment
+EXTERN  boost_fcontext_seh:PROC     ; exception handler
+EXTERN  boost_fcontext_start:PROC   ; start fcontext
 .code
 
 boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
-	.endprolog
+    .endprolog
 
     mov     [rcx],       r12        ; save R12
     mov     [rcx+08h],   r13        ; save R13
@@ -56,15 +58,15 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     [rcx+030h],  rbx        ; save RBX
     mov     [rcx+038h],  rbp        ; save RBP
 
-    mov     r8,          [rcx+060h]
-    fxsave  [r8]                    ; save fp
+    mov     r9,          [rcx+060h]
+    fxsave  [r9]                    ; save fp
 
-    mov     r8,          gs:[030h]  ; load NT_TIB
-    mov     rax,         [r8+08h]   ; load current stack base
+    mov     r9,          gs:[030h]  ; load NT_TIB
+    mov     rax,         [r9+08h]   ; load current stack base
     mov     [rcx+068h],  rax        ; save current stack base
-    mov     rax,         [r8+010h]  ; load current stack limit
+    mov     rax,         [r9+010h]  ; load current stack limit
     mov     [rcx+070h],  rax        ; save current stack limit
-    mov     rax,         [r8+018h]  ; load fiber local storage
+    mov     rax,         [r9+018h]  ; load fiber local storage
     mov     [rcx+080h],  rax        ; save fiber local storage
 
     lea     rax,         [rsp+08h]  ; exclude the return address
@@ -82,57 +84,76 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     rbx,        [rdx+030h]  ; restore RBX
     mov     rbp,        [rdx+038h]  ; restore RBP
 
-    mov     r8,         [rdx+060h]
-    fxrstor [r8]                    ; restore fp
+    mov     r9,         [rdx+060h]
+    fxrstor [r9]                    ; restore fp
 
-    mov     r8,         gs:[030h]   ; load NT_TIB
+    mov     r9,         gs:[030h]   ; load NT_TIB
     mov     rax,        [rdx+068h]  ; load stack base
-    mov     [r8+08h],   rax         ; restore stack base
+    mov     [r9+08h],   rax         ; restore stack base
     mov     rax,        [rdx+070h]  ; load stack limit
-    mov     [r8+010h],  rax         ; restore stack limit
+    mov     [r9+010h],  rax         ; restore stack limit
     mov     rax,        [rdx+080h]  ; load fiber local storage
-    mov     [r8+018h],  rax         ; restore fiber local storage
+    mov     [r9+018h],  rax         ; restore fiber local storage
 
     mov     rsp,        [rdx+040h]  ; restore RSP
-    mov     r8,         [rdx+048h]  ; fetch the address to returned to
+    mov     r9,         [rdx+048h]  ; fetch the address to returned to
     mov     rcx,        [rdx+050h]  ; restore RCX as first argument for called context
 
-    xor     rax,        rax         ; set RAX to zero
-    jmp     r8                      ; indirect jump to caller
+    mov     rax,        r8          ; use third arg as return value after jump
+
+    jmp     r9                      ; indirect jump to caller
 boost_fcontext_jump ENDP
 
-boost_fcontext_make PROC EXPORT
-    mov  [rcx],         rcx         ; store the address of current context
-    mov  [rcx+048h],    rdx         ; save the address of the function supposed to run
-    mov  [rcx+050h],    r8          ; save the the void pointer
-    mov  rdx,           [rcx+068h]  ; load the address where the context stack beginns
-    lea  rdx,           [rdx-028h]  ; reserve space for the last frame on stack, (RSP + 8) % 16 == 0
-    mov  [rcx+040h],    rdx         ; save the address where the context stack beginns
+boost_fcontext_make PROC EXPORT FRAME ; generate function table entry in .pdata and unwind information in    E
+    .endprolog                        ; .xdata for a function's structured exception handling unwind behavior
 
-    mov  rax,       [rcx+078h]      ; load the address of the next context
-    mov  [rcx+08h], rax             ; save the address of next context
+    mov  [rcx],      rcx         ; store the address of current context
+    mov  [rcx+048h], rdx         ; save the address of the function supposed to run
+    mov  [rcx+050h], r8          ; save the the void pointer
+    mov  rdx,        [rcx+068h]  ; load the address where the context stack beginns
 
-    mov     rax,         [rcx+060h]
-    fxsave  [rax]                   ; save fp
+    push  rcx                    ; save pointer to fcontext_t
+    sub   rsp,       028h        ; reserve shadow space for boost_fcontext_algin
+    mov   rcx,       rdx         ; stack pointer as arg for boost_fcontext_align
+	mov   [rsp+8],   rcx
+    call  boost_fcontext_align   ; align stack
+    mov   rdx,       rax         ; begin of aligned stack
+	add	  rsp,       028h
+    pop   rcx                    ; restore pointer to fcontext_t
+
+    lea  rdx,        [rdx-028h]  ; reserve 32byte shadow space + return address on stack, (RSP + 8) % 16 == 0
+    mov  [rcx+040h], rdx         ; save the address where the context stack beginns
+
+    mov  rax,       [rcx+078h]   ; load the address of the next context
+    mov  [rcx+08h], rax          ; save the address of next context
+
+    mov     rax,    [rcx+060h]
+    fxsave  [rax]                ; save fp
 
     lea  rax,       boost_fcontext_link   ; helper code executed after fn() returns
-    mov  [rdx],     rax             ; set the return address to the helper function
+    mov  [rdx],     rax          ; store address off the helper function as return address
 
-    xor  rax,       rax             ; set RAX to zero
+    xor  rax,       rax          ; set RAX to zero
     ret
 boost_fcontext_make ENDP
 
-boost_fcontext_link PROC
-    test  r13,      r13             ; test if a next context was given
-    je    finish                    ; jump to finish
+boost_fcontext_link PROC FRAME   ; generate function table entry in .pdata and unwind information in
+    .endprolog					 ; .xdata for a function's structured exception handling unwind behavior
 
-	mov   rcx,      r12             ; first argument eq. address of current context
-	mov   rdx,      r13             ; second argumnet eq. address of next context
-    call  boost_fcontext_jump       ; install next context
+    sub   rsp,      028h         ; reserve shadow space for boost_fcontext_algin
+    test  r13,      r13          ; test if a next context was given
+    je    finish                 ; jump to finish
+
+    mov   rcx,      r12          ; first argument eq. address of current context
+    mov   rdx,      r13          ; second argumnet eq. address of next context
+	mov   [rsp+010h], rdx
+	mov   [rsp+08h],  rcx
+    call  boost_fcontext_start   ; install next context
 
 finish:
-	xor   rcx,      rcx
-    call  _exit                     ; exit application
+    xor   rcx,        rcx
+	mov   [rsp+08h],  rcx
+    call  _exit                  ; exit application
     hlt
 boost_fcontext_link ENDP
 END

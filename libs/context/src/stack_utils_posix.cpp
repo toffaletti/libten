@@ -6,7 +6,7 @@
 
 #define BOOST_CONTEXT_SOURCE
 
-#include <boost/context/stack_helper.hpp>
+#include <boost/context/stack_utils.hpp>
 
 extern "C" {
 #include <sys/resource.h>
@@ -40,46 +40,41 @@ static rlimit stacksize_limit()
 namespace boost {
 namespace contexts {
 
-std::size_t
-stack_helper::default_stacksize()
+BOOST_CONTEXT_DECL
+std::size_t default_stacksize()
 {
     static std::size_t size = 256 * 1024;
     return size;
 }
 
 BOOST_CONTEXT_DECL
-std::size_t
-stack_helper::pagesize()
+std::size_t minimum_stacksize()
+{ return SIGSTKSZ; }
+
+BOOST_CONTEXT_DECL
+std::size_t maximum_stacksize()
+{
+    BOOST_ASSERT( ! is_stack_unbound() );
+    return static_cast< std::size_t >( stacksize_limit().rlim_max);
+}
+
+BOOST_CONTEXT_DECL
+bool is_stack_unbound()
+{ return RLIM_INFINITY == stacksize_limit().rlim_max; }
+
+BOOST_CONTEXT_DECL
+std::size_t pagesize()
 {
     static std::size_t pagesize( ::getpagesize() );
     return pagesize;
 }
 
 BOOST_CONTEXT_DECL
-std::size_t
-stack_helper::page_count( std::size_t stacksize)
+std::size_t page_count( std::size_t stacksize)
 {
     return static_cast< std::size_t >( 
         std::ceil(
-            static_cast< float >( stacksize) / stack_helper::pagesize() ) );
-}
-
-BOOST_CONTEXT_DECL
-bool
-stack_helper::unlimited_stacksize()
-{ return RLIM_INFINITY == stacksize_limit().rlim_max; }
-
-BOOST_CONTEXT_DECL
-std::size_t
-stack_helper::minimal_stacksize()
-{ return SIGSTKSZ; }
-
-BOOST_CONTEXT_DECL
-std::size_t
-stack_helper::maximal_stacksize()
-{
-    BOOST_ASSERT( ! unlimited_stacksize() );
-    return static_cast< std::size_t >( stacksize_limit().rlim_max);
+            static_cast< float >( stacksize) / pagesize() ) );
 }
 
 }}
