@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <cassert>
 
 namespace fw {
 

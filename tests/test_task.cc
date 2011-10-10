@@ -27,7 +27,7 @@ static void foo(std::thread::id p, semaphore &s) {
 BOOST_AUTO_TEST_CASE(constructor_test) {
     procmain p;
     semaphore s;
-    procspawn(std::bind(foo, std::this_thread::get_id(), boost::ref(s)));
+    procspawn(std::bind(foo, std::this_thread::get_id(), std::ref(s)));
     s.wait();
     p.main();
 }
@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(schedule_test) {
     procmain p;
     int count = 0;
     for (int i=0; i<10; ++i) {
-        taskspawn(std::bind(co1, boost::ref(count)));
+        taskspawn(std::bind(co1, std::ref(count)));
     }
     p.main();
     BOOST_CHECK_EQUAL(20, count);
@@ -145,7 +145,7 @@ static void sleeper(semaphore &s) {
 BOOST_AUTO_TEST_CASE(task_sleep) {
     procmain p;
     semaphore s;
-    taskspawn(std::bind(sleeper, boost::ref(s)));
+    taskspawn(std::bind(sleeper, std::ref(s)));
     p.main();
     s.wait();
 }
@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     // lower timeout to make test run faster
     runner::set_thread_timeout(100);
     for (unsigned int i=0; i<runner::ncpu()+5; ++i) {
-        procspawn(std::bind(sleep_many, boost::ref(count)), true);
+        procspawn(std::bind(sleep_many, std::ref(count)), true);
     }
     taskspawn(long_timeout);
     p.main();
@@ -282,19 +282,18 @@ BOOST_AUTO_TEST_CASE(task_cancel_io) {
     p.main();
 }
 
-#if 0
 static void yield_loop(uint64_t &counter) {
     for (;;) {
-        task::yield();
+        taskyield();
         ++counter;
     }
 }
 
 static void yield_timer() {
     uint64_t counter = 0;
-    task t = taskspawn(std::bind(yield_loop, boost::ref(counter)));
-    task::sleep(1000);
-    t.cancel();
+    uint64_t id = taskspawn(std::bind(yield_loop, std::ref(counter)));
+    tasksleep(1000);
+    taskcancel(id);
     // tight yield loop should take less than microsecond
     // this test depends on hardware and will probably fail
     // when run under debugging tools like valgrind/gdb
@@ -307,6 +306,7 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
     p.main();
 }
 
+#if 0
 static void deadline_timer() {
     try {
         task::deadline deadline(100);
