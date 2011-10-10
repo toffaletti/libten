@@ -54,11 +54,18 @@ intptr_t iocall(iop &io, const op_func &op, ...) {
     assert(!io->inuse);
     io->inuse = true;
     io->op = op;
+    // start arg parsing, will resume in op_func
+    // which is called in another thread
     va_start(io->arg, op);
+    // pass control of ioproc struct to thread
+    // that will make the syscall
     io->c.send(io.get());
+    // wait for thread to finish and pass
+    // control of the ioproc struct back
     _ioproc *x = io->creply.recv();
     assert(x == io.get());
     io->inuse = false;
+    va_end(io->arg);
     return io->ret;
 }
 
