@@ -8,6 +8,7 @@
 #include "task.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
+#include "net.hh"
 
 namespace fw {
 
@@ -16,7 +17,7 @@ class http_server : boost::noncopyable {
 public:
     //! wrapper around an http request/response
     struct request {
-        request(http_request &req_, task::socket &sock_)
+        request(http_request &req_, netsock &sock_)
             : req(req_), resp(404, "Not Found"), sock(sock_),
             start(boost::posix_time::microsec_clock::universal_time()),
             resp_sent(false) {}
@@ -110,7 +111,7 @@ public:
 
         http_request &req;
         http_response resp;
-        task::socket &sock;
+        netsock &sock;
         boost::posix_time::ptime start;
         bool resp_sent;
     };
@@ -120,8 +121,8 @@ public:
     typedef std::vector<tuple_type> map_type;
 
 public:
-    http_server(size_t stack_size_=DEFAULT_STACK_SIZE, int timeout_ms_=-1)
-        : sock(AF_INET, SOCK_STREAM), stack_size(stack_size_), timeout_ms(timeout_ms_)
+    http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
+        : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_), timeout_ms(timeout_ms_)
     {
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
@@ -142,13 +143,13 @@ public:
         sock.bind(baddr);
         sock.getsockname(baddr);
         LOG(INFO) << "listening on: " << baddr;
-        task::spawn(std::bind(&http_server::listen_task, this));
+        taskspawn(std::bind(&http_server::listen_task, this));
     }
 
 private:
-    task::socket sock;
+    netsock sock;
     map_type _map;
-    size_t stack_size;
+    size_t stacksize;
     int timeout_ms;
     func_type _log_func;
 
@@ -159,13 +160,13 @@ private:
             address client_addr;
             int fd;
             while ((fd = sock.accept(client_addr, 0)) > 0) {
-                task::spawn(std::bind(&http_server::client_task, this, fd), 0, stack_size);
+                taskspawn(std::bind(&http_server::client_task, this, fd), stacksize);
             }
         }
     }
 
     void client_task(int fd) {
-        task::socket s(fd);
+        netsock s(fd);
         buffer buf(4*1024);
         http_parser parser;
 
@@ -184,15 +185,15 @@ private:
         }
     }
 
-    void handle_request(http_request &req, task::socket &s) {
+    void handle_request(http_request &req, netsock &s) {
         request r(req, s);
         uri u = r.get_uri();
         DVLOG(5) << "path: " << u.path;
         // not super efficient, but good enough
         for (map_type::const_iterator i= _map.begin(); i!= _map.end(); i++) {
-            DVLOG(5) << "matching pattern: " << i->get<0>();
-            if (fnmatch(i->get<0>().c_str(), u.path.c_str(), i->get<1>()) == 0) {
-                i->get<2>()(r);
+            DVLOG(5) << "matching pattern: " << std::get<0>(*i);
+            if (fnmatch(std::get<0>(*i).c_str(), u.path.c_str(), std::get<1>(*i)) == 0) {
+                std::get<2>(*i)(r);
                 break;
             }
         }

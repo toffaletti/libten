@@ -4,7 +4,6 @@
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
 
-#include "runner.hh"
 #include "task.hh"
 #include "logging.hh"
 
@@ -90,7 +89,6 @@ public:
     application(const char *name_, const char *version_, app_config &c)
         : opts(name_, c), name(name_), version(version_), _conf(c)
     {
-        runner::init();
     }
 
     ~application() {
@@ -165,13 +163,14 @@ public:
         return static_cast<ConfigT &>(_conf);
     }
 
-    int run() { return runner::main(); }
+    int run() { return p.main(); }
 
     void quit() {
-        // TODO: need a way to shutdown the main runner
+        // TODO: need a way to cleanly shutdown
     }
 protected:
     app_config &_conf;
+    procmain p;
 };
 
 } // end namespace fw

@@ -1,7 +1,6 @@
 #ifndef SHARED_POOL_HH
 #define SHARED_POOL_HH
 
-#include "thread.hh"
 #include "task.hh"
 #include "logging.hh"
 
@@ -30,14 +29,14 @@ public:
     {}
 
   size_t size() {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     return _set.size();
   }
 
   // XXX: i provided a default definition, so this is no longer true
   // NOTE: cannot call this in a destructor because free_resource is pure virtual
   void clear() {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     _q.clear();
     for (typename set_type::const_iterator i = _set.begin(); i!= _set.end(); i++) {
       free_resource(*i);
@@ -54,8 +53,8 @@ public:
 protected:
   template <typename TT> friend class detail::scoped_resource;
 
-  mutex _mut;
-  task::condition _not_empty;
+  qutex _mut;
+  rendez _not_empty;
   queue_type _q;
   set_type _set;
   std::string _name;
@@ -67,12 +66,12 @@ protected:
   virtual void free_resource(ResourceT *p) {}
 
   virtual ResourceT *acquire() {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     return create_or_acquire_nolock(lk);
   }
 
   // internal, does not lock mutex
-  inline ResourceT *create_or_acquire_nolock(mutex::scoped_lock &lk) {
+  inline ResourceT *create_or_acquire_nolock(std::unique_lock<qutex> &lk) {
     ResourceT *c;
     if (_q.empty()) {
       // need to create a new resource
@@ -87,7 +86,7 @@ protected:
         }
       } else {
         // can't create anymore we're at max, try waiting
-        if (_not_empty.timed_wait(lk, 20)) {
+        if (_not_empty.sleep_for(lk, 20)) {
           c = _q.front();
           _q.pop_front();
         } else {
@@ -104,28 +103,28 @@ protected:
 
   virtual bool insert(ResourceT *c) {
     // add a resource to the pool. use with care
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     std::pair<typename set_type::iterator, bool> p = _set.insert(c);
     if (p.second) {
         _q.push_front(c);
-        _not_empty.signal();
+        _not_empty.wakeup();
     }
     return p.second;
   }
 
   virtual void release(ResourceT *c) {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     // don't add resource to queue if it was removed from _set
     if (_set.count(c)) {
       _q.push_front(c);
-      _not_empty.signal();
+      _not_empty.wakeup();
     }
   }
 
   // return a defective resource to the pool
   // get a new one back.
   virtual ResourceT *exchange(ResourceT *c) {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     // remove bad resource
     if (c) {
       free_resource(c);
@@ -136,7 +135,7 @@ protected:
   }
 
   void destroy(ResourceT *c) {
-    mutex::scoped_lock lk(_mut);
+    std::unique_lock<qutex> lk(_mut);
     // remove bad resource
     DVLOG(5) << "shared_pool(" << _name << ") destroy in set? " << _set.count(c) << " : " << c;
     free_resource(c);

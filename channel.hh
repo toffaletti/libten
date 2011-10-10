@@ -108,7 +108,7 @@ public:
             m->not_full.wakeup();
         }
         while (m->is_empty() && !m->closed) {
-            if (!m->not_empty.timed_wait(l, ms)) return false;
+            if (!m->not_empty.sleep_for(l, ms)) return false;
         }
         if (m->unread == 0) {
             check_closed();
@@ -122,7 +122,7 @@ public:
             // waiting for recv
             m->capacity = 0;
         } else {
-            m->not_full.signal();
+            m->not_full.wakeup();
         }
         return true;
     }

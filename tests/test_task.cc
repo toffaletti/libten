@@ -226,16 +226,17 @@ BOOST_AUTO_TEST_CASE(too_many_runners) {
     BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
     runner::set_thread_timeout(5*1000);
 }
+#endif
 
 static void long_sleeper() {
-    task::sleep(10000);
+    tasksleep(10000);
     BOOST_CHECK(false);
 }
 
 static void cancel_sleep() {
-    task t = taskspawn(long_sleeper);
-    task::sleep(10);
-    t.cancel();
+    uint64_t id = taskspawn(long_sleeper);
+    tasksleep(10);
+    taskcancel(id);
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
@@ -252,9 +253,9 @@ static void channel_wait() {
 }
 
 static void cancel_channel() {
-    task t = taskspawn(channel_wait);
+    uint64_t id = taskspawn(channel_wait);
     tasksleep(10);
-    t.cancel();
+    taskcancel(id);
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_channel) {
@@ -265,14 +266,14 @@ BOOST_AUTO_TEST_CASE(task_cancel_channel) {
 
 static void io_wait() {
     pipe_fd p;
-    task::poll(p.r.fd, EPOLLIN);
+    fdwait(p.r.fd, 'r');
     BOOST_CHECK(false);
 }
 
 static void cancel_io() {
-    task t = taskspawn(io_wait);
-    task::sleep(10);
-    t.cancel();
+    uint64_t id = taskspawn(io_wait);
+    tasksleep(10);
+    taskcancel(id);
 }
 
 BOOST_AUTO_TEST_CASE(task_cancel_io) {
@@ -281,6 +282,7 @@ BOOST_AUTO_TEST_CASE(task_cancel_io) {
     p.main();
 }
 
+#if 0
 static void yield_loop(uint64_t &counter) {
     for (;;) {
         task::yield();

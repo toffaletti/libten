@@ -10,6 +10,8 @@ extern size_t default_stacksize;
 
 namespace fw {
 
+struct task_interrupted : std::exception {};
+
 #define SEC2MS(s) (s*1000)
 
 struct task;
@@ -20,6 +22,7 @@ typedef std::deque<proc *> proclist;
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 int64_t taskyield();
 //static void taskexit(void *r = 0);
+bool taskcancel(uint64_t id);
 void tasksystem();
 void tasksetstate(const char *fmt, ...);
 const char *taskgetstate();
@@ -29,16 +32,25 @@ const char *taskgetname();
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 
 struct qutex {
-    std::mutex m;
+    std::timed_mutex m;
     task *owner;
     tasklist waiting;
 
     qutex() {
-        std::unique_lock<std::mutex> lk(m);
+        std::unique_lock<std::timed_mutex> lk(m);
         owner = 0;
     }
     void lock();
     void unlock();
+    bool try_lock();
+    template<typename Rep,typename Period>
+        bool try_lock_for(
+                std::chrono::duration<Rep,Period> const&
+                relative_time);
+    template<typename Clock,typename Duration>
+        bool try_lock_until(
+                std::chrono::time_point<Clock,Duration> const&
+                absolute_time);
 };
 
 struct rendez {
@@ -53,6 +65,8 @@ struct rendez {
             sleep(lk);
         }
     }
+
+    bool sleep_for(std::unique_lock<qutex> &lk, unsigned int ms);
 
     void wakeup();
     void wakeupall();

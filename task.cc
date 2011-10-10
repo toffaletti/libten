@@ -53,6 +53,7 @@ struct task {
     timespec *deadline;
     bool exiting;
     bool systask;
+    bool canceled;
     
     task(const std::function<void ()> &f, size_t stacksize);
     ~task() {
@@ -70,7 +71,11 @@ struct task {
 
     static void start(void *arg) {
         task *t = (task *)arg;
-        t->fn();
+        try {
+            t->fn();
+        } catch (task_interrupted &e) {
+            DVLOG(5) << "task " << t << " interrupted";
+        }
         t->exit();
     }
 };
@@ -94,7 +99,7 @@ deadline::~deadline() {
 #endif
 
 struct proc {
-    io_scheduler *sched;
+    io_scheduler *_sched;
     std::thread *thread;
     std::mutex mutex;
     uint64_t nswitch;
@@ -106,14 +111,14 @@ struct proc {
     std::atomic<uint64_t> taskcount;
 
     proc()
-        : sched(0), thread(0), nswitch(0), ctask(0), taskcount(0)
+        : _sched(0), thread(0), nswitch(0), ctask(0), taskcount(0)
     {
         _this_proc = this;
         add(this);
     }
 
-    proc(struct task *t)
-        : sched(0), nswitch(0), ctask(0), taskcount(0)
+    proc(task *t)
+        : _sched(0), nswitch(0), ctask(0), taskcount(0)
     {
 
         add(this);
@@ -126,27 +131,21 @@ struct proc {
 
     void schedule();
 
+    io_scheduler &sched();
+
     bool is_ready() {
         return !runqueue.empty();
     }
 
     void wakeupandunlock(std::unique_lock<std::mutex> &lk);
 
-    void addtaskinproc(struct task *t) {
+    void addtaskinproc(task *t) {
         ++taskcount;
         alltasks.push_back(t);
         t->cproc = this;
     }
 
-    void deltaskinproc(struct task *t) {
-        if (!t->systask) {
-            --taskcount;
-        }
-        auto i = std::find(alltasks.begin(), alltasks.end(), t);
-        alltasks.erase(i);
-        t->cproc = 0;
-        delete t;
-    }
+    void deltaskinproc(task *t);
 
     static void add(proc *p) {
         std::unique_lock<std::mutex> lk(procsmutex);
@@ -204,6 +203,24 @@ void tasksystem() {
     }
 }
 
+bool taskcancel(uint64_t id) {
+    proc *p = _this_proc;
+    task *t = 0;
+    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
+        if ((*i)->id == id) {
+            t = *i;
+            break;
+        }
+    }
+
+    if (t) {
+        // TODO: set state canceled
+        t->canceled = true;
+        t->ready();
+    }
+    return (bool)t;
+}
+
 void tasksetname(const char *fmt, ...)
 {
 	va_list arg;
@@ -234,28 +251,40 @@ const char *taskgetstate() {
 task::task(const std::function<void ()> &f, size_t stacksize)
     : fn(f), co(task::start, this, stacksize), cproc(0), 
     timeout(0), deadline(0),
-    exiting(false), systask(false)
+    exiting(false), systask(false), canceled(false)
 {
     id = ++taskidgen;
 }
 
 void task::swap() {
+    // swap to scheduler coroutine
     co.swap(&_this_proc->co);
+
+    if (canceled) {
+        throw task_interrupted();
+    }
 }
 
 void task::ready() {
     proc *p = cproc;
+    assert(!exiting);
     std::unique_lock<std::mutex> lk(p->mutex);
-    p->runqueue.push_back(this);
-    if (p != _this_proc) {
-        p->wakeupandunlock(lk);
+    if (std::find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
+        DVLOG(5) << "adding task: " << this << " to runqueue for proc: " << p;
+        p->runqueue.push_back(this);
+        // XXX: does this need to be outside of the if(!found) ?
+        if (p != _this_proc) {
+            p->wakeupandunlock(lk);
+        }
+    } else {
+        DVLOG(5) << "found task: " << this << " already in runqueue for proc: " << p;
     }
 }
 
 void qutex::lock() {
     task *t = _this_proc->ctask;
     {
-        std::unique_lock<std::mutex> lk(m);
+        std::unique_lock<std::timed_mutex> lk(m);
         if (owner == 0) {
             owner = t;
             return;
@@ -266,10 +295,40 @@ void qutex::lock() {
     assert(owner == _this_proc->ctask);
 }
 
+bool qutex::try_lock() {
+    task *t = _this_proc->ctask;
+    std::unique_lock<std::timed_mutex> lk(m, std::try_to_lock);
+    if (lk.owns_lock()) {
+        if (owner == 0) {
+            owner = t;
+            return true;
+        }
+    }
+    return false;
+}
+
+template<typename Rep,typename Period>
+bool qutex::try_lock_for(
+        std::chrono::duration<Rep,Period> const&
+        relative_time)
+{
+    //_this_proc->sched().add_timeout(ms);
+    return false;
+}
+
+template<typename Clock,typename Duration>
+bool qutex::try_lock_until(
+        std::chrono::time_point<Clock,Duration> const&
+        absolute_time)
+{
+    return false;
+}
+
+
 void qutex::unlock() {
     task *t = 0;
     {
-        std::unique_lock<std::mutex> lk(m);
+        std::unique_lock<std::timed_mutex> lk(m);
         if (!waiting.empty()) {
             t = owner = waiting.front();
             waiting.pop_front();
@@ -439,7 +498,7 @@ void proc::schedule() {
         if (runqueue.empty()) {
             runcv.wait(lk, std::bind(&proc::is_ready, this));
         }
-        struct task *t = runqueue.front();
+        task *t = runqueue.front();
         runqueue.pop_front();
         ctask = t;
         ++nswitch;
@@ -499,6 +558,10 @@ struct io_scheduler {
             }
         }
         timeouts.insert(t);
+    }
+
+    bool del_timeout(task *t) {
+        return timeouts.erase(t);
     }
 
     void sleep(uint64_t ms) {
@@ -610,8 +673,8 @@ private:
 };
 
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
-    if (sched) {
-        ssize_t nw = sched->pi.write("\1", 1);
+    if (_sched) {
+        ssize_t nw = _sched->pi.write("\1", 1);
         (void)nw;
     } else {
         runcv.notify_one();
@@ -621,7 +684,6 @@ void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
 
 proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
-    delete sched;
     if (thread == 0) {
         for (;;) {
             {
@@ -641,26 +703,57 @@ proc::~proc() {
     while (!alltasks.empty()) {
         deltaskinproc(alltasks.front());
     }
+    // must delete _sched *after* tasks because
+    // they might try to remove themselves from timeouts set
+    delete _sched;
     lk.unlock();
     del(this);
     DVLOG(5) << "proc freed: " << this;
 }
 
+io_scheduler &proc::sched() {
+    if (_sched == 0) {
+        _sched = new io_scheduler();
+    }
+    return *_sched;
+}
 
 void tasksleep(uint64_t ms) {
-    proc *p = _this_proc;
-    if (p->sched == 0) {
-        p->sched = new io_scheduler();
-    }
-    p->sched->sleep(ms);
+    _this_proc->sched().sleep(ms);
 }
 
 bool fdwait(int fd, int rw, uint64_t ms) {
-    proc *p = _this_proc;
-    if (p->sched == 0) {
-        p->sched = new io_scheduler();
-    }
-    return p->sched->fdwait(fd, rw, ms);
+    return _this_proc->sched().fdwait(fd, rw, ms);
 }
+
+bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
+    task *t = _this_proc->ctask;
+    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+        DVLOG(5) << "RENDEZ PUSH BACK: " << t;
+        waiting.push_back(t);
+    }
+    lk.unlock();
+    _this_proc->sched().add_timeout(t, ms);
+    t->swap();
+    lk.lock();
+    _this_proc->sched().del_timeout(t);
+    // if we're not in the waiting list then we were signaled to wakeup
+    return std::find(waiting.begin(), waiting.end(), t) == waiting.end();
+}
+
+void proc::deltaskinproc(task *t) {
+    if (!t->systask) {
+        --taskcount;
+    }
+    auto i = std::find(alltasks.begin(), alltasks.end(), t);
+    alltasks.erase(i);
+    t->cproc = 0;
+    if (_sched) {
+        _sched->del_timeout(t);
+    }
+    DVLOG(5) << "FREEING task: " << t;
+    delete t;
+}
+
 
 } // end namespace fw
