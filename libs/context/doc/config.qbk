@@ -8,7 +8,7 @@
 [section:installtion How to build and install]
 
 * download the sources from
-[@https://github.com/olk/boost.context GitHub]
+[@http://www.boost-consulting.com/vault/index.php?directory=Concurrent%20Programming Boost Vault]
 * extract the archive into the boost-source directory
 
 The only supported compilers are GCC, Intel and MSVC. On POSIX and Windows systems, GNU AS and MASM

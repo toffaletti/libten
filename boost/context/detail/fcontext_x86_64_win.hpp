@@ -32,7 +32,7 @@ typedef struct boost_fcontext  boost_fcontext_t;
 struct boost_fcontext
 {
     boost::uint64_t        fc_greg[12];
-    void                *  fc_fp;
+    boost::uint32_t        fc_freg[2];
     boost_fcontext_stack_t fc_stack;
     boost_fcontext_t    *  fc_link;
     void                *  fc_local_storage;

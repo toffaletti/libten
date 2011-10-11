@@ -12,6 +12,9 @@ execution control transfer mechanism. The boost_fcontext_t API provides a
 similar interface like ucontext_t. boost_fcontext_t and its functions are
 located in the global namespace and the functions are declared as extern "C". 
 
+[important The stack used by boost_fcontext_t must be aligned to __mini_alignment__
+bytes border.]
+
 [important Win64 requires for floating point registers space (512 bytes) on the
 freestore aligned to 16 bytes border.]
 
@@ -122,6 +125,7 @@ freestore aligned to 16 bytes border.]
 [[Member:] [Address of successor context.]]
 ]
 
+
         void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
         void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
         void boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
@@ -144,10 +148,10 @@ the other context and will be returned by `boost_fcontext_start()` or `boost_fco
 
 [heading `void boost_fcontext_make( boost_fcontext_t * fc, void(*fn)(void*), void * p)`]
 [variablelist
-[[Precondition:] [A stack is applied to `*fc` before `boost_fcontext_make()` is
-called. If a successor context should be executed after `*fc` finished the
-address of the successor context must be stored inside `fc->fc_link`. The
-application exits otherwise.]]
+[[Precondition:] [A stack, aligned to `__mini_aliggnment__` byte border, is applied to `*fc` before
+`boost_fcontext_make()` is called. If a successor context should be executed
+after `*fc` finished the address of the successor context must be stored inside
+`fc->fc_link`. The application exits otherwise.]]
 [[Effects:] [Modifies `*fc` in order to execute `fn` with argument `p` if the context
 is activated next time.]]
 ]

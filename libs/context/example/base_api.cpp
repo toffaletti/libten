@@ -9,6 +9,7 @@
 #include <cstring>
 #include <vector>
 
+#include <boost/assert.hpp>
 #include <boost/context/all.hpp>
 
 boost_fcontext_t fcm, fc1, fc2;
@@ -28,42 +29,25 @@ void f2( void * p)
         fprintf(stderr,"f2() stated\n");
         fprintf(stderr,"f2: call boost_fcontext_jump( & fc2, & fc1)\n");
         boost_fcontext_jump( & fc2, & fc1, 0);
-        fprintf(stderr,"f2() returns\n");
+        BOOST_ASSERT( false && ! "f2() never returns");
 }
 
 int main( int argc, char * argv[])
 {
         boost::contexts::stack_allocator alloc;
 
-#if defined(BOOST_WINDOWS) && defined(_M_X64)
-        std::vector< char > bf1( 528, '\0');
-        std::vector< char > bf2( 528, '\0');
-        std::vector< char > bfm( 528, '\0');
-
-        fcm.fc_fp = reinterpret_cast< char * >(
-            ( ( reinterpret_cast< uint64_t >( & bfm[0]) + 16) >> 4) << 4 );
-#endif
-
         fc1.fc_stack.ss_base = alloc.allocate(262144);
         fc1.fc_stack.ss_limit =
             static_cast< char * >( fc1.fc_stack.ss_base) - 262144;
         fc1.fc_link = & fcm;
-#if defined(BOOST_WINDOWS) && defined(_M_X64)
-        fc1.fc_fp = reinterpret_cast< char * >(
-            ( ( reinterpret_cast< uint64_t >( & bf1[0]) + 16) >> 4) << 4 );
-#endif
         boost_fcontext_make( & fc1, f1, NULL);
 
         fc2.fc_stack.ss_base = alloc.allocate(262144);
         fc2.fc_stack.ss_limit =
             static_cast< char * >( fc2.fc_stack.ss_base) - 262144;
-#if defined(BOOST_WINDOWS) && defined(_M_X64)
-        fc2.fc_fp = reinterpret_cast< char * >(
-            ( ( reinterpret_cast< uint64_t >( & bf2[0]) + 16) >> 4) << 4 );
-#endif
         boost_fcontext_make( & fc2, f2, NULL);
 
-        fprintf(stderr,"main: call boost_fcontext_jump( & fcm, & fc1)\n");
+        fprintf(stderr,"main: call boost_fcontext_start( & fcm, & fc1)\n");
         boost_fcontext_start( & fcm, & fc1);
 
         fprintf( stderr, "main() returns\n");

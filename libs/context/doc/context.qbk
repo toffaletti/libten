@@ -41,7 +41,7 @@
 [def __thread__ ['thread]]
 [def __threads__ ['threads]]
 [def __tls__ ['thread-local-storage]]
-[def __stack_allocator_concept__ [stack_link ['stack-allocator]]]
+[def __stack_allocator_concept__ ['stack-allocator]]
 
 [def __fcontext__ ['fcontext_t]]
 [def __ucontext__ ['ucontext_t]]
@@ -56,7 +56,7 @@
 [def __context_suspend__ ['context::suspend()]]
 [def __context_unwind__ ['context::unwind_stack()]]
 [def __invalid_argument__ ['std::invalid_argument]]
-[def __stack_allocator__ [stack_link ['stack_allocator]]]
+[def __stack_allocator__ ['stack_allocator]]
 [def __stack_alloc__ ['allocate()]]
 [def __stack_dealloc__ ['deallocate()]]
 

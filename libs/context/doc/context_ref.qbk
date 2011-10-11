@@ -18,7 +18,7 @@ moveable but not copyable and can be returned by a function.
         void f()
         {
                 boost::contexts::context ctx( make_context() );
-                ctx.start();
+                ctx.resume();
         }
 
 [note In order to implement rvalue references __boost_move__ is used.]
@@ -37,8 +37,8 @@ __context_fn__), the stack size and two arguments determine stack unwinding and
 context termination.
 
 Each __context__ is associated with a stack which will be allocated and
-deallocated by a __stack_allocator_concept__. __context__ uses
-__stack_allocator__ per default - it is possible to specify an
+deallocated by a stack_link[__stack_allocator_concept__]. __context__ uses
+stack_link[__stack_allocator__] per default - it is possible to specify an
 alternative allocator by passing it to the constructor.
 The stack will be allocated in the __context__ constructor and deallocated in
 the destructor of __context__.
@@ -49,8 +49,8 @@ by passing additional arguments to the __context__ constructor.
     void f( int i);
 
     boost::contexts::context ctx = boost::contexts::context( f, 42,
-        boost::contexts::default_stacksize(),
-        boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
+		boost::contexts::default_stacksize(),
+		boost::contexts::no_stack_unwind, boost::contexts::return_to_caller);
 
 The arguments are copied into the internal context structure: if a reference is
 required, use boost::ref, just as for references to callable functions.
@@ -89,16 +89,16 @@ back to the context by returning from __context_suspend__.
         int main( int argc, char * argv[])
         {
             ctx = boost::contexts::context( fn, 7,
-                boost::contexts::default_stacksize(),
-                boost::contexts::no_stack_unwind,
-                boost::contexts::return_to_caller);
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind,
+				boost::contexts::return_to_caller);
 
             std::cout << "main() calls context ctx" << std::endl;
-            // start the context ctx for the first time
-            // enter fn()
-            ctx.start();
+			// start the context ctx for the first time
+			// enter fn()
+			ctx.start();
 
-            // ctx.suspend() was called so we returned from start()
+			// ctx.suspend() was called so we returned from start()
             while ( ! ctx.is_complete() )
             {
                 std::cout << "main() calls context ctx" << std::endl;
@@ -141,14 +141,14 @@ thus there is not return to __context_suspend__.
 
         void fn()
         {
-              int i = 7;
+			  int i = 7;
               std::cout << "fn(): local variable i == " << i << std::endl;
 
               // save current context
               // transfer execution control back to caller
-              // pass pointer to local variable i
+			  // pass pointer to local variable i
               void * vp = ctx.suspend( & i);
-              int j = * static_cast< int * >( vp);
+			  int j = * static_cast< int * >( vp);
 
               std::cout << "transfered value: " << j << std::endl;
         }
@@ -156,21 +156,21 @@ thus there is not return to __context_suspend__.
         int main( int argc, char * argv[])
         {
             ctx = boost::contexts::context( fn,
-                boost::contexts::default_stacksize(),
-                boost::contexts::no_stack_unwind,
-                boost::contexts::return_to_caller);
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind,
+				boost::contexts::return_to_caller);
 
             std::cout << "main() calls context ctx" << std::endl;
 
-            // start the context ctx for the first time
-            // enter fn()
-            void * vp = ctx.start();
-            int x = * static_cast< int * >( vp);
+			// start the context ctx for the first time
+			// enter fn()
+			void * vp = ctx.start();
+			int x = * static_cast< int * >( vp);
 
             std::cout << "transfered value: " << x << std::endl;
-            x = 10;
+			x = 10;
 
-            // ctx.suspend() was called so we returned from start()
+			// ctx.suspend() was called so we returned from start()
             ctx.resume( & x);
 
             std::cout << "Done" << std::endl;
@@ -213,11 +213,11 @@ back to the last invokation of __context__resume__.
         int main( int argc, char * argv[])
         {
             ctx = boost::contexts::context( fn, 7,
-                boost::contexts::default_stacksize(),
-                boost::contexts::no_stack_unwind,
-                boost::contexts::no_return_to_caller);
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind,
+				boost::contexts::no_return_to_caller);
 
-            ctx.start();
+			ctx.start();
             while ( ! ctx.is_complete() )
             {
                 std::cout << "main() calls context ctx" << std::endl;
@@ -251,11 +251,11 @@ after the context becomes complete.
         int main( int argc, char * argv[])
         {
             ctx = boost::contexts::context( fn, 7,
-                boost::contexts::default_stacksize(),
-                boost::contexts::no_stack_unwind,
-                boost::contexts::no_return_to_caller);
+				boost::contexts::default_stacksize(),
+				boost::contexts::no_stack_unwind,
+				boost::contexts::no_return_to_caller);
 
-            ctx.start();
+			ctx.start();
             while ( ! ctx.is_complete() )
             {
                 std::cout << "main() calls context ctx" << std::endl;
@@ -302,14 +302,14 @@ instances will return to __context_resume__.
                 ctx2 = boost::contexts::context(
                     fn2, 
                     boost::contexts::default_stacksize(),
-                    boost::contexts::no_stack_unwind,
-                    boost::contexts::return_to_caller);
+					boost::contexts::no_stack_unwind,
+					boost::contexts::return_to_caller);
 
                 // ctx1 defines ctx2 as its successor
                 boost::contexts::context ctx1(
                     fn1, 
                     boost::contexts::default_stacksize(),
-                    boost::contexts::no_stack_unwind, ctx2);
+					boost::contexts::no_stack_unwind, ctx2);
 
                 // transfer execution control to ctx1
                 // fn1() is entered 
@@ -318,7 +318,7 @@ instances will return to __context_resume__.
                 // ctx2.suspend() was called
             }
 
-            // ctx2 was already started by ctx1 
+			// ctx2 was already started by ctx1 
             ctx2.resume();
 
             std::cout << "Done" << std::endl;
@@ -369,9 +369,9 @@ After unwinding the context is complete (postcondition).
             ctx = boost::contexts::context(
                     fn,
                     boost::contexts::default_stacksize(),
-                    boost::contexts::no_stack_unwind,
-                    boost::contexts::return_to_caller);
-            ctx.start();
+					boost::contexts::no_stack_unwind,
+					boost::contexts::return_to_caller);
+			ctx.start();
             for ( int i = 0; i < 5; ++i)
             {
                 // transfer execution control to fn()

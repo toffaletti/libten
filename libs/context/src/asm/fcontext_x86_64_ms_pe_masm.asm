@@ -30,14 +30,14 @@
 ;  ----------------------------------------------------------------------------------
 ;  |   0x60  |   0x64  |                                                            |
 ;  ----------------------------------------------------------------------------------
-;  |       fc_fp       |                                                            |
+;  | fc_mxcsr|fc_x87_cw|                                                            |
 ;  ----------------------------------------------------------------------------------
 ;  ----------------------------------------------------------------------------------
-;  |    26    |   27  |    28    |    29   |    30   |    31   |    32   |    33    |
+;  |    26    |   27   |    28    |    29   |    30   |    31   |    32   |    33   |
 ;  ----------------------------------------------------------------------------------
-;  |   0x68   |  0x6c |   0x70   |   0x74  |   0x78  |   0x7c  |   0x80  |   0x84   |
+;  |   0x68   |  0x6c  |   0x70   |   0x74  |   0x78  |   0x7c  |   0x80  |   0x84  |
 ;  ----------------------------------------------------------------------------------
-;  |       sbase      |       slimit       |       fc_link     |      fbr_strg      |
+;  |       sbase       |       slimit       |       fc_link     |      fbr_strg     |
 ;  ----------------------------------------------------------------------------------
 
 EXTERN  _exit:PROC                  ; standard C library function
@@ -58,8 +58,8 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     [rcx+030h],  rbx        ; save RBX
     mov     [rcx+038h],  rbp        ; save RBP
 
-    mov     r9,          [rcx+060h]
-    fxsave  [r9]                    ; save fp
+    stmxcsr [rcx+060h]              ; save SSE2 control and status word
+    fnstcw  [rcx+064h]              ; save x87 control word
 
     mov     r9,          gs:[030h]  ; load NT_TIB
     mov     rax,         [r9+08h]   ; load current stack base
@@ -84,8 +84,8 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     rbx,        [rdx+030h]  ; restore RBX
     mov     rbp,        [rdx+038h]  ; restore RBP
 
-    mov     r9,         [rdx+060h]
-    fxrstor [r9]                    ; restore fp
+    ldmxcsr  [rdx+060h]             ; restore SSE2 control and status word
+    fldcw    [rdx+064h]             ; restore x87 control word
 
     mov     r9,         gs:[030h]   ; load NT_TIB
     mov     rax,        [rdx+068h]  ; load stack base
@@ -126,9 +126,8 @@ boost_fcontext_make PROC EXPORT FRAME ; generate function table entry in .pdata 
 
     mov  rax,       [rcx+078h]   ; load the address of the next context
     mov  [rcx+08h], rax          ; save the address of next context
-
-    mov     rax,    [rcx+060h]
-    fxsave  [rax]                ; save fp
+    stmxcsr [rcx+060h]           ; save SSE2 control and status word
+    fnstcw  [rcx+064h]           ; save x87 control word
 
     lea  rax,       boost_fcontext_link   ; helper code executed after fn() returns
     mov  [rdx],     rax          ; store address off the helper function as return address
