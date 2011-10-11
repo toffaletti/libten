@@ -80,24 +80,6 @@ struct task {
     }
 };
 
-#if 0
-deadline::deadline(uint64_t milliseconds) {
-    task t = task::self();
-    if (t.m->flags & _TASK_HAS_DEADLINE) {
-        throw errorx("trying to set deadline on task that already has a deadline");
-    }
-    std::unique_lock<std::mutex> lk(t.m->mut);
-    milliseconds_to_timespec(milliseconds, t.m->dl);
-    t.m->dl += runner::self().get_scheduler().cached_now();
-    t.m->flags |= _TASK_HAS_DEADLINE;
-}
-
-deadline::~deadline() {
-    task t = task::self();
-    t.m->flags ^= _TASK_HAS_DEADLINE;
-}
-#endif
-
 struct proc {
     io_scheduler *_sched;
     std::thread *thread;
@@ -255,15 +237,6 @@ task::task(const std::function<void ()> &f, size_t stacksize)
     exiting(false), systask(false), canceled(false)
 {
     id = ++taskidgen;
-}
-
-void task::swap() {
-    // swap to scheduler coroutine
-    co.swap(&_this_proc->co);
-
-    if (canceled) {
-        throw task_interrupted();
-    }
 }
 
 void task::ready() {
@@ -705,7 +678,6 @@ struct io_scheduler {
         return remove_pollfds(fds, nfds);
     }
 
-private:
     void fdtask() {
         tasksetname("fdtask");
         tasksystem();
@@ -795,6 +767,19 @@ private:
     }
 };
 
+void task::swap() {
+    // swap to scheduler coroutine
+    co.swap(&_this_proc->co);
+
+    if (canceled) {
+        throw task_interrupted();
+    }
+
+    if (deadline && _this_proc->sched().now >= *deadline) {
+        throw deadline_reached();
+    }
+}
+
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
     // TODO: maybe an if (asleep)
     ssize_t nw = pi.write("\1", 1);
@@ -880,5 +865,21 @@ void proc::deltaskinproc(task *t) {
     delete t;
 }
 
+deadline::deadline(uint64_t milliseconds) {
+    task *t = _this_proc->ctask;
+    if (t->deadline) {
+        throw errorx("task %p already has a deadline", t);
+    }
+    t->deadline = new timespec();
+    milliseconds_to_timespec(milliseconds, *t->deadline);
+    *t->deadline += _this_proc->sched().now;
+}
+
+deadline::~deadline() {
+    task *t = _this_proc->ctask;
+    CHECK(t->deadline);
+    delete t->deadline;
+    t->deadline = 0;
+}
 
 } // end namespace fw

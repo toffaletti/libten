@@ -306,26 +306,25 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
     p.main();
 }
 
-#if 0
 static void deadline_timer() {
     try {
-        task::deadline deadline(100);
-        task::sleep(200);
+        deadline dl(100);
+        tasksleep(200);
         BOOST_CHECK(false);
-    } catch (task::deadline_reached &e) {
+    } catch (deadline_reached &e) {
         BOOST_CHECK(true);
     }
 }
 
 static void deadline_not_reached() {
     try {
-        task::deadline deadline(100);
-        task::sleep(50);
+        deadline dl(100);
+        tasksleep(50);
         BOOST_CHECK(true);
-    } catch (task::deadline_reached &e) {
+    } catch (deadline_reached &e) {
         BOOST_CHECK(false);
     }
-    task::sleep(100);
+    tasksleep(100);
     BOOST_CHECK(true);
 }
 
@@ -335,7 +334,6 @@ BOOST_AUTO_TEST_CASE(task_deadline_timer) {
     taskspawn(deadline_not_reached);
     p.main();
 }
-#endif
 
 void qlocker(qutex &q, rendez &r, int &x) {
     std::unique_lock<qutex> lk(q);

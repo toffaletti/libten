@@ -83,6 +83,12 @@ void tasksleep(uint64_t ms);
 int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
 bool fdwait(int fd, int rw, uint64_t ms=0);
 
+struct deadline_reached : std::exception {};
+struct deadline {
+    deadline(uint64_t milliseconds);
+    ~deadline();
+};
+
 } // end namespace fw
 
 #endif // TASK_HH
