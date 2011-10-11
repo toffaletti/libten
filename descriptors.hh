@@ -58,6 +58,11 @@ struct fd_base : boost::noncopyable {
     int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
     int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
 
+    //! make fd nonblocking by setting O_NONBLOCK flag
+    void setnonblock() throw (errno_error) {
+        THROW_ON_ERROR(fcntl(F_SETFL, fcntl(F_GETFL)|O_NONBLOCK));
+    }
+
     //! true if fd != -1
     bool valid() { return fd != -1; }
 
@@ -131,6 +136,11 @@ struct pipe_fd {
     //! write to the write fd end of the pipe
     ssize_t write(const void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
         return w.write(buf, count);
+    }
+
+    void setnonblock() throw (errno_error) {
+        r.setnonblock();
+        w.setnonblock();
     }
 };
 
@@ -222,11 +232,6 @@ struct socket_fd : fd_base {
     //! create a socket_fd from an already existing file descriptor
     //! used for accept() and socketpair()
     socket_fd(int fd_) : fd_base(fd_) {}
-
-    //! make socket nonblocking by setting O_NONBLOCK flag
-    void setnonblock() throw (errno_error) {
-        THROW_ON_ERROR(fd_base::fcntl(F_SETFL, fd_base::fcntl(F_GETFL)|O_NONBLOCK));
-    }
 
     //! bind socket to address
     void bind(address &addr) throw (errno_error) {

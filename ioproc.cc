@@ -1,6 +1,7 @@
 #include "ioproc.hh"
 #include "channel.hh"
 #include "address.hh"
+#include "logging.hh"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -28,13 +29,14 @@ struct _ioproc {
     }
 };
 
-static void iotask(iop io) {
-
-    tasksetname("ioproc%p", io.get());
+static void iotask(channel<_ioproc*> c) {
+    _ioproc *io = c.recv();
+    tasksetname("ioproc%p", io);
     for (;;) {
-        _ioproc *x = io->c.recv();
+        _ioproc *x = c.recv();
+        DVLOG(5) << "iorpoc got " << x;
         if (x == 0) break;
-        assert(x == io.get());
+        assert(x == io);
 
         io->ret = io->op(io->arg);
         if (io->ret < 0) {
@@ -46,7 +48,8 @@ static void iotask(iop io) {
 
 iop ioproc(size_t stacksize) {
     iop p(new _ioproc);
-    p->tid = procspawn(std::bind(iotask, p), stacksize);
+    p->tid = procspawn(std::bind(iotask, p->c), stacksize);
+    p->c.send(p.get());
     return p;
 }
 

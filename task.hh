@@ -4,6 +4,7 @@
 #include <functional>
 #include <mutex>
 #include <deque>
+#include <poll.h>
 
 //! user must define
 extern size_t default_stacksize;
@@ -79,6 +80,7 @@ struct procmain {
 };
 
 void tasksleep(uint64_t ms);
+int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
 bool fdwait(int fd, int rw, uint64_t ms=0);
 
 } // end namespace fw

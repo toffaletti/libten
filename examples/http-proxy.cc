@@ -4,35 +4,25 @@
 #include "uri/uri.hh"
 #include "logging.hh"
 #include "net.hh"
+#include "channel.hh"
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace fw;
+size_t default_stacksize=4*1024;
 
 #define SEC2MS(s) (s*1000)
 
-void sock_copy(netsock &a, netsock &b, buffer::slice rb) {
-    for (;;) {
-        pollfd fds[2];
-        fds[0].events = EPOLLIN;
-        fds[0].fd = a.s.fd;
-        fds[1].events = EPOLLIN;
-        fds[1].fd = b.s.fd;
-        if (!task::poll(fds, 2, 0)) break;
-        if (fds[0].revents) {
-            ssize_t nr = a.recv(rb.data(), rb.size());
-            if (nr <= 0) break;
-            ssize_t nw = b.send(rb.data(), nr);
-            if (nw != nr) break;
-        }
-        if (fds[1].revents) {
-            ssize_t nr = b.recv(rb.data(), rb.size());
-            if (nr <= 0) break;
-            ssize_t nw = a.send(rb.data(), nr);
-            if (nw != nr) break;
-
-        }
+void sock_copy(channel<int> c, netsock &a, netsock &b, buffer::slice rb) {
+    ssize_t nr;
+    while ((nr = a.recv(rb.data(), rb.size())) > 0) {
+        DVLOG(3) << "sock_copy: " << a.s.fd << " to " << b.s.fd << " " << nr << " bytes";
+        ssize_t nw = b.send(rb.data(), nr);
     }
+    DVLOG(3) << "shutting down sock_copy: " << a.s.fd << " to " << b.s.fd;
+    shutdown(b.s.fd, SHUT_WR);
+    a.close();
+    c.send(1);
 }
 
 void send_503_reply(netsock &s) {
@@ -76,7 +66,11 @@ void proxy_task(int sock) {
             std::string data = resp.data();
             ssize_t nw = s.send(data.data(), data.size(), SEC2MS(5));
 
-            sock_copy(s, cs, rb);
+            channel<int> c;
+            taskspawn(std::bind(sock_copy, c, std::ref(s), std::ref(cs), rb));
+            taskspawn(std::bind(sock_copy, c, std::ref(cs), std::ref(s), rb));
+            c.recv();
+            c.recv();
             return;
         } else {
             if (u.port == 0) u.port = 80;
@@ -169,7 +163,7 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0)) > 0) {
-            taskspawn(std::bind(proxy_task, sock), 0, 4*1024*1024);
+            taskspawn(std::bind(proxy_task, sock), 4*1024*1024);
         }
     }
 }

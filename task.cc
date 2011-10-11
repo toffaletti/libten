@@ -106,8 +106,9 @@ struct proc {
     task *ctask;
     tasklist runqueue;
     tasklist alltasks;
-    std::condition_variable runcv;
     coroutine co;
+    //! pipe used to wake up
+    pipe_fd pi;
     std::atomic<uint64_t> taskcount;
 
     proc()
@@ -270,7 +271,7 @@ void task::ready() {
     assert(!exiting);
     std::unique_lock<std::mutex> lk(p->mutex);
     if (std::find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
-        DVLOG(5) << "adding task: " << this << " to runqueue for proc: " << p;
+        DVLOG(5) << _this_proc->ctask << " adding task: " << this << " to runqueue for proc: " << p;
         p->runqueue.push_back(this);
         // XXX: does this need to be outside of the if(!found) ?
         if (p != _this_proc) {
@@ -285,14 +286,18 @@ void qutex::lock() {
     task *t = _this_proc->ctask;
     {
         std::unique_lock<std::timed_mutex> lk(m);
-        if (owner == 0) {
+        if (owner == 0 || owner == t) {
             owner = t;
+            DVLOG(5) << "LOCK qutex: " << this << " owner: " << owner;
             return;
         }
+        DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
         waiting.push_back(t);
     }
     t->swap();
-    assert(owner == _this_proc->ctask);
+    CHECK(owner == _this_proc->ctask) << "Qutex: " << this << " owner check failed: " <<
+        owner << " != " << _this_proc->ctask << " t:" << t <<
+        " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
 }
 
 bool qutex::try_lock() {
@@ -343,7 +348,7 @@ void qutex::unlock() {
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
     if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ PUSH BACK: " << t;
+        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
         waiting.push_back(t);
     }
     lk.unlock();
@@ -355,6 +360,7 @@ void rendez::wakeup() {
     if (!waiting.empty()) {
         task *t = waiting.front();
         waiting.pop_front();
+        DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
         t->ready();
     }
 }
@@ -363,6 +369,7 @@ void rendez::wakeupall() {
     while (!waiting.empty()) {
         task *t = waiting.front();
         waiting.pop_front();
+        DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
         t->ready();
     }
 }
@@ -495,8 +502,12 @@ void proc::schedule() {
     for (;;) {
         if (taskcount == 0) break;
         std::unique_lock<std::mutex> lk(mutex);
-        if (runqueue.empty()) {
-            runcv.wait(lk, std::bind(&proc::is_ready, this));
+        while (runqueue.empty()) {
+            char buf[1];
+            lk.unlock();
+            ssize_t nr = pi.read(buf, 1);
+            (void)nr;
+            lk.lock();
         }
         task *t = runqueue.front();
         runqueue.pop_front();
@@ -519,10 +530,21 @@ struct io_scheduler {
             return *a->timeout < *b->timeout;
         }
     };
+    struct task_poll_state {
+        task *t_in; // POLLIN task
+        pollfd *p_in; // pointer to pollfd structure that is on the task's stack
+        task *t_out; // POLLOUT task
+        pollfd *p_out; // pointer to pollfd structure that is on the task's stack
+        uint32_t events; // events this fd is registered for
+        task_poll_state() : t_in(0), p_in(0), t_out(0), p_out(0), events(0) {}
+    };
+    typedef std::vector<task_poll_state> poll_task_array;
     typedef std::vector<epoll_event> event_vector;
     typedef std::multiset<task *, task_timeout_compare> timeoutset;
     //! tasks with timeouts set
     timeoutset timeouts;
+    //! array of tasks waiting on fds, indexed by the fd for speedy lookup
+    poll_task_array pollfds;
     //! epoll events
     event_vector events;
     //! current time cached in a few places through the event loop
@@ -531,18 +553,91 @@ struct io_scheduler {
     epoll_fd efd;
     //! number of fds we've been asked to wait on
     size_t npollfds;
-    //! pipe used to wake up from epoll_wait
-    pipe_fd pi;
 
-    io_scheduler() : npollfds(0), pi(O_NONBLOCK) {
+    io_scheduler() : npollfds(0) {
         events.reserve(1000);
         THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
         // add the pipe used to wake up
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN | EPOLLET;
-        efd.add(pi.r.fd, ev);
+        int pi_fd = _this_proc->pi.r.fd;
+        ev.data.fd = pi_fd;
+        if (pollfds.size() <= (size_t)pi_fd) {
+            pollfds.resize(pi_fd+1);
+        }
+        efd.add(pi_fd, ev);
         taskspawn(std::bind(&io_scheduler::fdtask, this));
+    }
+
+    void add_pollfds(task *t, pollfd *fds, nfds_t nfds) {
+        for (nfds_t i=0; i<nfds; ++i) {
+            epoll_event ev;
+            memset(&ev, 0, sizeof(ev));
+            int fd = fds[i].fd;
+            fds[i].revents = 0;
+            // make room for the highest fd number
+            if (pollfds.size() <= (size_t)fd) {
+                pollfds.resize(fd+1);
+            }
+            ev.data.fd = fd;
+            uint32_t events = pollfds[fd].events;
+
+            if (fds[i].events & EPOLLIN) {
+                CHECK(pollfds[fd].t_in == 0);
+                pollfds[fd].t_in = t;
+                pollfds[fd].p_in = &fds[i];
+                pollfds[fd].events |= EPOLLIN;
+            }
+
+            if (fds[i].events & EPOLLOUT) {
+                CHECK(pollfds[fd].t_out == 0);
+                pollfds[fd].t_out = t;
+                pollfds[fd].p_out = &fds[i];
+                pollfds[fd].events |= EPOLLOUT;
+            }
+
+            ev.events = pollfds[fd].events;
+
+            if (events == 0) {
+                THROW_ON_ERROR(efd.add(fd, ev));
+            } else if (events != pollfds[fd].events) {
+                THROW_ON_ERROR(efd.modify(fd, ev));
+            }
+            ++npollfds;
+        }
+    }
+
+    int remove_pollfds(pollfd *fds, nfds_t nfds) {
+        int rvalue = 0;
+        for (nfds_t i=0; i<nfds; ++i) {
+            int fd = fds[i].fd;
+            if (fds[i].revents) rvalue++;
+
+            if (pollfds[fd].p_in == &fds[i]) {
+                pollfds[fd].t_in = 0;
+                pollfds[fd].p_in = 0;
+                pollfds[fd].events ^= EPOLLIN;
+            }
+
+            if (pollfds[fd].p_out == &fds[i]) {
+                pollfds[fd].t_out = 0;
+                pollfds[fd].p_out = 0;
+                pollfds[fd].events ^= EPOLLOUT;
+            }
+
+            if (pollfds[fd].events == 0) {
+                THROW_ON_ERROR(efd.remove(fd));
+            } else {
+                epoll_event ev;
+                memset(&ev, 0, sizeof(ev));
+                ev.data.fd = fd;
+                ev.events = pollfds[fd].events;
+                THROW_ON_ERROR(efd.modify(fd, ev));
+            }
+            --npollfds;
+        }
+        return rvalue;
     }
 
     void add_timeout(task *t, uint64_t ms) {
@@ -571,37 +666,43 @@ struct io_scheduler {
     }
 
     bool fdwait(int fd, int rw, uint64_t ms) {
-        task *t = _this_proc->ctask;
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.data.ptr = t;
-        const char *msg = "error";
+        short events = 0;
         switch (rw) {
             case 'r':
-                ev.events |= EPOLLIN;
-                msg = "read";
+                events |= EPOLLIN;
                 break;
             case 'w':
-                ev.events |= EPOLLOUT;
-                msg = "write";
+                events |= EPOLLOUT;
                 break;
         }
-        efd.add(fd, ev);
-        ++npollfds;
+        pollfd fds = {fd, events, 0};
+        return poll(&fds, 1, ms) > 0;
+    }
+
+    int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+        task *t = _this_proc->ctask;
+        if (nfds == 1) {
+            tasksetstate("poll fd %i r: %i w: %i %ul ms",
+                    fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
+        } else {
+            tasksetstate("poll %u fds for %ul ms", nfds, ms);
+        }
         if (ms) {
             add_timeout(t, ms);
         }
-        tasksetstate("fdwait for %i %s", fd, msg);
-        t->swap();
+        add_pollfds(t, fds, nfds);
 
-        if (ms) {
-            timeouts.erase(t);
-            int s = efd.remove(fd);
-            // if remove succeeds, then an event did not occur on the fd
-            // which means the timeout was reached
-            if (s == 0) return false;
+        DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
+        try {
+            t->swap();
+        } catch (task_interrupted &e) {
+            if (ms) timeouts.erase(t);
+            remove_pollfds(fds, nfds);
+            throw;
         }
-        return true;
+
+        if (ms) timeouts.erase(t);
+        return remove_pollfds(fds, nfds);
     }
 
 private:
@@ -612,24 +713,24 @@ private:
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // let everyone else run
             taskyield();
-
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            proc *p = _this_proc;
+            task *t = 0;
 
             int ms = -1;
             if (!timeouts.empty()) {
-                task *front = *timeouts.begin();
-                if (*front->timeout <= now) {
+                t = *timeouts.begin();
+                if (*t->timeout <= now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = timespec_to_milliseconds(*front->timeout - now);
+                    ms = timespec_to_milliseconds(*t->timeout - now);
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
             }
 
             if (ms != 0) {
-                proc *p = _this_proc;
                 std::unique_lock<std::mutex> lk(p->mutex);
                 if (!p->runqueue.empty()) {
                     // don't block on epoll if tasks are ready to run
@@ -642,16 +743,37 @@ private:
                 // only process 1000 events each iteration to keep it fair
                 events.resize(1000);
                 efd.wait(events, ms);
+
+                int wakeup_pipe_fd = p->pi.r.fd;
+                // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
-                    task *t = (task *)i->data.ptr;
-                    if (t) {
-                        --npollfds;
+                    // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+                    // even if they arent asked for, so we must wake up the tasks on any event
+                    // to avoid just spinning in epoll.
+                    int fd = i->data.fd;
+                    if (pollfds[fd].t_in) {
+                        pollfds[fd].p_in->revents = i->events;
+                        t = pollfds[fd].t_in;
+                        DVLOG(5) << "IN EVENT on task: " << t << " state: " << t->state;
                         t->ready();
-                    } else {
-                        // our wakeup pipe was written to
+                    }
+
+                    // check to see if pollout is a different task than pollin
+                    if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
+                        pollfds[fd].p_out->revents = i->events;
+                        t = pollfds[fd].t_out;
+                        DVLOG(5) << "OUT EVENT on task: " << t << " state: " << t->state;
+                        t->ready();
+                    }
+
+                    if (i->data.fd == wakeup_pipe_fd) {
+                        // our wake up pipe was written to
                         char buf[32];
                         // clear pipe
-                        while (pi.read(buf, sizeof(buf)) > 0) {}
+                        while (p->pi.read(buf, sizeof(buf)) > 0) {}
+                    } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
+                        // TODO: otherwise we might want to remove fd from epoll
+                        LOG(ERROR) << "event " << i->events << " for fd: " << i->data.fd << " but has no task";
                     }
                 }
             }
@@ -660,8 +782,9 @@ private:
             // wake up sleeping tasks
             auto i = timeouts.begin();
             for (; i != timeouts.end(); ++i) {
-                task *t = *i;
+                t = *i;
                 if (*t->timeout <= now) {
+                    DVLOG(5) << "TIMEOUT on task: " << t;
                     t->ready();
                 } else {
                     break;
@@ -673,12 +796,9 @@ private:
 };
 
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
-    if (_sched) {
-        ssize_t nw = _sched->pi.write("\1", 1);
-        (void)nw;
-    } else {
-        runcv.notify_one();
-    }
+    // TODO: maybe an if (asleep)
+    ssize_t nw = pi.write("\1", 1);
+    (void)nw;
     lk.unlock();
 }
 
@@ -686,8 +806,8 @@ proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
     if (thread == 0) {
         for (;;) {
+            // TODO: remove this busy loop in favor of sleeping the proc
             {
-                // TODO: count non-system procs
                 std::unique_lock<std::mutex> lk(procsmutex);
                 size_t np = procs.size();
                 if (np == 1)
@@ -713,6 +833,7 @@ proc::~proc() {
 
 io_scheduler &proc::sched() {
     if (_sched == 0) {
+        pi.setnonblock();
         _sched = new io_scheduler();
     }
     return *_sched;
@@ -724,6 +845,10 @@ void tasksleep(uint64_t ms) {
 
 bool fdwait(int fd, int rw, uint64_t ms) {
     return _this_proc->sched().fdwait(fd, rw, ms);
+}
+
+int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+    return _this_proc->sched().poll(fds, nfds, ms);
 }
 
 bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
