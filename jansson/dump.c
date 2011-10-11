@@ -196,25 +196,11 @@ static int do_dump(const json_t *json, size_t flags, int depth,
         {
             char buffer[MAX_REAL_STR_LENGTH];
             int size;
+            double value = json_real_value(json);
 
-            size = snprintf(buffer, MAX_REAL_STR_LENGTH, "%.17g",
-                            json_real_value(json));
-            if(size >= MAX_REAL_STR_LENGTH)
+            size = jsonp_dtostr(buffer, MAX_REAL_STR_LENGTH, value);
+            if(size < 0)
                 return -1;
-
-            /* Make sure there's a dot or 'e' in the output. Otherwise
-               a real is converted to an integer when decoding */
-            if(strchr(buffer, '.') == NULL &&
-               strchr(buffer, 'e') == NULL)
-            {
-                if(size + 2 >= MAX_REAL_STR_LENGTH) {
-                    /* No space to append ".0" */
-                    return -1;
-                }
-                buffer[size] = '.';
-                buffer[size + 1] = '0';
-                size += 2;
-            }
 
             return dump(buffer, size, data);
         }
@@ -413,39 +399,26 @@ static int do_dump(const json_t *json, size_t flags, int depth,
     }
 }
 
-
 char *json_dumps(const json_t *json, size_t flags)
 {
     strbuffer_t strbuff;
     char *result;
 
-    if(!(flags & JSON_ENCODE_ANY)) {
-        if(!json_is_array(json) && !json_is_object(json))
-           return NULL;
-    }
-
     if(strbuffer_init(&strbuff))
         return NULL;
 
-    if(do_dump(json, flags, 0, dump_to_strbuffer, (void *)&strbuff)) {
-        strbuffer_close(&strbuff);
-        return NULL;
-    }
+    if(json_dump_callback(json, dump_to_strbuffer, (void *)&strbuff, flags))
+        result = NULL;
+    else
+        result = jsonp_strdup(strbuffer_value(&strbuff));
 
-    result = jsonp_strdup(strbuffer_value(&strbuff));
     strbuffer_close(&strbuff);
-
     return result;
 }
 
 int json_dumpf(const json_t *json, FILE *output, size_t flags)
 {
-    if(!(flags & JSON_ENCODE_ANY)) {
-        if(!json_is_array(json) && !json_is_object(json))
-           return -1;
-    }
-
-    return do_dump(json, flags, 0, dump_to_file, (void *)output);
+    return json_dump_callback(json, dump_to_file, (void *)output, flags);
 }
 
 int json_dump_file(const json_t *json, const char *path, size_t flags)
