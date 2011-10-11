@@ -86,7 +86,8 @@ public:
     std::string usage;
     std::string usage_example;
 
-    application(const char *name_, const char *version_, app_config &c)
+    application(const char *version_, app_config &c,
+            const char *name_= program_invocation_short_name)
         : opts(name_, c), name(name_), version(version_), _conf(c)
     {
     }
