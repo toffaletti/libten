@@ -11,7 +11,7 @@ netsock::netsock(int domain, int type, int protocol) throw (errno_error)
 }
 
 int netsock::dial(const char *addr, uint16_t port, unsigned int timeout_ms) {
-    iop io = ioproc(8*1024*1024);
+    auto io = ioproc(8*1024*1024);
     return iodial(io, s.fd, addr, port);
 }
 
