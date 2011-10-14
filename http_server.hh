@@ -176,18 +176,22 @@ private:
         buffer buf(4*1024);
         http_parser parser;
 
-        buffer::slice rb = buf(0);
-        for (;;) {
-            http_request req;
-            req.parser_init(&parser);
+        try {
+            buffer::slice rb = buf(0);
             for (;;) {
-                ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
-                if (nr < 0) return;
-                if (req.parse(&parser, rb.data(), nr)) break;
-                if (nr == 0) return;
+                http_request req;
+                req.parser_init(&parser);
+                for (;;) {
+                    ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
+                    if (nr < 0) return;
+                    if (req.parse(&parser, rb.data(), nr)) break;
+                    if (nr == 0) return;
+                }
+                // handle request
+                handle_request(req, s);
             }
-            // handle request
-            handle_request(req, s);
+        } catch (std::exception &e) {
+            LOG(ERROR) << "unhandled client task error: " << e.what();
         }
     }
 

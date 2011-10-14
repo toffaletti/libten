@@ -1,5 +1,4 @@
 #include "ioproc.hh"
-#include "channel.hh"
 #include "address.hh"
 #include "logging.hh"
 #include <sys/types.h>
@@ -11,25 +10,6 @@
 namespace fw {
 
 namespace detail {
-struct ioproc {
-    uint64_t tid;
-    op_func op;
-    bool inuse;
-    channel<ioproc *> c;
-    channel<ioproc *> creply;
-    va_list arg;
-    intptr_t ret;
-    char err[256];
-
-    ioproc() : inuse(false), ret(0) {
-    }
-
-    ~ioproc() {
-        // tell proc/thread to exit
-        c.send(0);
-    }
-};
-
 static void iotask(channel<ioproc *> c) {
     ioproc *io = c.recv();
     tasksetname("ioproc%p", io);
@@ -39,65 +19,20 @@ static void iotask(channel<ioproc *> c) {
         if (x == 0) break;
         assert(x == io);
 
-        io->ret = io->op(io->arg);
-        if (io->ret < 0) {
+        errno = 0;
+        if (io->vop) {
+            io->vop();
+        } else if (io->op) {
+            io->ret = io->op();
+        } else {
+            abort();
+        }
+        // capture error string
+        if (errno) {
             strerror_r(errno, io->err, sizeof(io->err));
         }
         io->creply.send(x);
     }
-}
-
-
-
-static intptr_t _ioopen(va_list arg) {
-    char *path;
-    int mode;
-    path = va_arg(arg, char *);
-    mode = va_arg(arg, int);
-    return ::open(path, mode);
-}
-
-int ioopen(ioproc *io, char *path, int mode) {
-    return iocall(io, _ioopen, path, mode);
-}
-
-static intptr_t _ioclose(va_list arg) {
-    int fd;
-    fd = va_arg(arg, int);
-    return ::close(fd);
-}
-
-int ioclose(ioproc *io, int fd) {
-    return iocall(io, _ioclose, fd);
-}
-
-static intptr_t _ioread(va_list arg) {
-    int fd;
-    void *buf;
-    size_t n;
-    fd = va_arg(arg, int);
-    buf = va_arg(arg, void*);
-    n = va_arg(arg, size_t);
-    return ::read(fd, buf, n);
-}
-
-ssize_t ioread(ioproc *io, int fd, void *buf, size_t n) {
-    return iocall(io, _ioread, fd, buf, n);
-}
-
-static intptr_t _iowrite(va_list arg) {
-    int fd;
-    void *a;
-    size_t n;
-
-    fd = va_arg(arg, int);
-    a = va_arg(arg, void*);
-    n = va_arg(arg, long);
-    return ::write(fd, a, n);
-}
-
-ssize_t iowrite(ioproc *io, int fd, void *a, size_t n) {
-    return iocall(io, _iowrite, fd, a, n);
 }
 
 int netconnect(int fd, const address &addr, unsigned int ms) {
@@ -117,10 +52,7 @@ int netconnect(int fd, const address &addr, unsigned int ms) {
     return 0;
 }
 
-intptr_t _iodial(va_list arg) {
-    int fd = va_arg(arg, int);
-    const char *addr = va_arg(arg, const char *);
-    uint16_t port = va_arg(arg, int);
+int dial(int fd, const char *addr, uint64_t port) {
     struct addrinfo *results = 0;
     struct addrinfo *result = 0;
     int status = getaddrinfo(addr, NULL, NULL, &results);
@@ -136,28 +68,7 @@ intptr_t _iodial(va_list arg) {
     return status;
 }
 
-int iodial(ioproc *io, int fd, const char *addr, uint16_t port) {
-    return iocall(io, _iodial, fd, addr, port);
-}
-
 } // end namespace detail
-
-intptr_t iocall(detail::ioproc *io, const op_func &op, ...) {
-    assert(!io->inuse);
-    io->inuse = true;
-    va_start(io->arg, op);
-    io->op = op;
-    // pass control of ioproc struct to thread
-    // that will make the syscall
-    io->c.send(io);
-    // wait for thread to finish and pass
-    // control of the ioproc struct back
-    detail::ioproc *x = io->creply.recv();
-    assert(x == io);
-    io->inuse = false;
-    va_end(io->arg);
-    return io->ret;
-}
 
 shared_ioproc ioproc(size_t stacksize) {
     shared_ioproc p(new detail::ioproc);

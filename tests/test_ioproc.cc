@@ -7,16 +7,10 @@ using namespace fw;
 
 size_t default_stacksize=4096;
 
-intptr_t usleep_op(va_list arg) {
-    useconds_t usecs = va_arg(arg, useconds_t);
-    usleep(usecs);
-    return usecs;
-}
-
 void ioproc_sleeper() {
     auto io = ioproc();
-    intptr_t ret = iocall(io.get(), usleep_op, 100);
-    BOOST_CHECK_EQUAL(ret, 100);
+    int ret = iocall<int>(io, std::bind(usleep, 100));
+    BOOST_CHECK_EQUAL(ret, 0);
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
@@ -41,8 +35,8 @@ BOOST_AUTO_TEST_CASE(task_socket_dial) {
 
 void ioproc_pool_sleeper(ioproc_pool &pool) {
     ioproc_pool::scoped_resource io(pool);
-    intptr_t ret = iocall(io.get(), usleep_op, 100);
-    BOOST_CHECK_EQUAL(ret, 100);
+    intptr_t ret = iocall<int>(io, std::bind(usleep, 100));
+    BOOST_CHECK_EQUAL(ret, 0);
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_pool_test) {
