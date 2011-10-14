@@ -69,6 +69,33 @@ struct task {
         swap();
     }
 
+    void cancel() {
+        canceled = true;
+        ready();
+    }
+
+    void setname(const char *fmt, ...) {
+        va_list arg;
+        va_start(arg, fmt);
+        vsetname(fmt, arg);
+        va_end(arg);
+    }
+
+    void vsetname(const char *fmt, va_list arg) {
+        vsnprintf(name, sizeof(name), fmt, arg);
+    }
+
+    void setstate(const char *fmt, ...) {
+        va_list arg;
+        va_start(arg, fmt);
+        vsetstate(fmt, arg);
+        va_end(arg);
+    }
+
+    void vsetstate(const char *fmt, va_list arg) {
+        vsnprintf(state, sizeof(state), fmt, arg);
+    }
+
     static void start(void *arg) {
         task *t = (task *)arg;
         try {
@@ -197,20 +224,18 @@ bool taskcancel(uint64_t id) {
     }
 
     if (t) {
-        // TODO: set state canceled
-        t->canceled = true;
-        t->ready();
+        t->cancel();
     }
     return (bool)t;
 }
 
 void tasksetname(const char *fmt, ...)
 {
-	va_list arg;
-	task *t = _this_proc->ctask;
-	va_start(arg, fmt);
-	vsnprintf(t->name, sizeof(t->name), fmt, arg);
-	va_end(arg);
+    task *t = _this_proc->ctask;
+    va_list arg;
+    va_start(arg, fmt);
+    t->vsetname(fmt, arg);
+    va_end(arg);
 }
 
 const char *taskgetname() {
@@ -219,10 +244,10 @@ const char *taskgetname() {
 
 void tasksetstate(const char *fmt, ...)
 {
-	va_list arg;
 	task *t = _this_proc->ctask;
+	va_list arg;
 	va_start(arg, fmt);
-	vsnprintf(t->state, sizeof(t->state), fmt, arg);
+    t->vsetstate(fmt, arg);
 	va_end(arg);
 }
 
@@ -230,6 +255,39 @@ const char *taskgetstate() {
     return _this_proc->ctask->state;
 }
 
+std::string taskdump() {
+    std::stringstream ss;
+    proc *p = _this_proc;
+    task *t = 0;
+    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
+        t = *i;
+        ss << t->id << " " << t->name << " |" << t->state
+            << "| sys: " << t->systask
+            << " exiting: " << t->exiting
+            << " canceled: " << t->canceled
+            << "\n";
+    }
+    return ss.str();
+}
+
+void procshutdown() {
+    // cancel all non-system tasks
+    // this should be a clean exit
+    proc *p = _this_proc;
+    task *t = 0;
+    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
+        t = *i;
+        if (!t->systask) {
+            t->cancel();
+        }
+    }
+}
+
+void taskdumpf(FILE *of) {
+    std::string dump = taskdump();
+    fwrite(dump.c_str(), sizeof(char), dump.size(), of);
+    fflush(of);
+}
 
 task::task(const std::function<void ()> &f, size_t stacksize)
     : fn(f), co(task::start, this, stacksize), cproc(0), 
@@ -237,6 +295,8 @@ task::task(const std::function<void ()> &f, size_t stacksize)
     exiting(false), systask(false), canceled(false)
 {
     id = ++taskidgen;
+    setname("task[%ju]", id);
+    setstate("new");
 }
 
 void task::ready() {
@@ -347,6 +407,10 @@ void rendez::wakeupall() {
     }
 }
 
+static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
+    taskdumpf();
+}
+
 static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
     // http://stackoverflow.com/questions/77005/how-to-generate-a-stacktrace-when-my-gcc-c-app-crashes
     // TODO: maybe use the google logging demangler that doesn't alloc
@@ -427,6 +491,9 @@ static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
 
 static void procmain_init() {
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
+    // XXX: i *think* this usable with the backtrace
+    // i beleive the ucontext passed to the sig handler
+    // is the pointer to the main stack
     stack_t ss;
     ss.ss_sp = malloc(SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
@@ -440,6 +507,8 @@ static void procmain_init() {
     FLAGS_logtostderr = true;
 
     struct sigaction act;
+    // XXX: google glog handles this for us
+    // in a more signal safe manner (no malloc)
 #if 0
     // install SIGSEGV handler
     act.sa_sigaction = backtrace_handler;
@@ -456,6 +525,14 @@ static void procmain_init() {
     if (act.sa_handler == SIG_DFL) {
         act.sa_handler = SIG_IGN;
         THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
+    }
+
+    // install INFO handler
+    THROW_ON_ERROR(sigaction(SIGUSR1, NULL, &act));
+    if (act.sa_handler == SIG_DFL) {
+        act.sa_sigaction = info_handler;
+        act.sa_flags = SA_RESTART | SA_SIGINFO;
+        THROW_ON_ERROR(sigaction(SIGUSR1, &act, NULL));
     }
 
     new proc();

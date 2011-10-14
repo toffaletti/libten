@@ -1,3 +1,6 @@
+#ifndef APP_HH
+#define APP_HH
+
 #include <sys/resource.h>
 #include <iostream>
 #include <fstream>
@@ -6,6 +9,7 @@
 
 #include "task.hh"
 #include "logging.hh"
+#include "descriptors.hh"
 
 namespace fw {
 
@@ -88,8 +92,13 @@ public:
 
     application(const char *version_, app_config &c,
             const char *name_= program_invocation_short_name)
-        : opts(name_, c), name(name_), version(version_), _conf(c)
+        : opts(name_, c), name(name_), version(version_), _conf(c),
+        sigpi(O_NONBLOCK)
     {
+        if (global_app != 0) {
+            throw errorx("there can be only one application");
+        }
+        global_app = this;
     }
 
     ~application() {
@@ -164,14 +173,54 @@ public:
         return static_cast<ConfigT &>(_conf);
     }
 
-    int run() { return p.main(); }
+    int run() { 
+        struct sigaction act;
+        memset(&act, 0, sizeof(act));
+        // install SIGINT handler
+        THROW_ON_ERROR(sigaction(SIGINT, NULL, &act));
+        if (act.sa_handler == SIG_DFL) {
+            act.sa_sigaction = application::signal_handler;
+            act.sa_flags = SA_RESTART | SA_SIGINFO;
+            THROW_ON_ERROR(sigaction(SIGINT, &act, NULL));
+            taskspawn(std::bind(&application::signal_task, this), 4*1024);
+        }
+        return p.main();
+    }
 
     void quit() {
-        // TODO: need a way to cleanly shutdown
+        procshutdown();
     }
-protected:
+private:
     app_config &_conf;
     procmain p;
+    pipe_fd sigpi;
+    static application *global_app;
+
+    void signal_task() {
+        tasksetname("app::signal_task");
+        tasksystem();
+        int sig_num = 0;
+        for (;;) {
+            fdwait(sigpi.r.fd, 'r');
+            ssize_t nr = sigpi.read(&sig_num, sizeof(sig_num));
+            if (nr != sizeof(sig_num)) abort();
+            LOG(WARNING) << strsignal(sig_num) << " received";
+            switch (sig_num) {
+                case SIGINT:
+                    quit();
+                    break;
+            }
+        }
+    }
+
+    static void signal_handler(int sig_num, siginfo_t *info, void *ctxt) {
+        ssize_t nw = global_app->sigpi.write(&sig_num, sizeof(sig_num));
+        (void)nw; // not much we can do if this fails
+    }
 };
 
+application *application::global_app = 0;
+
 } // end namespace fw
+
+#endif // APP_HH

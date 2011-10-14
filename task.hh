@@ -29,8 +29,11 @@ void tasksetstate(const char *fmt, ...);
 const char *taskgetstate();
 void tasksetname(const char *fmt, ...);
 const char *taskgetname();
+std::string taskdump();
+void taskdumpf(FILE *of = stderr);
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
+void procshutdown();
 
 struct qutex {
     std::timed_mutex m;

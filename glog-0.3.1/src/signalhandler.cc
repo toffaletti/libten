@@ -333,7 +333,7 @@ void InstallFailureSignalHandler() {
   struct sigaction sig_action;
   memset(&sig_action, 0, sizeof(sig_action));
   sigemptyset(&sig_action.sa_mask);
-  sig_action.sa_flags |= SA_SIGINFO;
+  sig_action.sa_flags |= SA_SIGINFO | SA_ONSTACK
   sig_action.sa_sigaction = &FailureSignalHandler;
 
   for (int i = 0; i < ARRAYSIZE(kFailureSignals); ++i) {
