@@ -70,12 +70,13 @@ protected:
 
     // internal, does not lock mutex
     inline ResourceT *create_or_acquire_nolock(std::unique_lock<qutex> &lk) {
-        ResourceT *c;
+        ResourceT *c = 0;
         if (_q.empty()) {
             // need to create a new resource
             if (_max < 0 || _set.size() < (size_t)_max) {
                 try {
                     c = new_resource();
+                    CHECK(c) << "new_resource failed for pool: " << c;
                     DVLOG(5) << "inserting to shared_pool(" << _name << "): " << c;
                     _set.insert(c);
                 } catch (std::exception &e) {
@@ -84,18 +85,20 @@ protected:
                 }
             } else {
                 // can't create anymore we're at max, try waiting
-                if (_not_empty.sleep_for(lk, 20)) {
-                    c = _q.front();
-                    _q.pop_front();
-                } else {
-                    throw std::runtime_error("timeout waiting for shared resource: " + _name);
+                // TODO: this while loop shouldn't be needed.
+                while (_q.empty()) {
+                    _not_empty.sleep(lk);
                 }
+                CHECK(!_q.empty());
+                c = _q.front();
+                _q.pop_front();
             }
         } else {
             // pop resource from front of queue
             c = _q.front();
             _q.pop_front();
         }
+        CHECK(c) << "aquire shared resource failed in pool: " << _name;
         return c;
     }
 
