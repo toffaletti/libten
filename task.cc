@@ -600,7 +600,7 @@ struct io_scheduler {
             }
 
             if (pollfds[fd].events == 0) {
-                THROW_ON_ERROR(efd.remove(fd));
+                efd.remove(fd);
             } else {
                 epoll_event ev;
                 memset(&ev, 0, sizeof(ev));
