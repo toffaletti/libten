@@ -166,7 +166,7 @@ shared_ioproc ioproc(size_t stacksize) {
     return p;
 }
 
-detail::ioproc *ioproc_pool::new_resource() {
+detail::ioproc *ioproc_pool::new_resource(size_t stacksize) {
     std::unique_ptr<detail::ioproc> p (new detail::ioproc);
     p->tid = procspawn(std::bind(detail::iotask, p->c), stacksize);
     p->c.send(p.get());
@@ -176,6 +176,5 @@ detail::ioproc *ioproc_pool::new_resource() {
 void ioproc_pool::free_resource(detail::ioproc *p) {
     delete p;
 }
-
 
 } // end namespace fw

@@ -22,9 +22,16 @@ public:
     typedef ScopeT scoped_resource;
     typedef std::deque<ResourceT *> queue_type;
     typedef std::set<ResourceT *> set_type;
+    typedef std::function<ResourceT *()> alloc_func;
+    typedef std::function<void (ResourceT *)> free_func;
 
-    shared_pool(const std::string &name, ssize_t max_ = -1)
-        : _name(name),
+    shared_pool(const std::string &name_,
+            const alloc_func &alloc_,
+            const free_func &free_,
+            ssize_t max_ = -1)
+        : _name(name_),
+        _new_resource(alloc_),
+        _free_resource(free_),
         _max(max_)
     {}
 
@@ -37,7 +44,7 @@ public:
         std::unique_lock<qutex> lk(_mut);
         _q.clear();
         for (typename set_type::const_iterator i = _set.begin(); i!= _set.end(); i++) {
-            free_resource(*i);
+            _free_resource(*i);
         }
         _set.clear();
     }
@@ -56,12 +63,11 @@ protected:
     queue_type _q;
     set_type _set;
     std::string _name;
+    alloc_func _new_resource;
+    free_func _free_resource;
     ssize_t _max;
 
     bool is_not_empty() const { return !_q.empty(); }
-
-    virtual ResourceT *new_resource() = 0;
-    virtual void free_resource(ResourceT *p) {}
 
     virtual ResourceT *acquire() {
         std::unique_lock<qutex> lk(_mut);
@@ -75,7 +81,7 @@ protected:
             // need to create a new resource
             if (_max < 0 || _set.size() < (size_t)_max) {
                 try {
-                    c = new_resource();
+                    c = _new_resource();
                     CHECK(c) << "new_resource failed for pool: " << c;
                     DVLOG(5) << "inserting to shared_pool(" << _name << "): " << c;
                     _set.insert(c);
@@ -128,7 +134,7 @@ protected:
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
         if (c) {
-            free_resource(c);
+            _free_resource(c);
             _set.erase(c);
         }
 
@@ -139,7 +145,7 @@ protected:
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
         DVLOG(5) << "shared_pool(" << _name << ") destroy in set? " << _set.count(c) << " : " << c;
-        free_resource(c);
+        _free_resource(c);
         _set.erase(c);
         typename queue_type::iterator i = find(_q.begin(), _q.end(), c);
         if (i!=_q.end()) { _q.erase(i); }

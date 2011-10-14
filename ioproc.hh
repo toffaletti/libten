@@ -50,13 +50,15 @@ int iodial(T &io, int fd, const char *addr, uint16_t port) {
 }
 
 class ioproc_pool : public shared_pool<detail::ioproc> {
+private:
+    static detail::ioproc *new_resource(size_t stacksize);
+    static void free_resource(detail::ioproc *p);
 public:
     ioproc_pool(size_t stacksize_=default_stacksize, ssize_t max_=-1)
-        : shared_pool<detail::ioproc>("ioproc_pool", max_), stacksize(stacksize_) {}
-protected:
-    size_t stacksize;
-    detail::ioproc *new_resource();
-    void free_resource(detail::ioproc *p);
+        : shared_pool<detail::ioproc>("ioproc_pool",
+        std::bind(new_resource, stacksize_),
+        ioproc_pool::free_resource,
+        max_) {}
 };
 
 } // end namespace fw

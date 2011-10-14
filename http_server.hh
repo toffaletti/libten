@@ -122,7 +122,8 @@ public:
 
 public:
     http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
-        : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_), timeout_ms(timeout_ms_)
+        : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_),
+        timeout_ms(timeout_ms_), listen_task_id(0)
     {
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
@@ -143,7 +144,11 @@ public:
         sock.bind(baddr);
         sock.getsockname(baddr);
         LOG(INFO) << "listening on: " << baddr;
-        taskspawn(std::bind(&http_server::listen_task, this));
+        listen_task_id = taskspawn(std::bind(&http_server::listen_task, this));
+    }
+
+    void shutdown() {
+        taskcancel(listen_task_id);
     }
 
 private:
@@ -152,6 +157,7 @@ private:
     size_t stacksize;
     int timeout_ms;
     func_type _log_func;
+    uint64_t listen_task_id;
 
     void listen_task() {
         sock.listen();
