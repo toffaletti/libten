@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <sstream>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 /* TODO:
  * Normalization and Comparison
@@ -72,6 +73,17 @@ struct uri {
 
     static query_params::iterator find_param(query_params &p, const std::string &k) {
         return std::find_if(p.begin(), p.end(), query_match<std::string>(k));
+    }
+
+    template <typename ParamT> static bool get_param(query_params &p, const std::string &k, ParamT &v) {
+        auto i = std::find_if(p.begin(), p.end(), query_match<std::string>(k));
+        if (i != p.end()) {
+            try {
+                v = boost::lexical_cast<ParamT>(i->second);
+                return true;
+            } catch (boost::bad_lexical_cast &e) {}
+        }
+        return false;
     }
 
     static void remove_param(query_params &p, const std::string &k) {
