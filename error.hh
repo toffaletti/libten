@@ -54,6 +54,11 @@ struct errorx : backtrace_exception {
         va_end(ap);
     }
 
+    errorx(const std::string &msg) {
+        strncpy(_buf, msg.data(), sizeof(_buf)-1);
+        _buf[sizeof(_buf)-1] = 0;
+    }
+
     //! \return a string describing the error
     const char *what() const throw () { return _buf; }
 };

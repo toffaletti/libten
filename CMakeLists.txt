@@ -18,7 +18,15 @@ SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 add_library(fw error.cc task.cc ioproc.cc net.cc ${ASM})
 add_dependencies(fw libglog)
-target_link_libraries(fw rt glog)
+
+set(GLOG_LIBS glog)
+# if libunwind is installed glog configure picks it up
+# and you must link with it
+find_library(LIBUNWIND unwind)
+if (LIBUNWIND)
+    set(GLOG_LIBS ${GLOG_LIBS} unwind)
+endif (LIBUNWIND)
+target_link_libraries(fw rt ${GLOG_LIBS})
 
 add_subdirectory(examples)
 add_subdirectory(tests)

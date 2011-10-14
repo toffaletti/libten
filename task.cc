@@ -500,7 +500,7 @@ void proc::schedule() {
 struct io_scheduler {
     struct task_timeout_compare {
         bool operator ()(const task *a, const task *b) const {
-            return *a->timeout < *b->timeout;
+            return *a->timeout < *b->timeout || (*a->timeout == *b->timeout && a < b);
         }
     };
     struct task_poll_state {
@@ -629,6 +629,7 @@ struct io_scheduler {
     }
 
     bool del_timeout(task *t) {
+        if (t->timeout == 0) return false;
         return timeouts.erase(t);
     }
 
