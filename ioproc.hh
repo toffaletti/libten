@@ -8,6 +8,7 @@
 #include <boost/any.hpp>
 #include "shared_pool.hh"
 #include <fcntl.h>
+#include <cassert>
 
 namespace fw {
 
