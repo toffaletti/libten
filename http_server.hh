@@ -3,6 +3,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <functional>
 #include <tuple>
+#include <netinet/tcp.h>
 
 #include "logging.hh"
 #include "task.hh"
@@ -59,11 +60,10 @@ public:
                 resp.set_header("Date", buf);
             }
             data = resp.data();
-            ssize_t nw = sock.send(data.data(), data.size());
-            // TODO: handle nw error
             if (!resp.body.empty()) {
-                nw = sock.send(resp.body.data(), resp.body.size());
+                data += resp.body;
             }
+            ssize_t nw = sock.send(data.data(), data.size());
             return nw;
         }
 
@@ -175,6 +175,8 @@ private:
         netsock s(fd);
         buffer buf(4*1024);
         http_parser parser;
+
+        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
         try {
             buffer::slice rb = buf(0);
