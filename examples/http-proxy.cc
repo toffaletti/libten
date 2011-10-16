@@ -40,11 +40,21 @@ void proxy_task(int sock) {
     req.parser_init(&parser);
 
     buffer::slice rb = buf(0);
+    bool got_headers = false;
     for (;;) {
         ssize_t nr = s.recv(rb.data(), rb.size(), SEC2MS(5));
         if (nr < 0) { goto request_read_error; }
         if (req.parse(&parser, rb.data(), nr)) break;
         if (nr == 0) return;
+        if (!got_headers && !req.method.empty()) {
+            got_headers = true;
+            if (req.header_string("Expect") == "100-continue") {
+                http_response cont_resp(100, "Continue");
+                std::string data = cont_resp.data();
+                ssize_t nw = s.send(data.data(), data.size());
+                (void)nw;
+            }
+        }
     }
 
     try {

@@ -173,7 +173,8 @@ private:
 
     void client_task(int fd) {
         netsock s(fd);
-        buffer buf(4*1024);
+        // TODO: tuneable buffer sizes
+        buffer buf(32*1024);
         http_parser parser;
 
         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
@@ -183,11 +184,21 @@ private:
             for (;;) {
                 http_request req;
                 req.parser_init(&parser);
+                bool got_headers = false;
                 for (;;) {
                     ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
                     if (nr < 0) return;
                     if (req.parse(&parser, rb.data(), nr)) break;
                     if (nr == 0) return;
+                    if (!got_headers && !req.method.empty()) {
+                        got_headers = true;
+                        if (req.header_string("Expect") == "100-continue") {
+                            http_response cont_resp(100, "Continue");
+                            std::string data = cont_resp.data();
+                            ssize_t nw = s.send(data.data(), data.size());
+                            (void)nw;
+                        }
+                    }
                 }
                 // handle request
                 handle_request(req, s);

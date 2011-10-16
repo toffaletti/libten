@@ -30,12 +30,18 @@ public:
     {
         // add on size for a guard page
         size_t pgs = getpagesize();
+#ifndef NDEBUG
         size_t real_size = stack_size + pgs;
+#else
+        size_t real_size = stack_size;
+#endif
         int r = posix_memalign((void **)&stack_end, pgs, real_size);
         THROW_ON_NONZERO(r);
+#ifndef NDEBUG
         // protect the guard page
         THROW_ON_ERROR(mprotect(stack_end, pgs, PROT_NONE));
         stack_end += pgs;
+#endif
         // stack grows down on x86 & x86_64
         stack_start = stack_end + stack_size;
 #ifndef NVALGRIND
@@ -50,9 +56,14 @@ public:
 #ifndef NVALGRIND
             VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
 #endif
+
+#ifndef NDEBUG
             size_t pgs = getpagesize();
             THROW_ON_ERROR(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE));
             free(stack_end-pgs);
+#else
+            free(stack_end);
+#endif
         }
     }
 
