@@ -320,6 +320,15 @@ BOOST_AUTO_TEST_CASE(http_request_header_manipulation) {
     BOOST_CHECK(!req.remove_header("Test-A"));
 }
 
+BOOST_AUTO_TEST_CASE(http_request_host_with_underscores) {
+    http_request req("HEAD", "http://my_host_name/");
+    std::string data = req.data();
+
+    http_parser parser;
+    req.parser_init(&parser);
+    BOOST_CHECK(req.parse(&parser, data.data(), data.size()));
+}
+
 /* http response */
 
 BOOST_AUTO_TEST_CASE(http_response_constructor) {
