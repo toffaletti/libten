@@ -21,8 +21,10 @@ static void iotask(channel<ioproc *> c) {
         errno = 0;
         if (io->vop) {
             io->vop();
+            io->vop = std::function<void ()>();
         } else if (io->op) {
             io->ret = io->op();
+            io->op = std::function<int ()>();
         } else {
             abort();
         }

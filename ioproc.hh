@@ -32,18 +32,6 @@ struct ioproc {
     }
 };
 
-inline void magic(ioproc *io) {
-    io->inuse = true;
-    // pass control of ioproc struct to thread
-    // that will make the syscall
-    io->c.send(io);
-    // wait for thread to finish and pass
-    // control of the ioproc struct back
-    detail::ioproc *x = io->creply.recv();
-    assert(x == io);
-    io->inuse = false;
-}
-
 // TODO: doesn't really belong here, maybe net.hh
 int dial(int fd, const char *addr, uint64_t port);
 
@@ -53,25 +41,49 @@ typedef std::shared_ptr<detail::ioproc> shared_ioproc;
 
 shared_ioproc ioproc(size_t stacksize=default_stacksize);
 
-template <typename ReturnT, typename ProcT> ReturnT iocall(ProcT &io, const std::function<boost::any ()> &op) {
+template <typename ProcT> void iosend(ProcT &io, const std::function<boost::any ()> &op) {
     assert(!io->inuse);
     assert(!io->vop);
     assert(!io->op);
     io->op = op;
-    detail::magic(io.get());
-    // make empty
-    io->op = std::function<int ()>();
-    return boost::any_cast<ReturnT>(io->ret);
+    io->inuse = true;
+    // pass control of ioproc struct to thread
+    // that will make the syscall
+    io->c.send(io.get());
 }
 
-template <typename ProcT> void iocall(ProcT &io, const std::function<void ()> &vop) {
+template <typename ProcT> void iosend(ProcT &io, const std::function<void ()> &vop) {
     assert(!io->inuse);
     assert(!io->vop);
     assert(!io->op);
     io->vop = vop;
-    detail::magic(io.get());
-    // make empty
-    io->vop = std::function<void ()>();
+    io->inuse = true;
+    // pass control of ioproc struct to thread
+    // that will make the syscall
+    io->c.send(io.get());
+}
+
+template <typename ProcT> void iowait(ProcT &io) {
+    // wait for thread to finish and pass
+    // control of the ioproc struct back
+    detail::ioproc *x = io->creply.recv();
+    assert(x == io.get());
+    io->inuse = false;
+}
+
+template <typename ReturnT, typename ProcT> ReturnT iowait(ProcT &io) {
+    iowait(io);
+    return boost::any_cast<ReturnT>(io->ret);
+}
+
+template <typename ReturnT, typename ProcT> ReturnT iocall(ProcT &io, const std::function<boost::any ()> &op) {
+    iosend(io, op);
+    return iowait<ReturnT>(io);
+}
+
+template <typename ProcT> void iocall(ProcT &io, const std::function<void ()> &vop) {
+    iosend(io, vop);
+    return iowait(io);
 }
 
 template <typename ProcT> int ioopen(ProcT &io, char *path, int mode) {
