@@ -48,7 +48,7 @@ void proxy_task(int sock) {
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
-            if (req.header_string("Expect") == "100-continue") {
+            if (req.get("Expect") == "100-continue") {
                 http_response cont_resp(100, "Continue");
                 std::string data = cont_resp.data();
                 ssize_t nw = s.send(data.data(), data.size());
@@ -90,7 +90,7 @@ void proxy_task(int sock) {
 
             http_request r(req.method, u.compose(true));
             // HTTP/1.1 requires host header
-            r.append_header("Host", u.host);
+            r.append("Host", u.host);
             r.headers = req.headers;
             std::string data = r.data();
             ssize_t nw = cs.send(data.data(), data.size(), SEC2MS(5));
@@ -115,7 +115,7 @@ void proxy_task(int sock) {
                 }
 
                 if (resp.body.size()) {
-                    if (resp.header_string("Transfer-Encoding") == "chunked") {
+                    if (resp.get("Transfer-Encoding") == "chunked") {
                         char lenbuf[64];
                         int len = snprintf(lenbuf, sizeof(lenbuf)-1, "%zx\r\n", resp.body.size());
                         resp.body.insert(0, lenbuf, len);
@@ -127,7 +127,7 @@ void proxy_task(int sock) {
                 }
                 if (complete) {
                     // send end chunk
-                    if (resp.header_string("Transfer-Encoding") == "chunked") {
+                    if (resp.get("Transfer-Encoding") == "chunked") {
                         nw = s.send("0\r\n\r\n", 5);
                     }
                     break;

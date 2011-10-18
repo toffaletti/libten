@@ -18,7 +18,8 @@ static void do_get(uri u) {
 
     http_request r("GET", u.compose(true));
     // HTTP/1.1 requires host header
-    r.append_header("Host", u.host);
+    r.append("Host", u.host); 
+
     std::string data = r.data();
     std::cout << "Request:\n" << "--------------\n";
     std::cout << data;

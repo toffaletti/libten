@@ -1,6 +1,5 @@
 #include "http_message.hh"
 #include <sstream>
-#include <boost/lexical_cast.hpp>
 #include <algorithm>
 
 // normalize message header field names.
@@ -34,7 +33,7 @@ struct is_header {
     }
 };
 
-void http_base::set_header(const std::string &field, const std::string &value) {
+void Headers::set(const std::string &field, const std::string &value) {
     std::string normal_field = normalize_header_name(field);
     header_list::iterator i = std::find_if(headers.begin(),
         headers.end(), is_header(normal_field));
@@ -45,20 +44,12 @@ void http_base::set_header(const std::string &field, const std::string &value) {
     }
 }
 
-void http_base::set_header(const std::string &field, unsigned long long value) {
-    set_header(field, boost::lexical_cast<std::string>(value));
-}
-
-void http_base::append_header(const std::string &field, const std::string &value) {
+void Headers::append(const std::string &field, const std::string &value) {
     std::string normal_field = normalize_header_name(field);
     headers.push_back(std::make_pair(normal_field, value));
 }
 
-void http_base::append_header(const std::string &field, unsigned long long value) {
-    append_header(field, boost::lexical_cast<std::string>(value));
-}
-
-bool http_base::remove_header(const std::string &field) {
+bool Headers::remove(const std::string &field) {
     std::string normal_field = normalize_header_name(field);
     header_list::iterator i = std::remove_if(headers.begin(),
         headers.end(), is_header(normal_field));
@@ -69,7 +60,7 @@ bool http_base::remove_header(const std::string &field) {
     return false;
 }
 
-std::string http_base::header_string(const std::string &field) const {
+std::string Headers::get(const std::string &field) const {
     header_list::const_iterator i = std::find_if(headers.begin(),
         headers.end(), is_header(normalize_header_name(field)));
     if (i != headers.end()) {
@@ -78,16 +69,7 @@ std::string http_base::header_string(const std::string &field) const {
     return "";
 }
 
-unsigned long long http_base::header_ull(const std::string &field) const {
-    header_list::const_iterator i = std::find_if(headers.begin(),
-        headers.end(), is_header(normalize_header_name(field)));
-    if (i != headers.end()) {
-        return boost::lexical_cast<unsigned long long>(i->second);
-    }
-    return 0;
-}
-
-void http_base::normalize_headers() {
+void http_base::normalize() {
     for (header_list::iterator i=headers.begin(); i!=headers.end(); ++i) {
         i->first.assign(normalize_header_name(i->first));
     }
@@ -131,7 +113,7 @@ static int _request_on_url(http_parser *p, const char *at, size_t length) {
 
 static int _request_on_headers_complete(http_parser *p) {
     http_request *m = reinterpret_cast<http_request*>(p->data);
-    m->normalize_headers();
+    m->normalize();
     m->method = http_method_str((http_method)p->method);
     std::stringstream ss;
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
@@ -190,7 +172,7 @@ static int _response_on_reason(http_parser *p, const char *at, size_t length) {
 
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
-    m->normalize_headers();
+    m->normalize();
     m->status_code = p->status_code;
     std::stringstream ss;
     ss << "HTTP/" << p->http_major << "." << p->http_minor;

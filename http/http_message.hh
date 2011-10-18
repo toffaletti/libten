@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdexcept>
 #include <stdarg.h>
+#include <boost/lexical_cast.hpp>
 
 #include "http_parser.h"
 #include "error.hh"
@@ -14,29 +15,68 @@
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
-struct http_base {
+struct Headers {
     header_list headers;
+
+    Headers() {}
+
+    template <typename ValueT, typename ...Args>
+    Headers(const std::string &header_name, const ValueT &header_value, Args ...args) {
+        init(header_name, header_value, args...);
+    }
+
+    // init can go away with delegating constructor support
+    void init() {}
+    template <typename ValueT, typename ...Args>
+    void init(const std::string &header_name, const ValueT &header_value, Args ...args) {
+        append<ValueT>(header_name, header_value);
+        init(args...);
+    }
+
+    void set(const std::string &field, const std::string &value);
+
+    template <typename ValueT>
+        void set(const std::string &field, const ValueT &value) {
+            set(field, boost::lexical_cast<std::string>(value));
+        }
+
+    void append(const std::string &field, const std::string &value);
+
+    template <typename ValueT>
+        void append(const std::string &field, const ValueT &value) {
+            append(field, boost::lexical_cast<std::string>(value));
+        }
+
+    header_list::iterator find(const std::string &field);
+
+    bool remove(const std::string &field);
+
+    std::string get(const std::string &field) const;
+
+    template <typename ValueT>
+        ValueT get(const std::string &field) const {
+            std::string val = get(field);
+            if (val.empty()) {
+                return ValueT();
+            }
+            return boost::lexical_cast<ValueT>(val);
+        }
+};
+
+struct http_base : Headers {
     bool complete;
     std::string body;
     size_t body_length;
 
-    http_base() : complete(false), body_length(0) {}
+    explicit http_base(const Headers &headers_ = Headers()) :
+        Headers(headers_), complete(false), body_length(0) {}
 
-    void set_header(const std::string &field, const std::string &value);
-    void set_header(const std::string &field, unsigned long long value);
-    void append_header(const std::string &field, const std::string &value);
-    void append_header(const std::string &field, unsigned long long value);
-    header_list::iterator find_header(const std::string &field);
-    bool remove_header(const std::string &field);
-    std::string header_string(const std::string &field) const;
-    unsigned long long header_ull(const std::string &field) const;
-
-    void normalize_headers();
+    void normalize();
     void set_body(const std::string &body_) {
         body = body_;
         body_length = body.size();
-        remove_header("Content-Length");
-        append_header("Content-Length", body_length);
+        remove("Content-Length");
+        set("Content-Length", body_length);
     }
 };
 
@@ -48,8 +88,10 @@ struct http_request : http_base {
     http_request() {}
     http_request(const std::string &method_,
         const std::string &uri_,
+        const Headers &headers_ = Headers(),
         const std::string &http_version_ = "HTTP/1.1")
-        : method(method_), uri(uri_), http_version(http_version_) {}
+        : http_base(headers_),
+        method(method_), uri(uri_), http_version(http_version_) {}
 
     void clear() {
         headers.clear();
@@ -77,22 +119,14 @@ struct http_response : http_base {
 
     http_response(unsigned long status_code_ = 200,
         const std::string &reason_ = "OK",
-        const std::string &http_version_ = "HTTP/1.1",
-        unsigned int nheaders = 0,
-        ...) // headers
-        : http_version(http_version_),
+        const Headers &headers_ = Headers(),
+        const std::string &http_version_ = "HTTP/1.1")
+        : http_base(headers_),
+        http_version(http_version_),
         status_code(status_code_),
         reason(reason_),
         req(NULL)
     {
-        va_list ap;
-        va_start(ap, nheaders);
-        for (;nheaders > 0;--nheaders) {
-            const char *header_name = va_arg(ap, const char *);
-            const char *header_value = va_arg(ap, const char *);
-            append_header(header_name, header_value);
-        }
-        va_end(ap);
     }
 
     void clear() {
