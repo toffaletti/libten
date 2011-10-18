@@ -54,6 +54,7 @@ struct task {
     bool exiting;
     bool systask;
     bool canceled;
+    bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
     ~task() {
@@ -70,6 +71,8 @@ struct task {
     }
 
     void cancel() {
+        // don't cancel systasks
+        if (systask) return;
         canceled = true;
         ready();
     }
@@ -122,7 +125,8 @@ struct proc {
     std::atomic<uint64_t> taskcount;
 
     proc(task *t = 0)
-        : _sched(0), nswitch(0), ctask(0), asleep(false), taskcount(0)
+        : _sched(0), nswitch(0), ctask(0),
+        asleep(false), taskcount(0)
     {
 
         add(this);
@@ -272,6 +276,7 @@ void procshutdown() {
     proc *p = _this_proc;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         task *t = *i;
+        if (t == p->ctask) continue; // don't add ourself to the runqueue
         if (!t->systask) {
             t->cancel();
         }
@@ -287,7 +292,7 @@ void taskdumpf(FILE *of) {
 task::task(const std::function<void ()> &f, size_t stacksize)
     : fn(f), co(task::start, this, stacksize), cproc(0), 
     timeout(0), deadline(0),
-    exiting(false), systask(false), canceled(false)
+    exiting(false), systask(false), canceled(false), unwinding(false)
 {
     id = ++taskidgen;
     setname("task[%ju]", id);
@@ -320,6 +325,9 @@ void qutex::lock() {
             return;
         }
         DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
+        if (t->canceled) {
+            DVLOG(5) << "BUG LOCK";
+        }
         waiting.push_back(t);
     }
 
@@ -330,9 +338,19 @@ void qutex::lock() {
             " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
     } catch (task_interrupted &e) {
         std::unique_lock<std::timed_mutex> lk(m);
-        auto i = std::find(waiting.begin(), waiting.end(), t);
-        if (i != waiting.end()) {
-            waiting.erase(i);
+        if (t == owner) {
+            owner = 0;
+            if (!waiting.empty()) {
+                owner = waiting.front();
+                waiting.pop_front();
+            }
+            lk.unlock();
+            if (owner) owner->ready();
+        } else {
+            auto i = std::find(waiting.begin(), waiting.end(), t);
+            if (i != waiting.end()) {
+                waiting.erase(i);
+            }
         }
         throw;
     }
@@ -378,53 +396,9 @@ void qutex::unlock() {
         } else {
             owner = 0;
         }
-        DVLOG(5) << "UNLOCK qutex: " << this << " owner: " << owner << " waiting: " << waiting.size();
+        DVLOG(5) << "UNLOCK qutex: " << this << " new owner: " << owner << " waiting: " << waiting.size();
     }
     if (t) t->ready();
-}
-
-void rendez::sleep(std::unique_lock<qutex> &lk) {
-    task *t = _this_proc->ctask;
-    if (!q) {
-        q = lk.mutex();
-    }
-    CHECK(q == lk.mutex());
-    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
-    lk.unlock();
-    try {
-        t->swap(); 
-        lk.lock();
-    } catch (task_interrupted &e) {
-        lk.lock();
-        auto i = std::find(waiting.begin(), waiting.end(), t);
-        if (i != waiting.end()) {
-            waiting.erase(i);
-        }
-        throw;
-    }
-}
-
-void rendez::wakeup() {
-    if (!waiting.empty()) {
-        CHECK(q->owner == _this_proc->ctask);
-        task *t = waiting.front();
-        waiting.pop_front();
-        DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
-        t->ready();
-    }
-}
-
-void rendez::wakeupall() {
-    while (!waiting.empty()) {
-        CHECK(q->owner == _this_proc->ctask);
-        task *t = waiting.front();
-        waiting.pop_front();
-        DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
-        t->ready();
-    }
 }
 
 static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
@@ -592,6 +566,7 @@ void proc::schedule() {
         co.swap(&t->co);
         lk.lock();
         ctask = 0;
+        
         if (t->exiting) {
             deltaskinproc(t);
         }
@@ -881,12 +856,14 @@ struct io_scheduler {
 };
 
 void task::swap() {
+    if (canceled && !exiting) {
+        DVLOG(5) << "BUG: " << this;
+    }
     // swap to scheduler coroutine
     co.swap(&_this_proc->co);
 
-    if (canceled) {
-        // allow scheduling during cleanup
-        canceled = false;
+    if (canceled && !unwinding) {
+        unwinding = true;
         throw task_interrupted();
     }
 
@@ -953,21 +930,6 @@ int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
     return _this_proc->sched().poll(fds, nfds, ms);
 }
 
-bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
-    task *t = _this_proc->ctask;
-    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
-    lk.unlock();
-    _this_proc->sched().add_timeout(t, ms);
-    t->swap();
-    lk.lock();
-    _this_proc->sched().del_timeout(t);
-    // if we're not in the waiting list then we were signaled to wakeup
-    return std::find(waiting.begin(), waiting.end(), t) == waiting.end();
-}
-
 void proc::deltaskinproc(task *t) {
     if (!t->systask) {
         --taskcount;
@@ -981,6 +943,67 @@ void proc::deltaskinproc(task *t) {
     DVLOG(5) << "FREEING task: " << t;
     delete t;
 }
+
+bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
+    task *t = _this_proc->ctask;
+    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+        DVLOG(5) << "RENDEZ SLEEP PUSH BACK: " << t;
+        waiting.push_back(t);
+    }
+    lk.unlock();
+    _this_proc->sched().add_timeout(t, ms);
+    t->swap();
+    lk.lock();
+    _this_proc->sched().del_timeout(t);
+    // if we're not in the waiting list then we were signaled to wakeup
+    return std::find(waiting.begin(), waiting.end(), t) == waiting.end();
+}
+
+void rendez::sleep(std::unique_lock<qutex> &lk) {
+    task *t = _this_proc->ctask;
+    if (!q) {
+        q = lk.mutex();
+    }
+    CHECK(q == lk.mutex());
+    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
+        waiting.push_back(t);
+    }
+    lk.unlock();
+    try {
+        t->swap(); 
+        lk.lock();
+    } catch (task_interrupted &e) {
+        std::unique_lock<std::timed_mutex> (q->m);
+        auto i = std::find(waiting.begin(), waiting.end(), t);
+        if (i != waiting.end()) {
+            waiting.erase(i);
+        }
+        throw;
+    }
+}
+
+void rendez::wakeup() {
+    if (!waiting.empty()) {
+        CHECK(q->owner == _this_proc->ctask);
+        task *t = waiting.front();
+        waiting.pop_front();
+        DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
+        t->ready();
+    }
+}
+
+void rendez::wakeupall() {
+    while (!waiting.empty()) {
+        CHECK(q->owner == _this_proc->ctask);
+        task *t = waiting.front();
+        waiting.pop_front();
+        DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
+        t->ready();
+    }
+}
+
+
 
 deadline::deadline(uint64_t milliseconds) {
     task *t = _this_proc->ctask;
