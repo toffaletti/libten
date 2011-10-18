@@ -87,6 +87,8 @@ public:
         // we don't pop_back because the item will just get overwritten
         // when the circular buffer wraps around
         item = m->container[--m->unread];
+        // XXX: prevent leak?
+        m->container.pop_back();
         if (unbuffered) {
             // shrink capacity again so sends will block
             // waiting for recv

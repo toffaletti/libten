@@ -197,7 +197,7 @@ private:
     static application *global_app;
 
     void signal_task() {
-        tasksetname("app::signal_task");
+        taskname("app::signal_task");
         tasksystem();
         int sig_num = 0;
         for (;;) {

@@ -200,7 +200,7 @@ int64_t taskyield() {
     uint64_t n = p->nswitch;
     task *t = p->ctask;
     t->ready();
-    tasksetstate("yield");
+    taskstate("yield");
     t->swap();
     return p->nswitch - n - 1;
 }
@@ -229,30 +229,28 @@ bool taskcancel(uint64_t id) {
     return (bool)t;
 }
 
-void tasksetname(const char *fmt, ...)
+const char *taskname(const char *fmt, ...)
 {
     task *t = _this_proc->ctask;
-    va_list arg;
-    va_start(arg, fmt);
-    t->vsetname(fmt, arg);
-    va_end(arg);
+    if (fmt && strlen(fmt)) {
+        va_list arg;
+        va_start(arg, fmt);
+        t->vsetname(fmt, arg);
+        va_end(arg);
+    }
+    return t->name;
 }
 
-const char *taskgetname() {
-    return _this_proc->ctask->name;
-}
-
-void tasksetstate(const char *fmt, ...)
+const char *taskstate(const char *fmt, ...)
 {
 	task *t = _this_proc->ctask;
-	va_list arg;
-	va_start(arg, fmt);
-    t->vsetstate(fmt, arg);
-	va_end(arg);
-}
-
-const char *taskgetstate() {
-    return _this_proc->ctask->state;
+    if (fmt && strlen(fmt)) {
+        va_list arg;
+        va_start(arg, fmt);
+        t->vsetstate(fmt, arg);
+        va_end(arg);
+    }
+    return t->state;
 }
 
 std::string taskdump() {
@@ -271,12 +269,31 @@ std::string taskdump() {
 }
 
 void procshutdown() {
-    // cancel all non-system tasks
-    // this should be a clean exit
+    std::unique_lock<std::mutex> lk(procsmutex);
+    for (auto pi = procs.rbegin(); pi != procs.rend(); ++pi) {
+        // cancel all non-system tasks
+        // this should be a clean exit
+        proc *p = *pi;
+        // TODO: this is a NASTY hack right now
+        if (p == _this_proc) continue;
+        for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
+            task *t = *i;
+            if (!t->systask) {
+                t->cancel();
+            }
+        }
+    }
+
+    // TODO: nasty hack
+    while (procs.size() > 1) {
+        lk.unlock();
+        std::this_thread::yield();
+        lk.lock();
+    }
+
     proc *p = _this_proc;
-    task *t = 0;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        t = *i;
+        task *t = *i;
         if (!t->systask) {
             t->cancel();
         }
@@ -300,8 +317,8 @@ task::task(const std::function<void ()> &f, size_t stacksize)
 }
 
 void task::ready() {
+    if (exiting) return;
     proc *p = cproc;
-    assert(!exiting);
     std::unique_lock<std::mutex> lk(p->mutex);
     if (std::find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
         DVLOG(5) << _this_proc->ctask << " adding task: " << this << " to runqueue for proc: " << p;
@@ -327,10 +344,20 @@ void qutex::lock() {
         DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
         waiting.push_back(t);
     }
-    t->swap();
-    CHECK(owner == _this_proc->ctask) << "Qutex: " << this << " owner check failed: " <<
-        owner << " != " << _this_proc->ctask << " t:" << t <<
-        " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
+
+    try {
+        t->swap();
+        CHECK(owner == _this_proc->ctask) << "Qutex: " << this << " owner check failed: " <<
+            owner << " != " << _this_proc->ctask << " t:" << t <<
+            " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
+    } catch (task_interrupted &e) {
+        std::unique_lock<std::timed_mutex> lk(m);
+        auto i = std::find(waiting.begin(), waiting.end(), t);
+        if (i != waiting.end()) {
+            waiting.erase(i);
+        }
+        throw;
+    }
 }
 
 bool qutex::try_lock() {
@@ -380,17 +407,31 @@ void qutex::unlock() {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
+    if (!q) {
+        q = lk.mutex();
+    }
+    CHECK(q == lk.mutex());
     if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
         DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
         waiting.push_back(t);
     }
     lk.unlock();
-    t->swap(); 
-    lk.lock();
+    try {
+        t->swap(); 
+        lk.lock();
+    } catch (task_interrupted &e) {
+        lk.lock();
+        auto i = std::find(waiting.begin(), waiting.end(), t);
+        if (i != waiting.end()) {
+            waiting.erase(i);
+        }
+        throw;
+    }
 }
 
 void rendez::wakeup() {
     if (!waiting.empty()) {
+        CHECK(q->owner == _this_proc->ctask);
         task *t = waiting.front();
         waiting.pop_front();
         DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
@@ -400,6 +441,7 @@ void rendez::wakeup() {
 
 void rendez::wakeupall() {
     while (!waiting.empty()) {
+        CHECK(q->owner == _this_proc->ctask);
         task *t = waiting.front();
         waiting.pop_front();
         DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
@@ -494,11 +536,13 @@ static void procmain_init() {
     // XXX: i *think* this usable with the backtrace
     // i beleive the ucontext passed to the sig handler
     // is the pointer to the main stack
+#if 0
     stack_t ss;
-    ss.ss_sp = malloc(SIGSTKSZ);
+    ss.ss_sp = calloc(1, SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
     THROW_ON_ERROR(sigaltstack(&ss, NULL));
+#endif
 
     // allow log files and message queues to be created group writable
     umask(0);
@@ -735,10 +779,10 @@ struct io_scheduler {
     int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
         task *t = _this_proc->ctask;
         if (nfds == 1) {
-            tasksetstate("poll fd %i r: %i w: %i %ul ms",
+            taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
         } else {
-            tasksetstate("poll %u fds for %ul ms", nfds, ms);
+            taskstate("poll %u fds for %ul ms", nfds, ms);
         }
         if (ms) {
             add_timeout(t, ms);
@@ -759,7 +803,7 @@ struct io_scheduler {
     }
 
     void fdtask() {
-        tasksetname("fdtask");
+        taskname("fdtask");
         tasksystem();
         for (;;) {
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
@@ -800,7 +844,7 @@ struct io_scheduler {
             }
 
             if (ms != 0 || npollfds > 0) {
-                tasksetstate("epoll");
+                taskstate("epoll");
                 // only process 1000 events each iteration to keep it fair
                 events.resize(1000);
                 
@@ -863,6 +907,8 @@ void task::swap() {
     co.swap(&_this_proc->co);
 
     if (canceled) {
+        // allow scheduling during cleanup
+        canceled = false;
         throw task_interrupted();
     }
 
@@ -892,7 +938,8 @@ proc::~proc() {
             }
             std::this_thread::yield();
         }
-        DVLOG(5) << "procs empty";
+        DVLOG(5) << "procs empty yielding again";
+        std::this_thread::yield();
     } else {
         delete thread;
     }

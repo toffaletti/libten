@@ -20,18 +20,15 @@ class shared_pool : boost::noncopyable {
 public:
     // use this scoped_resource type to RAII resources from the pool
     typedef ScopeT scoped_resource;
-    typedef std::deque<ResourceT *> queue_type;
-    typedef std::set<ResourceT *> set_type;
-    typedef std::function<ResourceT *()> alloc_func;
-    typedef std::function<void (ResourceT *)> free_func;
+    typedef std::deque<std::shared_ptr<ResourceT> > queue_type;
+    typedef std::set<std::shared_ptr<ResourceT> > set_type;
+    typedef std::function<std::shared_ptr<ResourceT> ()> alloc_func;
 
     shared_pool(const std::string &name_,
             const alloc_func &alloc_,
-            const free_func &free_,
             ssize_t max_ = -1)
         : _name(name_),
         _new_resource(alloc_),
-        _free_resource(free_),
         _max(max_)
     {}
 
@@ -43,14 +40,7 @@ public:
     void clear() {
         std::unique_lock<qutex> lk(_mut);
         _q.clear();
-        for (typename set_type::const_iterator i = _set.begin(); i!= _set.end(); i++) {
-            _free_resource(*i);
-        }
         _set.clear();
-    }
-
-    ~shared_pool() {
-        clear();
     }
 
     const std::string &name() const { return _name; }
@@ -64,34 +54,32 @@ protected:
     set_type _set;
     std::string _name;
     alloc_func _new_resource;
-    free_func _free_resource;
     ssize_t _max;
 
     bool is_not_empty() const { return !_q.empty(); }
 
-    virtual ResourceT *acquire() {
+    std::shared_ptr<ResourceT> acquire() {
         std::unique_lock<qutex> lk(_mut);
         return create_or_acquire_nolock(lk);
     }
 
     // internal, does not lock mutex
-    inline ResourceT *create_or_acquire_nolock(std::unique_lock<qutex> &lk) {
-        ResourceT *c = 0;
+    std::shared_ptr<ResourceT> create_or_acquire_nolock(std::unique_lock<qutex> &lk) {
+        std::shared_ptr<ResourceT> c;
         if (_q.empty()) {
             // need to create a new resource
             if (_max < 0 || _set.size() < (size_t)_max) {
                 try {
                     c = _new_resource();
-                    CHECK(c) << "new_resource failed for pool: " << c;
+                    CHECK(c) << "new_resource failed for pool: " << _name;
                     DVLOG(5) << "inserting to shared_pool(" << _name << "): " << c;
                     _set.insert(c);
                 } catch (std::exception &e) {
-                    LOG(ERROR) << "exception creating new resource for pool: " << e.what();
+                    LOG(ERROR) << "exception creating new resource for pool: " <<_name << " " << e.what();
                     throw;
                 }
             } else {
                 // can't create anymore we're at max, try waiting
-                // TODO: this while loop shouldn't be needed.
                 while (_q.empty()) {
                     _not_empty.sleep(lk);
                 }
@@ -104,14 +92,14 @@ protected:
             c = _q.front();
             _q.pop_front();
         }
-        CHECK(c) << "aquire shared resource failed in pool: " << _name;
+        CHECK(c) << "acquire shared resource failed in pool: " << _name;
         return c;
     }
 
-    virtual bool insert(ResourceT *c) {
+    bool insert(std::shared_ptr<ResourceT> &c) {
         // add a resource to the pool. use with care
         std::unique_lock<qutex> lk(_mut);
-        std::pair<typename set_type::iterator, bool> p = _set.insert(c);
+        auto p = _set.insert(c);
         if (p.second) {
             _q.push_front(c);
             _not_empty.wakeup();
@@ -119,7 +107,7 @@ protected:
         return p.second;
     }
 
-    virtual void release(ResourceT *c) {
+    void release(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // don't add resource to queue if it was removed from _set
         if (_set.count(c)) {
@@ -130,25 +118,35 @@ protected:
 
     // return a defective resource to the pool
     // get a new one back.
-    virtual ResourceT *exchange(ResourceT *c) {
+    std::shared_ptr<ResourceT> exchange(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
         if (c) {
-            _free_resource(c);
             _set.erase(c);
+            c.reset();
         }
 
         return create_or_acquire_nolock(lk);
     }
 
-    void destroy(ResourceT *c) {
+    void destroy(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
-        DVLOG(5) << "shared_pool(" << _name << ") destroy in set? " << _set.count(c) << " : " << c;
-        _free_resource(c);
+        DVLOG(5) << "shared_pool(" << _name
+            << ") destroy in set? " << _set.count(c)
+            << " : " << c << " rc: " << c.use_count();
         _set.erase(c);
         typename queue_type::iterator i = find(_q.begin(), _q.end(), c);
         if (i!=_q.end()) { _q.erase(i); }
+
+        c.reset();
+
+        // replace the destroyed resource
+        std::shared_ptr<ResourceT> cc = _new_resource();
+        _set.insert(cc);
+        _q.push_front(cc);
+        cc.reset();
+        _not_empty.wakeup();
     }
 
 };
@@ -156,19 +154,18 @@ protected:
 namespace detail {
 
 // do not use this class directly, instead use your shared_pool<>::scoped_resource
-template <typename T> class scoped_resource : boost::noncopyable {
+template <typename T> class scoped_resource {
 public:
     typedef typename boost::call_traits<shared_pool<T> >::reference poolref;
-    typedef T element_type;
 
     explicit scoped_resource(poolref p)
         : _pool(p) {
             _c = _pool.acquire();
         }
 
-    virtual ~scoped_resource() {
-        if (_c == NULL) return;
-        _pool.release(_c);
+    ~scoped_resource() {
+        if (!_c) return;
+        _pool.destroy(_c);
     }
 
     void exchange() {
@@ -177,24 +174,25 @@ public:
 
     void destroy() {
         _pool.destroy(_c);
-        _c = NULL;
     }
 
-    element_type & operator*() const {
-        if (_c == NULL) { throw std::runtime_error("null pointer"); }
-        return *_c;
+    void done() {
+        _pool.release(_c);
+        _c.reset();
     }
 
-    element_type * operator->() const {
-        if (_c == NULL) { throw std::runtime_error("null pointer"); }
+    std::shared_ptr<T> &shared() {
         return _c;
     }
 
-    element_type * get() const { return _c; }
+    T *operator->() {
+        if (!_c) throw std::runtime_error("null pointer");
+        return _c.get();
+    }
 
 protected:
-    T *_c;
     poolref _pool;
+    std::shared_ptr<T> _c;
 };
 
 } // end detail namespace

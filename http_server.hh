@@ -123,7 +123,7 @@ public:
 public:
     http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
         : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_),
-        timeout_ms(timeout_ms_), listen_task_id(0)
+        timeout_ms(timeout_ms_)
     {
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
@@ -138,30 +138,13 @@ public:
         _log_func = f;
     }
 
-    //! spawn the listening task
+    //! listen and accept connections
     void serve(const std::string &ipaddr, uint16_t port) {
         address baddr(ipaddr.c_str(), port);
         sock.bind(baddr);
         sock.getsockname(baddr);
         LOG(INFO) << "listening on: " << baddr;
-        listen_task_id = taskspawn(std::bind(&http_server::listen_task, this));
-    }
-
-    void shutdown() {
-        taskcancel(listen_task_id);
-    }
-
-private:
-    netsock sock;
-    map_type _map;
-    size_t stacksize;
-    int timeout_ms;
-    func_type _log_func;
-    uint64_t listen_task_id;
-
-    void listen_task() {
         sock.listen();
-
         for (;;) {
             address client_addr;
             int fd;
@@ -170,6 +153,13 @@ private:
             }
         }
     }
+
+private:
+    netsock sock;
+    map_type _map;
+    size_t stacksize;
+    int timeout_ms;
+    func_type _log_func;
 
     void client_task(int fd) {
         netsock s(fd);

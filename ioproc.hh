@@ -13,11 +13,12 @@
 namespace fw {
 
 namespace detail {
+
 struct ioproc {
     uint64_t tid;
     std::function<void ()> vop;
     std::function<boost::any ()> op;
-    channel<ioproc *> c;
+    channel<std::shared_ptr<ioproc> > c;
     channel<ioproc *> creply;
     char err[256];
     bool inuse;
@@ -27,10 +28,13 @@ struct ioproc {
     }
 
     ~ioproc() {
-        // tell proc/thread to exit
-        c.send(0);
+        // notify thread it can exit
+        c.close();
+        creply.close();
     }
 };
+
+void iotask(channel<std::shared_ptr<ioproc> > &c);
 
 // TODO: doesn't really belong here, maybe net.hh
 int dial(int fd, const char *addr, uint64_t port);
@@ -39,7 +43,8 @@ int dial(int fd, const char *addr, uint64_t port);
 
 typedef std::shared_ptr<detail::ioproc> shared_ioproc;
 
-shared_ioproc ioproc(size_t stacksize=default_stacksize);
+shared_ioproc ioproc(size_t stacksize=default_stacksize,
+        void (*iotask)(channel<shared_ioproc> &) = detail::iotask);
 
 template <typename ProcT> void iosend(ProcT &io, const std::function<boost::any ()> &op) {
     assert(!io->inuse);
@@ -49,7 +54,7 @@ template <typename ProcT> void iosend(ProcT &io, const std::function<boost::any 
     io->inuse = true;
     // pass control of ioproc struct to thread
     // that will make the syscall
-    io->c.send(io.get());
+    io->c.send(io);
 }
 
 template <typename ProcT> void iosend(ProcT &io, const std::function<void ()> &vop) {
@@ -60,7 +65,7 @@ template <typename ProcT> void iosend(ProcT &io, const std::function<void ()> &v
     io->inuse = true;
     // pass control of ioproc struct to thread
     // that will make the syscall
-    io->c.send(io.get());
+    io->c.send(io);
 }
 
 template <typename ProcT> void iowait(ProcT &io) {
@@ -68,7 +73,6 @@ template <typename ProcT> void iowait(ProcT &io) {
     // control of the ioproc struct back
     detail::ioproc *x = io->creply.recv();
     assert(x == io.get());
-    io->inuse = false;
 }
 
 template <typename ReturnT, typename ProcT> ReturnT iowait(ProcT &io) {
@@ -107,14 +111,11 @@ template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64
 }
 
 class ioproc_pool : public shared_pool<detail::ioproc> {
-private:
-    static detail::ioproc *new_resource(size_t stacksize);
-    static void free_resource(detail::ioproc *p);
 public:
-    ioproc_pool(size_t stacksize_=default_stacksize, ssize_t max_=-1)
+    ioproc_pool(size_t stacksize_=default_stacksize, ssize_t max_=-1,
+           void (*iotask_)(channel<shared_ioproc> &) = detail::iotask)
         : shared_pool<detail::ioproc>("ioproc_pool",
-        std::bind(new_resource, stacksize_),
-        ioproc_pool::free_resource,
+        std::bind(fw::ioproc, stacksize_, iotask_),
         max_) {}
 };
 

@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(task_socket_dial) {
 
 void ioproc_pool_sleeper(ioproc_pool &pool) {
     ioproc_pool::scoped_resource io(pool);
-    intptr_t ret = iocall<int>(io, std::bind(usleep, 100));
+    intptr_t ret = iocall<int>(io.shared(), std::bind(usleep, 100));
     BOOST_CHECK_EQUAL(ret, 0);
 }
 

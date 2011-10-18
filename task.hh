@@ -5,13 +5,15 @@
 #include <mutex>
 #include <deque>
 #include <poll.h>
+#include "logging.hh"
 
 //! user must define
 extern size_t default_stacksize;
 
 namespace fw {
 
-struct task_interrupted : std::exception {};
+//! exception to unwind stack on taskcancel
+struct task_interrupted {};
 
 #define SEC2MS(s) (s*1000)
 
@@ -25,10 +27,8 @@ int64_t taskyield();
 //static void taskexit(void *r = 0);
 bool taskcancel(uint64_t id);
 void tasksystem();
-void tasksetstate(const char *fmt, ...);
-const char *taskgetstate();
-void tasksetname(const char *fmt, ...);
-const char *taskgetname();
+const char *taskstate(const char *fmt=0, ...);
+const char * taskname(const char *fmt=0, ...);
 std::string taskdump();
 void taskdumpf(FILE *of = stderr);
 
@@ -58,8 +58,10 @@ struct qutex {
 };
 
 struct rendez {
-    qutex q;
+    qutex *q;
     tasklist waiting;
+
+    rendez() : q(0) {}
 
     void sleep(std::unique_lock<qutex> &lk);
 
