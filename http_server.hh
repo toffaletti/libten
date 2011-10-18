@@ -145,12 +145,17 @@ public:
         sock.getsockname(baddr);
         LOG(INFO) << "listening on: " << baddr;
         sock.listen();
-        for (;;) {
-            address client_addr;
-            int fd;
-            while ((fd = sock.accept(client_addr, 0)) > 0) {
-                taskspawn(std::bind(&http_server::client_task, this, fd), stacksize);
+        try {
+            for (;;) {
+                address client_addr;
+                int fd;
+                while ((fd = sock.accept(client_addr, 0)) > 0) {
+                    taskspawn(std::bind(&http_server::client_task, this, fd), stacksize);
+                }
             }
+        } catch (...) {
+            _map.clear();
+            throw;
         }
     }
 

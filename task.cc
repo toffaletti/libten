@@ -269,28 +269,6 @@ std::string taskdump() {
 }
 
 void procshutdown() {
-    std::unique_lock<std::mutex> lk(procsmutex);
-    for (auto pi = procs.rbegin(); pi != procs.rend(); ++pi) {
-        // cancel all non-system tasks
-        // this should be a clean exit
-        proc *p = *pi;
-        // TODO: this is a NASTY hack right now
-        if (p == _this_proc) continue;
-        for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-            task *t = *i;
-            if (!t->systask) {
-                t->cancel();
-            }
-        }
-    }
-
-    // TODO: nasty hack
-    while (procs.size() > 1) {
-        lk.unlock();
-        std::this_thread::yield();
-        lk.lock();
-    }
-
     proc *p = _this_proc;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         task *t = *i;

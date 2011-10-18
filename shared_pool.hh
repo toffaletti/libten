@@ -165,7 +165,9 @@ public:
 
     ~scoped_resource() {
         if (!_c) return;
-        _pool.destroy(_c);
+        _pool.release(_c);
+        // XXX: use destroy once done() has been added everywhere
+        //_pool.destroy(_c);
     }
 
     void exchange() {
