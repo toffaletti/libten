@@ -26,7 +26,7 @@ public:
         //! compose a uri from the request uri
         uri get_uri(std::string host="") {
             if (host.empty()) {
-                host = req.header_string("Host");
+                host = req.get("Host");
                 // TODO: transform to preserve passed in host
                 if (boost::starts_with(req.uri, "http://")) {
                     return req.uri;
@@ -52,12 +52,12 @@ public:
             // TODO: Content-Length might be another good one to add here
             // but only if Transfer-Encoding isn't chunked?
             // HTTP/1.1 requires Date, so lets add it
-            if (resp.header_string("Date").empty()) {
+            if (resp.get("Date").empty()) {
                 char buf[128];
                 struct tm tm;
                 time_t now = time(NULL);
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
-                resp.set_header("Date", buf);
+                resp.set("Date", buf);
             }
             data = resp.data();
             if (!resp.body.empty()) {
@@ -71,7 +71,7 @@ public:
         //! might use the X-Forwarded-For header
         std::string agent_ip(bool use_xff=false) const {
             if (use_xff) {
-                std::string xffs = req.header_string("X-Forwarded-For");
+                std::string xffs = req.get("X-Forwarded-For");
                 const char *xff = xffs.c_str();
                 if (xff) {
                     // pick the first addr    
@@ -98,13 +98,13 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, "Not Found");
-                resp.append_header("Connection", "close");
-                resp.append_header("Content-Length", 0);
+                resp = http_response(404, "Not Found",
+                        Headers("Connection", "close",
+                            "Content-Length", 0));
                 send_response();
             }
 
-            if (resp.header_string("Connection") == "close") {
+            if (resp.get("Connection") == "close") {
                 sock.close();
             }
         }
@@ -187,7 +187,7 @@ private:
                     if (nr == 0) return;
                     if (!got_headers && !req.method.empty()) {
                         got_headers = true;
-                        if (req.header_string("Expect") == "100-continue") {
+                        if (req.get("Expect") == "100-continue") {
                             http_response cont_resp(100, "Continue");
                             std::string data = cont_resp.data();
                             ssize_t nw = s.send(data.data(), data.size());
