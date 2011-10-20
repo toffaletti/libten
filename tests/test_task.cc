@@ -204,30 +204,6 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
     BOOST_CHECK_EQUAL(count, 3000);
 }
 
-#if 0
-static void long_timeout() {
-    task::sleep(200);
-    // TODO: fix?
-    // there is a race here, test might fail.
-    // should mostly succeed though
-    //BOOST_CHECK_EQUAL(runner::count(), runner::ncpu());
-}
-
-BOOST_AUTO_TEST_CASE(too_many_runners) {
-    procmain p;
-    atomic_count count(0);
-    // lower timeout to make test run faster
-    runner::set_thread_timeout(100);
-    for (unsigned int i=0; i<runner::ncpu()+5; ++i) {
-        procspawn(std::bind(sleep_many, std::ref(count)), true);
-    }
-    taskspawn(long_timeout);
-    p.main();
-    BOOST_CHECK_EQUAL(count, (runner::ncpu()+5)*3);
-    runner::set_thread_timeout(5*1000);
-}
-#endif
-
 static void long_sleeper() {
     tasksleep(10000);
     BOOST_CHECK(false);

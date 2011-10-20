@@ -49,11 +49,6 @@ struct ioproc {
     }
 };
 
-
-// TODO: doesn't really belong here, maybe net.hh
-int dial(int fd, const char *addr, uint64_t port);
-
-
 inline void iowait(iochannel &reply_chan) {
     // TODO: maybe this close logic needs to be in channel itself?
     // is there ever a case where you'd want a channel to stay open
@@ -135,20 +130,11 @@ template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n
     return iocall<ssize_t>(io, std::bind(::write, fd, buf, n));
 }
 
+extern int dial(int fd, const char *addr, uint16_t port);
+
 template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64_t port) {
     return iocall<int>(io, std::bind(dial, fd, addr, port));
 }
-
-#if 0
-class ioproc_pool : public shared_pool<detail::ioproc> {
-public:
-    ioproc_pool(size_t stacksize_=default_stacksize, ssize_t max_=-1,
-           void (*iotask_)(channel<shared_ioproc> &) = detail::iotask)
-        : shared_pool<detail::ioproc>("ioproc_pool",
-        std::bind(fw::ioproc, stacksize_, iotask_),
-        max_) {}
-};
-#endif
 
 } // end namespace fw
 

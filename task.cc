@@ -111,6 +111,18 @@ struct task {
     }
 };
 
+std::ostream &operator << (std::ostream &o, task *t) {
+    if (t) {
+        o << t << " " << t->id << " "
+            << t->name << " |" << t->state
+            << "| sys: " << t->systask
+            << " exiting: " << t->exiting
+            << " canceled: " << t->canceled;
+    } else {
+        o << "nulltask";
+    }
+}
+
 struct proc {
     io_scheduler *_sched;
     std::thread *thread;
@@ -267,11 +279,7 @@ std::string taskdump() {
     task *t = 0;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         t = *i;
-        ss << t->id << " " << t->name << " |" << t->state
-            << "| sys: " << t->systask
-            << " exiting: " << t->exiting
-            << " canceled: " << t->canceled
-            << "\n";
+        ss << t << "\n";
     }
     return ss.str();
 }
@@ -914,7 +922,10 @@ proc::~proc() {
             std::this_thread::yield();
         }
         std::this_thread::yield();
-        DVLOG(5) << "sleeping last proc for 1ms to allow other threads to exit";
+        // nasty hack for mysql thread cleanup
+        // because it happens *after* all of my code, i have no way of waiting
+        // for it to finish with an event (unless i joined all threads)
+        DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
         usleep(1000);
     } else {
         delete thread;
@@ -1023,8 +1034,6 @@ void rendez::wakeupall() {
         t->ready();
     }
 }
-
-
 
 deadline::deadline(uint64_t milliseconds) {
     task *t = _this_proc->ctask;

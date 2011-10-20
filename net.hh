@@ -2,6 +2,8 @@
 
 namespace fw {
 
+int dial(int fd, const char *addr, uint16_t port);
+
 class netsock : boost::noncopyable {
 public:
     netsock(int fd) throw (errno_error);
