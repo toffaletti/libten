@@ -41,8 +41,7 @@ void ioproctask(iochannel &ch) {
             try {
                 creply.send(call);
             } catch (channel_closed_error &e) {
-                taskstate("send channel closed");
-                break;
+                // ignore this
             }
         }
     }

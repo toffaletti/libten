@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
     p.main();
 }
 
-static void channel_closer(channel<int> c, int &closed) {
+static void channel_closer_task(channel<int> c, int &closed) {
     taskyield();
     c.close();
     closed++;
@@ -162,7 +162,7 @@ void close_test_task(int &closed) {
     channel<int> c;
     taskspawn(std::bind(channel_recv_close, c, std::ref(closed)));
     taskspawn(std::bind(channel_recv_close, c, std::ref(closed)));
-    taskspawn(std::bind(channel_closer, c, std::ref(closed)));
+    taskspawn(std::bind(channel_closer_task, c, std::ref(closed)));
 }
 
 BOOST_AUTO_TEST_CASE(channel_close_test) {

@@ -189,8 +189,10 @@ struct proc {
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = new task(f, stacksize);
+    uint64_t tid = t->id;
     new proc(t);
-    return t->id;
+    // task could be freed at this point
+    return tid;
 }
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
@@ -361,6 +363,7 @@ void qutex::lock() {
 
 bool qutex::try_lock() {
     task *t = _this_proc->ctask;
+    CHECK(t) << "BUG: qutex::try_lock called outside of task";
     std::unique_lock<std::timed_mutex> lk(m, std::try_to_lock);
     if (lk.owns_lock()) {
         if (owner == 0) {
@@ -377,6 +380,7 @@ bool qutex::try_lock_for(
         relative_time)
 {
     //_this_proc->sched().add_timeout(ms);
+    // TODO: implement
     return false;
 }
 
@@ -385,6 +389,7 @@ bool qutex::try_lock_until(
         std::chrono::time_point<Clock,Duration> const&
         absolute_time)
 {
+    // TODO: implement
     return false;
 }
 
@@ -539,10 +544,16 @@ static void procmain_init() {
 
 procmain::procmain() {
     std::call_once(init_flag, procmain_init);
+    if (_this_proc == 0) {
+        // needed for tests which call procmain a lot
+        new proc();
+    }
 }
 
 int procmain::main(int argc, char *argv[]) {
-    _this_proc->schedule();
+    std::unique_ptr<proc> p(_this_proc);
+    p->schedule();
+    _this_proc = 0;
     return EXIT_SUCCESS;
 }
 
@@ -902,8 +913,9 @@ proc::~proc() {
             }
             std::this_thread::yield();
         }
-        DVLOG(5) << "procs empty yielding again";
         std::this_thread::yield();
+        DVLOG(5) << "sleeping last proc for 1ms to allow other threads to exit";
+        usleep(1000);
     } else {
         delete thread;
     }
