@@ -8,45 +8,45 @@
 
 namespace fw {
 
-namespace detail {
-
-void iotask(channel<shared_ioproc> &c) {
-    // TODO: system task?
-    try {
-        shared_ioproc io = c.recv();
-        ioproc *x = io.get();
-        io.reset();
-        taskname("ioproc%p", x);
-        for (;;) {
-            taskstate("waiting");
-            io = c.recv();
-            DVLOG(5) << "iorpoc got " << io.get() << " rc: " << io.use_count();
-            if (!io) break;
-            assert(x == io.get());
-
-            taskstate("executing");
-            errno = 0;
-            if (io->vop) {
-                io->vop();
-                io->vop = std::function<void ()>();
-            } else if (io->op) {
-                io->ret = io->op();
-                io->op = std::function<int ()>();
-            } else {
-                abort();
-            }
-            // capture error string
-            if (errno) {
-                strerror_r(errno, io->err, sizeof(io->err));
-            }
-            taskstate("replying");
-            io->inuse = false;
-            io->creply.send(x);
-            io.reset();
+void ioproctask(iochannel &ch) {
+    taskname("ioproctask");
+    for (;;) {
+        std::unique_ptr<pcall> call;
+        try {
+            taskstate("waiting for recv");
+            call = ch.recv();
+        } catch (channel_closed_error &e) {
+            taskstate("recv channel closed");
+            break;
         }
-    } catch (channel_closed_error &e) {
-        taskstate("channel closed");
+        if (!call) break;
+        taskstate("executing call");
+        errno = 0;
+        if (call->vop) {
+            DVLOG(5) << "ioproc calling vop";
+            call->vop();
+            call->vop = 0;
+        } else if (call->op) {
+            DVLOG(5) << "ioproc calling op";
+            call->ret = call->op();
+            call->op = 0;
+        } else {
+            abort();
+        }
+
+        // scope for reply iochannel
+        {
+            iochannel creply = call->ch;
+            taskstate("sending reply");
+            try {
+                creply.send(call);
+            } catch (channel_closed_error &e) {
+                taskstate("send channel closed");
+                break;
+            }
+        }
     }
+    DVLOG(5) << "exiting ioproc";
 }
 
 int netconnect(int fd, const address &addr, unsigned int ms) {
@@ -80,15 +80,6 @@ int dial(int fd, const char *addr, uint64_t port) {
     }
     freeaddrinfo(results);
     return status;
-}
-
-} // end namespace detail
-
-shared_ioproc ioproc(size_t stacksize, void (*iotask)(channel<shared_ioproc> &)) {
-    shared_ioproc p(new detail::ioproc);
-    p->tid = procspawn(std::bind(iotask, p->c), stacksize);
-    p->c.send(p);
-    return p;
 }
 
 } // end namespace fw

@@ -5,6 +5,7 @@
 #include <mutex>
 #include <deque>
 #include <poll.h>
+#include <boost/utility.hpp>
 #include "logging.hh"
 
 //! user must define
@@ -35,7 +36,7 @@ void taskdumpf(FILE *of = stderr);
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 void procshutdown();
 
-struct qutex {
+struct qutex : boost::noncopyable {
     std::timed_mutex m;
     task *owner;
     tasklist waiting;
@@ -57,11 +58,15 @@ struct qutex {
                 absolute_time);
 };
 
-struct rendez {
+struct rendez : boost::noncopyable {
     qutex *q;
     tasklist waiting;
 
     rendez() : q(0) {}
+    ~rendez() {
+        // TODO: bug if anything is waiting?
+        // lock and clear waiting?
+    }
 
     void sleep(std::unique_lock<qutex> &lk);
 

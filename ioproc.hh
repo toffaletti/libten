@@ -12,83 +12,112 @@
 
 namespace fw {
 
-namespace detail {
+struct pcall;
+typedef channel<std::unique_ptr<pcall> > iochannel;
 
-struct ioproc {
-    uint64_t tid;
+struct pcall {
+    iochannel ch;
     std::function<void ()> vop;
     std::function<boost::any ()> op;
-    channel<std::shared_ptr<ioproc> > c;
-    channel<ioproc *> creply;
     char err[256];
-    bool inuse;
     boost::any ret;
 
-    ioproc() : inuse(false), ret(0) {
+    pcall(const std::function<void ()> &vop_, iochannel &ch_) : ch(ch_), vop(vop_) {}
+    pcall(const std::function<boost::any ()> &op_, iochannel &ch_) : ch(ch_), op(op_) {}
+};
+
+void ioproctask(iochannel &);
+
+struct ioproc {
+    iochannel ch;
+    std::vector<uint64_t> tids;
+
+    ioproc(
+            size_t stacksize = default_stacksize,
+            unsigned nprocs = 1,
+            void (*proctask)(iochannel &) = ioproctask)
+        : ch(nprocs)
+    {
+        for (unsigned i=0; i<nprocs; ++i) {
+            tids.push_back(procspawn(std::bind(proctask, ch), stacksize));
+        }
     }
 
     ~ioproc() {
-        // notify thread it can exit
-        c.close();
-        creply.close();
+        DVLOG(5) << "freeing ioproc: " << this;
+        ch.close();
     }
 };
 
-void iotask(channel<std::shared_ptr<ioproc> > &c);
 
 // TODO: doesn't really belong here, maybe net.hh
 int dial(int fd, const char *addr, uint64_t port);
 
+
+inline void iowait(iochannel &reply_chan) {
+    // TODO: maybe this close logic needs to be in channel itself?
+    // is there ever a case where you'd want a channel to stay open
+    // after a task using it has been interrupted? i can't think of one
+    try {
+        std::unique_ptr<pcall> reply(reply_chan.recv());
+    } catch (task_interrupted &e) {
+        reply_chan.close();
+        throw;
+    }
 }
 
-typedef std::shared_ptr<detail::ioproc> shared_ioproc;
-
-shared_ioproc ioproc(size_t stacksize=default_stacksize,
-        void (*iotask)(channel<shared_ioproc> &) = detail::iotask);
-
-template <typename ProcT> void iosend(ProcT &io, const std::function<boost::any ()> &op) {
-    assert(!io->inuse);
-    assert(!io->vop);
-    assert(!io->op);
-    io->op = op;
-    io->inuse = true;
-    // pass control of ioproc struct to thread
-    // that will make the syscall
-    io->c.send(io);
+template <typename ReturnT>
+ReturnT iowait(iochannel &reply_chan) {
+    try {
+        std::unique_ptr<pcall> reply(reply_chan.recv());
+        return boost::any_cast<ReturnT>(reply->ret);
+    } catch (task_interrupted &e) {
+        reply_chan.close();
+        throw;
+    }
 }
 
-template <typename ProcT> void iosend(ProcT &io, const std::function<void ()> &vop) {
-    assert(!io->inuse);
-    assert(!io->vop);
-    assert(!io->op);
-    io->vop = vop;
-    io->inuse = true;
-    // pass control of ioproc struct to thread
-    // that will make the syscall
-    io->c.send(io);
+template <typename ReturnT>
+void iocallasync(
+        ioproc &io,
+        const std::function<boost::any ()> &op,
+        iochannel reply_chan = iochannel())
+{
+    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
+    io.ch.send(call);
 }
 
-template <typename ProcT> void iowait(ProcT &io) {
-    // wait for thread to finish and pass
-    // control of the ioproc struct back
-    detail::ioproc *x = io->creply.recv();
-    assert(x == io.get());
+inline void iocallasync(
+        ioproc &io,
+        const std::function<void ()> &vop,
+        iochannel reply_chan = iochannel())
+{
+    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
+    io.ch.send(call);
 }
 
-template <typename ReturnT, typename ProcT> ReturnT iowait(ProcT &io) {
-    iowait(io);
-    return boost::any_cast<ReturnT>(io->ret);
+template <typename ReturnT>
+ReturnT iocall(
+        ioproc &io,
+        const std::function<boost::any ()> &op,
+        iochannel reply_chan = iochannel())
+{
+    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
+    io.ch.send(call);
+    return iowait<ReturnT>(reply_chan);
 }
 
-template <typename ReturnT, typename ProcT> ReturnT iocall(ProcT &io, const std::function<boost::any ()> &op) {
-    iosend(io, op);
-    return iowait<ReturnT>(io);
+inline void iocall(
+        ioproc &io,
+        const std::function<void ()> &vop,
+        iochannel reply_chan = iochannel())
+{
+    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
+    io.ch.send(call);
+    iowait(reply_chan);
 }
 
-template <typename ProcT> void iocall(ProcT &io, const std::function<void ()> &vop) {
-    iosend(io, vop);
-    return iowait(io);
-}
+////// iorw /////
 
 template <typename ProcT> int ioopen(ProcT &io, char *path, int mode) {
     return iocall<int>(io, std::bind((int (*)(char *, int))::open, path, mode));
@@ -107,9 +136,10 @@ template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n
 }
 
 template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64_t port) {
-    return iocall<int>(io, std::bind(detail::dial, fd, addr, port));
+    return iocall<int>(io, std::bind(dial, fd, addr, port));
 }
 
+#if 0
 class ioproc_pool : public shared_pool<detail::ioproc> {
 public:
     ioproc_pool(size_t stacksize_=default_stacksize, ssize_t max_=-1,
@@ -118,6 +148,7 @@ public:
         std::bind(fw::ioproc, stacksize_, iotask_),
         max_) {}
 };
+#endif
 
 } // end namespace fw
 

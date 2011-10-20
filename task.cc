@@ -67,6 +67,7 @@ struct task {
 
     void exit() {
         exiting = true;
+        fn = 0;
         swap();
     }
 
@@ -104,7 +105,7 @@ struct task {
         try {
             t->fn();
         } catch (task_interrupted &e) {
-            DVLOG(5) << "task " << t << " interrupted";
+            DVLOG(5) << "task interrupted " << t << " " << t->name << " |" << t->state << "|";
         }
         t->exit();
     }
@@ -206,6 +207,7 @@ int64_t taskyield() {
     t->ready();
     taskstate("yield");
     t->swap();
+    DVLOG(5) << "yield: " << (p->nswitch - n - 1);
     return p->nswitch - n - 1;
 }
 
@@ -317,6 +319,7 @@ void task::ready() {
 
 void qutex::lock() {
     task *t = _this_proc->ctask;
+    CHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::unique_lock<std::timed_mutex> lk(m);
         if (owner == 0 || owner == t) {
@@ -560,7 +563,13 @@ void proc::schedule() {
         task *t = runqueue.front();
         runqueue.pop_front();
         ctask = t;
-        ++nswitch;
+        if (!t->systask) {
+            // dont increment for system tasks so
+            // while(taskyield()) {} can be used to
+            // wait for all other tasks to exit
+            // really only useful for unit tests.
+            ++nswitch;
+        }
         DVLOG(5) << "p: " << this << " swapping to: " << t;
         lk.unlock();
         co.swap(&t->co);

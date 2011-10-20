@@ -8,7 +8,7 @@ using namespace fw;
 size_t default_stacksize=4096;
 
 void ioproc_sleeper() {
-    auto io = ioproc();
+    ioproc io;
     int ret = iocall<int>(io, std::bind(usleep, 100));
     BOOST_CHECK_EQUAL(ret, 0);
 }
@@ -22,7 +22,7 @@ BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
 static void dial_google() {
     socket_fd s(AF_INET, SOCK_STREAM);
     // getaddrinfo requires a rather large stack
-    auto io = ioproc(8*1024*1024);
+    ioproc io(8*1024*1024);
     int status = iodial(io, s.fd, "www.google.com", 80);
     BOOST_CHECK_EQUAL(status, 0);
 }
@@ -33,20 +33,23 @@ BOOST_AUTO_TEST_CASE(task_socket_dial) {
     p.main();
 }
 
-void ioproc_pool_sleeper(ioproc_pool &pool) {
-    ioproc_pool::scoped_resource io(pool);
-    intptr_t ret = iocall<int>(io.shared(), std::bind(usleep, 100));
-    BOOST_CHECK_EQUAL(ret, 0);
-}
+void test_pool() {
+    ioproc io(default_stacksize, 4);
+    iochannel reply_chan;
 
-BOOST_AUTO_TEST_CASE(ioproc_pool_test) {
-    procmain p;
-    ioproc_pool pool;
-    for (int i=0; i<5; i++) {
-        taskspawn(std::bind(ioproc_pool_sleeper, std::ref(pool)));
+    for (int i=0; i<4; ++i) {
+        iocallasync<int>(io, std::bind(usleep, 100), reply_chan);
     }
-    p.main();
-    BOOST_CHECK_EQUAL(pool.size(), 5);
-    pool.clear();
+
+    for (int i=0; i<4; ++i) {
+        int r = iowait<int>(reply_chan);
+        // usleep should return 0
+        BOOST_CHECK_EQUAL(0, r);
+    }
 }
 
+BOOST_AUTO_TEST_CASE(ioproc_thread_pool) {
+    procmain p;
+    taskspawn(test_pool);
+    p.main();
+}

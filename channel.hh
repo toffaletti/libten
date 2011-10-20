@@ -2,8 +2,9 @@
 #define CHANNEL_HH
 
 #include "task.hh"
-#include <boost/circular_buffer.hpp>
 #include <memory>
+#include <queue>
+#include <deque>
 
 namespace fw {
 
@@ -21,21 +22,20 @@ struct channel_closed_error : std::exception {};
 //! its best to allocate them on the heap and send the pointer
 //! share by communicating!
 //! channels are thread and task safe.
-template <typename T> class channel {
+template <typename T, typename ContainerT = std::deque<T> > class channel {
 private:
     struct impl : boost::noncopyable {
-        typedef typename boost::circular_buffer<T> container_type;
-        typedef typename container_type::size_type size_type;
+        typedef typename ContainerT::size_type size_type;
 
         impl(size_type capacity_=0) : capacity(capacity_), unread(0),
-            container(capacity ? capacity : 1), closed(false) {}
+            queue(ContainerT()), closed(false) {}
 
         // capacity is different than container.capacity()
         // to avoid needing to reallocate the container
         // on every send/recv for unbuffered channels
         size_type capacity;
         size_type unread;
-        container_type container;
+        std::queue<T, ContainerT> queue;
         qutex qtx;
         rendez not_empty;
         rendez not_full;
@@ -53,14 +53,14 @@ public:
     }
 
     //! send data
-    typename impl::size_type send(T p) {
+    typename impl::size_type send(T &&p) {
         std::unique_lock<qutex> l(m->qtx);
         typename impl::size_type unread = m->unread;
         while (m->is_full() && !m->closed) {
             m->not_full.sleep(l);
         }
         check_closed();
-        m->container.push_front(p);
+        m->queue.push(std::move(p));
         ++m->unread;
         m->not_empty.wakeup();
         return unread;
@@ -86,9 +86,9 @@ public:
 
         // we don't pop_back because the item will just get overwritten
         // when the circular buffer wraps around
-        item = m->container[--m->unread];
-        // XXX: prevent leak?
-        m->container.pop_back();
+        --m->unread;
+        item = std::move(m->queue.front());
+        m->queue.pop();
         if (unbuffered) {
             // shrink capacity again so sends will block
             // waiting for recv
@@ -99,6 +99,8 @@ public:
         return item;
     }
 
+    // TODO: rewrite this
+#if 0
     //! timed receive data
     bool timed_recv(T &item, unsigned int ms) {
         std::unique_lock<qutex> l(m->qtx);
@@ -128,6 +130,7 @@ public:
         }
         return true;
     }
+#endif
 
     bool empty() {
         return unread() == 0;
