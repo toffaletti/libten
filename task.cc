@@ -121,6 +121,7 @@ std::ostream &operator << (std::ostream &o, task *t) {
     } else {
         o << "nulltask";
     }
+    return o;
 }
 
 struct proc {
