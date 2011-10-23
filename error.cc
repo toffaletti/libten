@@ -45,7 +45,7 @@ std::string backtrace_exception::str() {
             if (status == 0) {
                 // if demangling is successful, output the demangled function name
                 ss << "[bt]: (" << i << ") " << messages.get()[i] << " : "
-                    << real_name << "+" << offset_begin << offset_end
+                    << real_name.get() << "+" << offset_begin << offset_end
                     << std::endl;
 
             } else {

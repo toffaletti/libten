@@ -1,8 +1,7 @@
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <chrono>
 #include <functional>
-#include <tuple>
 #include <netinet/tcp.h>
 
 #include "logging.hh"
@@ -20,7 +19,7 @@ public:
     struct request {
         request(http_request &req_, netsock &sock_)
             : req(req_), resp(404, "Not Found"), sock(sock_),
-            start(boost::posix_time::microsec_clock::universal_time()),
+            start(std::chrono::high_resolution_clock::now()),
             resp_sent(false) {}
 
         //! compose a uri from the request uri
@@ -112,7 +111,7 @@ public:
         http_request &req;
         http_response resp;
         netsock &sock;
-        boost::posix_time::ptime start;
+        std::chrono::high_resolution_clock::time_point start;
         bool resp_sent;
     };
 
