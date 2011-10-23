@@ -373,11 +373,10 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
     http_response resp(200, "OK");
 
     resp.append("host", "localhost");
-    resp.append("content-type", "text/plain");
 
     static const char *body = "this is a test.\r\nthis is only a test.";
 
-    resp.set_body(body);
+    resp.set_body(body, "text/plain");
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason);
@@ -389,8 +388,8 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
     static const char *expected_data =
     "HTTP/1.1 200 OK\r\n"
     "Host: localhost\r\n"
-    "Content-Type: text/plain\r\n"
     "Content-Length: 37\r\n"
+    "Content-Type: text/plain\r\n"
     "\r\n";
 
     BOOST_CHECK_EQUAL(expected_data, resp.data());
