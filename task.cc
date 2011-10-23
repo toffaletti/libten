@@ -133,14 +133,19 @@ struct proc {
     tasklist runqueue;
     tasklist alltasks;
     coroutine co;
-    //! pipe used to wake up
-    std::atomic<bool> asleep;
+    //! true when asleep and runqueue is empty and no epoll
+    bool asleep;
+    //! true when asleep in epoll_wait
+    bool polling;
+    //! cond used to wake up when runqueue is empty and no epoll
+    std::condition_variable cond;
+    //! pipe used to wake up from epoll
     pipe_fd pi;
     std::atomic<uint64_t> taskcount;
 
     proc(task *t = 0)
         : _sched(0), nswitch(0), ctask(0),
-        asleep(false), taskcount(0)
+        asleep(false), polling(false), pi(O_NONBLOCK), taskcount(0)
     {
 
         add(this);
@@ -573,11 +578,7 @@ void proc::schedule() {
         std::unique_lock<std::mutex> lk(mutex);
         while (runqueue.empty()) {
             asleep = true;
-            char buf[1];
-            lk.unlock();
-            ssize_t nr = pi.read(buf, 1);
-            (void)nr;
-            lk.lock();
+            cond.wait(lk);
         }
         asleep = false;
         task *t = runqueue.front();
@@ -796,44 +797,42 @@ struct io_scheduler {
             task *t = 0;
 
             int ms = -1;
-            {
-                // lock must be held while determining whether or not we'll be
-                // asleep in epoll, so wakeupandunlock will work from another
-                // thread
-                std::unique_lock<std::mutex> lk(p->mutex);
-                if (!timeouts.empty()) {
-                    t = *timeouts.begin();
-                    if (*t->timeout <= now) {
-                        // epoll_wait must return asap
-                        ms = 0;
-                    } else {
-                        ms = timespec_to_milliseconds(*t->timeout - now);
-                        // avoid spinning on timeouts smaller than 1ms
-                        if (ms <= 0) ms = 1;
-                    }
+            // lock must be held while determining whether or not we'll be
+            // asleep in epoll, so wakeupandunlock will work from another
+            // thread
+            std::unique_lock<std::mutex> lk(p->mutex);
+            if (!timeouts.empty()) {
+                t = *timeouts.begin();
+                if (*t->timeout <= now) {
+                    // epoll_wait must return asap
+                    ms = 0;
+                } else {
+                    ms = timespec_to_milliseconds(*t->timeout - now);
+                    // avoid spinning on timeouts smaller than 1ms
+                    if (ms <= 0) ms = 1;
                 }
+            }
 
-                if (ms != 0) {
-                    if (!p->runqueue.empty()) {
-                        // don't block on epoll if tasks are ready to run
-                        ms = 0;
-                    }
-                }
-
-                if (ms > 1 || ms < 0) {
-                    p->asleep = true;
+            if (ms != 0) {
+                if (!p->runqueue.empty()) {
+                    // don't block on epoll if tasks are ready to run
+                    ms = 0;
                 }
             }
 
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll");
                 // only process 1000 events each iteration to keep it fair
+                if (ms > 1 || ms < 0) {
+                    p->polling = true;
+                }
+                lk.unlock();
                 events.resize(1000);
-                
                 efd.wait(events, ms);
-                p->asleep = false;
-
+                lk.lock();
+                p->polling = false;
                 int wakeup_pipe_fd = p->pi.r.fd;
+                lk.unlock();
                 // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
                     // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
@@ -867,6 +866,8 @@ struct io_scheduler {
                 }
             }
 
+            // must unlock before calling task::ready
+            if (lk.owns_lock()) lk.unlock();
             THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
             // wake up sleeping tasks
             auto i = timeouts.begin();
@@ -903,6 +904,10 @@ void task::swap() {
 
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
     if (asleep) {
+        asleep = false;
+        cond.notify_one();
+    } else if (polling) {
+        polling = false;
         ssize_t nw = pi.write("\1", 1);
         (void)nw;
     }
@@ -944,7 +949,6 @@ proc::~proc() {
 
 io_scheduler &proc::sched() {
     if (_sched == 0) {
-        pi.setnonblock();
         _sched = new io_scheduler();
     }
     return *_sched;
