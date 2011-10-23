@@ -72,11 +72,17 @@ struct http_base : Headers {
         Headers(headers_), complete(false), body_length(0) {}
 
     void normalize();
-    void set_body(const std::string &body_) {
+
+    void set_body(const std::string &body_,
+            const std::string &content_type="")
+    {
         body = body_;
         body_length = body.size();
-        remove("Content-Length");
         set("Content-Length", body_length);
+        remove("Content-Type");
+        if (!content_type.empty()) {
+            append("Content-Type", content_type);
+        }
     }
 };
 

@@ -3,6 +3,7 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <sstream>
+#include <memory>
 #include <stdlib.h>
 
 namespace fw {
@@ -13,13 +14,13 @@ backtrace_exception::backtrace_exception() {
 
 std::string backtrace_exception::str() {
     std::stringstream ss;
-    char **messages = backtrace_symbols(array, size);
+    std::unique_ptr<char *, void (*)(void*)> messages(backtrace_symbols(array, size), free);
     // skip the first frame which is the constructor
-    for (int i = 1; i < size && messages != NULL; ++i) {
+    for (int i = 1; i < size && messages; ++i) {
         char *mangled_name = 0, *offset_begin = 0, *offset_end = 0;
 
         // find parantheses and +address offset surrounding mangled name
-        for (char *p = messages[i]; *p; ++p) {
+        for (char *p = messages.get()[i]; *p; ++p) {
             if (*p == '(') {
                 mangled_name = p;
             } else if (*p == '+') {
@@ -39,28 +40,25 @@ std::string backtrace_exception::str() {
             *offset_end++ = '\0';
 
             int status;
-            char * real_name = abi::__cxa_demangle(mangled_name, 0, 0, &status);
+            std::unique_ptr<char, void (*)(void*)> real_name(abi::__cxa_demangle(mangled_name, 0, 0, &status), free);
 
             if (status == 0) {
                 // if demangling is successful, output the demangled function name
-                ss << "[bt]: (" << i << ") " << messages[i] << " : "
+                ss << "[bt]: (" << i << ") " << messages.get()[i] << " : "
                     << real_name << "+" << offset_begin << offset_end
                     << std::endl;
 
             } else {
                 // otherwise, output the mangled function name
-                ss << "[bt]: (" << i << ") " << messages[i] << " : "
+                ss << "[bt]: (" << i << ") " << messages.get()[i] << " : "
                     << mangled_name << "+" << offset_begin << offset_end
                     << std::endl;
             }
-            free(real_name);
         } else {
             // otherwise, print the whole line
-            ss << "[bt]: (" << i << ") " << messages[i] << std::endl;
+            ss << "[bt]: (" << i << ") " << messages.get()[i] << std::endl;
         }
     }
-
-    free(messages);
     return ss.str();
 }
 

@@ -116,9 +116,17 @@ public:
         bool resp_sent;
     };
 
-    typedef std::function<void (request &)> func_type;
-    typedef std::tuple<std::string, int, func_type> tuple_type;
-    typedef std::vector<tuple_type> map_type;
+    typedef std::function<void (request &)> callback_type;
+    struct route {
+        std::string pattern;
+        callback_type callback;
+        int fnmatch_flags;
+
+        route(const std::string &pattern_,
+                const callback_type &callback_,
+                int fnmatch_flags_=0)
+            : pattern(pattern_), callback(callback_), fnmatch_flags(fnmatch_flags_) {}
+    };
 
 public:
     http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
@@ -129,12 +137,15 @@ public:
     }
 
     //! add a callback for a uri with an fnmatch pattern
-    void add_callback(const std::string &pattern, const func_type &f, int fnmatch_flags = 0) {
-      _map.push_back(tuple_type(pattern, fnmatch_flags, f));
+    void add_route(const std::string &pattern,
+            const callback_type &callback,
+            int fnmatch_flags = 0)
+    {
+      _routes.push_back(route(pattern, callback, fnmatch_flags));
     }
 
     //! set logging function, called after every request
-    void set_log_callback(const func_type &f) {
+    void set_log_callback(const callback_type &f) {
         _log_func = f;
     }
 
@@ -154,17 +165,18 @@ public:
                 }
             }
         } catch (...) {
-            _map.clear();
+            // release any memory held by bound callbacks
+            _routes.clear();
             throw;
         }
     }
 
 private:
     netsock sock;
-    map_type _map;
+    std::vector<route> _routes;
     size_t stacksize;
     int timeout_ms;
-    func_type _log_func;
+    callback_type _log_func;
 
     void client_task(int fd) {
         netsock s(fd);
@@ -208,10 +220,17 @@ private:
         uri u = r.get_uri();
         DVLOG(5) << "path: " << u.path;
         // not super efficient, but good enough
-        for (map_type::const_iterator i= _map.begin(); i!= _map.end(); i++) {
-            DVLOG(5) << "matching pattern: " << std::get<0>(*i);
-            if (fnmatch(std::get<0>(*i).c_str(), u.path.c_str(), std::get<1>(*i)) == 0) {
-                std::get<2>(*i)(r);
+        for (auto i= _routes.cbegin(); i!= _routes.cend(); i++) {
+            DVLOG(5) << "matching pattern: " << i->pattern;
+            if (fnmatch(i->pattern.c_str(), u.path.c_str(), i->fnmatch_flags) == 0) {
+                try {
+                    i->callback(r);
+                } catch (std::exception &e) {
+                    r.resp = http_response(500, "Server Error",
+                            Headers("Connection", "close"));
+                    r.resp.set_body(e.what());
+                    r.send_response();
+                }
                 break;
             }
         }
