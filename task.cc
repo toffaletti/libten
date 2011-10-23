@@ -928,9 +928,8 @@ proc::~proc() {
         // for it to finish with an event (unless i joined all threads)
         DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
         usleep(1000);
-    } else {
-        delete thread;
     }
+    delete thread;
     // clean up system tasks
     while (!alltasks.empty()) {
         deltaskinproc(alltasks.front());
