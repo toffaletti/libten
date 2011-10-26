@@ -2,7 +2,7 @@
 #include <condition_variable>
 #include <cassert>
 #include <algorithm>
-#include <stdatomic.h>
+#include "atomic.hh"
 #include "timespec.hh"
 #include "coroutine.hh"
 #include "logging.hh"

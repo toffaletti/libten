@@ -35,7 +35,7 @@ void ioproctask(iochannel &ch) {
             iochannel creply = call->ch;
             taskstate("sending reply");
             try {
-                creply.send(call);
+                creply.send(std::move(call));
             } catch (channel_closed_error &e) {
                 // ignore this
             }

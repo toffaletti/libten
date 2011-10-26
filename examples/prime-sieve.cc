@@ -9,7 +9,7 @@ const size_t default_stacksize = 4096;
 
 void generate(channel<int> out) {
     for (int i=2; ; ++i) {
-        out.send(i);
+        out.send(std::move(i));
     }
 }
 
@@ -17,7 +17,7 @@ void filter(channel<int> in, channel<int> out, int prime) {
     for (;;) {
         int i = in.recv();
         if (i % prime != 0) {
-            out.send(i);
+            out.send(std::move(i));
         }
     }
 }

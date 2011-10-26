@@ -34,13 +34,13 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
         if (nr <= 0) break;
         bs.resize(nr);
         // send block on channel to file_sender task
-        c.send(bs);
+        c.send(std::move(bs));
         // move positions in the buffer to the next 4096 byte block
         bufp++;
         if (bufp == buffer_cap) bufp = 0;
     }
     buffer::slice empty;
-    c.send(empty);
+    c.send(std::move(empty));
     c.close();
 }
 
