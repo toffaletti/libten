@@ -1,3 +1,6 @@
+#ifndef NETSOCK_HH
+#define NETSOCK_HH
+
 #include "descriptors.hh"
 
 namespace fw {
@@ -57,3 +60,4 @@ public:
 
 } // end namespace fw
 
+#endif // NETSOCK_HH

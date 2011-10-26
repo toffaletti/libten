@@ -153,7 +153,7 @@ public:
         address baddr(ipaddr.c_str(), port);
         sock.bind(baddr);
         sock.getsockname(baddr);
-        LOG(INFO) << "listening on: " << baddr;
+        LOG(INFO) << "listening for http on: " << baddr;
         sock.listen();
         try {
             for (;;) {
