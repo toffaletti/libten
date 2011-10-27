@@ -178,6 +178,11 @@ public:
         _pool.destroy(_c);
     }
 
+    void acquire() {
+        if (_c) return;
+        _c = _pool.acquire();
+    }
+
     void done() {
         _pool.release(_c);
         _c.reset();

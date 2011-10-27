@@ -93,7 +93,9 @@ void tasksleep(uint64_t ms);
 int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
 bool fdwait(int fd, int rw, uint64_t ms=0);
 
-struct deadline_reached : std::exception {};
+// inherit from task_interrupted so lock/rendez/poll canceling
+// doesn't need to be duplicated
+struct deadline_reached : task_interrupted {};
 struct deadline {
     deadline(uint64_t milliseconds);
     ~deadline();
