@@ -21,8 +21,8 @@ public:
     typedef std::vector<std::string> args_type;
     typedef std::function<void (netsock &s, const args_type &, env_type &)> callback_type;
 
-    cmd_server(size_t stacksize_=default_stacksize)
-        : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_)
+    cmd_server(const std::string &welcome_="", size_t stacksize_=default_stacksize)
+        : welcome(welcome_), sock(AF_INET, SOCK_STREAM), stacksize(stacksize_)
     {
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
@@ -55,6 +55,7 @@ public:
         }
     }
 
+    std::string welcome;
 private:
     netsock sock;
     std::unordered_map<std::string, callback_type> _cmds;
@@ -74,6 +75,9 @@ private:
         ssize_t nw;
         try {
             buffer::slice rb = buf(0);
+            if (!welcome.empty()) {
+                nw = s.send(welcome.data(), welcome.size());
+            }
             for (;;) {
                 std::string prompt = env["PROMPT"];
                 nw = s.send(prompt.data(), prompt.size());
@@ -95,7 +99,14 @@ private:
                             if (args.front() == "\4") return; // ^D
                             auto it = _cmds.find(args.front());
                             if (it != _cmds.end()) {
-                                it->second(s, args, env);
+                                try {
+                                    it->second(s, args, env);
+                                } catch (std::exception &e) {
+                                    std::string reply = e.what();
+                                    reply += "\n";
+                                    nw = s.send(reply.data(), reply.size());
+                                    (void)nw;
+                                }
                             } else {
                                 std::string reply = args.front() + ": command not found\n";
                                 nw = s.send(reply.data(), reply.size());
