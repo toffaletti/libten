@@ -3,7 +3,7 @@
 #include <iostream>
 
 using namespace fw;
-size_t default_stacksize = 4096;
+const size_t default_stacksize = 4096;
 
 // adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 

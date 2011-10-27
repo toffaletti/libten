@@ -2,7 +2,7 @@
 #include "error.hh"
 
 using namespace fw;
-size_t default_stacksize=4096;
+const size_t default_stacksize=4096;
 
 void go_crazy() {
     throw errorx("weee!");

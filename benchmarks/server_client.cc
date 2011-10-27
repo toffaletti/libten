@@ -1,15 +1,15 @@
-#include "runner.hh"
 #include "task.hh"
-#include "descriptors.hh"
+#include "net.hh"
 #include "channel.hh"
-#include <boost/bind.hpp>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 
 using namespace fw;
 
+const size_t default_stacksize=4096;
+
 static void connecter(address &addr, channel<int> ch) {
-    task::socket s(AF_INET, SOCK_STREAM);
+    netsock s(AF_INET, SOCK_STREAM);
     if (s.connect(addr, 100) == 0) {
         ch.send(0);
     } else {
@@ -18,7 +18,7 @@ static void connecter(address &addr, channel<int> ch) {
 }
 
 static void handler(int fd) {
-    task::socket s(fd);
+    netsock s(fd);
     char buf[32];
     for (;;) {
         ssize_t nr = s.recv(buf, sizeof(buf));
@@ -26,23 +26,39 @@ static void handler(int fd) {
     }
 }
 
-static void listener(task::socket &sock) {
+static void listener(netsock &sock) {
     address addr;
     for (;;) {
         int fd = sock.accept(addr);
         if (fd != -1) {
-            task::spawn(boost::bind(handler, fd));
+            taskspawn(std::bind(handler, fd));
         }
     }
 }
 
-static void collecter(channel<int> ch) {
-    std::map<int, unsigned int> results;
+static void connecter_spawner(address &addr, channel<int> &ch) {
     for (int i=0; i<1000; ++i) {
+        taskspawn(std::bind(connecter, std::ref(addr), ch));
+    }
+}
+
+static void startup() {
+    channel<int> ch(1000);
+    address addr;
+    netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
+    s.bind(addr);
+    s.listen();
+    s.getsockname(addr);
+    int listen_task = taskspawn(std::bind(listener, std::ref(s)));
+    taskyield(); // let listener get setup
+    procspawn(std::bind(connecter_spawner, addr, ch));
+
+    std::unordered_map<int, unsigned int> results;
+    for (unsigned i=0; i<1000; ++i) {
         int result = ch.recv();
         results[result] += 1;
     }
-    for (std::map<int, unsigned int>::iterator i=results.begin(); i!=results.end(); ++i) {
+    for (auto i=results.begin(); i!=results.end(); ++i) {
         if (i->first == 0) {
             std::cout << "Success: " << i->second << "\n";
         } else {
@@ -50,21 +66,11 @@ static void collecter(channel<int> ch) {
         }
     }
     std::cout << std::endl;
-    exit(0);
+    taskcancel(listen_task);
 }
 
 int main(int argc, char *argv[]) {
-    runner::init();
-    channel<int> ch(1000);
-    address addr;
-    task::socket s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
-    s.bind(addr);
-    s.listen();
-    s.getsockname(addr);
-    task::spawn(boost::bind(listener, boost::ref(s)));
-    for (int i=0; i<1000; ++i) {
-        runner::spawn(boost::bind(connecter, boost::ref(addr), ch));
-    }
-    task::spawn(boost::bind(collecter, ch));
-    return runner::main();
+    procmain p;
+    taskspawn(startup);
+    return p.main();
 }

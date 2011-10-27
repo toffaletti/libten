@@ -7,7 +7,7 @@
 #include "task.hh"
 
 using namespace fw;
-size_t default_stacksize=4096;
+const size_t default_stacksize=4096;
 
 static void channel_recv(channel<intptr_t> c) {
     intptr_t d = c.recv();

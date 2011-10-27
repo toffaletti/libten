@@ -5,7 +5,7 @@
 
 using namespace fw;
 
-size_t default_stacksize=4096;
+const size_t default_stacksize=4096;
 
 void ioproc_sleeper() {
     ioproc io;

@@ -6,7 +6,7 @@
 #include <list>
 
 using namespace fw;
-size_t default_stacksize=4096*2;
+const size_t default_stacksize=4096*2;
 
 struct client {
     netsock s;

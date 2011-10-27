@@ -9,7 +9,7 @@
 
 using namespace fw;
 // needed a larger stack for socket_io_mt
-size_t default_stacksize=4096*2;
+const size_t default_stacksize=4096*2;
 
 static void bar(std::thread::id p) {
     // cant use BOOST_CHECK in multi-threaded tests :(

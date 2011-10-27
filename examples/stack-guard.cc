@@ -1,7 +1,7 @@
 #include "task.hh"
 
 using namespace fw;
-size_t default_stacksize=4096;
+const size_t default_stacksize=4096;
 
 static void stack_overflow() {
     char buf[4*1024];

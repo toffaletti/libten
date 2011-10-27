@@ -4,7 +4,7 @@
 #include <iostream>
 
 using namespace fw;
-size_t default_stacksize=4096*2;
+const size_t default_stacksize=4096*2;
 
 void echo_task(int sock) {
     netsock s(sock);

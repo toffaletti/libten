@@ -4,7 +4,7 @@
 #include <iostream>
 
 using namespace fw;
-size_t default_stacksize=4096*2;
+const size_t default_stacksize=4096*2;
 
 // this uses task::poll directly instead of task::socket
 

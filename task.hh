@@ -9,7 +9,7 @@
 #include "logging.hh"
 
 //! user must define
-extern size_t default_stacksize;
+extern const size_t default_stacksize;
 
 namespace fw {
 
