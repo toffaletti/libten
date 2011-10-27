@@ -113,11 +113,11 @@ struct task {
 
 std::ostream &operator << (std::ostream &o, task *t) {
     if (t) {
-        o << t << " " << t->id << " "
+        o << "[" << (void*)t << " " << t->id << " "
             << t->name << " |" << t->state
             << "| sys: " << t->systask
             << " exiting: " << t->exiting
-            << " canceled: " << t->canceled;
+            << " canceled: " << t->canceled << "]";
     } else {
         o << "nulltask";
     }

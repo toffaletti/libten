@@ -1,165 +1,166 @@
+/* src/config.h.  Generated from config.h.in by configure.  */
 /* src/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Namespace for Google classes */
-#undef GOOGLE_NAMESPACE
+#define GOOGLE_NAMESPACE google
 
 /* Define if you have the `dladdr' function */
-#undef HAVE_DLADDR
+/* #undef HAVE_DLADDR */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
-#undef HAVE_DLFCN_H
+#define HAVE_DLFCN_H 1
 
 /* Define to 1 if you have the <execinfo.h> header file. */
-#undef HAVE_EXECINFO_H
+#define HAVE_EXECINFO_H 1
 
 /* Define if you have the `fcntl' function */
-#undef HAVE_FCNTL
+#define HAVE_FCNTL 1
 
 /* Define to 1 if you have the <glob.h> header file. */
-#undef HAVE_GLOB_H
+#define HAVE_GLOB_H 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
-#undef HAVE_INTTYPES_H
+#define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the `pthread' library (-lpthread). */
-#undef HAVE_LIBPTHREAD
+#define HAVE_LIBPTHREAD 1
 
 /* Define to 1 if you have the <libunwind.h> header file. */
-#undef HAVE_LIBUNWIND_H
+/* #undef HAVE_LIBUNWIND_H */
 
 /* define if you have google gflags library */
-#undef HAVE_LIB_GFLAGS
+/* #undef HAVE_LIB_GFLAGS */
 
 /* define if you have google gmock library */
-#undef HAVE_LIB_GMOCK
+/* #undef HAVE_LIB_GMOCK */
 
 /* define if you have google gtest library */
-#undef HAVE_LIB_GTEST
+/* #undef HAVE_LIB_GTEST */
 
 /* define if you have libunwind */
-#undef HAVE_LIB_UNWIND
+/* #undef HAVE_LIB_UNWIND */
 
 /* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
+#define HAVE_MEMORY_H 1
 
 /* define if the compiler implements namespaces */
-#undef HAVE_NAMESPACES
+#define HAVE_NAMESPACES 1
 
 /* Define if you have POSIX threads libraries and header files. */
-#undef HAVE_PTHREAD
+#define HAVE_PTHREAD 1
 
 /* Define to 1 if you have the <pwd.h> header file. */
-#undef HAVE_PWD_H
+#define HAVE_PWD_H 1
 
 /* define if the compiler implements pthread_rwlock_* */
-#undef HAVE_RWLOCK
+#define HAVE_RWLOCK 1
 
 /* Define if you have the `sigaltstack' function */
-#undef HAVE_SIGALTSTACK
+#define HAVE_SIGALTSTACK 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
-#undef HAVE_STDINT_H
+#define HAVE_STDINT_H 1
 
 /* Define to 1 if you have the <stdlib.h> header file. */
-#undef HAVE_STDLIB_H
+#define HAVE_STDLIB_H 1
 
 /* Define to 1 if you have the <strings.h> header file. */
-#undef HAVE_STRINGS_H
+#define HAVE_STRINGS_H 1
 
 /* Define to 1 if you have the <string.h> header file. */
-#undef HAVE_STRING_H
+#define HAVE_STRING_H 1
 
 /* Define to 1 if you have the <syscall.h> header file. */
-#undef HAVE_SYSCALL_H
+#define HAVE_SYSCALL_H 1
 
 /* Define to 1 if you have the <syslog.h> header file. */
-#undef HAVE_SYSLOG_H
+#define HAVE_SYSLOG_H 1
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
-#undef HAVE_SYS_STAT_H
+#define HAVE_SYS_STAT_H 1
 
 /* Define to 1 if you have the <sys/syscall.h> header file. */
-#undef HAVE_SYS_SYSCALL_H
+#define HAVE_SYS_SYSCALL_H 1
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#undef HAVE_SYS_TIME_H
+#define HAVE_SYS_TIME_H 1
 
 /* Define to 1 if you have the <sys/types.h> header file. */
-#undef HAVE_SYS_TYPES_H
+#define HAVE_SYS_TYPES_H 1
 
 /* Define to 1 if you have the <sys/ucontext.h> header file. */
-#undef HAVE_SYS_UCONTEXT_H
+#define HAVE_SYS_UCONTEXT_H 1
 
 /* Define to 1 if you have the <sys/utsname.h> header file. */
-#undef HAVE_SYS_UTSNAME_H
+#define HAVE_SYS_UTSNAME_H 1
 
 /* Define to 1 if you have the <ucontext.h> header file. */
-#undef HAVE_UCONTEXT_H
+#define HAVE_UCONTEXT_H 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#undef HAVE_UNISTD_H
+#define HAVE_UNISTD_H 1
 
 /* define if the compiler supports using expression for operator */
-#undef HAVE_USING_OPERATOR
+#define HAVE_USING_OPERATOR 1
 
 /* define if your compiler has __attribute__ */
-#undef HAVE___ATTRIBUTE__
+#define HAVE___ATTRIBUTE__ 1
 
 /* define if your compiler has __builtin_expect */
-#undef HAVE___BUILTIN_EXPECT
+#define HAVE___BUILTIN_EXPECT 1
 
 /* define if your compiler has __sync_val_compare_and_swap */
-#undef HAVE___SYNC_VAL_COMPARE_AND_SWAP
+/* #undef HAVE___SYNC_VAL_COMPARE_AND_SWAP */
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
-#undef LT_OBJDIR
+#define LT_OBJDIR ".libs/"
 
 /* Name of package */
-#undef PACKAGE
+#define PACKAGE "glog"
 
 /* Define to the address where bug reports for this package should be sent. */
-#undef PACKAGE_BUGREPORT
+#define PACKAGE_BUGREPORT "opensource@google.com"
 
 /* Define to the full name of this package. */
-#undef PACKAGE_NAME
+#define PACKAGE_NAME "glog"
 
 /* Define to the full name and version of this package. */
-#undef PACKAGE_STRING
+#define PACKAGE_STRING "glog 0.3.1"
 
 /* Define to the one symbol short name of this package. */
-#undef PACKAGE_TARNAME
+#define PACKAGE_TARNAME "glog"
 
 /* Define to the home page for this package. */
-#undef PACKAGE_URL
+#define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#undef PACKAGE_VERSION
+#define PACKAGE_VERSION "0.3.1"
 
 /* How to access the PC from a struct ucontext */
-#undef PC_FROM_UCONTEXT
+#define PC_FROM_UCONTEXT uc_mcontext.gregs[REG_RIP]
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
-#undef PTHREAD_CREATE_JOINABLE
+/* #undef PTHREAD_CREATE_JOINABLE */
 
 /* The size of `void *', as computed by sizeof. */
-#undef SIZEOF_VOID_P
+#define SIZEOF_VOID_P 8
 
 /* Define to 1 if you have the ANSI C header files. */
-#undef STDC_HEADERS
+/* #undef STDC_HEADERS */
 
 /* the namespace where STL code like vector<> is defined */
-#undef STL_NAMESPACE
+#define STL_NAMESPACE std
 
 /* location of source code */
-#undef TEST_SRC_DIR
+#define TEST_SRC_DIR "."
 
 /* Version number of package */
-#undef VERSION
+#define VERSION "0.3.1"
 
 /* Stops putting the code inside the Google namespace */
-#undef _END_GOOGLE_NAMESPACE_
+#define _END_GOOGLE_NAMESPACE_ }
 
 /* Puts following code inside the Google namespace */
-#undef _START_GOOGLE_NAMESPACE_
+#define _START_GOOGLE_NAMESPACE_ namespace google {
