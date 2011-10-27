@@ -3,7 +3,6 @@
 #include <cassert>
 #include <algorithm>
 #include "atomic.hh"
-#include "timespec.hh"
 #include "coroutine.hh"
 #include "logging.hh"
 #include "task.hh"
@@ -28,20 +27,6 @@ static std::mutex procsmutex;
 static proclist procs;
 static std::once_flag init_flag;
 
-static unsigned int timespec_to_milliseconds(const timespec &ts) {
-    // convert timespec to milliseconds
-    unsigned int ms = ts.tv_sec * 1000;
-    // 1 millisecond is 1 million nanoseconds
-    ms += ts.tv_nsec / 1000000;
-    return ms;
-}
-
-static void milliseconds_to_timespec(unsigned int ms, timespec &ts) {
-    // convert milliseconds to seconds and nanoseconds
-    ts.tv_sec = ms / 1000;
-    ts.tv_nsec = (ms % 1000) * 1000000;
-}
-
 struct task {
     char name[256];
     char state[256];
@@ -49,18 +34,15 @@ struct task {
     coroutine co;
     uint64_t id;
     proc *cproc;
-    timespec *timeout;
-    timespec *deadline;
+
+    time_point<monotonic_clock> timeout;
+    time_point<monotonic_clock> deadline;
     bool exiting;
     bool systask;
     bool canceled;
     bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
-    ~task() {
-        delete timeout;
-        delete deadline;
-    }
 
     void ready();
     void swap();
@@ -309,7 +291,6 @@ void taskdumpf(FILE *of) {
 
 task::task(const std::function<void ()> &f, size_t stacksize)
     : fn(f), co(task::start, this, stacksize), cproc(0), 
-    timeout(0), deadline(0),
     exiting(false), systask(false), canceled(false), unwinding(false)
 {
     id = ++taskidgen;
@@ -387,26 +368,6 @@ bool qutex::try_lock() {
     }
     return false;
 }
-
-template<typename Rep,typename Period>
-bool qutex::try_lock_for(
-        std::chrono::duration<Rep,Period> const&
-        relative_time)
-{
-    //_this_proc->sched().add_timeout(ms);
-    // TODO: implement
-    return false;
-}
-
-template<typename Clock,typename Duration>
-bool qutex::try_lock_until(
-        std::chrono::time_point<Clock,Duration> const&
-        absolute_time)
-{
-    // TODO: implement
-    return false;
-}
-
 
 void qutex::unlock() {
     task *t = 0;
@@ -606,7 +567,10 @@ void proc::schedule() {
 struct io_scheduler {
     struct task_timeout_compare {
         bool operator ()(const task *a, const task *b) const {
-            return *a->timeout < *b->timeout || (*a->timeout == *b->timeout && a < b);
+            // sort by timeout and then pointer value so erase will be able to
+            // find exact pointer values when the timeouts are the same
+            // which can happen frequently because we try to collate timeouts
+            return a->timeout < b->timeout || (a->timeout == b->timeout && a < b);
         }
     };
     struct task_poll_state {
@@ -627,7 +591,7 @@ struct io_scheduler {
     //! epoll events
     event_vector events;
     //! current time cached in a few places through the event loop
-    timespec now;
+    time_point<monotonic_clock> now;
     //! the epoll fd used for io in this runner
     epoll_fd efd;
     //! number of fds we've been asked to wait on
@@ -635,7 +599,7 @@ struct io_scheduler {
 
     io_scheduler() : npollfds(0) {
         events.reserve(1000);
-        THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+        now = monotonic_clock::now();
         // add the pipe used to wake up
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
@@ -719,29 +683,27 @@ struct io_scheduler {
         return rvalue;
     }
 
-    void add_timeout(task *t, uint64_t ms) {
-        if (t->timeout == 0) {
-            t->timeout = new timespec();
-        }
-        milliseconds_to_timespec(ms, *t->timeout);
-        (*t->timeout) += now;
-        if (t->deadline) {
-            if (*t->timeout > *t->deadline) {
+    template<typename Rep,typename Period>
+    void add_timeout(task *t, const duration<Rep,Period> &dura) {
+        t->timeout = now + dura;
+        if (t->deadline.time_since_epoch().count() != 0) {
+            if (t->timeout > t->deadline) {
                 // don't sleep past the deadline
-                *t->timeout = *t->deadline;
+                t->timeout = t->deadline;
             }
         }
         timeouts.insert(t);
     }
 
     bool del_timeout(task *t) {
-        if (t->timeout == 0) return false;
+        if (t->timeout.time_since_epoch().count() == 0) return false;
         return timeouts.erase(t);
     }
 
-    void sleep(uint64_t ms) {
+    template<typename Rep,typename Period>
+    void sleep(const duration<Rep, Period> &dura) {
         task *t = _this_proc->ctask;
-        add_timeout(t, ms);
+        add_timeout(t, dura);
         t->swap();
     }
 
@@ -768,7 +730,7 @@ struct io_scheduler {
             taskstate("poll %u fds for %ul ms", nfds, ms);
         }
         if (ms) {
-            add_timeout(t, ms);
+            add_timeout(t, milliseconds(ms));
         }
         add_pollfds(t, fds, nfds);
 
@@ -789,10 +751,10 @@ struct io_scheduler {
         taskname("fdtask");
         tasksystem();
         for (;;) {
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            now = monotonic_clock::now();
             // let everyone else run
             taskyield();
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            now = monotonic_clock::now();
             proc *p = _this_proc;
             task *t = 0;
 
@@ -803,11 +765,11 @@ struct io_scheduler {
             std::unique_lock<std::mutex> lk(p->mutex);
             if (!timeouts.empty()) {
                 t = *timeouts.begin();
-                if (*t->timeout <= now) {
+                if (t->timeout <= now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = timespec_to_milliseconds(*t->timeout - now);
+                    ms = duration_cast<milliseconds>(t->timeout - now).count();
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
@@ -868,12 +830,12 @@ struct io_scheduler {
 
             // must unlock before calling task::ready
             if (lk.owns_lock()) lk.unlock();
-            THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &now));
+            now = monotonic_clock::now();
             // wake up sleeping tasks
             auto i = timeouts.begin();
             for (; i != timeouts.end(); ++i) {
                 t = *i;
-                if (*t->timeout <= now) {
+                if (t->timeout <= now) {
                     DVLOG(5) << "TIMEOUT on task: " << t;
                     t->ready();
                 } else {
@@ -897,10 +859,9 @@ void task::swap() {
         throw task_interrupted();
     }
 
-    if (deadline && _this_proc->sched().now >= *deadline) {
+    if (deadline.time_since_epoch().count() != 0 && _this_proc->sched().now >= deadline) {
         // remove deadline so we don't throw twice
-        delete deadline;
-        deadline = 0;
+        deadline = time_point<monotonic_clock>();
         throw deadline_reached();
     }
 }
@@ -958,7 +919,7 @@ io_scheduler &proc::sched() {
 }
 
 void tasksleep(uint64_t ms) {
-    _this_proc->sched().sleep(ms);
+    _this_proc->sched().sleep(milliseconds(ms));
 }
 
 bool fdwait(int fd, int rw, uint64_t ms) {
@@ -983,6 +944,7 @@ void proc::deltaskinproc(task *t) {
     delete t;
 }
 
+#if 0
 bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
     task *t = _this_proc->ctask;
     if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
@@ -997,6 +959,7 @@ bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
     // if we're not in the waiting list then we were signaled to wakeup
     return std::find(waiting.begin(), waiting.end(), t) == waiting.end();
 }
+#endif
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
@@ -1042,20 +1005,17 @@ void rendez::wakeupall() {
     }
 }
 
-deadline::deadline(uint64_t milliseconds) {
+deadline::deadline(uint64_t ms) {
     task *t = _this_proc->ctask;
-    if (t->deadline) {
+    if (t->deadline.time_since_epoch().count() != 0) {
         throw errorx("task %p already has a deadline", t);
     }
-    t->deadline = new timespec();
-    milliseconds_to_timespec(milliseconds, *t->deadline);
-    *t->deadline += _this_proc->sched().now;
+    t->deadline = _this_proc->sched().now + milliseconds(ms);
 }
 
 deadline::~deadline() {
     task *t = _this_proc->ctask;
-    delete t->deadline;
-    t->deadline = 0;
+    t->deadline = time_point<monotonic_clock>();
 }
 
 } // end namespace fw

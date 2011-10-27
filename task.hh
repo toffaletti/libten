@@ -1,6 +1,7 @@
 #ifndef TASK_HH
 #define TASK_HH
 
+#include <chrono>
 #include <functional>
 #include <mutex>
 #include <deque>
@@ -12,6 +13,8 @@
 extern const size_t default_stacksize;
 
 namespace fw {
+
+using namespace std::chrono;
 
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
@@ -76,8 +79,6 @@ struct rendez : boost::noncopyable {
             sleep(lk);
         }
     }
-
-    bool sleep_for(std::unique_lock<qutex> &lk, unsigned int ms);
 
     void wakeup();
     void wakeupall();

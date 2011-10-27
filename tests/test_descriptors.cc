@@ -2,7 +2,6 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 #include "descriptors.hh"
-#include "timespec.hh"
 
 using namespace fw;
 

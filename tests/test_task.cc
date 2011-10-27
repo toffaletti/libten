@@ -4,7 +4,6 @@
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"
-#include "timespec.hh"
 #include "task.hh"
 
 using namespace fw;
@@ -129,16 +128,15 @@ BOOST_AUTO_TEST_CASE(socket_io_mt) {
 }
 
 static void sleeper(semaphore &s) {
-    timespec start;
-    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &start));
+    using namespace std::chrono;
+    auto start = monotonic_clock::now();
     tasksleep(10);
-    timespec end;
-    THROW_ON_ERROR(clock_gettime(CLOCK_MONOTONIC, &end));
+    auto end = monotonic_clock::now();
 
-    timespec passed = end - start;
-    BOOST_CHECK_EQUAL(passed.tv_sec, 0);
     // check that at least 10 milliseconds passed
-    BOOST_CHECK_GE(passed.tv_nsec, 10*1000000);
+    // annoyingly have to compare count here because duration doesn't have an
+    // ostream << operator
+    BOOST_CHECK_GE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
     s.post();
 }
 
@@ -148,21 +146,6 @@ BOOST_AUTO_TEST_CASE(task_sleep) {
     taskspawn(std::bind(sleeper, std::ref(s)));
     p.main();
     s.wait();
-}
-
-BOOST_AUTO_TEST_CASE(timespec_operations) {
-    timespec a = {100, 9};
-    timespec b = {99, 10};
-
-    BOOST_CHECK(a > b);
-    BOOST_CHECK(b < a);
-
-    timespec r = a - b;
-    BOOST_CHECK_EQUAL(r.tv_sec, 0);
-    BOOST_CHECK_EQUAL(r.tv_nsec, 999999999);
-
-    b += r;
-    BOOST_CHECK_EQUAL(a, b);
 }
 
 static void listen_timeout_co(semaphore &sm) {
@@ -218,6 +201,32 @@ static void cancel_sleep() {
 BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
     procmain p;
     taskspawn(cancel_sleep);
+    p.main();
+}
+
+static void long_sleeper_yield() {
+    try {
+        tasksleep(10000);
+    } catch (task_interrupted &) {
+        // make sure yield doesn't throw again
+        taskyield();
+        BOOST_CHECK(true);
+        taskyield();
+        BOOST_CHECK(true);
+        throw;
+    }
+    BOOST_CHECK(false);
+}
+
+static void cancel_once() {
+    uint64_t id = taskspawn(long_sleeper_yield);
+    tasksleep(10);
+    taskcancel(id);
+}
+
+BOOST_AUTO_TEST_CASE(task_cancel_only_once) {
+    procmain p;
+    taskspawn(cancel_once);
     p.main();
 }
 
@@ -308,6 +317,29 @@ BOOST_AUTO_TEST_CASE(task_deadline_timer) {
     procmain p;
     taskspawn(deadline_timer);
     taskspawn(deadline_not_reached);
+    p.main();
+}
+
+static void deadline_cleared() {
+    try {
+        deadline dl(10);
+        tasksleep(20000);
+        BOOST_CHECK(false);
+    } catch (deadline_reached &e) {
+        BOOST_CHECK(true);
+        // if the deadline or timeout aren't cleared,
+        // this yield will sleep or throw again
+        auto start = monotonic_clock::now();
+        taskyield();
+        auto end = monotonic_clock::now();
+        BOOST_CHECK(true);
+        BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), seconds(1).count());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
+    procmain p;
+    taskspawn(deadline_cleared);
     p.main();
 }
 
