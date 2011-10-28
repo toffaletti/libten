@@ -13,7 +13,7 @@
 namespace fw {
 
 //! simple http server
-class http_server : boost::noncopyable {
+class http_server : public netsock_server {
 public:
     //! wrapper around an http request/response
     struct request {
@@ -129,10 +129,8 @@ public:
 
 public:
     http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
-        : sock(AF_INET, SOCK_STREAM), stacksize(stacksize_),
-        timeout_ms(timeout_ms_)
+        : netsock_server("http", stacksize_, timeout_ms_)
     {
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
 
     //! add a callback for a uri with an fnmatch pattern
@@ -148,69 +146,44 @@ public:
         _log_func = f;
     }
 
-    //! listen and accept connections
-    void serve(const std::string &ipaddr, uint16_t port) {
-        address baddr(ipaddr.c_str(), port);
-        sock.bind(baddr);
-        sock.getsockname(baddr);
-        LOG(INFO) << "listening for http on: " << baddr;
-        sock.listen();
-        try {
-            for (;;) {
-                address client_addr;
-                int fd;
-                while ((fd = sock.accept(client_addr, 0)) > 0) {
-                    taskspawn(std::bind(&http_server::client_task, this, fd), stacksize);
-                }
-            }
-        } catch (...) {
-            // release any memory held by bound callbacks
-            _routes.clear();
-            throw;
-        }
-    }
-
 private:
-    netsock sock;
     std::vector<route> _routes;
-    size_t stacksize;
-    int timeout_ms;
     callback_type _log_func;
 
-    void client_task(int fd) {
-        netsock s(fd);
+    void on_shutdown() {
+        // release any memory held by bound callbacks
+        _routes.clear();
+    }
+
+    void on_connection(netsock &s) {
         // TODO: tuneable buffer sizes
         buffer buf(32*1024);
         http_parser parser;
 
         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
-        try {
-            buffer::slice rb = buf(0);
+        buffer::slice rb = buf(0);
+        for (;;) {
+            http_request req;
+            req.parser_init(&parser);
+            bool got_headers = false;
             for (;;) {
-                http_request req;
-                req.parser_init(&parser);
-                bool got_headers = false;
-                for (;;) {
-                    ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
-                    if (nr < 0) return;
-                    if (req.parse(&parser, rb.data(), nr)) break;
-                    if (nr == 0) return;
-                    if (!got_headers && !req.method.empty()) {
-                        got_headers = true;
-                        if (req.get("Expect") == "100-continue") {
-                            http_response cont_resp(100, "Continue");
-                            std::string data = cont_resp.data();
-                            ssize_t nw = s.send(data.data(), data.size());
-                            (void)nw;
-                        }
+                ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
+                if (nr < 0) return;
+                if (req.parse(&parser, rb.data(), nr)) break;
+                if (nr == 0) return;
+                if (!got_headers && !req.method.empty()) {
+                    got_headers = true;
+                    if (req.get("Expect") == "100-continue") {
+                        http_response cont_resp(100, "Continue");
+                        std::string data = cont_resp.data();
+                        ssize_t nw = s.send(data.data(), data.size());
+                        (void)nw;
                     }
                 }
-                // handle request
-                handle_request(req, s);
             }
-        } catch (std::exception &e) {
-            LOG(ERROR) << "unhandled client task error: " << e.what();
+            // handle request
+            handle_request(req, s);
         }
     }
 

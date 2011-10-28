@@ -2,6 +2,7 @@
 #define NETSOCK_HH
 
 #include "descriptors.hh"
+#include "task.hh"
 
 namespace fw {
 
@@ -56,6 +57,65 @@ public:
     void close() { s.close(); }
 
     socket_fd s;
+};
+
+class netsock_server {
+public:
+    netsock_server(const std::string &protocol_name_,
+            size_t stacksize_=default_stacksize,
+            int timeout_ms_=-1)
+        : sock(AF_INET, SOCK_STREAM),
+        protocol_name(protocol_name_),
+        stacksize(stacksize_),
+        timeout_ms(timeout_ms_)
+    {
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    }
+
+    netsock_server(const netsock_server &) = delete;
+    netsock_server &operator=(const netsock_server &) = delete;
+
+    //! listen and accept connections
+    void serve(const std::string &ipaddr, uint16_t port) {
+        address baddr(ipaddr.c_str(), port);
+        sock.bind(baddr);
+        sock.getsockname(baddr);
+        LOG(INFO) << "listening for " << protocol_name << " on " << baddr;
+        sock.listen();
+        try {
+            for (;;) {
+                address client_addr;
+                int fd;
+                while ((fd = sock.accept(client_addr, 0)) > 0) {
+                    taskspawn(std::bind(&netsock_server::client_task, this, fd), stacksize);
+                }
+            }
+        } catch (...) {
+            // do any cleanup to free memory etc...
+            // for example if your callbacks hold a reference to this server
+            // this would be the place to release that circular reference
+            on_shutdown();
+            throw;
+        }
+    }
+
+protected:
+    netsock sock;
+    std::string protocol_name;
+    size_t stacksize;
+    int timeout_ms;
+
+    virtual void on_shutdown() {}
+    virtual void on_connection(netsock &s) = 0;
+
+    void client_task(int fd) {
+        netsock s(fd);
+        try {
+            on_connection(s);
+        } catch (std::exception &e) {
+            LOG(ERROR) << "unhandled client task error: " << e.what();
+        }
+    }
 };
 
 } // end namespace fw
