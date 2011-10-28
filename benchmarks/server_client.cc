@@ -13,7 +13,7 @@ static void connecter(address &addr, channel<int> ch) {
     if (s.connect(addr, 100) == 0) {
         ch.send(0);
     } else {
-        ch.send(errno);
+        ch.send(std::move(errno));
     }
 }
 

@@ -79,7 +79,7 @@ void iocallasync(
         iochannel reply_chan = iochannel())
 {
     std::unique_ptr<pcall> call(new pcall(op, reply_chan));
-    io.ch.send(call);
+    io.ch.send(std::move(call));
 }
 
 inline void iocallasync(
@@ -88,7 +88,7 @@ inline void iocallasync(
         iochannel reply_chan = iochannel())
 {
     std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
-    io.ch.send(call);
+    io.ch.send(std::move(call));
 }
 
 template <typename ReturnT>
@@ -98,7 +98,7 @@ ReturnT iocall(
         iochannel reply_chan = iochannel())
 {
     std::unique_ptr<pcall> call(new pcall(op, reply_chan));
-    io.ch.send(call);
+    io.ch.send(std::move(call));
     return iowait<ReturnT>(reply_chan);
 }
 
@@ -108,7 +108,7 @@ inline void iocall(
         iochannel reply_chan = iochannel())
 {
     std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
-    io.ch.send(call);
+    io.ch.send(std::move(call));
     iowait(reply_chan);
 }
 

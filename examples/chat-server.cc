@@ -24,7 +24,7 @@ void broadcast(const shared_client &from, const std::string &msg) {
     std::stringstream ss;
     ss << from->nick << ": " << msg;
     std::string chat = ss.str();
-    bchan.send(chat);
+    bchan.send(std::move(chat));
 }
 
 void chat_task(int sock) {
