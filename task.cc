@@ -898,6 +898,9 @@ void task::swap() {
     }
 
     if (deadline && _this_proc->sched().now >= *deadline) {
+        // remove deadline so we don't throw twice
+        delete deadline;
+        deadline = 0;
         throw deadline_reached();
     }
 }
@@ -1051,7 +1054,6 @@ deadline::deadline(uint64_t milliseconds) {
 
 deadline::~deadline() {
     task *t = _this_proc->ctask;
-    CHECK(t->deadline);
     delete t->deadline;
     t->deadline = 0;
 }
