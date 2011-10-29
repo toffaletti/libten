@@ -54,7 +54,7 @@ public:
             if (resp.get("Date").empty()) {
                 char buf[128];
                 struct tm tm;
-                time_t now = time(NULL);
+                time_t now = std::chrono::system_clock::to_time_t(procnow());
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
                 resp.set("Date", buf);
             }
