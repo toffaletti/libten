@@ -58,6 +58,11 @@ public:
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
                 resp.set("Date", buf);
             }
+            std::string conn = req.get("Connection");
+            if (!conn.empty() && resp.get("Connection").empty()) {
+                // obey clients wishes if we have none of our own
+                resp.set("Connection", conn);
+            }
             data = resp.data();
             if (!resp.body.empty()) {
                 data += resp.body;
@@ -97,9 +102,7 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, "Not Found",
-                        Headers("Connection", "close",
-                            "Content-Length", 0));
+                resp = http_response(404, "Not Found", Headers("Content-Length", 0));
                 send_response();
             }
 
@@ -163,8 +166,8 @@ private:
         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
         buffer::slice rb = buf(0);
+        http_request req;
         for (;;) {
-            http_request req;
             req.parser_init(&parser);
             bool got_headers = false;
             for (;;) {
