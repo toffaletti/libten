@@ -124,12 +124,14 @@ struct proc {
     //! pipe used to wake up from epoll
     pipe_fd pi;
     std::atomic<uint64_t> taskcount;
+    //! current time cached in a few places through the event loop
+    time_point<monotonic_clock> now;
 
     proc(task *t = 0)
         : _sched(0), nswitch(0), ctask(0),
         asleep(false), polling(false), pi(O_NONBLOCK), taskcount(0)
     {
-
+        now = monotonic_clock::now();
         add(this);
         if (t) {
             std::unique_lock<std::mutex> lk(mutex);
@@ -590,8 +592,6 @@ struct io_scheduler {
     poll_task_array pollfds;
     //! epoll events
     event_vector events;
-    //! current time cached in a few places through the event loop
-    time_point<monotonic_clock> now;
     //! the epoll fd used for io in this runner
     epoll_fd efd;
     //! number of fds we've been asked to wait on
@@ -599,7 +599,6 @@ struct io_scheduler {
 
     io_scheduler() : npollfds(0) {
         events.reserve(1000);
-        now = monotonic_clock::now();
         // add the pipe used to wake up
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
@@ -685,7 +684,7 @@ struct io_scheduler {
 
     template<typename Rep,typename Period>
     void add_timeout(task *t, const duration<Rep,Period> &dura) {
-        t->timeout = now + dura;
+        t->timeout = _this_proc->now + dura;
         if (t->deadline.time_since_epoch().count() != 0) {
             if (t->timeout > t->deadline) {
                 // don't sleep past the deadline
@@ -750,12 +749,12 @@ struct io_scheduler {
     void fdtask() {
         taskname("fdtask");
         tasksystem();
+        proc *p = _this_proc;
         for (;;) {
-            now = monotonic_clock::now();
+            p->now = monotonic_clock::now();
             // let everyone else run
             taskyield();
-            now = monotonic_clock::now();
-            proc *p = _this_proc;
+            p->now = monotonic_clock::now();
             task *t = 0;
 
             int ms = -1;
@@ -765,11 +764,11 @@ struct io_scheduler {
             std::unique_lock<std::mutex> lk(p->mutex);
             if (!timeouts.empty()) {
                 t = *timeouts.begin();
-                if (t->timeout <= now) {
+                if (t->timeout <= p->now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = duration_cast<milliseconds>(t->timeout - now).count();
+                    ms = duration_cast<milliseconds>(t->timeout - p->now).count();
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
@@ -830,12 +829,12 @@ struct io_scheduler {
 
             // must unlock before calling task::ready
             if (lk.owns_lock()) lk.unlock();
-            now = monotonic_clock::now();
+            p->now = monotonic_clock::now();
             // wake up sleeping tasks
             auto i = timeouts.begin();
             for (; i != timeouts.end(); ++i) {
                 t = *i;
-                if (t->timeout <= now) {
+                if (t->timeout <= p->now) {
                     DVLOG(5) << "TIMEOUT on task: " << t;
                     t->ready();
                 } else {
@@ -846,6 +845,10 @@ struct io_scheduler {
         }
     }
 };
+
+const time_point<monotonic_clock> &procnow() {
+    return _this_proc->now;
+}
 
 void task::swap() {
     if (canceled && !exiting) {
@@ -859,7 +862,7 @@ void task::swap() {
         throw task_interrupted();
     }
 
-    if (deadline.time_since_epoch().count() != 0 && _this_proc->sched().now >= deadline) {
+    if (deadline.time_since_epoch().count() != 0 && _this_proc->now >= deadline) {
         // remove deadline so we don't throw twice
         deadline = time_point<monotonic_clock>();
         throw deadline_reached();
@@ -1010,7 +1013,7 @@ deadline::deadline(uint64_t ms) {
     if (t->deadline.time_since_epoch().count() != 0) {
         throw errorx("task %p already has a deadline", t);
     }
-    t->deadline = _this_proc->sched().now + milliseconds(ms);
+    t->deadline = _this_proc->now + milliseconds(ms);
 }
 
 deadline::~deadline() {

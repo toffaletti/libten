@@ -39,6 +39,9 @@ void taskdumpf(FILE *of = stderr);
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 void procshutdown();
 
+// returns cached time, not precise
+const time_point<monotonic_clock> &procnow();
+
 struct qutex : boost::noncopyable {
     std::timed_mutex m;
     task *owner;
