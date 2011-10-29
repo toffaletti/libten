@@ -8,7 +8,7 @@
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4*1024;
 
 #define SEC2MS(s) (s*1000)

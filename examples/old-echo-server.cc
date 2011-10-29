@@ -3,7 +3,7 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4096*2;
 
 // this uses task::poll directly instead of task::socket

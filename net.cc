@@ -2,7 +2,7 @@
 #include "ioproc.hh"
 #include <netdb.h>
 
-namespace fw {
+namespace ten {
 
 int netconnect(int fd, const address &addr, unsigned int ms) {
     while (::connect(fd, addr.sockaddr(), addr.addrlen()) < 0) {
@@ -105,5 +105,5 @@ ssize_t netsock::send(const void *buf, size_t len, int flags, unsigned int timeo
     return total_sent;
 }
 
-} // end namespace fw
+} // end namespace ten
 

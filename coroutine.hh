@@ -10,7 +10,7 @@
 #include <valgrind/valgrind.h>
 #endif
 
-namespace fw {
+namespace ten {
 
 //! lightweight cooperatively scheduled threads of execution
 //
@@ -89,6 +89,6 @@ private:
 
 };
 
-} // end namespace fw
+} // end namespace ten 
 
 #endif // COROUTINE_HH

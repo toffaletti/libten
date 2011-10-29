@@ -10,6 +10,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 
+namespace ten {
+
 /* TODO:
  * Normalization and Comparison
  * http://tools.ietf.org/html/rfc3986#section-6
@@ -118,5 +120,7 @@ struct uri {
         return splits;
     }
 };
+
+} // end namespace ten
 
 #endif // URI_HH

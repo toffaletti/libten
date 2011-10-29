@@ -4,7 +4,7 @@
 #include <memory>
 #include <cassert>
 
-namespace fw {
+namespace ten {
 
 //! reference counted buffer, slices hold reference
 class buffer {
@@ -89,7 +89,7 @@ public:
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // BUFFER_HH
 

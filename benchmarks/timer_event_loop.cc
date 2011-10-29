@@ -2,7 +2,7 @@
 #include "descriptors.hh"
 #include <iostream>
 
-using namespace fw;
+using namespace ten;
 
 extern const size_t default_stacksize=4096;
 

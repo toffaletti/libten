@@ -4,10 +4,10 @@
 #include "jansson/jansson.h"
 #include <memory>
 
-namespace fw {
+namespace ten {
 
 typedef std::shared_ptr<json_t> json_ptr;
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // JSON_HH

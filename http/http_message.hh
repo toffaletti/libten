@@ -10,6 +10,8 @@
 #include "http_parser.h"
 #include "error.hh"
 
+namespace ten {
+
 // TODO: define exceptions
 
 typedef std::pair<std::string, std::string> header_pair;
@@ -150,4 +152,5 @@ struct http_response : http_base {
     std::string data() const;
 };
 
+} // end namespace ten
 #endif // HTTP_HH

@@ -4,6 +4,8 @@
 
 #include "uri.hh"
 
+using namespace ten;
+
 /* TODO: test uris from:
  * http://code.google.com/p/google-url/source/browse/trunk/src/gurl_unittest.cc
  */

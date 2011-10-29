@@ -3,7 +3,7 @@
 #include "ioproc.hh"
 #include "descriptors.hh"
 
-using namespace fw;
+using namespace ten;
 
 const size_t default_stacksize=4096;
 

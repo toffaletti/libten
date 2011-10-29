@@ -2,6 +2,8 @@
 #include <sstream>
 #include <algorithm>
 
+namespace ten {
+
 // normalize message header field names.
 static std::string normalize_header_name(const std::string &field) {
     bool first_letter = true;
@@ -145,7 +147,7 @@ bool http_request::parse(struct http_parser *p, const char *data, size_t len) {
 
     ssize_t nparsed = http_parser_execute(p, &s, data, len);
     if (nparsed != (ssize_t)len) {
-        throw fw::errorx("%s: %s",
+        throw errorx("%s: %s",
             http_errno_name((http_errno)p->http_errno),
             http_errno_description((http_errno)p->http_errno));
     }
@@ -210,7 +212,7 @@ bool http_response::parse(struct http_parser *p, const char *data, size_t len) {
 
     ssize_t nparsed = http_parser_execute(p, &s, data, len);
     if (nparsed != (ssize_t)len) {
-        throw fw::errorx("%s: %s",
+        throw errorx("%s: %s",
             http_errno_name((http_errno)p->http_errno),
             http_errno_description((http_errno)p->http_errno));
     }
@@ -226,4 +228,6 @@ std::string http_response::data() const {
     ss << "\r\n";
     return ss.str();
 }
+
+} // end namespace ten
 

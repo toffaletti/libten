@@ -18,7 +18,7 @@
 #include <signal.h>
 #include <vector>
 
-namespace fw {
+namespace ten {
 
 #if EAGAIN != EWOULDBLOCK
 #define IO_NOT_READY_ERROR  ((errno == EAGAIN) || (errno == EWOULDBLOCK))
@@ -382,7 +382,7 @@ struct signal_fd : fd_base {
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // DESCRIPTORS_HH
 

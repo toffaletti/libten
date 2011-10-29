@@ -17,7 +17,7 @@ namespace hack {
 #include <asm-generic/ucontext.h>
 }
 
-namespace fw {
+namespace ten {
 
 struct io_scheduler;
 
@@ -1018,4 +1018,4 @@ deadline::~deadline() {
     t->deadline = time_point<monotonic_clock>();
 }
 
-} // end namespace fw
+} // end namespace ten

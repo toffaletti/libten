@@ -12,7 +12,7 @@
 //! user must define
 extern const size_t default_stacksize;
 
-namespace fw {
+namespace ten {
 
 using namespace std::chrono;
 
@@ -102,7 +102,7 @@ struct deadline {
     ~deadline();
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // TASK_HH
 

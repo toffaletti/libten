@@ -3,7 +3,7 @@
 #include <boost/bind.hpp>
 #include "descriptors.hh"
 
-using namespace fw;
+using namespace ten;
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 BOOST_AUTO_TEST_CASE(fd_move_test) {

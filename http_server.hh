@@ -10,7 +10,7 @@
 #include "uri/uri.hh"
 #include "net.hh"
 
-namespace fw {
+namespace ten {
 
 //! simple http server
 class http_server : public netsock_server {
@@ -212,5 +212,5 @@ private:
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 

@@ -6,7 +6,7 @@
 #include "channel.hh"
 #include "task.hh"
 
-using namespace fw;
+using namespace ten;
 // needed a larger stack for socket_io_mt
 const size_t default_stacksize=4096*2;
 

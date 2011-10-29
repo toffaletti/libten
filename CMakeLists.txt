@@ -1,7 +1,8 @@
+project(ten)
 cmake_minimum_required(VERSION 2.8)
 enable_testing()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/fw.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ten.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ragel.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure.cmake)
 
@@ -13,10 +14,10 @@ include_directories(glog)
 set(ASM asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
-add_library(fw error.cc task.cc ioproc.cc net.cc ${ASM})
-add_dependencies(fw libglog)
+add_library(ten error.cc task.cc ioproc.cc net.cc ${ASM})
+add_dependencies(ten libglog)
 
-target_link_libraries(fw rt glog)
+target_link_libraries(ten rt glog)
 
 add_subdirectory(examples)
 add_subdirectory(tests)

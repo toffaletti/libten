@@ -1,7 +1,7 @@
 #include "task.hh"
 #include "error.hh"
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4096;
 
 void go_crazy() {

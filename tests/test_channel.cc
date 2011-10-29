@@ -6,7 +6,7 @@
 #include "channel.hh"
 #include "task.hh"
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4096;
 
 static void channel_recv(channel<intptr_t> c) {

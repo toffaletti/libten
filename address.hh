@@ -8,7 +8,7 @@
 #include <ostream>
 #include <boost/lexical_cast.hpp>
 
-namespace fw {
+namespace ten {
 
 inline void parse_host_port(std::string &host, unsigned short &port) {
     size_t pos = host.rfind(':');
@@ -119,7 +119,7 @@ struct address {
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // ADDRESS_HH
 

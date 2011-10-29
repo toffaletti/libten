@@ -11,7 +11,7 @@
 #include "logging.hh"
 #include "descriptors.hh"
 
-namespace fw {
+namespace ten {
 
 static int set_maxrlimit(int resource, rlim_t &max)
 {
@@ -221,6 +221,6 @@ private:
 
 application *application::global_app = 0;
 
-} // end namespace fw
+} // end namespace ten 
 
 #endif // APP_HH

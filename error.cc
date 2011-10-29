@@ -6,7 +6,7 @@
 #include <memory>
 #include <stdlib.h>
 
-namespace fw {
+namespace ten {
 
 backtrace_exception::backtrace_exception() {
     size = backtrace(array, 50);
@@ -62,5 +62,5 @@ std::string backtrace_exception::str() {
     return ss.str();
 }
 
-} // end namespace fw
+} // end namespace ten
 

@@ -4,7 +4,7 @@
 #include "descriptors.hh"
 #include "task.hh"
 
-namespace fw {
+namespace ten {
 
 int dial(int fd, const char *addr, uint16_t port);
 
@@ -118,6 +118,6 @@ protected:
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // NETSOCK_HH

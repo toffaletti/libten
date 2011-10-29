@@ -8,7 +8,7 @@
 #include <string.h>
 #include <errno.h>
 
-namespace fw {
+namespace ten {
 
 //! captures the backtrace in the constructor
 //
@@ -80,7 +80,7 @@ struct errorx : backtrace_exception {
         if (_rv != 0) throw errno_error(_rv); \
     }
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // ERROR_HH
 

@@ -3,7 +3,7 @@
 #include "net.hh"
 #include <iostream>
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4096*2;
 
 void echo_task(int sock) {

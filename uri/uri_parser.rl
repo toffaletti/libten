@@ -3,6 +3,8 @@
 #include <sstream>
 #include <boost/smart_ptr/scoped_array.hpp>
 
+namespace ten {
+
 %%{
   machine uri_parser;
 
@@ -450,3 +452,5 @@ uri::query_params uri::parse_query() {
   }
   return result;
 }
+
+} // end namespace ten

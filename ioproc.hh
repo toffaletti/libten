@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <cassert>
 
-namespace fw {
+namespace ten {
 
 struct pcall;
 typedef channel<std::unique_ptr<pcall> > iochannel;
@@ -136,7 +136,7 @@ template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64
     return iocall<int>(io, std::bind(dial, fd, addr, port));
 }
 
-} // end namespace fw
+} // end namespace ten 
 
 #endif // IOPROC_HH
 

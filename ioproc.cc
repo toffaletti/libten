@@ -2,7 +2,7 @@
 #include "address.hh"
 #include "logging.hh"
 
-namespace fw {
+namespace ten {
 
 void ioproctask(iochannel &ch) {
     taskname("ioproctask");
@@ -45,4 +45,4 @@ void ioproctask(iochannel &ch) {
 }
 
 
-} // end namespace fw
+} // end namespace ten

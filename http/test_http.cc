@@ -3,6 +3,8 @@
 
 #include "http_message.hh"
 
+using namespace ten;
+
 BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
     http_request req("GET", "/foo",
             Headers("This", 4, "That", "that"));
@@ -244,7 +246,7 @@ BOOST_AUTO_TEST_CASE(http_request_parser_garbage) {
     http_request req;
     http_parser parser;
     req.parser_init(&parser);
-    BOOST_CHECK_THROW(req.parse(&parser, sdata, strlen(sdata)), fw::errorx);
+    BOOST_CHECK_THROW(req.parse(&parser, sdata, strlen(sdata)), errorx);
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {

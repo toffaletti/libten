@@ -11,7 +11,7 @@
 // TODO: this shares a lot of code with http_server
 // they should have a common base class netsock_server
 
-namespace fw {
+namespace ten {
 
 template <typename T> bool is_empty(const T &c) { return c.empty(); }
 
@@ -100,5 +100,5 @@ private:
     }
 };
 
-} // end namespace fw
+} // end namespace ten 
 

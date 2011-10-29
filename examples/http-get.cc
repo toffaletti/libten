@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-using namespace fw;
+using namespace ten;
 const size_t default_stacksize=4096;
 
 static void do_get(uri u) {

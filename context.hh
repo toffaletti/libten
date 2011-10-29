@@ -14,7 +14,7 @@
 #ifdef USE_UCONTEXT
 #include <ucontext.h>
 
-namespace fw {
+namespace ten { 
 
 struct context : ucontext_t {
     typedef void (*proc)(void *);
@@ -38,13 +38,13 @@ struct context : ucontext_t {
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #elif USE_BOOST_FCONTEXT
 #include <string.h>
 #include "boost/context/fcontext.hpp"
 
-namespace fw {
+namespace ten {
 
 struct context : boost_fcontext_t {
     typedef void (*proc)(void *);
@@ -64,7 +64,7 @@ struct context : boost_fcontext_t {
     }
 };
 
-} // end namespace fw
+} // end namespace ten 
 
 #else
 #error "no context implementation chosen"

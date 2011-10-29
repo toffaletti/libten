@@ -9,7 +9,7 @@
 #include <set>
 #include <deque>
 
-namespace fw {
+namespace ten {
 
 namespace detail {
     template <typename T> class scoped_resource;
@@ -204,6 +204,6 @@ protected:
 
 } // end detail namespace
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // SHARED_POOL_HH

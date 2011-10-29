@@ -5,7 +5,7 @@
 #include <glog/stl_logging.h>
 #include <sstream>
 
-namespace fw {
+namespace ten {
 
 // helper for debugging hash issues
 template <typename T> std::string to_hex(T &in) {
@@ -18,6 +18,6 @@ template <typename T> std::string to_hex(T &in) {
   return ss.str();
 }
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // LOGGING_HH

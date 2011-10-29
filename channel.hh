@@ -6,7 +6,7 @@
 #include <queue>
 #include <deque>
 
-namespace fw {
+namespace ten {
 
 // based on bounded_buffer example
 // http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
@@ -175,7 +175,7 @@ private:
     }
 };
 
-} // end namespace fw
+} // end namespace ten
 
 #endif // CHANNEL_HH
 

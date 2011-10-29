@@ -9,8 +9,8 @@ include_directories(${CWD}/../jansson)
 include_directories(${CWD}/../msgpack)
 
 file(RELATIVE_PATH REL ${CMAKE_CURRENT_SOURCE_DIR} ${CWD}/..)
-get_filename_component(FW_INC ${CMAKE_CURRENT_BINARY_DIR}/${REL}/include ABSOLUTE)
-get_filename_component(FW_LIB ${CMAKE_CURRENT_BINARY_DIR}/${REL}/lib ABSOLUTE)
+get_filename_component(LIBTEN_INC ${CMAKE_CURRENT_BINARY_DIR}/${REL}/include ABSOLUTE)
+get_filename_component(LIBTEN_LIB ${CMAKE_CURRENT_BINARY_DIR}/${REL}/lib ABSOLUTE)
 
-include_directories(${FW_INC})
-link_directories(${FW_LIB})
+include_directories(${LIBTEN_INC})
+link_directories(${LIBTEN_LIB})
