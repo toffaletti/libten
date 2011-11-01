@@ -5,9 +5,8 @@
 namespace ten {
 
 // normalize message header field names.
-static std::string normalize_header_name(const std::string &field_in) {
+static const std::string &normalize_header_name_inplace(std::string &field) {
     bool first_letter = true;
-    std::string field = field_in;
     for (std::string::iterator i = field.begin(); i!=field.end(); ++i) {
         if (!first_letter) {
             char c = tolower(*i);
@@ -24,6 +23,11 @@ static std::string normalize_header_name(const std::string &field_in) {
         }
     }
     return field;
+}
+
+static std::string normalize_header_name(const std::string &field_in) {
+    std::string field(field_in);
+    return normalize_header_name_inplace(field);
 }
 
 struct is_header {
@@ -73,7 +77,7 @@ std::string Headers::get(const std::string &field) const {
 
 void http_base::normalize() {
     for (header_list::iterator i=headers.begin(); i!=headers.end(); ++i) {
-        i->first.assign(normalize_header_name(i->first));
+        normalize_header_name_inplace(i->first);
     }
 }
 
