@@ -63,6 +63,9 @@ public:
                 // obey clients wishes if we have none of our own
                 resp.set("Connection", conn);
             }
+            if (req.http_version == "HTTP/1.0" && req.get("Connection").empty()) {
+                resp.set("Connection", "close");
+            }
             data = resp.data();
             if (!resp.body.empty()) {
                 data += resp.body;

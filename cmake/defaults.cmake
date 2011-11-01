@@ -25,7 +25,7 @@ if (NOT GCC_FLAGS)
 
     # release- and debug-specific flags for gcc
     set(DEBUG_FLAGS   "-O0 -ggdb -D_DEBUG -rdynamic")
-    set(RELEASE_FLAGS "-O3 -ggdb")
+    set(RELEASE_FLAGS "-O2")
 
     # now that we know what the UB flags are, paste them into the cmake macros
 
