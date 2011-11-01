@@ -195,12 +195,12 @@ private:
 
     void handle_request(http_request &req, netsock &s) {
         request r(req, s);
-        uri u = r.get_uri();
-        DVLOG(5) << "path: " << u.path;
+        std::string path = req.path();
+        DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
         for (auto i= _routes.cbegin(); i!= _routes.cend(); i++) {
             DVLOG(5) << "matching pattern: " << i->pattern;
-            if (fnmatch(i->pattern.c_str(), u.path.c_str(), i->fnmatch_flags) == 0) {
+            if (fnmatch(i->pattern.c_str(), path.c_str(), i->fnmatch_flags) == 0) {
                 try {
                     i->callback(r);
                 } catch (std::exception &e) {

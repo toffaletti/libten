@@ -118,6 +118,15 @@ struct http_request : http_base {
     bool parse(struct http_parser *p, const char *data, size_t len);
 
     std::string data() const;
+
+    std::string path() const {
+        std::string p = uri;
+        size_t pos = p.find_first_of("?#");
+        if (pos != std::string::npos) {
+            p = p.substr(0, pos);
+        }
+        return p;
+    }
 };
 
 struct http_response : http_base {
