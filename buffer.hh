@@ -76,7 +76,7 @@ public:
     };
 public:
     //! allocate a block of memory
-    buffer(size_t bytes=0) : m(new impl(bytes)) {}
+    buffer(size_t bytes=0) : m(std::make_shared<impl>(bytes)) {}
 
     //! slice this buffer at pos
     slice operator ()(size_t pos) const {

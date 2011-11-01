@@ -188,10 +188,6 @@ public:
         _c.reset();
     }
 
-    std::shared_ptr<T> &shared() {
-        return _c;
-    }
-
     T *operator->() {
         if (!_c) throw std::runtime_error("null pointer");
         return _c.get();

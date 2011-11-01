@@ -49,9 +49,8 @@ public:
     //! create a new channel
     //! \param capacity number of items to buffer. the default is 0, unbuffered.
     channel(typename impl::size_type capacity=0, bool autoclose_=false)
-        : autoclose(autoclose_)
+        : m(std::make_shared<impl>(capacity)), autoclose(autoclose_)
     {
-       m.reset(new impl(capacity));
     }
 
     channel(const channel &other) : m(other.m), autoclose(false) {}
