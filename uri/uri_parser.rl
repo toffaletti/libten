@@ -1,7 +1,5 @@
 #include "uri.hh"
-#include <list>
 #include <sstream>
-#include <boost/smart_ptr/scoped_array.hpp>
 
 namespace ten {
 
