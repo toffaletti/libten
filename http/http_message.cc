@@ -5,10 +5,10 @@
 namespace ten {
 
 // normalize message header field names.
-static std::string normalize_header_name(const std::string &field) {
+static std::string normalize_header_name(const std::string &field_in) {
     bool first_letter = true;
-    std::stringstream ss;
-    for (std::string::const_iterator i = field.begin(); i!=field.end(); ++i) {
+    std::string field = field_in;
+    for (std::string::iterator i = field.begin(); i!=field.end(); ++i) {
         if (!first_letter) {
             char c = tolower(*i);
             if (c == '_') {
@@ -17,13 +17,13 @@ static std::string normalize_header_name(const std::string &field) {
             } else if (c == '-') {
                 first_letter = true;
             }
-            ss << c;
+            *i = c;
         } else {
-            ss << (char)toupper(*i);
+            *i = toupper(*i);
             first_letter = false;
         }
     }
-    return ss.str();
+    return field;
 }
 
 struct is_header {
@@ -68,7 +68,7 @@ std::string Headers::get(const std::string &field) const {
     if (i != headers.end()) {
         return i->second;
     }
-    return "";
+    return std::string();
 }
 
 void http_base::normalize() {
@@ -80,9 +80,9 @@ void http_base::normalize() {
 static int _on_header_field(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
     if (m->headers.empty()) {
-        m->headers.push_back(std::make_pair("", ""));
+        m->headers.push_back(std::make_pair(std::string(), std::string()));
     } else if (!m->headers.back().second.empty()) {
-        m->headers.push_back(std::make_pair("", ""));
+        m->headers.push_back(std::make_pair(std::string(), std::string()));
     }
     m->headers.back().first.append(at, length);
     return 0;

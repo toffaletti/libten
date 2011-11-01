@@ -17,6 +17,8 @@ namespace ten {
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
+const size_t HEADER_RESERVE = 5;
+
 struct Headers {
     header_list headers;
 
@@ -24,6 +26,7 @@ struct Headers {
 
     template <typename ValueT, typename ...Args>
     Headers(const std::string &header_name, const ValueT &header_value, Args ...args) {
+        headers.reserve(std::max(HEADER_RESERVE, sizeof...(args)));
         init(header_name, header_value, args...);
     }
 
@@ -93,7 +96,7 @@ struct http_request : http_base {
     std::string uri;
     std::string http_version;
 
-    http_request() {}
+    http_request() : http_base() {}
     http_request(const std::string &method_,
         const std::string &uri_,
         const Headers &headers_ = Headers(),
@@ -123,7 +126,7 @@ struct http_response : http_base {
     std::string reason;
     http_request *req;
 
-    http_response(http_request *req_) : req(req_) {}
+    http_response(http_request *req_) : http_base(), req(req_) {}
 
     http_response(unsigned long status_code_ = 200,
         const std::string &reason_ = "OK",
