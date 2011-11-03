@@ -43,7 +43,10 @@ struct fd_base : boost::noncopyable {
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     // C++0x move stuff
-    fd_base(fd_base &&other) : fd(other.fd) { other.fd = -1; }
+    fd_base(fd_base &&other) : fd(-1) {
+        std::swap(fd, other.fd);
+    }
+
     fd_base &operator = (fd_base &&other) {
         if (this != &other) {
             std::swap(fd, other.fd);

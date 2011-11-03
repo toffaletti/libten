@@ -10,9 +10,21 @@ int dial(int fd, const char *addr, uint16_t port);
 
 class netsock : boost::noncopyable {
 public:
-    netsock(int fd) throw (errno_error);
-
+    netsock(int fd=-1) throw (errno_error);
     netsock(int domain, int type, int protocol=0) throw (errno_error);
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    // C++0x move stuff
+    netsock(netsock &&other) : s(-1) {
+        std::swap(s, other.s);
+    }
+    netsock &operator = (netsock &&other) {
+        if (this != &other) {
+            std::swap(s, other.s);
+        }
+        return *this;
+    }
+#endif
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
     void listen(int backlog=128) throw (errno_error) { s.listen(backlog); }
@@ -64,12 +76,11 @@ public:
     netsock_server(const std::string &protocol_name_,
             size_t stacksize_=default_stacksize,
             int timeout_ms_=-1)
-        : sock(AF_INET, SOCK_STREAM),
+        :
         protocol_name(protocol_name_),
         stacksize(stacksize_),
         timeout_ms(timeout_ms_)
     {
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
 
     netsock_server(const netsock_server &) = delete;
@@ -78,6 +89,14 @@ public:
     //! listen and accept connections
     void serve(const std::string &ipaddr, uint16_t port) {
         address baddr(ipaddr.c_str(), port);
+        serve(baddr);
+    }
+
+    //! listen and accept connections
+    void serve(address &baddr) {
+
+        sock = netsock(baddr.family(), SOCK_STREAM);
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
         sock.bind(baddr);
         sock.getsockname(baddr);
         LOG(INFO) << "listening for " << protocol_name << " on " << baddr;

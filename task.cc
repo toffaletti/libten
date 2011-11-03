@@ -119,6 +119,8 @@ struct proc {
     bool asleep;
     //! true when asleep in epoll_wait
     bool polling;
+    //! true when canceled
+    bool canceled;
     //! cond used to wake up when runqueue is empty and no epoll
     std::condition_variable cond;
     //! pipe used to wake up from epoll
@@ -129,7 +131,7 @@ struct proc {
 
     proc(task *t = 0)
         : _sched(0), nswitch(0), ctask(0),
-        asleep(false), polling(false), pi(O_NONBLOCK), taskcount(0)
+        asleep(false), polling(false), canceled(false), pi(O_NONBLOCK), taskcount(0)
     {
         now = monotonic_clock::now();
         add(this);
@@ -154,6 +156,12 @@ struct proc {
         return !runqueue.empty();
     }
 
+    void cancel() {
+        std::unique_lock<std::mutex> lk(mutex);
+        canceled = true;
+        wakeupandunlock(lk);
+    }
+
     void wakeupandunlock(std::unique_lock<std::mutex> &lk);
 
     void addtaskinproc(task *t) {
@@ -176,7 +184,6 @@ struct proc {
     }
 
     static void startproc(proc *p_, task *t) {
-        //std::unique_lock<std::mutex> lk(p_->mutex);
         _this_proc = p_;
         std::unique_ptr<proc> p(p_);
         p->addtaskinproc(t);
@@ -539,11 +546,21 @@ void proc::schedule() {
     for (;;) {
         if (taskcount == 0) break;
         std::unique_lock<std::mutex> lk(mutex);
-        while (runqueue.empty()) {
+        while (runqueue.empty() && !canceled) {
             asleep = true;
             cond.wait(lk);
         }
         asleep = false;
+        if (canceled) {
+            // set canceled to false so we don't
+            // execute this every time through the loop
+            // while the tasks are cleaning up
+            canceled = false;
+            lk.unlock();
+            procshutdown();
+            lk.lock();
+            CHECK(!runqueue.empty()) << "BUG: runqueue empty?";
+        }
         task *t = runqueue.front();
         runqueue.pop_front();
         ctask = t;
@@ -859,12 +876,14 @@ void task::swap() {
 
     if (canceled && !unwinding) {
         unwinding = true;
+        DVLOG(5) << "THROW INTERRUPT: " << this;
         throw task_interrupted();
     }
 
     if (deadline.time_since_epoch().count() != 0 && _this_proc->now >= deadline) {
         // remove deadline so we don't throw twice
         deadline = time_point<monotonic_clock>();
+        DVLOG(5) << "THROW DEADLINE: " << this;
         throw deadline_reached();
     }
 }
@@ -884,6 +903,13 @@ void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
 proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
     if (thread == 0) {
+        {
+            std::unique_lock<std::mutex> lk(procsmutex);
+            for (auto i=procs.begin(); i!= procs.end(); ++i) {
+                if (*i == this) continue;
+                (*i)->cancel();
+            }
+        }
         for (;;) {
             // TODO: remove this busy loop in favor of sleeping the proc
             {

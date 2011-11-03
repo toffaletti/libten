@@ -6,7 +6,7 @@
 #include <functional>
 
 using namespace ten;
-const size_t default_stacksize=4096;
+const size_t default_stacksize=4096*2;
 
 // sends a file over a tcp socket on port 5500
 // $ nc -l -p 5500 > out & ./file-send libfw.a

@@ -6,7 +6,7 @@
 
 using namespace ten;
 
-const size_t default_stacksize=4096;
+const size_t default_stacksize=4096*2;
 
 static void connecter(address &addr, channel<int> ch) {
     netsock s(AF_INET, SOCK_STREAM);

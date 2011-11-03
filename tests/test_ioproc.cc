@@ -5,7 +5,7 @@
 
 using namespace ten;
 
-const size_t default_stacksize=4096;
+const size_t default_stacksize=8*1024;
 
 void ioproc_sleeper() {
     ioproc io;

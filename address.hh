@@ -4,8 +4,9 @@
 #include "error.hh"
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string>
 #include <string.h>
-#include <ostream>
+#include <sstream>
 #include <boost/lexical_cast.hpp>
 
 namespace ten {
@@ -47,6 +48,14 @@ struct address {
         clear();
         pton(s); // can throw
         port(p);
+    }
+
+    //! \param s address in string format for inet_pton
+    static address parse(const std::string &s) {
+        std::string host = s;
+        uint16_t port = 0;
+        parse_host_port(host, port);
+        return address(host.c_str(), port);
     }
 
     //! zeros out the address
@@ -109,6 +118,12 @@ struct address {
             return;
         }
         throw errno_error();
+    }
+
+    std::string str() const {
+        std::stringstream ss;
+        ss << *this;
+        return ss.str();
     }
 
     //! output address in addr:port format
