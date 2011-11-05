@@ -325,7 +325,7 @@ void task::ready() {
 
 void qutex::lock() {
     task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::lock called outside of task";
+    CHECK(t) << "BUG: qutex::lock called outside of task:\n" << saved_backtrace().str();
     {
         std::unique_lock<std::timed_mutex> lk(m);
         if (owner == 0 || owner == t) {
@@ -334,9 +334,7 @@ void qutex::lock() {
             return;
         }
         DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
-        if (t->canceled) {
-            DVLOG(5) << "BUG LOCK";
-        }
+        CHECK(!t->canceled) << "BUG: qutex::lock task canceled:\n" << saved_backtrace().str();
         waiting.push_back(t);
     }
 
@@ -367,7 +365,7 @@ void qutex::lock() {
 
 bool qutex::try_lock() {
     task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::try_lock called outside of task";
+    CHECK(t) << "BUG: qutex::try_lock called outside of task:\n" << saved_backtrace().str();
     std::unique_lock<std::timed_mutex> lk(m, std::try_to_lock);
     if (lk.owns_lock()) {
         if (owner == 0) {
@@ -869,7 +867,7 @@ const time_point<monotonic_clock> &procnow() {
 
 void task::swap() {
     if (canceled && !exiting) {
-        DVLOG(5) << "BUG: " << this;
+        DVLOG(5) << "BUG: " << this << "\n" << saved_backtrace().str();
     }
     // swap to scheduler coroutine
     co.swap(&_this_proc->co);

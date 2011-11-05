@@ -8,11 +8,11 @@
 
 namespace ten {
 
-backtrace_exception::backtrace_exception() {
+saved_backtrace::saved_backtrace() {
     size = backtrace(array, 50);
 }
 
-std::string backtrace_exception::str() {
+std::string saved_backtrace::str() {
     std::stringstream ss;
     std::unique_ptr<char *, void (*)(void*)> messages(backtrace_symbols(array, size), free);
     // skip the first frame which is the constructor

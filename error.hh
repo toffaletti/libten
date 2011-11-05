@@ -10,17 +10,24 @@
 
 namespace ten {
 
+struct saved_backtrace {
+    void *array[50];
+    int size;
+
+    saved_backtrace();
+    std::string str();
+};
+
 //! captures the backtrace in the constructor
 //
 //! useful for coroutines because the stack is lost switching contexts
 class backtrace_exception : public std::exception {
 public:
-    backtrace_exception();
+    backtrace_exception() {}
 
-    std::string str();
+    std::string str() { return bt.str(); }
 private:
-    void *array[50];
-    int size;
+    saved_backtrace bt;
 };
 
 //! exception that sets what() based on current errno value
