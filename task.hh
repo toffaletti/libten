@@ -27,6 +27,7 @@ typedef std::deque<task *> tasklist;
 typedef std::deque<proc *> proclist;
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
+uint64_t taskid();
 int64_t taskyield();
 //static void taskexit(void *r = 0);
 bool taskcancel(uint64_t id);

@@ -211,6 +211,12 @@ uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     return t->id;
 }
 
+uint64_t taskid() {
+    CHECK(_this_proc);
+    CHECK(_this_proc->ctask);
+    return _this_proc->ctask->id;
+}
+
 int64_t taskyield() {
     proc *p = _this_proc;
     uint64_t n = p->nswitch;
