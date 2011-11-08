@@ -163,6 +163,15 @@ public:
         m->not_empty.wakeupall();
         m->not_full.wakeupall();
     }
+
+    void clear() {
+        std::unique_lock<qutex> l(m->qtx);
+        while (!m->queue.empty()) {
+            m->queue.pop();
+        }
+        m->unread = 0;
+        m->not_full.wakeupall();
+    }
 private:
     std::shared_ptr<impl> m;
     bool autoclose;
