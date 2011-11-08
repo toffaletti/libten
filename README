@@ -2,7 +2,7 @@ C++ library for network services on modern x86-64 Linux.
 Heavily inspired and copied from python-gevent, state-threads, plan9, and go-lang.
 
 boost.context-0.7.6 parts from https://github.com/olk/boost.context
-http_parser from https://github.com/ry/http-parser
+http_parser from https://github.com/joyent/http-parser
 glog-0.3.1 from http://code.google.com/p/google-glog/
 stringencoders from http://code.google.com/p/stringencoders/
 msgpack-0.5.7 from http://msgpack.org/
