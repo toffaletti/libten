@@ -738,7 +738,13 @@ struct io_scheduler {
                 break;
         }
         pollfd fds = {fd, events, 0};
-        return poll(&fds, 1, ms) > 0;
+        if (poll(&fds, 1, ms) > 0) {
+            if ((fds.revents & EPOLLERR) || (fds.revents & EPOLLHUP)) {
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
@@ -832,7 +838,7 @@ struct io_scheduler {
                     if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
                         pollfds[fd].p_out->revents = i->events;
                         t = pollfds[fd].t_out;
-                        DVLOG(5) << "OUT EVENT on task: " << t << " state: " << t->state;
+                        DVLOG(5) << "OUT EVENT on task: " << t;
                         t->ready();
                     }
 
