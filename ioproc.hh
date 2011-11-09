@@ -131,10 +131,10 @@ template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n
     return iocall<ssize_t>(io, std::bind(::write, fd, buf, n));
 }
 
-extern int dial(int fd, const char *addr, uint16_t port);
+extern int netdial(int fd, const char *addr, uint16_t port);
 
 template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64_t port) {
-    return iocall<int>(io, std::bind(dial, fd, addr, port));
+    return iocall<int>(io, std::bind(netdial, fd, addr, port));
 }
 
 } // end namespace ten 

@@ -4,7 +4,7 @@
 
 namespace ten {
 
-int netconnect(int fd, const address &addr, unsigned int ms) {
+int netconnect(int fd, const address &addr, unsigned ms) {
     while (::connect(fd, addr.sockaddr(), addr.addrlen()) < 0) {
         if (errno == EINTR)
             continue;
@@ -21,7 +21,7 @@ int netconnect(int fd, const address &addr, unsigned int ms) {
     return 0;
 }
 
-int dial(int fd, const char *addr, uint16_t port) {
+int netdial(int fd, const char *addr, uint16_t port) {
     struct addrinfo *results = 0;
     struct addrinfo *result = 0;
     int status = getaddrinfo(addr, NULL, NULL, &results);
@@ -37,47 +37,30 @@ int dial(int fd, const char *addr, uint16_t port) {
     return status;
 }
 
-netsock::netsock(int fd) throw (errno_error) : s(fd) {}
-
-netsock::netsock(int domain, int type, int protocol) throw (errno_error)
-    : s(domain, type | SOCK_NONBLOCK, protocol)
-{
-}
-
-int netsock::dial(const char *addr, uint16_t port, unsigned int timeout_ms) {
-    // need large stack size for getaddrinfo (see dial)
-    // TODO: maybe replace with c-ares from libcurl project
-    ioproc io(8*1024*1024);
-    return iodial(io, s.fd, addr, port);
-}
-
-int netsock::connect(const address &addr, unsigned int timeout_ms) {
-    return netconnect(s.fd, addr, timeout_ms);
-}
-
-int netsock::accept(address &addr, int flags, unsigned int timeout_ms) {
-    int fd;
-    while ((fd = s.accept(addr, flags | SOCK_NONBLOCK)) < 0) {
+int netaccept(int fd, address &addr, int flags, unsigned timeout_ms) {
+    int nfd;
+    socklen_t addrlen = addr.addrlen();
+    while ((nfd = ::accept4(fd, addr.sockaddr(), &addrlen, flags | SOCK_NONBLOCK)) < 0) {
         if (errno == EINTR)
             continue;
         if (!IO_NOT_READY_ERROR)
             return -1;
-        if (!fdwait(s.fd, 'r', timeout_ms)) {
+        if (!fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
             return -1;
         }
     }
-    return fd;
+    return nfd;
 }
 
-ssize_t netsock::recv(void *buf, size_t len, int flags, unsigned int timeout_ms) {
+ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned timeout_ms) {
     ssize_t nr;
-    while ((nr = s.recv(buf, len, flags)) < 0) {
+    while ((nr = ::recv(fd, buf, len, flags)) < 0) {
         if (errno == EINTR)
             continue;
         if (!IO_NOT_READY_ERROR)
             break;
-        if (!fdwait(s.fd, 'r', timeout_ms)) {
+        if (!fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
             break;
         }
@@ -85,16 +68,16 @@ ssize_t netsock::recv(void *buf, size_t len, int flags, unsigned int timeout_ms)
     return nr;
 }
 
-ssize_t netsock::send(const void *buf, size_t len, int flags, unsigned int timeout_ms) {
+ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned timeout_ms) {
     size_t total_sent=0;
     while (total_sent < len) {
-        ssize_t nw = s.send(&((const char *)buf)[total_sent], len-total_sent, flags);
+        ssize_t nw = ::send(fd, &((const char *)buf)[total_sent], len-total_sent, flags);
         if (nw == -1) {
             if (errno == EINTR)
                 continue;
             if (!IO_NOT_READY_ERROR)
                 return -1;
-            if (!fdwait(s.fd, 'w', timeout_ms)) {
+            if (!fdwait(fd, 'w', timeout_ms)) {
                 errno = ETIMEDOUT;
                 return total_sent;
             }
@@ -103,6 +86,13 @@ ssize_t netsock::send(const void *buf, size_t len, int flags, unsigned int timeo
         }
     }
     return total_sent;
+}
+
+int netsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
+    // need large stack size for getaddrinfo (see dial)
+    // TODO: maybe replace with c-ares from libcurl project
+    ioproc io(8*1024*1024);
+    return iodial(io, s.fd, addr, port);
 }
 
 } // end namespace ten

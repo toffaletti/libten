@@ -6,25 +6,19 @@
 
 namespace ten {
 
-int dial(int fd, const char *addr, uint16_t port);
+int netconnect(int fd, const address &addr, unsigned ms);
+int netdial(int fd, const char *addr, uint16_t port);
+int netaccept(int fd, address &addr, int flags, unsigned ms);
+ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned ms);
+ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned ms);
 
-class netsock : boost::noncopyable {
+class sockbase : boost::noncopyable {
 public:
-    netsock(int fd=-1) throw (errno_error);
-    netsock(int domain, int type, int protocol=0) throw (errno_error);
+    socket_fd s;
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
-    netsock(netsock &&other) : s(-1) {
-        std::swap(s, other.s);
-    }
-    netsock &operator = (netsock &&other) {
-        if (this != &other) {
-            std::swap(s, other.s);
-        }
-        return *this;
-    }
-#endif
+    sockbase(int fd=-1) throw (errno_error) : s(fd) {}
+    sockbase(int domain, int type, int protocol=0) throw (errno_error)
+        : s(domain, type | SOCK_NONBLOCK, protocol) {}
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
     void listen(int backlog=128) throw (errno_error) { s.listen(backlog); }
@@ -50,25 +44,72 @@ public:
         return s.setsockopt(level, optname, optval);
     }
 
-    //! dial requires a large 8MB stack size for getaddrinfo
-    int dial(const char *addr,
-            uint16_t port, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
-
-    int connect(const address &addr,
-            unsigned int timeout_ms=0) __attribute__((warn_unused_result));
-
-    int accept(address &addr,
-            int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
-
-    ssize_t recv(void *buf,
-            size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
-
-    ssize_t send(const void *buf,
-            size_t len, int flags=0, unsigned int timeout_ms=0) __attribute__((warn_unused_result));
-
     void close() { s.close(); }
 
-    socket_fd s;
+    virtual int dial(const char *addr,
+            uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result)) = 0;
+
+    virtual int connect(const address &addr,
+            unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+
+    virtual int accept(address &addr,
+            int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+
+    virtual ssize_t recv(void *buf,
+            size_t len, int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+
+    virtual ssize_t send(const void *buf,
+            size_t len, int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+};
+
+class netsock : public sockbase {
+public:
+    netsock(int fd=-1) throw (errno_error) : sockbase(fd) {}
+    netsock(int domain, int type, int protocol=0) throw (errno_error)
+        : sockbase(domain, type, protocol) {}
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    // C++0x move stuff
+    netsock(netsock &&other) : sockbase(-1) {
+        std::swap(s, other.s);
+    }
+    netsock &operator = (netsock &&other) {
+        if (this != &other) {
+            std::swap(s, other.s);
+        }
+        return *this;
+    }
+#endif
+
+    //! dial requires a large 8MB stack size for getaddrinfo
+    int dial(const char *addr,
+            uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result));
+
+    int connect(const address &addr,
+            unsigned timeout_ms=0) __attribute__((warn_unused_result))
+    {
+        return netconnect(s.fd, addr, timeout_ms);
+    }
+
+    int accept(address &addr,
+            int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+    {
+        return netaccept(s.fd, addr, flags, timeout_ms);
+    }
+
+    ssize_t recv(void *buf,
+            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+    {
+        return netrecv(s.fd, buf, len, flags, timeout_ms);
+    }
+
+    ssize_t send(const void *buf,
+            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+    {
+        return netsend(s.fd, buf, len, flags, timeout_ms);
+    }
+
+
 };
 
 class netsock_server {
