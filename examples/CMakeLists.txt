@@ -29,3 +29,7 @@ target_link_libraries(http-proxy ten http uri)
 
 add_executable(msg-pack msgpack.cc)
 target_link_libraries(msg-pack ten msgpack)
+
+# optional
+add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
+target_link_libraries(https-get ten http uri ssl)

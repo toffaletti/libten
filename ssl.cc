@@ -1,8 +1,7 @@
-#include <openssl/ssl.h>
+#include "ssl.hh"
+#include "ioproc.hh"
 #include <openssl/err.h>
 #include <arpa/inet.h>
-#include "net.hh"
-#include "ssl.hh"
 
 namespace ten {
 
@@ -103,22 +102,17 @@ static int netfd_puts(BIO *b, const char *str) {
 
 static int netfd_connect(BIO *b) {
     netfd_state_t *s = (netfd_state_t *)b->ptr;
-    int ret = -1;
-
-    if (BIO_get_port(s->param_port, &s->port) <= 0) {
-        goto done;
+    if (s->port == 0) {
+        if (BIO_get_port(s->param_port, &s->port) <= 0) {
+            return -1;
+        }
+    }
+    if (netdial(b->num, s->param_hostname, s->port) == 0) {
+        // success!
+        return 1;
     }
 
-    if (netdial(b->num, s->param_hostname, s->port) != 0) {
-        goto done;
-    }
-
-    // success!
-    ret = 0;
-
-done:
-    return ret;
-
+    return 0;
 }
 
 static long netfd_ctrl(BIO *b, int cmd, long num, void *ptr) {
@@ -200,11 +194,11 @@ static long netfd_ctrl(BIO *b, int cmd, long num, void *ptr) {
                     //char buf[DECIMAL_SIZE(int)+1];
                     char buf[32];
 
-                    BIO_snprintf(buf, sizeof(buf), "%d", *(int *)ptr);
+                    BIO_snprintf(buf, sizeof(buf), "%d", (uint16_t)(intptr_t)ptr);
                     if (s->param_port != NULL)
                         OPENSSL_free(s->param_port);
                     s->param_port=BUF_strdup(buf);
-                    s->port= *(int *)ptr;
+                    s->port=(intptr_t)ptr;
                 }
             }
             break;
@@ -236,21 +230,22 @@ static long netfd_ctrl(BIO *b, int cmd, long num, void *ptr) {
 }
 
 
-sslsock::sslsock(SSL_METHOD *method, int fd) throw (errno_error) : s(fd), ctx(0), bio(0)
+sslsock::sslsock(SSL_METHOD *method, int fd) throw (errno_error)
+    : sockbase(fd), ctx(0), bio(0)
 {
     ctx = SSL_CTX_new(method);
-    BIO *bio_ssl = BIO_new_ssl(ctx, 0);
+    BIO *ssl_bio = BIO_new_ssl(ctx, 0); /* server */
     BIO *net_bio = BIO_new_netfd(s.fd, 0);
-    bio = BIO_push(bio_ssl, net_bio);
+    bio = BIO_push(ssl_bio, net_bio);
 }
 
 sslsock::sslsock(SSL_METHOD *method, int domain, int type, int protocol) throw (errno_error)
-    : s(domain, type | SOCK_NONBLOCK, protocol), ctx(0), bio(0)
+    : sockbase(domain, type | SOCK_NONBLOCK, protocol), ctx(0), bio(0)
 {
     ctx = SSL_CTX_new(method);
-    BIO *bio_ssl = BIO_new_ssl(ctx, 0);
+    BIO *ssl_bio = BIO_new_ssl(ctx, 1); /* client */
     BIO *net_bio = BIO_new_netfd(s.fd, 0);
-    bio = BIO_push(bio_ssl, net_bio);
+    bio = BIO_push(ssl_bio, net_bio);
 }
 
 sslsock::~sslsock() {
@@ -261,15 +256,9 @@ sslsock::~sslsock() {
 int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
     // need large stack size for getaddrinfo (see dial)
     // TODO: maybe replace with c-ares from libcurl project
-    //ioproc io(8*1024*1024);
-    //return iodial(io, s.fd, addr, port);
-    BIO_set_conn_hostname(bio, addr);
-    BIO_set_conn_int_port(bio, port);
-
-    if (BIO_do_connect(bio) <= 0) {
-        char errbuf[128];
-        throw errorx("%s", ERR_error_string(ERR_get_error(), errbuf));
-    }
+    ioproc io(8*1024*1024);
+    int status = iodial(io, s.fd, addr, port);
+    if (status != 0) return status;
 
     handshake(); 
 

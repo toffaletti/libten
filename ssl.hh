@@ -1,4 +1,6 @@
+#include <openssl/ssl.h>
 #include <openssl/bio.h>
+#include "net.hh"
 
 namespace ten {
 
@@ -7,6 +9,9 @@ BIO *BIO_new_netfd(int fd, int close_flag);
 
 class sslsock : public sockbase {
 public:
+    SSL_CTX *ctx;
+    BIO *bio;
+
     sslsock(SSL_METHOD *method, int fd=-1) throw (errno_error);
     sslsock(SSL_METHOD *method, int domain, int type, int protocol=0) throw (errno_error);
 
@@ -14,7 +19,7 @@ public:
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     // C++0x move stuff
-    sslsock(sslsock &&other) : s(-1), bio(0) {
+    sslsock(sslsock &&other) : sockbase(), ctx(0), bio(0) {
         std::swap(s, other.s);
         std::swap(ctx, other.ctx);
         std::swap(bio, other.bio);
@@ -60,9 +65,6 @@ public:
 
     void handshake();
 
-    socket_fd s;
-    SSL_CTX *ctx;
-    BIO *bio;
 };
 
 
