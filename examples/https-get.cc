@@ -10,7 +10,8 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
-    sslsock s(SSLv23_client_method(), AF_INET, SOCK_STREAM);
+    sslsock s(AF_INET, SOCK_STREAM);
+    s.initssl(SSLv23_client_method(), true);
     u.normalize();
     if (u.scheme != "https") return;
     if (u.port == 0) u.port = 443;

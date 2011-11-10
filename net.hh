@@ -19,6 +19,7 @@ public:
     sockbase(int fd=-1) throw (errno_error) : s(fd) {}
     sockbase(int domain, int type, int protocol=0) throw (errno_error)
         : s(domain, type | SOCK_NONBLOCK, protocol) {}
+    virtual ~sockbase() {}
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
     void listen(int backlog=128) throw (errno_error) { s.listen(backlog); }
@@ -70,7 +71,7 @@ public:
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     // C++0x move stuff
-    netsock(netsock &&other) : sockbase(-1) {
+    netsock(netsock &&other) : sockbase() {
         std::swap(s, other.s);
     }
     netsock &operator = (netsock &&other) {

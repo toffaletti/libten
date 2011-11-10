@@ -230,27 +230,37 @@ static long netfd_ctrl(BIO *b, int cmd, long num, void *ptr) {
 }
 
 
-sslsock::sslsock(SSL_METHOD *method, int fd) throw (errno_error)
-    : sockbase(fd), ctx(0), bio(0)
-{
-    ctx = SSL_CTX_new(method);
-    BIO *ssl_bio = BIO_new_ssl(ctx, 0); /* server */
-    BIO *net_bio = BIO_new_netfd(s.fd, 0);
-    bio = BIO_push(ssl_bio, net_bio);
+sslerror::sslerror() {
+    err = ERR_get_error();
+    ERR_error_string(err, errstr);
 }
 
-sslsock::sslsock(SSL_METHOD *method, int domain, int type, int protocol) throw (errno_error)
+
+sslsock::sslsock(int fd) throw (errno_error)
+    : sockbase(fd), ctx(0), bio(0)
+{
+}
+
+sslsock::sslsock(int domain, int type, int protocol) throw (errno_error)
     : sockbase(domain, type | SOCK_NONBLOCK, protocol), ctx(0), bio(0)
 {
-    ctx = SSL_CTX_new(method);
-    BIO *ssl_bio = BIO_new_ssl(ctx, 1); /* client */
-    BIO *net_bio = BIO_new_netfd(s.fd, 0);
-    bio = BIO_push(ssl_bio, net_bio);
 }
 
 sslsock::~sslsock() {
     BIO_free_all(bio);
     SSL_CTX_free(ctx);
+}
+
+
+void sslsock::initssl(SSL_CTX *ctx_, bool client) {
+    ctx = ctx_;
+    BIO *ssl_bio = BIO_new_ssl(ctx, client);
+    BIO *net_bio = BIO_new_netfd(s.fd, 0);
+    bio = BIO_push(ssl_bio, net_bio);
+}
+
+void sslsock::initssl(SSL_METHOD *method, bool client) {
+    initssl(SSL_CTX_new(method), client);
 }
 
 int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
@@ -267,8 +277,7 @@ int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
 
 void sslsock::handshake() {
     if (BIO_do_handshake(bio) <= 0) {
-        char errbuf[128];
-        throw errorx("%s", ERR_error_string(ERR_get_error(), errbuf));
+        throw sslerror();
     }
 }
 
