@@ -61,6 +61,21 @@ public:
 
     virtual ssize_t send(const void *buf,
             size_t len, int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+
+    ssize_t recvall(void *buf, size_t len, unsigned ms=0) {
+        size_t pos = 0;
+        ssize_t left = len;
+        while (pos != len) {
+            ssize_t nr = recv(&((char *)buf)[pos], left, 0, ms);
+            if (nr > 0) {
+                pos += nr;
+                left -= nr;
+            } else {
+                break;
+            }
+        }
+        return pos;
+    }
 };
 
 class netsock : public sockbase {
