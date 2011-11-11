@@ -1015,7 +1015,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
         t->swap(); 
         lk.lock();
     } catch (task_interrupted &e) {
-        std::unique_lock<std::timed_mutex> (q->m);
+        std::unique_lock<std::timed_mutex> ll(q->m);
         auto i = std::find(waiting.begin(), waiting.end(), t);
         if (i != waiting.end()) {
             waiting.erase(i);
