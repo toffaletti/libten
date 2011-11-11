@@ -88,6 +88,12 @@ struct task {
             t->fn();
         } catch (task_interrupted &e) {
             DVLOG(5) << "task interrupted " << t << " " << t->name << " |" << t->state << "|";
+        } catch (backtrace_exception &e) {
+            LOG(ERROR) << "unhandled error in task::start: " << e.what() << "\n" << e.str();
+            std::exit(2);
+        } catch (std::exception &e) {
+            LOG(ERROR) << "unhandled error in task::start: " << e.what();
+            std::exit(2);
         }
         t->exit();
     }
@@ -546,44 +552,52 @@ int procmain::main(int argc, char *argv[]) {
 }
 
 void proc::schedule() {
-    DVLOG(5) << "p: " << this << " entering proc::schedule";
-    for (;;) {
-        if (taskcount == 0) break;
-        std::unique_lock<std::mutex> lk(mutex);
-        while (runqueue.empty() && !canceled) {
-            asleep = true;
-            cond.wait(lk);
-        }
-        asleep = false;
-        if (canceled) {
-            // set canceled to false so we don't
-            // execute this every time through the loop
-            // while the tasks are cleaning up
-            canceled = false;
+    try {
+        DVLOG(5) << "p: " << this << " entering proc::schedule";
+        for (;;) {
+            if (taskcount == 0) break;
+            std::unique_lock<std::mutex> lk(mutex);
+            while (runqueue.empty() && !canceled) {
+                asleep = true;
+                cond.wait(lk);
+            }
+            asleep = false;
+            if (canceled) {
+                // set canceled to false so we don't
+                // execute this every time through the loop
+                // while the tasks are cleaning up
+                canceled = false;
+                lk.unlock();
+                procshutdown();
+                lk.lock();
+                CHECK(!runqueue.empty()) << "BUG: runqueue empty?";
+            }
+            task *t = runqueue.front();
+            runqueue.pop_front();
+            ctask = t;
+            if (!t->systask) {
+                // dont increment for system tasks so
+                // while(taskyield()) {} can be used to
+                // wait for all other tasks to exit
+                // really only useful for unit tests.
+                ++nswitch;
+            }
+            DVLOG(5) << "p: " << this << " swapping to: " << t;
             lk.unlock();
-            procshutdown();
+            co.swap(&t->co);
             lk.lock();
-            CHECK(!runqueue.empty()) << "BUG: runqueue empty?";
+            ctask = 0;
+            
+            if (t->exiting) {
+                deltaskinproc(t);
+            }
         }
-        task *t = runqueue.front();
-        runqueue.pop_front();
-        ctask = t;
-        if (!t->systask) {
-            // dont increment for system tasks so
-            // while(taskyield()) {} can be used to
-            // wait for all other tasks to exit
-            // really only useful for unit tests.
-            ++nswitch;
-        }
-        DVLOG(5) << "p: " << this << " swapping to: " << t;
-        lk.unlock();
-        co.swap(&t->co);
-        lk.lock();
-        ctask = 0;
-        
-        if (t->exiting) {
-            deltaskinproc(t);
-        }
+    } catch (backtrace_exception &e) {
+        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what() << "\n" << e.str();
+        std::exit(2);
+    } catch (std::exception &e) {
+        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what();
+        std::exit(2);
     }
 }
 
