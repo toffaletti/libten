@@ -19,25 +19,39 @@
 ;  |        RDI        |        RSI        |         RBX        |        RBP        |
 ;  ----------------------------------------------------------------------------------
 ;  ----------------------------------------------------------------------------------
-;  |    16   |    17   |   18   |    19    |    20    |    21   |   22    |   23    |
+;  |    16   |    17   |   18   |    19    |                                        |
 ;  ----------------------------------------------------------------------------------
-;  |   0x40  |   0x44  |  0x48  |   0x4c   |   0x50   |  0x54   |  0x58   |  0x5c   |
+;  |   0x40  |   0x44  |  0x48  |   0x4c   |                                        |
 ;  ----------------------------------------------------------------------------------
-;  |        RSP        |       RIP         |         RCX        |                   |
+;  |        RSP        |       RIP         |                                        |
 ;  ----------------------------------------------------------------------------------
 ;  ----------------------------------------------------------------------------------
-;  |    24   |    25   |                                                            |
+;  |    20   |    21   |                                                            |
 ;  ----------------------------------------------------------------------------------
-;  |   0x60  |   0x64  |                                                            |
+;  |   0x50  |   0x54  |                                                            |
 ;  ----------------------------------------------------------------------------------
 ;  | fc_mxcsr|fc_x87_cw|                                                            |
 ;  ----------------------------------------------------------------------------------
 ;  ----------------------------------------------------------------------------------
-;  |    26    |   27   |    28    |    29   |    30   |    31   |    32   |    33   |
+;  |    22    |   23   |    24    |    25   |                                       |
 ;  ----------------------------------------------------------------------------------
-;  |   0x68   |  0x6c  |   0x70   |   0x74  |   0x78  |   0x7c  |   0x80  |   0x84  |
+;  |   0x58   |  0x5c  |   0x60   |   0x64  |                                       |
 ;  ----------------------------------------------------------------------------------
-;  |       sbase       |       slimit       |       fc_link     |      fbr_strg     |
+;  |       sbase       |       slimit       |                                       |
+;  ----------------------------------------------------------------------------------
+;  ----------------------------------------------------------------------------------
+;  |    26   |    27   |                                                            |
+;  ----------------------------------------------------------------------------------
+;  |   0x68  |   0x6c  |                                                            |
+;  ----------------------------------------------------------------------------------
+;  |       fc_link     |                                                            |
+;  ----------------------------------------------------------------------------------
+;  ----------------------------------------------------------------------------------
+;  |    28   |    29   |                                                            |
+;  ----------------------------------------------------------------------------------
+;  |   0x70  |   0x74  |                                                            |
+;  ----------------------------------------------------------------------------------
+;  |      fbr_strg     |                                                            |
 ;  ----------------------------------------------------------------------------------
 
 EXTERN  _exit:PROC                  ; standard C library function
@@ -58,16 +72,16 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     [rcx+030h],  rbx        ; save RBX
     mov     [rcx+038h],  rbp        ; save RBP
 
-    stmxcsr [rcx+060h]              ; save SSE2 control and status word
-    fnstcw  [rcx+064h]              ; save x87 control word
+    stmxcsr [rcx+050h]              ; save SSE2 control and status word
+    fnstcw  [rcx+054h]              ; save x87 control word
 
     mov     r9,          gs:[030h]  ; load NT_TIB
     mov     rax,         [r9+08h]   ; load current stack base
-    mov     [rcx+068h],  rax        ; save current stack base
+    mov     [rcx+058h],  rax        ; save current stack base
     mov     rax,         [r9+010h]  ; load current stack limit
-    mov     [rcx+070h],  rax        ; save current stack limit
+    mov     [rcx+060h],  rax        ; save current stack limit
     mov     rax,         [r9+018h]  ; load fiber local storage
-    mov     [rcx+080h],  rax        ; save fiber local storage
+    mov     [rcx+070h],  rax        ; save fiber local storage
 
     lea     rax,         [rsp+08h]  ; exclude the return address
     mov     [rcx+040h],  rax        ; save as stack pointer
@@ -84,20 +98,20 @@ boost_fcontext_jump PROC EXPORT FRAME:boost_fcontext_seh
     mov     rbx,        [rdx+030h]  ; restore RBX
     mov     rbp,        [rdx+038h]  ; restore RBP
 
-    ldmxcsr  [rdx+060h]             ; restore SSE2 control and status word
-    fldcw    [rdx+064h]             ; restore x87 control word
+    ldmxcsr  [rdx+050h]             ; restore SSE2 control and status word
+    fldcw    [rdx+054h]             ; restore x87 control word
 
     mov     r9,         gs:[030h]   ; load NT_TIB
-    mov     rax,        [rdx+068h]  ; load stack base
+    mov     rax,        [rdx+058h]  ; load stack base
     mov     [r9+08h],   rax         ; restore stack base
-    mov     rax,        [rdx+070h]  ; load stack limit
+    mov     rax,        [rdx+060h]  ; load stack limit
     mov     [r9+010h],  rax         ; restore stack limit
-    mov     rax,        [rdx+080h]  ; load fiber local storage
+    mov     rax,        [rdx+070h]  ; load fiber local storage
     mov     [r9+018h],  rax         ; restore fiber local storage
 
     mov     rsp,        [rdx+040h]  ; restore RSP
     mov     r9,         [rdx+048h]  ; fetch the address to returned to
-    mov     rcx,        [rdx+050h]  ; restore RCX as first argument for called context
+    mov     rcx,        r14         ; restore RCX as first argument for called context
 
     mov     rax,        r8          ; use third arg as return value after jump
 
@@ -109,8 +123,8 @@ boost_fcontext_make PROC EXPORT FRAME ; generate function table entry in .pdata 
 
     mov  [rcx],      rcx         ; store the address of current context
     mov  [rcx+048h], rdx         ; save the address of the function supposed to run
-    mov  [rcx+050h], r8          ; save the the void pointer
-    mov  rdx,        [rcx+068h]  ; load the address where the context stack beginns
+    mov  [rcx+010h], r8          ; save the the void pointer
+    mov  rdx,        [rcx+058h]  ; load the address where the context stack beginns
 
     push  rcx                    ; save pointer to fcontext_t
     sub   rsp,       028h        ; reserve shadow space for boost_fcontext_algin
@@ -124,10 +138,10 @@ boost_fcontext_make PROC EXPORT FRAME ; generate function table entry in .pdata 
     lea  rdx,        [rdx-028h]  ; reserve 32byte shadow space + return address on stack, (RSP + 8) % 16 == 0
     mov  [rcx+040h], rdx         ; save the address where the context stack beginns
 
-    mov  rax,       [rcx+078h]   ; load the address of the next context
+    mov  rax,       [rcx+068h]   ; load the address of the next context
     mov  [rcx+08h], rax          ; save the address of next context
-    stmxcsr [rcx+060h]           ; save SSE2 control and status word
-    fnstcw  [rcx+064h]           ; save x87 control word
+    stmxcsr [rcx+050h]           ; save SSE2 control and status word
+    fnstcw  [rcx+054h]           ; save x87 control word
 
     lea  rax,       boost_fcontext_link   ; helper code executed after fn() returns
     mov  [rdx],     rax          ; store address off the helper function as return address

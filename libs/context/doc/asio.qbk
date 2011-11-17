@@ -31,7 +31,7 @@ boost.context.
             ctx_(
                 & continuation::trampoline_, this,
                 boost::contexts::default_stacksize(),
-	        	boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
+                boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
             fn_( fn), started_( false)
         {}
 
@@ -81,15 +81,15 @@ until the remaining bytes are received.
 
         void do_()
         {
-           for (;;)                                                   
-           {                                                          
+           for (;;)
+           {
                 boost::asio::ip::tcp::socket socket( acceptor_.get_io_service() );
                 // accept connection request and enque *this for reading data from conenction
                 acceptor_.async_accept( socket, boost::bind( & server::operator(), this->shared_from_this(), _1, 0) );
                 // suspend() jumps back to operator() which returns to asio reactor
                 suspend();
 
-                while ( ! ec_)                                                   
+                while ( ! ec_)
                 {
                     // buffer has local scope!
                     boost::array< char, 1024 > buffer;
@@ -97,7 +97,7 @@ until the remaining bytes are received.
                     // enqueue *this to read some bytes from the connection into buffer
                     socket.async_read_some(
                         boost::asio::buffer( buffer),
-                        boost::bind( & server::operator(), this->shared_from_this(), _1, _2) ); 
+                        boost::bind( & server::operator(), this->shared_from_this(), _1, _2) );
                     // suspend() jumps back to operator(); asio reactor
                     suspend();
 
@@ -111,8 +111,8 @@ until the remaining bytes are received.
                         boost::bind( & server::operator(), this->shared_from_this(), _1, _2) ); 
                     // suspend() jumps back to operator(); asio reactor
                     suspend();
-                }                                                          
-           }                                                          
+                }
+           }
         }
 
         server( boost::asio::io_service & io_service, short port) :
@@ -133,7 +133,7 @@ until the remaining bytes are received.
             n_ = n;
             // jump to coroutine (do_())
             resume();
-        }       
+        }
     };
 
     int main( int argc, char * argv[])
@@ -155,7 +155,7 @@ until the remaining bytes are received.
                 io_service.run();
             }
             std::cout << "Done" << std::endl;
-        
+
             return  EXIT_SUCCESS;
         }
         catch ( std::exception const& e)

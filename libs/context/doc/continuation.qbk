@@ -17,7 +17,7 @@ The functor is required to accept a const reference to its own `continuation` in
     private:
         boost::contexts::context                    ctx_;
         boost::function< void( continuation &) >    fn_;
-		bool										started_;
+        bool                                        started_;
 
         void trampoline_()
         { fn_( * this); }
@@ -26,8 +26,8 @@ The functor is required to accept a const reference to its own `continuation` in
         continuation( boost::function< void( continuation &) > const& fn) :
             ctx_(
                 & continuation::trampoline_, this,
-				boost::contexts::default_stacksize(),
-				boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
+                boost::contexts::default_stacksize(),
+                boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
                 false),
             fn_( fn), started_( false)
         {}

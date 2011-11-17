@@ -13,6 +13,7 @@
 #include <boost/config.hpp>
 #include <boost/move/move.hpp>
 #include <boost/type_traits/remove_reference.hpp>
+#include <boost/utility/base_from_member.hpp>
 
 #include <boost/context/detail/config.hpp>
 #include <boost/context/detail/context_base.hpp>
@@ -27,10 +28,13 @@ namespace contexts {
 namespace detail {
 
 template< typename Fn, typename Allocator >
-class context_object : public context_base< Allocator >
+class context_object : private base_from_member< Fn >,
+                       private base_from_member< Allocator >,
+                       public context_base
 {
 private:
-    Fn  fn_;
+	typedef base_from_member< Fn >			fn_t;
+	typedef base_from_member< Allocator >	alloc_t;
 
     context_object( context_object &);
     context_object & operator=( context_object const&);
@@ -38,96 +42,111 @@ private:
 public:
 #ifndef BOOST_NO_RVALUE_REFERENCES
     context_object( Fn & fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( fn)
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
-    context_object( Fn & fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( fn)
+    context_object( Fn & fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
 
     context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( static_cast< Fn && >( fn) )
+        fn_t( static_cast< Fn && >( fn) ), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return),
     {}
 
-    context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( static_cast< Fn && >( fn) )
+    context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( static_cast< Fn && >( fn) ), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
 #else
     context_object( Fn fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( fn)
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
-    context_object( Fn fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( fn)
+    context_object( Fn fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
 
     context_object( BOOST_RV_REF( Fn) fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( fn)
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
-    context_object( BOOST_RV_REF( Fn) fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( fn)
+    context_object( BOOST_RV_REF( Fn) fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
 #endif
 
+	~context_object()
+	{ cleanup( alloc_t::member); }
+
     void exec()
-    { fn_(); }
+    { fn_t::member(); }
 };
 
 template< typename Fn, typename Allocator >
-class context_object< reference_wrapper< Fn >, Allocator > : public context_base< Allocator >
+class context_object< reference_wrapper< Fn >, Allocator > : private base_from_member< Fn & >,
+                                                             private base_from_member< Allocator >,
+                                                             public context_base
 {
 private:
-    Fn  &   fn_;
+	typedef base_from_member< Fn & >		fn_t;
+	typedef base_from_member< Allocator >	alloc_t;
 
     context_object( context_object &);
     context_object & operator=( context_object const&);
 
 public:
     context_object( reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( fn)
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
-    context_object( reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( fn)
+    context_object( reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
+
+	~context_object()
+	{ cleanup( alloc_t::member); }
 
     void exec()
-    { fn_(); }
+    { fn_t::member(); }
 };
 
 template< typename Fn, typename Allocator >
-class context_object< const reference_wrapper< Fn >, Allocator > : public context_base< Allocator >
+class context_object< const reference_wrapper< Fn >, Allocator > : private base_from_member< Fn & >,
+                                                                   private base_from_member< Allocator >,
+                                                                   public context_base
 {
 private:
-    Fn  &   fn_;
+	typedef base_from_member< Fn & >		fn_t;
+	typedef base_from_member< Allocator >	alloc_t;
 
     context_object( context_object &);
     context_object & operator=( context_object const&);
 
 public:
     context_object( const reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
-        context_base< Allocator >( alloc, size, do_unwind, do_return),
-        fn_( fn)
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
-    context_object( const reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base< Allocator >::ptr_t nxt) :
-        context_base< Allocator >( alloc, size, do_unwind, nxt),
-        fn_( fn)
+    context_object( const reference_wrapper< Fn > fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
+        fn_t( fn), alloc_t( alloc),
+        context_base( alloc_t::member, size, do_unwind, nxt)
     {}
+
+	~context_object()
+	{ cleanup( alloc_t::member); }
 
     void exec()
-    { fn_(); }
+    { fn_t::member(); }
 };
 
 }}}

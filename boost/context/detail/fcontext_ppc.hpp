@@ -31,9 +31,9 @@ typedef struct boost_fcontext boost_fcontext_t;
 struct boost_fcontext
 {
 # if defined(__powerpc64__)
-    boost::uint64_t         fc_greg[24];
+    boost::uint64_t         fc_greg[23];
 # else
-    boost::uint32_t         fc_greg[24];
+    boost::uint32_t         fc_greg[23];
 # endif
     boost::uint64_t         fc_freg[19];
     boost_fcontext_stack_t  fc_stack;

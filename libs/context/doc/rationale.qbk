@@ -22,10 +22,10 @@ required to separate both features in separat classes via pimpl idiom.
 A nice feature is that a __context__ has the size of a pointer, so it fits into
 a register.
 
-With the current design the constructor accepts functors and its arguments+
+With the current design the constructor accepts functors and its arguments
 similiar to __thread__.
 
-With the pimpl idiom the type of the __stack_allocator_context__ can be erased.
+With the pimpl idiom the type of the __stack_allocator_concept__ can be erased.
 
 
 [heading Unwinding]

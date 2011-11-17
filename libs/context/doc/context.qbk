@@ -34,13 +34,13 @@
 [def __coroutines__ ['coroutines]]
 [def __fiber__ ['fiber]]
 [def __fibers__ ['fibers]]
-[def __fls__ ['fiber-local-storage]]
+[def __fls__ ['fiber-local storage]]
 [def __guard_page__ ['guard-page]]
 [def __not_a_context__ ['not-a-context]]
 [def __stack__ [stack_link ['stack]]]
 [def __thread__ ['thread]]
 [def __threads__ ['threads]]
-[def __tls__ ['thread-local-storage]]
+[def __tls__ ['thread-local storage]]
 [def __stack_allocator_concept__ ['stack-allocator]]
 
 [def __fcontext__ ['fcontext_t]]
@@ -55,10 +55,12 @@
 [def __context_resume__ ['context::resume()]]
 [def __context_suspend__ ['context::suspend()]]
 [def __context_unwind__ ['context::unwind_stack()]]
+[def __forced_unwind__ ['forced_unwind]]
 [def __invalid_argument__ ['std::invalid_argument]]
 [def __stack_allocator__ ['stack_allocator]]
 [def __stack_alloc__ ['allocate()]]
 [def __stack_dealloc__ ['deallocate()]]
+[def __stack_helper__ ['stack_helper]]
 
 [def __context_ns__ ['boost::contexts]]
 

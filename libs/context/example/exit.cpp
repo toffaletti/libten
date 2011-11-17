@@ -22,7 +22,7 @@ int main( int argc, char * argv[])
         boost::contexts::context ctx(
 			fn,
 			boost::contexts::default_stacksize(),
-			boost::contexts::no_stack_unwind, boost::contexts::no_return_to_caller);
+			boost::contexts::no_stack_unwind, boost::contexts::exit_application);
 
         ctx.start();
     }

@@ -19,7 +19,7 @@ enum flag_unwind_t
 enum flag_return_t
 {
 	return_to_caller = 0,
-	no_return_to_caller
+	exit_application
 };
 
 }}

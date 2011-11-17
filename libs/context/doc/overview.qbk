@@ -7,29 +7,25 @@
 
 [section:overview Overview]
 
-__boost_context__ provides an abstraction of the execution state, e.g. it
-maintains data like stack (with local variables), all registers and CPU flags,
-stack pointer and instruction pointer - a instance of__context__ represents a
-point in the applications execution path.
-
-A __context__ decides explicitly when it suspends and allows another __context__
-to run (execution control transfered).
-The use of a stackful transfer mechanism enables a __context__ to suspend its
-execution from within nested functions and continues from the exact point where
-it was suspended, if it is resumed next time.
-
-This allows multiple execution paths running on a single __thread__ using a sort
-of cooperative multitasking (__threads__ provide preemptive multitasking).
-A __context__ can only run on a single __thread__ at any point in time but may
-be migrated between __threads__.
-
-Because a context switch between threads requires system calls (switch to kernel)
-it costs usally thousends of CPU cycles on x86 compared to a __context__ switch
-with few hundreds of cycles. The kernel doesn't need to participate in the switch
-between __context__ instances (no system calls incorporated). 
-
-__boost_context__ is intented to be the basis for a higher abstractions like
+__boost_context__ is a foundational library that provides a sort of cooperative
+multitasking on a single thread. By providing an abstraction of the current
+execution state in the current thread, including the stack (with local
+variables) and stack pointer, all registers and CPU flags, and the instruction
+pointer, a __context__ instance represents a specific point in the application's
+execution path. This is useful for building higher-level abstractions, like
 __coroutines__ and __fibers__.
+
+A __context__ provides the means to suspend the current execution path and to
+transfer execution control, thereby permitting another _context_ to run on the
+current thread. This stateful transfer mechanism enables a __context__ to
+suspend execution from within nested functions and, later, to resume from where
+it was suspended. While the execution path represented by a __context__ only
+runs on a single thread, it can be migrated to another thread at any given time.
+
+A context switch between threads requires system calls (involving the OS
+kernel), which can cost thousands of CPU cycles on x86 CPUs. By contrast,
+transferring control among them requires only a few hundred CPU cycles because
+it does not involve system calls as it is done within a single thread.
 
 In order to use the classes and functions described here, you can either include
 the specific headers specified by the descriptions of each class or function, or

@@ -32,7 +32,7 @@ struct boost_fcontext_stack
 typedef struct boost_fcontext boost_fcontext_t;
 struct boost_fcontext
 {
-    boost::uint64_t         fc_greg[14];
+    boost::uint64_t         fc_greg[13];
 # if _MIPS_SIM == _ABI64
     boost::uint64_t         fc_freg[8];
 # else

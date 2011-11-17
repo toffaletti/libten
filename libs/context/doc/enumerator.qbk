@@ -43,7 +43,7 @@ With `yield_break()` the control is unconditionally returned to the caller to si
                 ctx_(
                     & enumerator::run, this,
                     boost::contexts::default_stacksize(),
-	            	boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
+                    boost::contexts::no_stack_unwind, boost::contexts::return_to_caller),
                 complete_( false),
                 do_unwind_( do_unwind),
                 started_( false)

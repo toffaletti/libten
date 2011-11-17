@@ -26,21 +26,21 @@
  *  ----------------------------------------------------------------------------------  *
  *  |   0x40  |   0x44  |                                                            |  *
  *  ----------------------------------------------------------------------------------  *
- *  |        RDI        |                                                            |  *
- *  ----------------------------------------------------------------------------------  *
- *  ----------------------------------------------------------------------------------  *
- *  |   18    |   19    |                                                            |  *
- *  ----------------------------------------------------------------------------------  *
- *  |  0x48   |  0x4c   |                                                            |  *
- *  ----------------------------------------------------------------------------------  *
  *  | fc_mxcsr|fc_x87_cw|                                                            |  *
  *  ----------------------------------------------------------------------------------  *
  *  ----------------------------------------------------------------------------------  *
- *  |   20    |    21   |    22    |   23    |    24   |    25   |                   |  *
+ *  |   18    |   19    |   20    |    21   |                                        |  *
  *  ----------------------------------------------------------------------------------  *
- *  |  0x50   |   0x54  |   0x58   |  0x5c   |   0x60  |   0x64  |                   |  *
+ *  |  0x48   |  0x4c   |  0x50   |   0x54  |                                        |  *
  *  ----------------------------------------------------------------------------------  *
- *  |       sbase       |        slimit      |      fc_link      |                   |  *
+ *  |       sbase       |        slimit     |                                        |  *
+ *  ----------------------------------------------------------------------------------  *
+ *  ----------------------------------------------------------------------------------  *
+ *  |    22   |    23   |                                                            |  *
+ *  ----------------------------------------------------------------------------------  *
+ *  |   0x58  |   0x5c  |                                                            |  *
+ *  ----------------------------------------------------------------------------------  *
+ *  |      fc_link      |                                                            |  *
  *  ----------------------------------------------------------------------------------  *
  *                                                                                      *
  * **************************************************************************************/
@@ -57,8 +57,8 @@ boost_fcontext_jump:
     movq     %r15,       0x20(%rdi)     /* save R15 */
     movq     %rbp,       0x28(%rdi)     /* save RBP */
 
-    stmxcsr  0x48(%rdi)                 /* save SSE2 control and status word */
-    fnstcw   0x4c(%rdi)                 /* save x87 control word */
+    stmxcsr  0x40(%rdi)                 /* save SSE2 control and status word */
+    fnstcw   0x44(%rdi)                 /* save x87 control word */
 
     leaq     0x8(%rsp),  %rcx           /* exclude the return address and save as stack pointer */
     movq     %rcx,       0x30(%rdi)     /* save as stack pointer */
@@ -73,14 +73,14 @@ boost_fcontext_jump:
     movq     0x20(%rsi),  %r15      /* restore R15 */
     movq     0x28(%rsi),  %rbp      /* restore RBP */
 
-    ldmxcsr  0x48(%rsi)             /* restore SSE2 control and status word */
-    fldcw    0x4c(%rsi)             /* restore x87 control word */
+    ldmxcsr  0x40(%rsi)             /* restore SSE2 control and status word */
+    fldcw    0x44(%rsi)             /* restore x87 control word */
 
     movq     %rdx,        %rax      /* use third arg as return value after jump */
 
     movq     0x30(%rsi),  %rsp      /* restore RSP */
     movq     0x38(%rsi),  %rcx      /* fetch the address to return to */
-    movq     0x40(%rsi),  %rdi      /* restore RDI */
+    movq     %r13,        %rdi      /* restore void pointer as argument */
 
     jmp      *%rcx                  /* indirect jump to context */
 .size boost_fcontext_jump,.-boost_fcontext_jump
@@ -92,8 +92,8 @@ boost_fcontext_jump:
 boost_fcontext_make:
     movq   %rdi,                 (%rdi)     /* save the address of current context */
     movq   %rsi,                 0x38(%rdi) /* save the address of the function supposed to run */
-    movq   %rdx,                 0x40(%rdi) /* save the the void pointer */
-    movq   0x50(%rdi),           %rdx       /* load the stack base */
+    movq   %rdx,                 0x10(%rdi) /* save the the void pointer */
+    movq   0x48(%rdi),           %rdx       /* load the stack base */
 
     pushq  %rdi                             /* save pointer to fcontext_t */
     movq   %rdx,                 %rdi       /* stack pointer as arg for boost_fcontext_align */
@@ -103,10 +103,10 @@ boost_fcontext_make:
 
     leaq   -0x8(%rdx),           %rdx       /* reserve space for the last frame on stack, (RSP + 8) % 16 == 0 */
     movq   %rdx,                 0x30(%rdi) /* save the address */
-    movq   0x60(%rdi),           %rcx       /* load the address of the next context */
+    movq   0x58(%rdi),           %rcx       /* load the address of the next context */
     movq   %rcx,                 0x8(%rdi)  /* save the address of next context */
-    stmxcsr  0x48(%rdi)                     /* save SSE2 control and status word */
-    fnstcw 0x4c(%rdi)                       /* save x87 control word */
+    stmxcsr  0x40(%rdi)                     /* save SSE2 control and status word */
+    fnstcw 0x44(%rdi)                       /* save x87 control word */
     leaq   link_fcontext(%rip),  %rcx       /* helper code executed after context function returns */
     movq   %rcx,                 (%rdx)
     xorq   %rax,                 %rax       /* set RAX to zero */
@@ -125,3 +125,4 @@ link_fcontext:
     call   _exit@PLT                        /* exit application */
     hlt
 .size boost_fcontext_make,.-boost_fcontext_make
+

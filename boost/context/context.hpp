@@ -31,7 +31,7 @@ namespace contexts {
 class context
 {
 private:
-    typedef detail::icontext::ptr_t  base_ptr_t;
+    typedef detail::context_base::ptr_t  base_ptr_t;
 
     base_ptr_t  impl_;
 

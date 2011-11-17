@@ -5,18 +5,12 @@
           http://www.boost.org/LICENSE_1_0.txt
 ]
 
-[section:capi low level API (boost_fcontext_t)]
+[section:capi Low level API (boost_fcontext_t)]
 
 __boost_context__ uses and provides a low level API which implements the
 execution control transfer mechanism. The boost_fcontext_t API provides a
 similar interface like ucontext_t. boost_fcontext_t and its functions are
 located in the global namespace and the functions are declared as extern "C". 
-
-[important The stack used by boost_fcontext_t must be aligned to __mini_alignment__
-bytes border.]
-
-[important Win64 requires for floating point registers space (512 bytes) on the
-freestore aligned to 16 bytes border.]
 
     #include <cstdio>
     #include <cstdlib>
@@ -50,32 +44,15 @@ freestore aligned to 16 bytes border.]
             boost::contexts::protected_stack b1(262144);
             boost::contexts::protected_stack b2(262144);
 
-    #if defined(BOOST_WINDOWS) && defined(_M_X64)
-            std::vector< char > bf1( 528, '\0');
-            std::vector< char > bf2( 528, '\0');
-            std::vector< char > bfm( 528, '\0');
-
-            fcm.fc_fp = reinterpret_cast< char * >(
-                ( ( reinterpret_cast< uint64_t >( & bfm[0]) + 16) >> 4) << 4 );
-    #endif
-
             fc1.fc_stack.ss_base = b1.address();
             fc1.fc_stack.ss_limit =
                 static_cast< char * >( fc1.fc_stack.ss_base) - b1.size();
             fc1.fc_link = & fcm;
-    #if defined(BOOST_WINDOWS) && defined(_M_X64)
-            fc1.fc_fp = reinterpret_cast< char * >(
-                ( ( reinterpret_cast< uint64_t >( & bf1[0]) + 16) >> 4) << 4 );
-    #endif
             boost_fcontext_make( & fc1, f1, NULL);
 
             fc2.fc_stack.ss_base = b2.address();
             fc2.fc_stack.ss_limit =
                 static_cast< char * >( fc2.fc_stack.ss_base) - b2.size();
-    #if defined(BOOST_WINDOWS) && defined(_M_X64)
-            fc2.fc_fp = reinterpret_cast< char * >(
-                ( ( reinterpret_cast< uint64_t >( & bf2[0]) + 16) >> 4) << 4 );
-    #endif
             boost_fcontext_make( & fc2, f2, NULL);
 
             fprintf(stderr,"main: call boost_fcontext_start( & fcm, & fc1)\n");
@@ -95,6 +72,19 @@ freestore aligned to 16 bytes border.]
             void    *   ss_limit;
         };
 
+        typedef struct boost_fcontext boost_fcontext_t;
+        struct boost_fcontext
+        {
+            < platform specific >
+
+            boost_fcontext_stack_t  fc_stack;
+            boost_fcontext_t     *  fc_link;
+        };
+
+        void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
+        void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
+        void boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
+
 [heading `ss_base`]
 [variablelist
 [[Member:] [Pointer to the top of the stack.]]
@@ -105,16 +95,6 @@ freestore aligned to 16 bytes border.]
 [[Member:] [Pointer to the bottom of the stack.]]
 ]
 
-
-        typedef struct boost_fcontext boost_fcontext_t;
-        struct boost_fcontext
-        {
-            boost_fcontext_stack_t  fc_stack;
-            boost_fcontext_t     *  fc_link;
-
-            < platform specific >
-        };
-
 [heading `fc_stack`]
 [variablelist
 [[Member:] [Pointers to allocated new stack used by context.]]
@@ -124,11 +104,6 @@ freestore aligned to 16 bytes border.]
 [variablelist
 [[Member:] [Address of successor context.]]
 ]
-
-
-        void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
-        void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
-        void boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
 
 [heading `void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t * nfc)`]
 [variablelist
@@ -148,7 +123,7 @@ the other context and will be returned by `boost_fcontext_start()` or `boost_fco
 
 [heading `void boost_fcontext_make( boost_fcontext_t * fc, void(*fn)(void*), void * p)`]
 [variablelist
-[[Precondition:] [A stack, aligned to `__mini_aliggnment__` byte border, is applied to `*fc` before
+[[Precondition:] [A stack is applied to `*fc` before
 `boost_fcontext_make()` is called. If a successor context should be executed
 after `*fc` finished the address of the successor context must be stored inside
 `fc->fc_link`. The application exits otherwise.]]

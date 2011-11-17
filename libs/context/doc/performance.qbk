@@ -12,7 +12,7 @@
 * cache warm-up considered 
 * thread is pinned to one cpu
 * average of 1000 invokations calculated
-* build with 'variant=release cxxflags="-DBOOST_DISABLE_ASSERTS"'
+* build with 'variant = release cxxflags = "-DBOOST_DISABLE_ASSERTS"'
 
 [table Perfomance of context switch
     [[Platform] [ucontext_t] [fcontext_t]]
