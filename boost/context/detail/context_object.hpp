@@ -53,7 +53,7 @@ public:
 
     context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, flag_return_t do_return) :
         fn_t( static_cast< Fn && >( fn) ), alloc_t( alloc),
-        context_base( alloc_t::member, size, do_unwind, do_return),
+        context_base( alloc_t::member, size, do_unwind, do_return)
     {}
 
     context_object( Fn && fn, Allocator const& alloc, std::size_t size, flag_unwind_t do_unwind, typename context_base::ptr_t nxt) :
