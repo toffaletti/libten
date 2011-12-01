@@ -1,0 +1,136 @@
+[/
+          Copyright Oliver Kowalke 2009.
+ Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at
+          http://www.boost.org/LICENSE_1_0.txt
+]
+
+[section:capi Low level API (boost_fcontext_t)]
+
+__boost_context__ uses and provides a low level API which implements the
+execution control transfer mechanism. The boost_fcontext_t API provides a
+similar interface like ucontext_t. boost_fcontext_t and its functions are
+located in the global namespace and the functions are declared as extern "C". 
+
+    #include <cstdio>
+    #include <cstdlib>
+    #include <cstring>
+    #include <vector>
+
+    #include <boost/context/all.hpp>
+
+    boost_fcontext_t fcm, fc1, fc2;
+
+    void f1( void * p)
+    {
+            (void) p;
+            fprintf(stderr,"f1() stated\n");
+            fprintf(stderr,"f1: call boost_fcontext_jump( & fc1, & fc2, 0)\n");
+            boost_fcontext_jump( & fc1, & fc2, 0);
+            fprintf(stderr,"f1() returns\n");
+    }
+
+    void f2( void * p)
+    {
+            (void) p;
+            fprintf(stderr,"f2() stated\n");
+            fprintf(stderr,"f2: call boost_fcontext_jump( & fc2, & fc1, 0)\n");
+            boost_fcontext_jump( & fc2, & fc1, 0);
+            fprintf(stderr,"f2() returns\n");
+    }
+
+    int main( int argc, char * argv[])
+    {
+            boost::contexts::protected_stack b1(262144);
+            boost::contexts::protected_stack b2(262144);
+
+            fc1.fc_stack.ss_base = b1.address();
+            fc1.fc_stack.ss_limit =
+                static_cast< char * >( fc1.fc_stack.ss_base) - b1.size();
+            fc1.fc_link = & fcm;
+            boost_fcontext_make( & fc1, f1, NULL);
+
+            fc2.fc_stack.ss_base = b2.address();
+            fc2.fc_stack.ss_limit =
+                static_cast< char * >( fc2.fc_stack.ss_base) - b2.size();
+            boost_fcontext_make( & fc2, f2, NULL);
+
+            fprintf(stderr,"main: call boost_fcontext_start( & fcm, & fc1)\n");
+            boost_fcontext_start( & fcm, & fc1);
+
+            fprintf( stderr, "main() returns\n");
+            return EXIT_SUCCESS;
+    }
+
+
+[section:boost_fcontext Struct `boost_fcontext_t` and related functions]
+
+        typedef struct boost_fcontext_stack boost_fcontext_stack_t;
+        struct boost_fcontext_stack
+        {
+            void    *   ss_base;
+            void    *   ss_limit;
+        };
+
+        typedef struct boost_fcontext boost_fcontext_t;
+        struct boost_fcontext
+        {
+            < platform specific >
+
+            boost_fcontext_stack_t  fc_stack;
+            boost_fcontext_t     *  fc_link;
+        };
+
+        void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t const* nfc);
+        void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t const* nfc, void * vp);
+        void boost_fcontext_make( boost_fcontext_t * fc, void(* fn)(void*), void * p);
+
+[heading `ss_base`]
+[variablelist
+[[Member:] [Pointer to the top of the stack.]]
+]
+
+[heading `ss_limit`]
+[variablelist
+[[Member:] [Pointer to the bottom of the stack.]]
+]
+
+[heading `fc_stack`]
+[variablelist
+[[Member:] [Pointers to allocated new stack used by context.]]
+]
+
+[heading `fc_link`]
+[variablelist
+[[Member:] [Address of successor context.]]
+]
+
+[heading `void * boost_fcontext_start( boost_fcontext_t * ofc, boost_fcontext_t * nfc)`]
+[variablelist
+[[Effects:] [Stores the current context data like stack pointer, instruction
+pointer and CPU registers to `*ofc` and restores the data from `*nfc` which
+means jumping to the execution context of `*nfc`. The function returns a void pointer provided
+by `boost_function_jump()`. This function must be called first in order to enter the context.]]
+]
+
+[heading `void * boost_fcontext_jump( boost_fcontext_t * ofc, boost_fcontext_t * nfc, void * vp)`]
+[variablelist
+[[Effects:] [Stores the current context data like stack pointer, instruction
+pointer and CPU registers to `*ofc` and restores the data from `*nfc` which
+means jumping to the execution context of `*nfc`. The void pointer `vp` can be passed to
+the other context and will be returned by `boost_fcontext_start()` or `boost_fcontext_jump()`.]]
+]
+
+[heading `void boost_fcontext_make( boost_fcontext_t * fc, void(*fn)(void*), void * p)`]
+[variablelist
+[[Precondition:] [A stack is applied to `*fc` before
+`boost_fcontext_make()` is called. If a successor context should be executed
+after `*fc` finished the address of the successor context must be stored inside
+`fc->fc_link`. The application exits otherwise.]]
+[[Effects:] [Modifies `*fc` in order to execute `fn` with argument `p` if the context
+is activated next time.]]
+]
+
+[endsect]
+
+[endsect]
