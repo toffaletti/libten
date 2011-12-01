@@ -11,10 +11,13 @@ add_definitions(-DBOOST_TEST_DYN_LINK)
 add_subdirectory(glog)
 include_directories(glog)
 
-set(ASM asm/fcontext_x86_64_sysv_elf_gas.S)
+include_directories(boost.context)
+set(ASM boost.context/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
-add_library(ten error.cc task.cc ioproc.cc net.cc ${ASM})
+add_library(ten
+    error.cc task.cc ioproc.cc net.cc ${ASM}
+    boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
 target_link_libraries(ten rt glog)

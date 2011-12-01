@@ -60,7 +60,7 @@ struct context : boost_fcontext_t {
     }
 
     void swap(context *other) {
-        boost_fcontext_jump(this, other);
+        boost_fcontext_jump(this, other, 0);
     }
 };
 
