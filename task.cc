@@ -196,8 +196,7 @@ struct proc {
         t->ready();
         DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
         p->schedule();
-        DVLOG(5) << "proc done: " << std::this_thread::get_id();
-        _this_proc = 0;
+        DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
     }
 
 };
@@ -230,7 +229,7 @@ int64_t taskyield() {
     t->ready();
     taskstate("yield");
     t->swap();
-    DVLOG(5) << "yield: " << (p->nswitch - n - 1);
+    DVLOG(5) << "yield: " << (int64_t)(p->nswitch - n - 1);
     return p->nswitch - n - 1;
 }
 
@@ -285,6 +284,7 @@ const char *taskstate(const char *fmt, ...)
 std::string taskdump() {
     std::stringstream ss;
     proc *p = _this_proc;
+    CHECK(p) << "BUG: taskdump called in null proc";
     task *t = 0;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         t = *i;
@@ -346,7 +346,6 @@ void qutex::lock() {
             return;
         }
         DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
-        CHECK(!t->canceled) << "BUG: qutex::lock task canceled:\n" << saved_backtrace().str();
         waiting.push_back(t);
     }
 
@@ -547,7 +546,6 @@ procmain::procmain() {
 int procmain::main(int argc, char *argv[]) {
     std::unique_ptr<proc> p(_this_proc);
     p->schedule();
-    _this_proc = 0;
     return EXIT_SUCCESS;
 }
 
@@ -962,6 +960,7 @@ proc::~proc() {
     lk.unlock();
     del(this);
     DVLOG(5) << "proc freed: " << this;
+    _this_proc = 0;
 }
 
 io_scheduler &proc::sched() {

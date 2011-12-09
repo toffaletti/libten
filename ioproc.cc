@@ -32,6 +32,7 @@ void ioproctask(iochannel &ch) {
 
         // scope for reply iochannel
         {
+            DVLOG(5) << "sending reply";
             iochannel creply = call->ch;
             taskstate("sending reply");
             try {
@@ -39,6 +40,7 @@ void ioproctask(iochannel &ch) {
             } catch (channel_closed_error &e) {
                 // ignore this
             }
+            DVLOG(5) << "done sending reply";
         }
     }
     DVLOG(5) << "exiting ioproc";
