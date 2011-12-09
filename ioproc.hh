@@ -35,8 +35,9 @@ struct ioproc {
     ioproc(
             size_t stacksize = default_stacksize,
             unsigned nprocs = 1,
+            unsigned chanbuf = 0,
             void (*proctask)(iochannel &) = ioproctask)
-        : ch(nprocs)
+        : ch(chanbuf ? chanbuf : nprocs)
     {
         for (unsigned i=0; i<nprocs; ++i) {
             tids.push_back(procspawn(std::bind(proctask, ch), stacksize));
