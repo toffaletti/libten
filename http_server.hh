@@ -134,7 +134,7 @@ public:
     };
 
 public:
-    http_server(size_t stacksize_=default_stacksize, int timeout_ms_=-1)
+    http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
         : netsock_server("http", stacksize_, timeout_ms_)
     {
     }

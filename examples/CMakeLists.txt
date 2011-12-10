@@ -27,6 +27,9 @@ target_link_libraries(http-get ten http uri)
 add_executable(http-proxy http-proxy.cc)
 target_link_libraries(http-proxy ten http uri)
 
+add_executable(http-server http-server.cc)
+target_link_libraries(http-server ten http uri boost_program_options)
+
 add_executable(msg-pack msgpack.cc)
 target_link_libraries(msg-pack ten msgpack)
 
