@@ -3,6 +3,7 @@
 
 #include "descriptors.hh"
 #include "task.hh"
+#include <memory>
 
 namespace ten {
 
@@ -144,35 +145,25 @@ public:
     netsock_server &operator=(const netsock_server &) = delete;
 
     //! listen and accept connections
-    void serve(const std::string &ipaddr, uint16_t port) {
+    void serve(const std::string &ipaddr, uint16_t port, unsigned threads=1) {
         address baddr(ipaddr.c_str(), port);
-        serve(baddr);
+        serve(baddr, threads);
     }
 
     //! listen and accept connections
-    void serve(address &baddr) {
-
+    void serve(address &baddr, unsigned threads=1) {
         sock = netsock(baddr.family(), SOCK_STREAM);
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
         sock.bind(baddr);
         sock.getsockname(baddr);
-        LOG(INFO) << "listening for " << protocol_name << " on " << baddr;
+        LOG(INFO) << "listening for " << protocol_name
+            << " on " << baddr << " with " << threads << " threads";;
         sock.listen();
-        try {
-            for (;;) {
-                address client_addr;
-                int fd;
-                while ((fd = sock.accept(client_addr, 0)) > 0) {
-                    taskspawn(std::bind(&netsock_server::client_task, this, fd), stacksize);
-                }
-            }
-        } catch (...) {
-            // do any cleanup to free memory etc...
-            // for example if your callbacks hold a reference to this server
-            // this would be the place to release that circular reference
-            on_shutdown();
-            throw;
+        std::shared_ptr<int> shutdown_guard((int *)0x8008135, std::bind(&netsock_server::do_shutdown, this));
+        for (unsigned n=1; n<threads; ++n) {
+            procspawn(std::bind(&netsock_server::do_accept_loop, this, shutdown_guard));
         }
+        do_accept_loop(shutdown_guard);
     }
 
 protected:
@@ -183,6 +174,28 @@ protected:
 
     virtual void on_shutdown() {}
     virtual void on_connection(netsock &s) = 0;
+
+    void do_shutdown() {
+        // do any cleanup to free memory etc...
+        // for example if your callbacks hold a reference to this server
+        // this would be the place to release that circular reference
+
+        on_shutdown();
+    }
+
+    void do_accept_loop(std::shared_ptr<int> shutdown_guard) {
+        accept_loop();
+    }
+
+    virtual void accept_loop() {
+        for (;;) {
+            address client_addr;
+            int fd;
+            while ((fd = sock.accept(client_addr, 0)) > 0) {
+                taskspawn(std::bind(&netsock_server::client_task, this, fd), stacksize);
+            }
+        }
+    }
 
     void client_task(int fd) {
         netsock s(fd);

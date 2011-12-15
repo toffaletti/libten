@@ -135,7 +135,8 @@ public:
 
 public:
     http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
-        : netsock_server("http", stacksize_, timeout_ms_)
+        : netsock_server("http", stacksize_, timeout_ms_),
+        _routes(std::make_shared<std::vector<route> >())
     {
     }
 
@@ -144,7 +145,7 @@ public:
             const callback_type &callback,
             int fnmatch_flags = 0)
     {
-      _routes.push_back(route(pattern, callback, fnmatch_flags));
+      _routes->push_back(route(pattern, callback, fnmatch_flags));
     }
 
     //! set logging function, called after every request
@@ -153,12 +154,14 @@ public:
     }
 
 private:
-    std::vector<route> _routes;
+    std::shared_ptr<std::vector<route> > _routes;
     callback_type _log_func;
 
     void on_shutdown() {
         // release any memory held by bound callbacks
-        _routes.clear();
+        // this shared ptr madness is for threaded shutdown
+        auto rr = _routes;
+        rr->clear();
     }
 
     void on_connection(netsock &s) {
@@ -198,7 +201,7 @@ private:
         std::string path = req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
-        for (auto i= _routes.cbegin(); i!= _routes.cend(); i++) {
+        for (auto i= _routes->cbegin(); i!= _routes->cend(); i++) {
             DVLOG(5) << "matching pattern: " << i->pattern;
             if (fnmatch(i->pattern.c_str(), path.c_str(), i->fnmatch_flags) == 0) {
                 try {
