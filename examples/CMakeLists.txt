@@ -33,6 +33,9 @@ target_link_libraries(http-server ten http uri boost_program_options)
 add_executable(msg-pack msgpack.cc)
 target_link_libraries(msg-pack ten msgpack)
 
+add_executable(rpc-server rpc-server.cc)
+target_link_libraries(rpc-server ten msgpack)
+
 # optional
 add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
 target_link_libraries(https-get ten http uri ssl)
