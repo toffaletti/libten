@@ -2,12 +2,15 @@
 #include "task.hh"
 #include "net.hh"
 #include "msgpack/msgpack.hpp"
+#include "rpc/protocol.hh"
 
 #include <sstream>
 #include <boost/utility.hpp>
 #include <unordered_map>
 #include <vector>
 #include <functional>
+
+using namespace msgpack::rpc;
 
 namespace ten {
 
@@ -38,6 +41,7 @@ private:
     void on_connection(netsock &s) {
         size_t bsize = 4096;
         msgpack::unpacker pac;
+        msgpack::sbuffer sbuf;
 
         for (;;) {
             pac.reserve_buffer(bsize);
@@ -47,7 +51,17 @@ private:
 
             msgpack::unpacked result;
             while (pac.next(&result)) {
-                DVLOG(3) << "rpc call: " << result.get();
+                msgpack::object o = result.get();
+                DVLOG(3) << "rpc call: " << o;
+                msg_request<std::string, msgpack::object> req;
+                o.convert(&req);
+                msg_response<int, int> resp(12345, 0, req.msgid);
+                msgpack::pack(sbuf, resp);
+
+                ssize_t nw = s.send(sbuf.data(), sbuf.size());
+                if (nw != (ssize_t)sbuf.size()) {
+                    throw errorx("rpc call failed to send reply");
+                }
             }
         }
     }

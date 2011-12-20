@@ -1,47 +1,87 @@
+#include "rpc/protocol.hh"
 #include "rpc_server.hh"
 
 using namespace ten;
+using namespace msgpack::rpc;
 const size_t default_stacksize=256*1024;
 
-ssize_t rpcall(netsock &s, msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
-    ssize_t nw = s.send(sbuf.data(), sbuf.size());
-    LOG(INFO) << "sent: " << nw;
-    return nw;
-}
+class rpc_client : public boost::noncopyable {
+public:
+    rpc_client(const std::string &hostname, uint16_t port)
+        : s(AF_INET, SOCK_STREAM), msgid(0)
+    {
+        if (s.dial(hostname.c_str(), port) != 0) {
+            throw errorx("rpc client connection failed");
+        }
+    }
 
-template <typename Arg, typename ...Args>
-ssize_t rpcall(netsock &s, msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf, Arg arg, Args ...args) {
-    pk.pack(arg);
-    return rpcall(s, pk, sbuf, args...);
-}
+    template <typename Result, typename ...Args>
+        Result call(const std::string &method, Args ...args) {
+            uint32_t mid = ++msgid;
+            return rpcall<Result>(mid, method, args...);
+        }
 
-template <typename ...Args>
-ssize_t rpcall(netsock &s, uint32_t msgid, const std::string &method, Args ...args) {
-    msgpack::sbuffer sbuf;
-    msgpack::packer<msgpack::sbuffer> pk(&sbuf);
-    pk.pack_array(4);
-    pk.pack_int(0);
-    pk.pack_uint32(msgid);
-    pk.pack(method);
-    pk.pack_array(sizeof...(args));
-    return rpcall(s, pk, sbuf, args...);
-}
+protected:
+    netsock s;
+    uint32_t msgid;
+    msgpack::unpacker pac;
+
+    template <typename Result>
+        Result rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
+            ssize_t nw = s.send(sbuf.data(), sbuf.size());
+            if (nw != (ssize_t)sbuf.size()) {
+                throw errorx("rpc call failed to send");
+            }
+
+            size_t bsize = 4096;
+
+            for (;;) {
+                pac.reserve_buffer(bsize);
+                ssize_t nr = s.recv(pac.buffer(), bsize);
+                if (nr <= 0) {
+                    throw errorx("rpc client lost connection");
+                }
+                DVLOG(3) << "client recv: " << nr;
+                pac.buffer_consumed(nr);
+
+                msgpack::unpacked result;
+                if (pac.next(&result)) {
+                    msgpack::object o = result.get();
+                    DVLOG(3) << "client got: " << o;
+                    msg_response<Result, int> resp;
+                    o.convert(&resp);
+                    return resp.result;
+                }
+            }
+            // shouldn't get here.
+            throw errorx("rpc client unknown error");
+        }
+
+    template <typename Result, typename Arg, typename ...Args>
+        Result rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf, Arg arg, Args ...args) {
+            pk.pack(arg);
+            return rpcall<Result>(pk, sbuf, args...);
+        }
+
+    template <typename Result, typename ...Args>
+        Result rpcall(uint32_t msgid, const std::string &method, Args ...args) {
+            msgpack::sbuffer sbuf;
+            msgpack::packer<msgpack::sbuffer> pk(&sbuf);
+            pk.pack_array(4);
+            pk.pack_uint8(0); // request message type
+            pk.pack_uint32(msgid);
+            pk.pack(method);
+            pk.pack_array(sizeof...(args));
+            return rpcall<Result>(pk, sbuf, args...);
+        }
+
+
+};
 
 static void client_task() {
-    netsock s(AF_INET, SOCK_STREAM);
-    tasksleep(10);
-    s.dial("localhost", 5500);
-    msgpack::sbuffer sbuf;
-    msgpack::packer<msgpack::sbuffer> pk(&sbuf);
-    pk.pack_array(4);
-    pk.pack_int(0);
-    pk.pack_uint32(1);
-    pk.pack(std::string("method"));
-    pk.pack_array(0);
-    ssize_t nw = s.send(sbuf.data(), sbuf.size());
-    LOG(INFO) << "sent: " << nw;
-
-    rpcall(s, 2, "method2", std::string("params"), 1, 5, 1.34);
+    rpc_client c("localhost", 5500);
+    int status = c.call<int>("method2", std::string("params"), 1, 5, 1.34);
+    LOG(INFO) << "status: " << status;
 }
 
 static void startup() {
