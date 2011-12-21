@@ -12,7 +12,7 @@ add_subdirectory(glog)
 include_directories(glog)
 
 include_directories(boost.context)
-if(${CMAKE_SIZEOF_VOID_P} EQUAL 64)
+if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
     set(ASM boost.context/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
 else()
     set(ASM boost.context/libs/context/src/asm/fcontext_i386_sysv_elf_gas.S)

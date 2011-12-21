@@ -1,4 +1,5 @@
 #include "rpc/protocol.hh"
+#include "rpc/thunk.hh"
 #include "rpc_server.hh"
 
 using namespace ten;
@@ -48,9 +49,14 @@ protected:
                 if (pac.next(&result)) {
                     msgpack::object o = result.get();
                     DVLOG(3) << "client got: " << o;
-                    msg_response<Result, int> resp;
+                    msg_response<msgpack::object, msgpack::object> resp;
                     o.convert(&resp);
-                    return resp.result;
+                    if (resp.error.is_nil()) {
+                        return resp.result.as<Result>();
+                    } else {
+                        LOG(ERROR) << "rpc error returned: " << resp.error;
+                        throw errorx(resp.error.as<std::string>());
+                    }
                 }
             }
             // shouldn't get here.
@@ -80,12 +86,18 @@ protected:
 
 static void client_task() {
     rpc_client c("localhost", 5500);
-    int status = c.call<int>("method2", std::string("params"), 1, 5, 1.34);
+    int status = c.call<int>("add2", 40, 2);
     LOG(INFO) << "status: " << status;
+}
+
+static int add2(int a, int b) {
+    LOG(INFO) << "called add2(" << a << "," << b << ")";
+    return a + b;
 }
 
 static void startup() {
     rpc_server rpc;
+    rpc.add_command("add2", thunk<int, int, int>(add2));
     taskspawn(client_task);
     rpc.serve("0.0.0.0", 5500);
 }

@@ -16,7 +16,7 @@ namespace ten {
 
 class rpc_server : public netsock_server {
 public:
-    typedef std::function<void (netsock &s)> callback_type;
+    typedef std::function<msgpack::object (msgpack::object & , msgpack::zone *)> callback_type;
 
     rpc_server(size_t stacksize_=default_stacksize)
         : netsock_server("msgpack-rpc", stacksize_)
@@ -44,6 +44,7 @@ private:
         msgpack::sbuffer sbuf;
 
         for (;;) {
+            msgpack::zone z;
             pac.reserve_buffer(bsize);
             ssize_t nr = s.recv(pac.buffer(), bsize);
             if (nr <= 0) return;
@@ -55,8 +56,15 @@ private:
                 DVLOG(3) << "rpc call: " << o;
                 msg_request<std::string, msgpack::object> req;
                 o.convert(&req);
-                msg_response<int, int> resp(12345, 0, req.msgid);
-                msgpack::pack(sbuf, resp);
+                auto it = _cmds.find(req.method);
+                if (it != _cmds.end()) {
+                    msgpack::object result = it->second(req.param, &z);
+                    msg_response<msgpack::object, msgpack::object> resp(result, msgpack::object(), req.msgid);
+                    msgpack::pack(sbuf, resp);
+                } else {
+                    msg_response<msgpack::object, std::string> resp(msgpack::object(), "method not found", req.msgid);
+                    msgpack::pack(sbuf, resp);
+                }
 
                 ssize_t nw = s.send(sbuf.data(), sbuf.size());
                 if (nw != (ssize_t)sbuf.size()) {
