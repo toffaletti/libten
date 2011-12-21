@@ -12,7 +12,11 @@ add_subdirectory(glog)
 include_directories(glog)
 
 include_directories(boost.context)
-set(ASM boost.context/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
+if(${CMAKE_SIZEOF_VOID_P} EQUAL 64)
+    set(ASM boost.context/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
+else()
+    set(ASM boost.context/libs/context/src/asm/fcontext_i386_sysv_elf_gas.S)
+endif()
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 add_library(ten
