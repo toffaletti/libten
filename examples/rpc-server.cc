@@ -86,8 +86,9 @@ protected:
 
 static void client_task() {
     rpc_client c("localhost", 5500);
-    int status = c.call<int>("add2", 40, 2);
-    LOG(INFO) << "status: " << status;
+    LOG(INFO) << "40+2=" << c.call<int>("add2", 40, 2);
+    LOG(INFO) << "44-2=" << c.call<int>("subtract2", 44, 2);
+    procshutdown();
 }
 
 static int add2(int a, int b) {
@@ -95,9 +96,14 @@ static int add2(int a, int b) {
     return a + b;
 }
 
+static int subtract2(int a, int b) {
+    return a - b;
+}
+
 static void startup() {
     rpc_server rpc;
     rpc.add_command("add2", thunk<int, int, int>(add2));
+    rpc.add_command("subtract2", thunk<int, int, int>(subtract2));
     taskspawn(client_task);
     rpc.serve("0.0.0.0", 5500);
 }
