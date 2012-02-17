@@ -821,7 +821,7 @@ struct io_scheduler {
             }
 
             if (ms != 0 || npollfds > 0) {
-                taskstate("epoll");
+                taskstate("epoll %d ms", ms);
                 // only process 1000 events each iteration to keep it fair
                 if (ms > 1 || ms < 0) {
                     p->polling = true;
@@ -1063,6 +1063,8 @@ deadline::deadline(uint64_t ms) {
         throw errorx("task %p already has a deadline", t);
     }
     t->deadline = _this_proc->now + milliseconds(ms);
+    t->timeout = t->deadline;
+    _this_proc->sched().timeouts.insert(t);
 }
 
 deadline::~deadline() {

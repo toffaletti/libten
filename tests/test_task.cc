@@ -343,6 +343,31 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
     p.main();
 }
 
+static void deadline_yield() {
+    try {
+        deadline dl(5);
+        for (;;) {
+            taskyield();
+        }
+        BOOST_CHECK(false);
+    } catch (deadline_reached &e) {
+        BOOST_CHECK(true);
+        // if the deadline or timeout aren't cleared,
+        // this yield will sleep or throw again
+        auto start = monotonic_clock::now();
+        taskyield();
+        auto end = monotonic_clock::now();
+        BOOST_CHECK(true);
+        BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(task_deadline_yield) {
+    procmain p;
+    taskspawn(deadline_yield);
+    p.main();
+}
+
 void qlocker(qutex &q, rendez &r, int &x) {
     std::unique_lock<qutex> lk(q);
     ++x;
