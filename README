@@ -1,3 +1,6 @@
+libten
+======
+
 C++11 library for network services on modern x86-64 Linux.
 Heavily inspired and copied from python-gevent, state-threads, plan9, and go-lang.
 
@@ -7,6 +10,30 @@ glog-0.3.1 from http://code.google.com/p/google-glog/
 stringencoders from http://code.google.com/p/stringencoders/
 msgpack-0.5.7 from http://msgpack.org/
 jansson-2.2.1 from http://www.digip.org/jansson/
+
+Features
+--------
+
+  * coroutines (boost.context)
+  * typed channels for communicating between threads and coroutines
+  * http client and server (based on http-parser)
+  * fast uri parser (ragel generated)
+  * JSON parser (jansson)
+  * logging (glog)
+  * rpc (based on msgpack)
+  * epoll event loop
+
+Dependencies
+____________
+
+  * cmake >= 2.8
+  * g++ >= 4.4.3
+  * libssl-dev >= 0.9.8
+  * libboost-dev >= 1.40
+  * libboost-date-time-dev >= 1.40
+  * libboost-program-options-dev >= 1.40
+  * libboost-test-dev >= 1.40
+  * ragel >= 6.5
 
 TODO
 ----
