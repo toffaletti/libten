@@ -85,7 +85,9 @@ struct task {
     static void start(void *arg) {
         task *t = (task *)arg;
         try {
-            t->fn();
+            if (!t->canceled) {
+                t->fn();
+            }
         } catch (task_interrupted &e) {
             DVLOG(5) << "task interrupted " << t << " " << t->name << " |" << t->state << "|";
         } catch (backtrace_exception &e) {
