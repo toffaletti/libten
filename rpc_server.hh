@@ -58,9 +58,14 @@ private:
                 o.convert(&req);
                 auto it = _cmds.find(req.method);
                 if (it != _cmds.end()) {
-                    msgpack::object result = it->second(req.param, &z);
-                    msg_response<msgpack::object, msgpack::object> resp(result, msgpack::object(), req.msgid);
-                    msgpack::pack(sbuf, resp);
+                    try {
+                        msgpack::object result = it->second(req.param, &z);
+                        msg_response<msgpack::object, msgpack::object> resp(result, msgpack::object(), req.msgid);
+                        msgpack::pack(sbuf, resp);
+                    } catch (std::exception &e) {
+                        msg_response<msgpack::object, std::string> resp(msgpack::object(), e.what(), req.msgid);
+                        msgpack::pack(sbuf, resp);
+                    }
                 } else {
                     msg_response<msgpack::object, std::string> resp(msgpack::object(), "method not found", req.msgid);
                     msgpack::pack(sbuf, resp);
