@@ -8,12 +8,9 @@ const size_t default_stacksize=256*1024;
 
 class rpc_client : public boost::noncopyable {
 public:
-    rpc_client(const std::string &hostname, uint16_t port)
-        : s(AF_INET, SOCK_STREAM), msgid(0)
+    rpc_client(const std::string &hostname_, uint16_t port_)
+        : hostname(hostname_), port(port_), msgid(0)
     {
-        if (s.dial(hostname.c_str(), port) != 0) {
-            throw errorx("rpc client connection failed");
-        }
     }
 
     template <typename Result, typename ...Args>
@@ -24,13 +21,27 @@ public:
 
 protected:
     netsock s;
+    std::string hostname;
+    uint64_t port;
     uint32_t msgid;
     msgpack::unpacker pac;
 
+    void ensure_connection() {
+        if (!s.valid()) {
+            netsock tmp(AF_INET, SOCK_STREAM);
+            std::swap(s, tmp);
+            if (s.dial(hostname.c_str(), port) != 0) {
+                throw errorx("rpc client connection failed");
+            }
+        }
+    }
+
     template <typename Result>
         Result rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
+            ensure_connection();
             ssize_t nw = s.send(sbuf.data(), sbuf.size());
             if (nw != (ssize_t)sbuf.size()) {
+                s.close();
                 throw errorx("rpc call failed to send");
             }
 
@@ -40,6 +51,7 @@ protected:
                 pac.reserve_buffer(bsize);
                 ssize_t nr = s.recv(pac.buffer(), bsize);
                 if (nr <= 0) {
+                    s.close();
                     throw errorx("rpc client lost connection");
                 }
                 DVLOG(3) << "client recv: " << nr;
