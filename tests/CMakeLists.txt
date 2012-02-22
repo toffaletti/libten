@@ -12,7 +12,11 @@ target_link_libraries(test_channel ten boost_unit_test_framework)
 add_executable(test_ioproc test_ioproc.cc)
 target_link_libraries(test_ioproc ten boost_unit_test_framework)
 
+add_executable(test_backoff test_backoff.cc)
+target_link_libraries(test_backoff boost_unit_test_framework)
+
 add_test(test_descriptors test_descriptors --random)
 add_test(test_task test_task --random)
 add_test(test_channel test_channel --random)
 add_test(test_ioproc test_ioproc --random)
+add_test(test_backoff test_backoff --random)
