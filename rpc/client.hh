@@ -88,8 +88,6 @@ protected:
             pk.pack_array(sizeof...(args));
             return rpcall<Result>(pk, sbuf, args...);
         }
-
-
 };
 
 } // end namespace ten

@@ -40,7 +40,6 @@ private:
     void on_connection(netsock &s) {
         size_t bsize = 4096;
         msgpack::unpacker pac;
-        msgpack::sbuffer sbuf;
 
         for (;;) {
             msgpack::zone z;
@@ -51,6 +50,7 @@ private:
 
             msgpack::unpacked result;
             while (pac.next(&result)) {
+                msgpack::sbuffer sbuf;
                 msgpack::object o = result.get();
                 DVLOG(3) << "rpc call: " << o;
                 msg_request<std::string, msgpack::object> req;
@@ -71,6 +71,7 @@ private:
                 }
 
                 ssize_t nw = s.send(sbuf.data(), sbuf.size());
+                DVLOG(3) << "rpc server sent: " << nw << " bytes";
                 if (nw != (ssize_t)sbuf.size()) {
                     throw errorx("rpc call failed to send reply");
                 }
