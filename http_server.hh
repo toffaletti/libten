@@ -209,7 +209,9 @@ private:
                 } catch (std::exception &e) {
                     r.resp = http_response(500, "Server Error",
                             Headers("Connection", "close"));
-                    r.resp.set_body(e.what());
+                    std::string msg = e.what();
+                    msg += "\n";
+                    r.resp.set_body(msg);
                     r.send_response();
                 }
                 break;
