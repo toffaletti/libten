@@ -1,7 +1,6 @@
 #include "logging.hh"
 #include "task.hh"
 #include "net.hh"
-#include "msgpack/msgpack.hpp"
 #include "rpc/protocol.hh"
 
 #include <sstream>
@@ -41,7 +40,6 @@ private:
     void on_connection(netsock &s) {
         size_t bsize = 4096;
         msgpack::unpacker pac;
-        msgpack::sbuffer sbuf;
 
         for (;;) {
             msgpack::zone z;
@@ -52,21 +50,28 @@ private:
 
             msgpack::unpacked result;
             while (pac.next(&result)) {
+                msgpack::sbuffer sbuf;
                 msgpack::object o = result.get();
                 DVLOG(3) << "rpc call: " << o;
                 msg_request<std::string, msgpack::object> req;
                 o.convert(&req);
                 auto it = _cmds.find(req.method);
                 if (it != _cmds.end()) {
-                    msgpack::object result = it->second(req.param, &z);
-                    msg_response<msgpack::object, msgpack::object> resp(result, msgpack::object(), req.msgid);
-                    msgpack::pack(sbuf, resp);
+                    try {
+                        msgpack::object result = it->second(req.param, &z);
+                        msg_response<msgpack::object, msgpack::object> resp(result, msgpack::object(), req.msgid);
+                        msgpack::pack(sbuf, resp);
+                    } catch (std::exception &e) {
+                        msg_response<msgpack::object, std::string> resp(msgpack::object(), e.what(), req.msgid);
+                        msgpack::pack(sbuf, resp);
+                    }
                 } else {
                     msg_response<msgpack::object, std::string> resp(msgpack::object(), "method not found", req.msgid);
                     msgpack::pack(sbuf, resp);
                 }
 
                 ssize_t nw = s.send(sbuf.data(), sbuf.size());
+                DVLOG(3) << "rpc server sent: " << nw << " bytes";
                 if (nw != (ssize_t)sbuf.size()) {
                     throw errorx("rpc call failed to send reply");
                 }
