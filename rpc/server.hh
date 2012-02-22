@@ -1,7 +1,6 @@
 #include "logging.hh"
 #include "task.hh"
 #include "net.hh"
-#include "msgpack/msgpack.hpp"
 #include "rpc/protocol.hh"
 
 #include <sstream>

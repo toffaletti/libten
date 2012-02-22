@@ -1,3 +1,4 @@
+#include "msgpack/msgpack.hpp"
 #include "error.hh"
 
 using namespace ten;
