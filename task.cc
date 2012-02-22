@@ -488,16 +488,11 @@ static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
 
 static void procmain_init() {
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
-    // XXX: i *think* this usable with the backtrace
-    // i beleive the ucontext passed to the sig handler
-    // is the pointer to the main stack
-#if 0
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
     THROW_ON_ERROR(sigaltstack(&ss, NULL));
-#endif
 
     // allow log files and message queues to be created group writable
     umask(0);
