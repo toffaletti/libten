@@ -27,7 +27,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "utilities.h"
 #include "config.h"
 
 #ifdef HAVE_USING_OPERATOR
@@ -171,7 +170,7 @@ void TestSTLLogging() {
 #endif
 }
 
-int main(int argc, char** argv) {
+int main(int, char**) {
   TestSTLLogging();
   std::cout << "PASS\n";
   return 0;
@@ -181,7 +180,7 @@ int main(int argc, char** argv) {
 
 #include <iostream>
 
-int main(int argc, char** argv) {
+int main(int, char**) {
   std::cout << "We don't support stl_logging for this compiler.\n"
             << "(we need compiler support of 'using ::operator<<' "
             << "for this feature.)\n";

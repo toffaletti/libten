@@ -496,8 +496,8 @@ static void procmain_init() {
 
     // allow log files and message queues to be created group writable
     umask(0);
-    google::InitGoogleLogging(program_invocation_short_name);
-    google::InstallFailureSignalHandler();
+    InitGoogleLogging(program_invocation_short_name);
+    InstallFailureSignalHandler();
     FLAGS_logtostderr = true;
 
     struct sigaction act;

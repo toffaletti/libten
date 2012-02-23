@@ -83,7 +83,7 @@ static ATTRIBUTE_NOINLINE void DemangleInplace(char *out, int out_size) {
   if (Demangle(out, demangled, sizeof(demangled))) {
     // Demangling succeeded. Copy to out if the space allows.
     size_t len = strlen(demangled);
-    if ((int)len + 1 <= out_size) {  // +1 for '\0'.
+    if (len + 1 <= (size_t)out_size) {  // +1 for '\0'.
       SAFE_ASSERT(len < sizeof(demangled));
       memmove(out, demangled, len + 1);
     }
@@ -123,9 +123,9 @@ _START_GOOGLE_NAMESPACE_
 // success, return the number of bytes read.  Otherwise, return -1.
 static ssize_t ReadPersistent(const int fd, void *buf, const size_t count) {
   SAFE_ASSERT(fd >= 0);
-  SAFE_ASSERT(count <= (size_t)std::numeric_limits<ssize_t>::max());
+  SAFE_ASSERT(count >= 0 && count <= std::numeric_limits<ssize_t>::max());
   char *buf0 = reinterpret_cast<char *>(buf);
-  size_t num_bytes = 0;
+  ssize_t num_bytes = 0;
   while (num_bytes < count) {
     ssize_t len;
     NO_INTR(len = read(fd, buf0 + num_bytes, count - num_bytes));
@@ -160,7 +160,7 @@ static ssize_t ReadFromOffset(const int fd, void *buf,
 static bool ReadFromOffsetExact(const int fd, void *buf,
                                 const size_t count, const off_t offset) {
   ssize_t len = ReadFromOffset(fd, buf, count, offset);
-  return len == (ssize_t)count;
+  return len == count;
 }
 
 // Returns elf_header.e_type if the file pointed by fd is an ELF binary.
@@ -186,15 +186,15 @@ GetSectionHeaderByType(const int fd, ElfW(Half) sh_num, const off_t sh_offset,
   // Read at most 16 section headers at a time to save read calls.
   ElfW(Shdr) buf[16];
   for (int i = 0; i < sh_num;) {
-    const size_t num_bytes_left = (sh_num - i) * sizeof(buf[0]);
-    const size_t num_bytes_to_read =
+    const ssize_t num_bytes_left = (sh_num - i) * sizeof(buf[0]);
+    const ssize_t num_bytes_to_read =
         (sizeof(buf) > num_bytes_left) ? num_bytes_left : sizeof(buf);
     const ssize_t len = ReadFromOffset(fd, buf, num_bytes_to_read,
                                        sh_offset + i * sizeof(buf[0]));
     SAFE_ASSERT(len % sizeof(buf[0]) == 0);
-    const size_t num_headers_in_buf = len / sizeof(buf[0]);
+    const ssize_t num_headers_in_buf = len / sizeof(buf[0]);
     SAFE_ASSERT(num_headers_in_buf <= sizeof(buf) / sizeof(buf[0]));
-    for (unsigned j = 0; j < num_headers_in_buf; ++j) {
+    for (int j = 0; j < num_headers_in_buf; ++j) {
       if (buf[j].sh_type == type) {
         *out = buf[j];
         return true;
@@ -241,7 +241,7 @@ bool GetSectionHeaderByName(int fd, const char *name, size_t name_len,
     ssize_t n_read = ReadFromOffset(fd, &header_name, name_len, name_offset);
     if (n_read == -1) {
       return false;
-    } else if (n_read != (ssize_t)name_len) {
+    } else if (n_read != name_len) {
       // Short read -- name could be at end of file.
       continue;
     }
@@ -282,9 +282,9 @@ FindSymbol(uint64_t pc, const int fd, char *out, int out_size,
     ElfW(Sym) buf[NUM_SYMBOLS];
     const ssize_t len = ReadFromOffset(fd, &buf, sizeof(buf), offset);
     SAFE_ASSERT(len % sizeof(buf[0]) == 0);
-    const size_t num_symbols_in_buf = len / sizeof(buf[0]);
+    const ssize_t num_symbols_in_buf = len / sizeof(buf[0]);
     SAFE_ASSERT(num_symbols_in_buf <= sizeof(buf)/sizeof(buf[0]));
-    for (unsigned j = 0; j < num_symbols_in_buf; ++j) {
+    for (int j = 0; j < num_symbols_in_buf; ++j) {
       const ElfW(Sym)& symbol = buf[j];
       uint64_t start_address = symbol.st_value;
       start_address += symbol_offset;
@@ -637,7 +637,7 @@ static ATTRIBUTE_NOINLINE bool SymbolizeAndDemangle(void *pc, char *out,
                                                     int out_size) {
   Dl_info info;
   if (dladdr(pc, &info)) {
-    if (strlen(info.dli_sname) < out_size) {
+    if ((int)strlen(info.dli_sname) < out_size) {
       strcpy(out, info.dli_sname);
       // Symbolization succeeded.  Now we try to demangle the symbol.
       DemangleInplace(out, out_size);

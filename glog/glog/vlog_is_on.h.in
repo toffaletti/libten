@@ -81,11 +81,11 @@
 // parsing of --vmodule flag and/or SetVLOGLevel calls.
 #define VLOG_IS_ON(verboselevel)                                \
   __extension__  \
-  ({ static ten::int32* vlocal__ = &ten::kLogSiteUninitialized;           \
-     ten::int32 verbose_level__ = (verboselevel);                    \
+  ({ static @ac_google_namespace@::int32* vlocal__ = &@ac_google_namespace@::kLogSiteUninitialized;           \
+     @ac_google_namespace@::int32 verbose_level__ = (verboselevel);                    \
      (*vlocal__ >= verbose_level__) &&                          \
-     ((vlocal__ != &ten::kLogSiteUninitialized) ||                   \
-      (ten::InitVLOG3__(&vlocal__, &FLAGS_v,                         \
+     ((vlocal__ != &@ac_google_namespace@::kLogSiteUninitialized) ||                   \
+      (@ac_google_namespace@::InitVLOG3__(&vlocal__, &FLAGS_v,                         \
                    __FILE__, verbose_level__))); })
 #else
 // GNU extensions not available, so we do not support --vmodule.
@@ -110,7 +110,7 @@ extern GOOGLE_GLOG_DLL_DECL int SetVLOGLevel(const char* module_pattern,
 // initialized.  We make this a large value, so the common-case check
 // of "*vlocal__ >= verbose_level__" in VLOG_IS_ON definition
 // passes in such cases and InitVLOG3__ is then triggered.
-extern ten::int32 kLogSiteUninitialized;
+extern @ac_google_namespace@::int32 kLogSiteUninitialized;
 
 // Helper routine which determines the logging info for a particalur VLOG site.
 //   site_flag     is the address of the site-local pointer to the controlling
@@ -121,9 +121,9 @@ extern ten::int32 kLogSiteUninitialized;
 // We will return the return value for VLOG_IS_ON
 // and if possible set *site_flag appropriately.
 extern GOOGLE_GLOG_DLL_DECL bool InitVLOG3__(
-    ten::int32** site_flag,
-    ten::int32* site_default,
+    @ac_google_namespace@::int32** site_flag,
+    @ac_google_namespace@::int32* site_default,
     const char* fname,
-    ten::int32 verbose_level);
+    @ac_google_namespace@::int32 verbose_level);
 
 #endif  // BASE_VLOG_IS_ON_H_

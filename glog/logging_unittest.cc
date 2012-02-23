@@ -155,7 +155,8 @@ static void BM_Check2(int n) {
 }
 BENCHMARK(BM_Check2);
 
-static void CheckFailure(int a, int b, const char* file, int line, const char* msg) {
+static void CheckFailure(int, int, const char* /* file */, int /* line */,
+                         const char* /* msg */) {
 }
 
 static void BM_logspeed(int n) {
@@ -201,7 +202,7 @@ int main(int argc, char **argv) {
   CaptureTestStderr();
 
   // re-emit early_stderr
-  LogMessage("dummy", LogMessage::kNoLogPrefix, INFO).stream() << early_stderr;
+  LogMessage("dummy", LogMessage::kNoLogPrefix, GLOG_INFO).stream() << early_stderr;
 
   TestLogging(true);
   TestRawLogging();
@@ -234,9 +235,9 @@ int main(int argc, char **argv) {
 }
 
 void TestLogging(bool check_counts) {
-  int64 base_num_infos   = LogMessage::num_messages(INFO);
-  int64 base_num_warning = LogMessage::num_messages(WARNING);
-  int64 base_num_errors  = LogMessage::num_messages(ERROR);
+  int64 base_num_infos   = LogMessage::num_messages(GLOG_INFO);
+  int64 base_num_warning = LogMessage::num_messages(GLOG_WARNING);
+  int64 base_num_errors  = LogMessage::num_messages(GLOG_ERROR);
 
   LOG(INFO) << string("foo ") << "bar " << 10 << ' ' << 3.4;
   for ( int i = 0; i < 10; ++i ) {
@@ -266,12 +267,12 @@ void TestLogging(bool check_counts) {
   LOG(ERROR) << string("foo") << ' '<< j << ' ' << setw(10) << j << " "
              << setw(1) << hex << j;
 
-  LogMessage("foo", LogMessage::kNoLogPrefix, INFO).stream() << "no prefix";
+  LogMessage("foo", LogMessage::kNoLogPrefix, GLOG_INFO).stream() << "no prefix";
 
   if (check_counts) {
-    CHECK_EQ(base_num_infos   + 14, LogMessage::num_messages(INFO));
-    CHECK_EQ(base_num_warning + 3,  LogMessage::num_messages(WARNING));
-    CHECK_EQ(base_num_errors  + 15, LogMessage::num_messages(ERROR));
+    CHECK_EQ(base_num_infos   + 14, LogMessage::num_messages(GLOG_INFO));
+    CHECK_EQ(base_num_warning + 3,  LogMessage::num_messages(GLOG_WARNING));
+    CHECK_EQ(base_num_errors  + 15, LogMessage::num_messages(GLOG_ERROR));
   }
 }
 
@@ -416,16 +417,16 @@ void LogWithLevels(int v, int severity, bool err, bool alsoerr) {
 }
 
 void TestLoggingLevels() {
-  LogWithLevels(0, INFO, false, false);
-  LogWithLevels(1, INFO, false, false);
-  LogWithLevels(-1, INFO, false, false);
-  LogWithLevels(0, WARNING, false, false);
-  LogWithLevels(0, ERROR, false, false);
-  LogWithLevels(0, FATAL, false, false);
-  LogWithLevels(0, FATAL, true, false);
-  LogWithLevels(0, FATAL, false, true);
-  LogWithLevels(1, WARNING, false, false);
-  LogWithLevels(1, FATAL, false, true);
+  LogWithLevels(0, GLOG_INFO, false, false);
+  LogWithLevels(1, GLOG_INFO, false, false);
+  LogWithLevels(-1, GLOG_INFO, false, false);
+  LogWithLevels(0, GLOG_WARNING, false, false);
+  LogWithLevels(0, GLOG_ERROR, false, false);
+  LogWithLevels(0, GLOG_FATAL, false, false);
+  LogWithLevels(0, GLOG_FATAL, true, false);
+  LogWithLevels(0, GLOG_FATAL, false, true);
+  LogWithLevels(1, GLOG_WARNING, false, false);
+  LogWithLevels(1, GLOG_FATAL, false, true);
 }
 
 TEST(DeathRawCHECK, logging) {
@@ -471,7 +472,7 @@ void TestLogToString() {
 class TestLogSinkImpl : public LogSink {
  public:
   vector<string> errors;
-  virtual void send(LogSeverity severity, const char* full_filename,
+  virtual void send(LogSeverity severity, const char* /* full_filename */,
                     const char* base_filename, int line,
                     const struct tm* tm_time,
                     const char* message, size_t message_len) {
@@ -508,7 +509,7 @@ void TestLogSink() {
 
   LOG(INFO) << "Captured by LOG_TO_SINK:";
   for (size_t i = 0; i < sink.errors.size(); ++i) {
-    LogMessage("foo", LogMessage::kNoLogPrefix, INFO).stream()
+    LogMessage("foo", LogMessage::kNoLogPrefix, GLOG_INFO).stream()
       << sink.errors[i];
   }
 }
@@ -610,7 +611,7 @@ static void GetFiles(const string& pattern, vector<string>* files) {
   glob_t g;
   const int r = glob(pattern.c_str(), 0, NULL, &g);
   CHECK((r == 0) || (r == GLOB_NOMATCH)) << ": error matching " << pattern;
-  for (int i = 0; i < g.gl_pathc; i++) {
+  for (size_t i = 0; i < g.gl_pathc; i++) {
     files->push_back(string(g.gl_pathv[i]));
   }
   globfree(&g);
@@ -647,7 +648,7 @@ static void DeleteFiles(const string& pattern) {
 static void CheckFile(const string& name, const string& expected_string) {
   vector<string> files;
   GetFiles(name + "*", &files);
-  CHECK_EQ(files.size(), 1);
+  CHECK_EQ(files.size(), 1UL);
 
   FILE* file = fopen(files[0].c_str(), "r");
   CHECK(file != NULL) << ": could not open " << files[0];
@@ -667,9 +668,9 @@ static void TestBasename() {
   const string dest = FLAGS_test_tmpdir + "/logging_test_basename";
   DeleteFiles(dest + "*");
 
-  SetLogDestination(INFO, dest.c_str());
+  SetLogDestination(GLOG_INFO, dest.c_str());
   LOG(INFO) << "message to new base";
-  FlushLogFiles(INFO);
+  FlushLogFiles(GLOG_INFO);
 
   CheckFile(dest, "message to new base");
 
@@ -686,10 +687,10 @@ static void TestSymlink() {
   DeleteFiles(dest + "*");
   DeleteFiles(sym + "*");
 
-  SetLogSymlink(INFO, "symlinkbase");
-  SetLogDestination(INFO, dest.c_str());
+  SetLogSymlink(GLOG_INFO, "symlinkbase");
+  SetLogDestination(GLOG_INFO, dest.c_str());
   LOG(INFO) << "message to new symlink";
-  FlushLogFiles(INFO);
+  FlushLogFiles(GLOG_INFO);
   CheckFile(sym, "message to new symlink");
 
   DeleteFiles(dest + "*");
@@ -702,16 +703,16 @@ static void TestExtension() {
   string dest = FLAGS_test_tmpdir + "/logging_test_extension";
   DeleteFiles(dest + "*");
 
-  SetLogDestination(INFO, dest.c_str());
+  SetLogDestination(GLOG_INFO, dest.c_str());
   SetLogFilenameExtension("specialextension");
   LOG(INFO) << "message to new extension";
-  FlushLogFiles(INFO);
+  FlushLogFiles(GLOG_INFO);
   CheckFile(dest, "message to new extension");
 
   // Check that file name ends with extension
   vector<string> filenames;
   GetFiles(dest + "*", &filenames);
-  CHECK_EQ(filenames.size(), 1);
+  CHECK_EQ(filenames.size(), 1UL);
   CHECK(strstr(filenames[0].c_str(), "specialextension") != NULL);
 
   // Release file handle for the destination file to unlock the file in Windows.
@@ -722,8 +723,8 @@ static void TestExtension() {
 struct MyLogger : public base::Logger {
   string data;
 
-  virtual void Write(bool should_flush,
-                     time_t timestamp,
+  virtual void Write(bool /* should_flush */,
+                     time_t /* timestamp */,
                      const char* message,
                      int length) {
     data.append(message, length);
@@ -738,11 +739,11 @@ static void TestWrapper() {
   fprintf(stderr, "==== Test log wrapper\n");
 
   MyLogger my_logger;
-  base::Logger* old_logger = base::GetLogger(INFO);
-  base::SetLogger(INFO, &my_logger);
+  base::Logger* old_logger = base::GetLogger(GLOG_INFO);
+  base::SetLogger(GLOG_INFO, &my_logger);
   LOG(INFO) << "Send to wrapped logger";
-  FlushLogFiles(INFO);
-  base::SetLogger(INFO, old_logger);
+  FlushLogFiles(GLOG_INFO);
+  base::SetLogger(GLOG_INFO, old_logger);
 
   CHECK(strstr(my_logger.data.c_str(), "Send to wrapped logger") != NULL);
 }
@@ -785,9 +786,9 @@ static void TestOneTruncate(const char *path, int64 limit, int64 keep,
   CHECK_ERR(lseek(fd, 0, SEEK_SET));
 
   // File should contain the suffix of the original file
-  int buf_size = statbuf.st_size + 1;
+  const size_t buf_size = statbuf.st_size + 1;
   char* buf = new char[buf_size];
-  memset(buf, 0, sizeof(buf));
+  memset(buf, 0, buf_size);
   CHECK_ERR(read(fd, buf, buf_size));
 
   const char *p = buf;
@@ -991,7 +992,7 @@ class TestWaitingLogSink : public LogSink {
 
   // (re)define LogSink interface
 
-  virtual void send(LogSeverity severity, const char* full_filename,
+  virtual void send(LogSeverity severity, const char* /* full_filename */,
                     const char* base_filename, int line,
                     const struct tm* tm_time,
                     const char* message, size_t message_len) {
@@ -1030,13 +1031,13 @@ static void TestLogSinkWaitTillSent() {
   for (size_t i = 0; i < global_messages.size(); ++i) {
     LOG(INFO) << "Sink capture: " << global_messages[i];
   }
-  CHECK_EQ(global_messages.size(), 3);
+  CHECK_EQ(global_messages.size(), 3UL);
 }
 
 TEST(Strerror, logging) {
   int errcode = EINTR;
   char *msg = strdup(strerror(errcode));
-  int buf_size = strlen(msg) + 1;
+  const size_t buf_size = strlen(msg) + 1;
   char *buf = new char[buf_size];
   CHECK_EQ(posix_strerror_r(errcode, NULL, 0), -1);
   buf[0] = 'A';
@@ -1190,10 +1191,10 @@ TEST(LogBacktraceAt, DoesBacktraceAtRightLineWhenEnabled) {
 #endif // HAVE_LIB_GMOCK
 
 struct UserDefinedClass {
-  bool operator==(const UserDefinedClass& rhs) const { return true; }
+  bool operator==(const UserDefinedClass&) const { return true; }
 };
 
-inline ostream& operator<<(ostream& out, const UserDefinedClass& u) {
+inline ostream& operator<<(ostream& out, const UserDefinedClass&) {
   out << "OK";
   return out;
 }
@@ -1202,7 +1203,7 @@ TEST(UserDefinedClass, logging) {
   UserDefinedClass u;
   vector<string> buf;
   LOG_STRING(INFO, &buf) << u;
-  CHECK_EQ(1, buf.size());
+  CHECK_EQ(1UL, buf.size());
   CHECK(buf[0].find("OK") != string::npos);
 
   // We must be able to compile this.

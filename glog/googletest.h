@@ -110,7 +110,7 @@ using testing::InitGoogleTest;
 
 _START_GOOGLE_NAMESPACE_
 
-void InitGoogleTest(int* argc, char** argv) {}
+void InitGoogleTest(int*, char**) {}
 
 // The following is some bare-bones testing infrastructure
 
@@ -528,7 +528,7 @@ class Thread {
  public:
   virtual ~Thread() {}
 
-  void SetJoinable(bool joinable) {}
+  void SetJoinable(bool) {}
 #if defined(OS_WINDOWS) || defined(OS_CYGWIN)
   void Start() {
     handle_ = CreateThread(NULL,
@@ -584,21 +584,21 @@ void (*g_new_hook)() = NULL;
 
 _END_GOOGLE_NAMESPACE_
 
-void* operator new(size_t size) {
+void* operator new(size_t size) throw(std::bad_alloc) {
   if (GOOGLE_NAMESPACE::g_new_hook) {
     GOOGLE_NAMESPACE::g_new_hook();
   }
   return malloc(size);
 }
 
-void* operator new[](size_t size) {
+void* operator new[](size_t size) throw(std::bad_alloc) {
   return ::operator new(size);
 }
 
-void operator delete(void* p) {
+void operator delete(void* p) throw() {
   free(p);
 }
 
-void operator delete[](void* p) {
+void operator delete[](void* p) throw() {
   ::operator delete(p);
 }

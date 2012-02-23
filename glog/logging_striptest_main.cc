@@ -39,6 +39,7 @@
 #include "config.h"
 
 DECLARE_bool(logtostderr);
+GLOG_DEFINE_bool(check_mode, false, "Prints 'opt' or 'dbg'");
 
 using std::string;
 using namespace GOOGLE_NAMESPACE;
@@ -55,9 +56,13 @@ int CheckNoReturn(bool b) {
 struct A { };
 std::ostream &operator<<(std::ostream &str, const A&) {return str;}
 
-int main(int argc, char* argv[]) {
+int main(int, char* argv[]) {
   FLAGS_logtostderr = true;
   InitGoogleLogging(argv[0]);
+  if (FLAGS_check_mode) {
+    printf("%s\n", DEBUG_MODE ? "dbg" : "opt");
+    return 0;
+  }
   LOG(INFO) << "TESTMESSAGE INFO";
   LOG(WARNING) << 2 << "something" << "TESTMESSAGE WARNING"
                << 1 << 'c' << A() << std::endl;

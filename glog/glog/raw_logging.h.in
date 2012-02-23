@@ -38,7 +38,7 @@
 
 #include <time.h>
 
-namespace ten {
+@ac_google_start_namespace@
 
 #include "glog/log_severity.h"
 #include "glog/vlog_is_on.h"
@@ -68,7 +68,7 @@ namespace ten {
 //   I0821 211317 file.cc:142] RAW: status is 20
 #define RAW_LOG(severity, ...) \
   do { \
-    switch (ten::GLOG_ ## severity) {  \
+    switch (@ac_google_namespace@::GLOG_ ## severity) {  \
       case 0: \
         RAW_LOG_INFO(__VA_ARGS__); \
         break; \
@@ -100,33 +100,33 @@ namespace ten {
 #endif // STRIP_LOG == 0
 
 #if STRIP_LOG == 0
-#define RAW_LOG_INFO(...) ten::RawLog__(ten::GLOG_INFO, \
+#define RAW_LOG_INFO(...) @ac_google_namespace@::RawLog__(@ac_google_namespace@::GLOG_INFO, \
                                    __FILE__, __LINE__, __VA_ARGS__)
 #else
-#define RAW_LOG_INFO(...) ten::RawLogStub__(0, __VA_ARGS__)
+#define RAW_LOG_INFO(...) @ac_google_namespace@::RawLogStub__(0, __VA_ARGS__)
 #endif // STRIP_LOG == 0
 
 #if STRIP_LOG <= 1
-#define RAW_LOG_WARNING(...) ten::RawLog__(ten::GLOG_WARNING,   \
+#define RAW_LOG_WARNING(...) @ac_google_namespace@::RawLog__(@ac_google_namespace@::GLOG_WARNING,   \
                                       __FILE__, __LINE__, __VA_ARGS__)
 #else
-#define RAW_LOG_WARNING(...) ten::RawLogStub__(0, __VA_ARGS__)
+#define RAW_LOG_WARNING(...) @ac_google_namespace@::RawLogStub__(0, __VA_ARGS__)
 #endif // STRIP_LOG <= 1
 
 #if STRIP_LOG <= 2
-#define RAW_LOG_ERROR(...) ten::RawLog__(ten::GLOG_ERROR,       \
+#define RAW_LOG_ERROR(...) @ac_google_namespace@::RawLog__(@ac_google_namespace@::GLOG_ERROR,       \
                                     __FILE__, __LINE__, __VA_ARGS__)
 #else
-#define RAW_LOG_ERROR(...) ten::RawLogStub__(0, __VA_ARGS__)
+#define RAW_LOG_ERROR(...) @ac_google_namespace@::RawLogStub__(0, __VA_ARGS__)
 #endif // STRIP_LOG <= 2
 
 #if STRIP_LOG <= 3
-#define RAW_LOG_FATAL(...) ten::RawLog__(ten::GLOG_FATAL,       \
+#define RAW_LOG_FATAL(...) @ac_google_namespace@::RawLog__(@ac_google_namespace@::GLOG_FATAL,       \
                                     __FILE__, __LINE__, __VA_ARGS__)
 #else
 #define RAW_LOG_FATAL(...) \
   do { \
-    ten::RawLogStub__(0, __VA_ARGS__);        \
+    @ac_google_namespace@::RawLogStub__(0, __VA_ARGS__);        \
     exit(1); \
   } while (0)
 #endif // STRIP_LOG <= 3
@@ -173,13 +173,13 @@ GOOGLE_GLOG_DLL_DECL void RawLog__(LogSeverity severity,
                                    const char* file,
                                    int line,
                                    const char* format, ...)
-   __attribute__((__format__ (__printf__, 4, 5)));
+   @ac_cv___attribute___printf_4_5@;
 
 // Hack to propagate time information into this module so that
 // this module does not have to directly call localtime_r(),
 // which could allocate memory.
 GOOGLE_GLOG_DLL_DECL void RawLog__SetLastTime(const struct tm& t, int usecs);
 
-}
+@ac_google_end_namespace@
 
 #endif  // BASE_RAW_LOGGING_H_

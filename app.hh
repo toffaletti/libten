@@ -102,7 +102,7 @@ public:
     }
 
     ~application() {
-        google::ShutdownGoogleLogging();
+        ShutdownGoogleLogging();
     }
 
     void showhelp(std::ostream &os = std::cerr) {

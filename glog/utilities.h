@@ -159,6 +159,7 @@ typedef double WallTime;
 WallTime WallTime_Now();
 
 int32 GetMainThreadPid();
+bool PidHasChanged();
 
 pid_t GetTID();
 
@@ -212,6 +213,9 @@ struct CrashReason {
 };
 
 void SetCrashReason(const CrashReason* r);
+
+void InitGoogleLoggingUtilities(const char* argv0);
+void ShutdownGoogleLoggingUtilities();
 
 }  // namespace glog_internal_namespace_
 
