@@ -89,12 +89,12 @@ struct task {
                 t->fn();
             }
         } catch (task_interrupted &e) {
-            DVLOG(5) << "task interrupted " << t << " " << t->name << " |" << t->state << "|";
+            DVLOG(5) << t << " interrupted ";
         } catch (backtrace_exception &e) {
-            LOG(ERROR) << "unhandled error in task::start: " << e.what() << "\n" << e.str();
+            LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.str();
             std::exit(2);
         } catch (std::exception &e) {
-            LOG(ERROR) << "unhandled error in task::start: " << e.what();
+            LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
             std::exit(2);
         }
         t->exit();
