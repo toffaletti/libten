@@ -18,16 +18,21 @@ void ioproctask(iochannel &ch) {
         if (!call) break;
         taskstate("executing call");
         errno = 0;
-        if (call->vop) {
-            DVLOG(5) << "ioproc calling vop";
-            call->vop();
-            call->vop = 0;
-        } else if (call->op) {
-            DVLOG(5) << "ioproc calling op";
-            call->ret = call->op();
-            call->op = 0;
-        } else {
-            abort();
+        try {
+            if (call->vop) {
+                DVLOG(5) << "ioproc calling vop";
+                call->vop();
+                call->vop = 0;
+            } else if (call->op) {
+                DVLOG(5) << "ioproc calling op";
+                call->ret = call->op();
+                call->op = 0;
+            } else {
+                abort();
+            }
+        } catch (std::exception &e) {
+            DVLOG(5) << "ioproc caught exception: " << e.what();
+            call->errmsg = e.what();
         }
 
         // scope for reply iochannel

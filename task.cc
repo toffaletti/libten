@@ -99,20 +99,21 @@ struct task {
         }
         t->exit();
     }
-};
 
-std::ostream &operator << (std::ostream &o, task *t) {
-    if (t) {
-        o << "[" << (void*)t << " " << t->id << " "
-            << t->name << " |" << t->state
-            << "| sys: " << t->systask
-            << " exiting: " << t->exiting
-            << " canceled: " << t->canceled << "]";
-    } else {
-        o << "nulltask";
+    friend std::ostream &operator << (std::ostream &o, task *t) {
+        if (t) {
+            o << "[" << (void*)t << " " << t->id << " "
+                << t->name << " |" << t->state
+                << "| sys: " << t->systask
+                << " exiting: " << t->exiting
+                << " canceled: " << t->canceled << "]";
+        } else {
+            o << "nulltask";
+        }
+        return o;
     }
-    return o;
-}
+
+};
 
 struct proc {
     io_scheduler *_sched;
