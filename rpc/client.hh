@@ -2,6 +2,23 @@
 
 namespace ten {
 
+#if 0
+// more general interface that supports calls over udp/tcp/pipe
+// TODO: allow server to call to the client
+// session should be shared interface both sides use
+// calls can create channels and wait on them
+// allow multiple simultaneous calls
+// out of order replies
+// calls with no reply (notify)
+class rpc_transport {
+    virtual void send(msgpack::sbuffer &sbuf) = 0;
+}
+
+class rpc_session {
+    // call()
+};
+#endif
+
 class rpc_client : public boost::noncopyable {
 public:
     rpc_client(const std::string &hostname_, uint16_t port_)

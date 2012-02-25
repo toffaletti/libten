@@ -1,7 +1,7 @@
 #include "msgpack/msgpack.hpp"
 #include "error.hh"
 
-using namespace ten;
+namespace ten {
 
 <% GENERATION_LIMIT = 8 %>
 
@@ -17,7 +17,7 @@ msgpack::object return_thunk(const std::function<Result ()> &f, msgpack::object 
 template <typename Result, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result>, f);
+    return std::bind(return_thunk<Result>, f, _1, _2);
 }
 
 <%0.upto(GENERATION_LIMIT) {|i|%>
@@ -44,6 +44,9 @@ msgpack::object return_thunk(const std::function<Result (A0<%1.upto(i) {|j|%>, A
 template <typename Result, typename A0<%1.upto(i) {|j|%>, typename A<%=j%><%}%>, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0<%1.upto(i) {|j|%>, A<%=j%><%}%>>, f<%1.upto(i+1) {|j|%>, _<%=j%><%}%>);
+    return std::bind(return_thunk<Result, A0<%1.upto(i) {|j|%>, A<%=j%><%}%>>, f, _1, _2);
 }
 <%}%>
+
+} // end namespace ten
+

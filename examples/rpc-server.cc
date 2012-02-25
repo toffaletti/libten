@@ -11,17 +11,15 @@ static void client_task() {
     LOG(INFO) << "40+2=" << c.call<int>("add2", 40, 2);
     LOG(INFO) << "4-2=" << c.call<int>("subtract2", 4, 2);
     try {
-        LOG(INFO) << "fail: " << c.call<int>("fail", 0, 0);
+        LOG(INFO) << "fail: " << c.call<int>("fail");
     } catch (errorx &e) {
         LOG(ERROR) << "fail got: " << e.what();
     }
     procshutdown();
 }
 
-// TODO: make this work for int fail(), and void fail()
-static int fail(int, int) {
+static int fail() {
     throw std::runtime_error("fail");
-    return 0;
 }
 
 static int add2(int a, int b) {
@@ -37,7 +35,7 @@ static void startup() {
     rpc_server rpc;
     rpc.add_command("add2", thunk<int, int, int>(add2));
     rpc.add_command("subtract2", thunk<int, int, int>(subtract2));
-    rpc.add_command("fail", thunk<int, int, int>(fail));
+    rpc.add_command("fail", thunk<int>(fail));
     taskspawn(client_task);
     rpc.serve("0.0.0.0", 5500);
 }

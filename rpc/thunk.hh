@@ -1,7 +1,7 @@
 #include "msgpack/msgpack.hpp"
 #include "error.hh"
 
-using namespace ten;
+namespace ten {
 
 
 
@@ -17,7 +17,7 @@ msgpack::object return_thunk(const std::function<Result ()> &f, msgpack::object 
 template <typename Result, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result>, f);
+    return std::bind(return_thunk<Result>, f, _1, _2);
 }
 
 
@@ -42,7 +42,7 @@ msgpack::object return_thunk(const std::function<Result (A0)> &f, msgpack::objec
 template <typename Result, typename A0, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0>, f, _1);
+    return std::bind(return_thunk<Result, A0>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1>
@@ -96,7 +96,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2)> &f, msgpac
 template <typename Result, typename A0, typename A1, typename A2, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2>, f, _1, _2, _3);
+    return std::bind(return_thunk<Result, A0, A1, A2>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3>
@@ -126,7 +126,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3)> &f, ms
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3>, f, _1, _2, _3, _4);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4>
@@ -158,7 +158,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3, A4)> &f
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4>, f, _1, _2, _3, _4, _5);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5>
@@ -192,7 +192,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3, A4, A5)
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5>, f, _1, _2, _3, _4, _5, _6);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6>
@@ -228,7 +228,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3, A4, A5,
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6>, f, _1, _2, _3, _4, _5, _6, _7);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7>
@@ -266,7 +266,7 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3, A4, A5,
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6, A7>, f, _1, _2, _3, _4, _5, _6, _7, _8);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6, A7>, f, _1, _2);
 }
 
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7, typename A8>
@@ -306,6 +306,9 @@ msgpack::object return_thunk(const std::function<Result (A0, A1, A2, A3, A4, A5,
 template <typename Result, typename A0, typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7, typename A8, typename F>
 std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(F *f) {
     using namespace std::placeholders;
-    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6, A7, A8>, f, _1, _2, _3, _4, _5, _6, _7, _8, _9);
+    return std::bind(return_thunk<Result, A0, A1, A2, A3, A4, A5, A6, A7, A8>, f, _1, _2);
 }
+
+
+} // end namespace ten
 
