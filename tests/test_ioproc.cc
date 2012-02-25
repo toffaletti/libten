@@ -7,7 +7,7 @@ using namespace ten;
 
 const size_t default_stacksize=8*1024;
 
-void ioproc_sleeper() {
+static void ioproc_sleeper() {
     ioproc io;
     int ret = iocall<int>(io, std::bind(usleep, 100));
     BOOST_CHECK_EQUAL(ret, 0);
@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(task_socket_dial) {
     p.main();
 }
 
-void test_pool() {
+static void test_pool() {
     ioproc io(default_stacksize, 4);
     iochannel reply_chan;
 
@@ -51,5 +51,27 @@ void test_pool() {
 BOOST_AUTO_TEST_CASE(ioproc_thread_pool) {
     procmain p;
     taskspawn(test_pool);
+    p.main();
+}
+
+static void fail() {
+    throw std::runtime_error("fail has failed");
+}
+
+static void ioproc_failure() {
+    ioproc io;
+    std::string errmsg;
+    try {
+        iocall(io, fail);
+        BOOST_CHECK(false);
+    } catch (ioproc_error &e) {
+        errmsg = e.what();
+    }
+    BOOST_CHECK_EQUAL(errmsg, "fail has failed");
+}
+
+BOOST_AUTO_TEST_CASE(ioproc_error_test) {
+    procmain p;
+    taskspawn(ioproc_failure);
     p.main();
 }
