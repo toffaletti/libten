@@ -33,6 +33,8 @@ private:
         // capacity is different than container.capacity()
         // to avoid needing to reallocate the container
         // on every send/recv for unbuffered channels
+        // unbuffered channels use 0 capacity so send
+        // will block waiting for recv on empty channel
         size_type capacity;
         size_type unread;
         std::queue<T, ContainerT> queue;
