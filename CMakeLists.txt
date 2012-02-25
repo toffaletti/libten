@@ -20,7 +20,7 @@ endif()
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 add_library(ten
-    error.cc task.cc ioproc.cc net.cc ${ASM}
+    error.cc task.cc ioproc.cc net.cc zip.cc ${ASM}
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
