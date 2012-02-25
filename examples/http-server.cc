@@ -1,7 +1,7 @@
 #include "app.hh"
 #include "task.hh"
 #include "buffer.hh"
-#include "http_server.hh"
+#include "http/server.hh"
 #include "uri/uri.hh"
 #include "logging.hh"
 #include "net.hh"
