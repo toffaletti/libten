@@ -8,9 +8,6 @@
 
 namespace ten {
 
-// based on bounded_buffer example
-// http://www.boost.org/doc/libs/1_41_0/libs/circular_buffer/doc/circular_buffer.html#boundedbuffer
-
 struct channel_closed_error : std::exception {};
 
 //! send and receive data between tasks in FIFO order
@@ -20,7 +17,7 @@ struct channel_closed_error : std::exception {};
 //! buffered channels only block send when the buffer is full
 //! data is copied, so if you need to send large data
 //! its best to allocate them on the heap and send the pointer
-//! share by communicating!
+//! share by communicating.
 //! channels are thread and task safe.
 template <typename T, typename ContainerT = std::deque<T> > class channel {
 private:
@@ -30,9 +27,6 @@ private:
         impl(size_type capacity_=0) : capacity(capacity_), unread(0),
             queue(ContainerT()), closed(false) {}
 
-        // capacity is different than container.capacity()
-        // to avoid needing to reallocate the container
-        // on every send/recv for unbuffered channels
         // unbuffered channels use 0 capacity so send
         // will block waiting for recv on empty channel
         size_type capacity;
@@ -100,8 +94,6 @@ public:
             check_closed();
         }
 
-        // we don't pop_back because the item will just get overwritten
-        // when the circular buffer wraps around
         --m->unread;
         item = std::move(m->queue.front());
         m->queue.pop();
