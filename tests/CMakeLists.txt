@@ -18,9 +18,13 @@ target_link_libraries(test_backoff boost_unit_test_framework)
 add_executable(test_zip test_zip.cc)
 target_link_libraries(test_zip ten boost_unit_test_framework)
 
+add_executable(test_json test_json.cc)
+target_link_libraries(test_json ten jansson boost_unit_test_framework)
+
 add_test(test_descriptors test_descriptors --random)
 add_test(test_task test_task --random)
 add_test(test_channel test_channel --random)
 add_test(test_ioproc test_ioproc --random)
 add_test(test_backoff test_backoff --random)
 add_test(test_zip test_zip --random)
+add_test(test_json test_json --random)
