@@ -4,6 +4,7 @@
 #include <functional>
 #include <netinet/tcp.h>
 
+#include "buffer.hh"
 #include "logging.hh"
 #include "task.hh"
 #include "http/http_message.hh"

@@ -24,7 +24,7 @@ struct uri {
     std::string path;
     std::string query;
     std::string fragment;
-    unsigned int port;
+    unsigned short port;
 
     uri() : port(0) {}
     uri(const std::string &uri_str) {
