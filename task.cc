@@ -840,7 +840,7 @@ struct io_scheduler {
                     if (pollfds[fd].t_in) {
                         pollfds[fd].p_in->revents = i->events;
                         t = pollfds[fd].t_in;
-                        DVLOG(5) << "IN EVENT on task: " << t << " state: " << t->state;
+                        DVLOG(5) << "IN EVENT on task: " << t;
                         t->ready();
                     }
 
