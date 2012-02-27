@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <ostream>
+#include <sstream>
 #include "error.hh"
 
 namespace ten {
@@ -46,6 +47,12 @@ public:
         }
     }
 
+    std::string dump(size_t flags=JSON_ENCODE_ANY) {
+        std::stringstream ss;
+        ss << p.get();
+        return ss.str();
+    }
+
     jsobj &operator = (json_t *j) {
         p.reset(j, json_decref);
         return *this;
@@ -69,6 +76,12 @@ public:
 
     std::string str() const {
         return json_string_value(p.get());
+    }
+
+    void set(const std::string &s) {
+        if (json_string_set(p.get(), s.c_str()) != 0) {
+            throw errorx("error setting string");
+        }
     }
 
     size_t size() const {
