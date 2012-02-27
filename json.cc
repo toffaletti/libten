@@ -1,5 +1,6 @@
 #include "json.hh"
 #include <list>
+#include <vector>
 #include <boost/lexical_cast.hpp>
 
 namespace ten {
@@ -14,6 +15,7 @@ static bool next_token(const std::string &path, size_t &i, std::string &tok) {
         case ']':
         case ':':
         case ',':
+        case '=':
             goto done;
         }
         ++i;
@@ -33,11 +35,9 @@ static void add_result(jsobj &result, json_t *r) {
 }
 
 static void recursive_descent(json_t *root, jsobj &result, const std::string &match) {
-    //std::cout << "descending into: " << root << "\n";
     if (json_is_object(root)) {
         void *iter = json_object_iter(root);
         while (iter) {
-            //std::cout << "k: " << json_object_iter_key(iter) << "\n";
             if (strcmp(json_object_iter_key(iter), match.c_str()) == 0) {
                 add_result(result, json_object_iter_value(iter));
             }
@@ -94,12 +94,44 @@ static void select_node(jsobj &result, std::list<std::string> &tokens) {
     }
 }
 
+static void slice_op(jsobj &result, std::list<std::string> &tokens) {
+    tokens.pop_front();
+    std::vector<std::string> args;
+    while (!tokens.empty() && tokens.front() != "]") {
+        args.push_back(tokens.front());
+        tokens.pop_front();
+    }
+    tokens.pop_front(); // pop ']'
+
+    //using ::operator<<;
+    //std::cout << "args: " << args << "\n";
+    if (args.size() == 1) {
+        size_t index = boost::lexical_cast<size_t>(args.front());
+        result = result[index];
+    } else if (args.size() == 3) {
+        std::string op = args[1];
+        if (op == ":") {
+            ssize_t start = boost::lexical_cast<ssize_t>(args[0]);
+            ssize_t end = boost::lexical_cast<ssize_t>(args[2]);
+        } else if (op == "=") {
+            std::string key = args[0];
+            jsobj filter(args[2]);
+            jsobj tmp(json_array());
+            for (size_t i=0; i<result.size(); ++i) {
+                if (result[i][key] == filter) {
+                    add_result(tmp, result[i].ptr());
+                }
+            }
+            result = tmp;
+        }
+    }
+}
+
 jsobj jsobj::path(const std::string &path) {
     size_t i = 0;
     std::string tok;
     std::list<std::string> tokens;
     while (next_token(path, i, tok)) {
-        //std::cout << tok << "\n";
         tokens.push_back(tok);
     }
 
@@ -120,13 +152,8 @@ jsobj jsobj::path(const std::string &path) {
                 result = tmp;
             }
         } else if (tokens.front() == "[") {
-            tokens.pop_front();
-            size_t index = boost::lexical_cast<size_t>(tokens.front());
-            tokens.pop_front();
-            tokens.pop_front(); // pop ']'
-            result = json_incref(json_array_get(result.ptr(), index));
+            slice_op(result, tokens);
         }
-        
     }
     return result;
 }
