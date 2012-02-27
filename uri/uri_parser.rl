@@ -443,7 +443,7 @@ uri::query_params uri::parse_query() {
   for (uri::split_vector::iterator i = splits.begin(); i!=splits.end(); ++i) {
     size_t pos = i->find_first_of('=');
     if (pos != std::string::npos) {
-      result.push_back(std::make_pair(i->substr(0, pos), decode(i->substr(pos+1))));
+      result.push_back(std::make_pair(decode(i->substr(0, pos)), decode(i->substr(pos+1))));
     } else {
       result.push_back(std::make_pair(*i, ""));
     }

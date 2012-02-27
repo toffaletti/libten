@@ -99,7 +99,7 @@ struct uri {
         ss << "?";
         query_params::const_iterator it = pms.begin();
         while (it!=pms.end()) {
-            ss << it->first << "=" << it->second;
+            ss << encode(it->first) << "=" << encode(it->second);
             ++it;
             if (it != pms.end()) {
                 ss << "&";
