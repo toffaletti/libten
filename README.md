@@ -36,7 +36,7 @@ ____________________________
   * glog-0.3.1 from http://code.google.com/p/google-glog/
   * stringencoders from http://code.google.com/p/stringencoders/
   * msgpack-0.5.7 from http://msgpack.org/
-  * jansson-2.2.1 from http://www.digip.org/jansson/
+  * jansson-2.3 from http://www.digip.org/jansson/
   * miniz from http://code.google.com/p/miniz/
 
 TODO
