@@ -33,7 +33,7 @@ ____________________________
 
   * boost.context-0.7.6 parts from https://github.com/olk/boost.context
   * http_parser forked from https://github.com/joyent/http-parser
-  * glog-0.3.1 from http://code.google.com/p/google-glog/
+  * glog-0.3.2 from http://code.google.com/p/google-glog/
   * stringencoders from http://code.google.com/p/stringencoders/
   * msgpack-0.5.7 from http://msgpack.org/
   * jansson-2.3 from http://www.digip.org/jansson/
