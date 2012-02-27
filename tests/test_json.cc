@@ -2,8 +2,6 @@
 #include <boost/test/unit_test.hpp>
 #include "json.hh"
 
-#include <iostream>
-
 using namespace ten;
 
 const char json[] = 
@@ -39,26 +37,32 @@ const char json[] =
 "  }"
 "}";
 
-BOOST_AUTO_TEST_CASE(json_test) {
+BOOST_AUTO_TEST_CASE(json_test_path1) {
     jsobj o(json);
-    BOOST_REQUIRE(o);
+    BOOST_REQUIRE(o.ptr());
 
-    jsobj r1(o.path("/store/book/author"), true);
-    std::cout << "r1: " << r1 << "\n";
+    static const char a1[] = "[\"Nigel Rees\", \"Evelyn Waugh\", \"Herman Melville\", \"J. R. R. Tolkien\"]";
+    jsobj r1(o.path("/store/book/author"));
+    BOOST_CHECK_EQUAL(jsobj(a1), r1);
 
-    jsobj r2(o.path("//author"), true);
-    std::cout << "r2: " << r2 << "\n";
+    jsobj r2(o.path("//author"));
+    BOOST_CHECK_EQUAL(jsobj(a1), r2);
 
-    jsobj r3(o.path("/store/*"), true);
-    std::cout << "r3: " << r3 << "\n";
+    static const char a3[] = "[{\"color\": \"red\", \"price\": 19.949999999999999}, {\"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.9499999999999993}, {\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.9900000000000002}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.989999999999998}]";
 
-    jsobj r4(o.path("/store//price"), true);
-    std::cout << "r4: " << r4 << "\n";
+    jsobj r3(o.path("/store/*"));
+    BOOST_CHECK_EQUAL(jsobj(a3), r3);
 
-    jsobj r5(o.path("//book[3]"), true);
-    std::cout << "r5: " << r5 << "\n";
+    static const char a4[] = "[19.949999999999999, 8.9499999999999993, 12.99, 8.9900000000000002, 22.989999999999998]";
+    jsobj r4(o.path("/store//price"));
+    BOOST_CHECK_EQUAL(jsobj(a4), r4);
 
-    jsobj r6(o.path("/store/book[3]/author"), true);
-    std::cout << "r6: " << r6 << "\n";
+    static const char a5[] = "{\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.989999999999998}";
+    jsobj r5(o.path("//book[3]"));
+    BOOST_CHECK_EQUAL(jsobj(a5), r5);
 
+    static const char a6[] = "\"J. R. R. Tolkien\"";
+    jsobj r6(o.path("/store/book[3]/author"));
+    BOOST_CHECK_EQUAL(jsobj(a6), r6);
+    BOOST_CHECK(jsobj(a6) == r6);
 }
