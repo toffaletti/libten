@@ -29,11 +29,7 @@ private:
     void true_value() const {}
     json_ptr p;
 public:
-    jsobj(json_t *j, bool incref=false) : p(j, json_decref) {
-        if (incref) {
-            json_incref(j);
-        }
-    }
+    jsobj(json_t *j) : p(j, json_decref) {}
     jsobj(const char *s, size_t flags=JSON_DECODE_ANY) {
         load(s, strlen(s), flags);
     }
@@ -64,11 +60,11 @@ public:
     }
 
     jsobj operator [](size_t index) {
-        return jsobj(json_array_get(p.get(), index), true);
+        return jsobj(json_incref(json_array_get(p.get(), index)));
     }
 
     jsobj operator [](const std::string &key) {
-        return jsobj(json_object_get(p.get(), key.c_str()), true);
+        return jsobj(json_incref(json_object_get(p.get(), key.c_str())));
     }
 
     std::string str() const {
