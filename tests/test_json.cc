@@ -71,3 +71,9 @@ BOOST_AUTO_TEST_CASE(json_test_path1) {
     jsobj r7(o.path("/store/book[category=\"fiction\"]"));
     BOOST_CHECK_EQUAL(jsobj(a7), r7);
 }
+
+BOOST_AUTO_TEST_CASE(json_test_path2) {
+    jsobj o("[{\"type\": 0}, {\"type\": 1}]");
+    BOOST_CHECK_EQUAL(jsobj("[{\"type\":1}]"), o.path("/[type=1]"));
+}
+

@@ -83,6 +83,7 @@ static void select_node(jsobj &result, std::list<std::string> &tokens) {
         result = tmp;
     } else {
         std::string match = tokens.front();
+        if (match == "[") return;
         tokens.pop_front();
         jsobj tmp(json_array());
         match_node(result.ptr(), tmp, match);
