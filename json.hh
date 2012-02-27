@@ -34,9 +34,16 @@ public:
             json_incref(j);
         }
     }
-    jsobj(const char *s, size_t flags=JSON_DECODE_ANY) : p((json_t *)0, json_decref) {
+    jsobj(const char *s, size_t flags=JSON_DECODE_ANY) {
+        load(s, strlen(s), flags);
+    }
+    jsobj(const std::string &s, size_t flags=JSON_DECODE_ANY) {
+        load(s.c_str(), s.size(), flags);
+    }
+
+    void load(const char *s, size_t len, size_t flags=JSON_DECODE_ANY) {
         json_error_t err;
-        p.reset(json_loads(s, flags, &err), json_decref);
+        p.reset(json_loadb(s, len, flags, &err), json_decref);
         if (!p) {
             // TODO: custom exception
             throw errorx("%s", err.text);
@@ -54,6 +61,27 @@ public:
 
     bool operator == (json_t *rhs) {
         return json_equal(p.get(), rhs);
+    }
+
+    jsobj operator [](size_t index) {
+        return jsobj(json_array_get(p.get(), index), true);
+    }
+
+    jsobj operator [](const std::string &key) {
+        return jsobj(json_object_get(p.get(), key.c_str()), true);
+    }
+
+    std::string str() const {
+        return json_string_value(p.get());
+    }
+
+    size_t size() const {
+        if (json_is_object(p.get())) {
+            return json_object_size(p.get());
+        } else if (json_is_array(p.get())) {
+            return json_array_size(p.get());
+        }
+        throw errorx("size not valid for type");
     }
 
     json_t *ptr() const {
