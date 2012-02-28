@@ -36,6 +36,9 @@ target_link_libraries(msg-pack ten msgpack)
 add_executable(rpc-server rpc-server.cc)
 target_link_libraries(rpc-server ten msgpack)
 
+add_executable(json-path json-path.cc)
+target_link_libraries(json-path ten jansson boost_program_options)
+
 # optional
 add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
 target_link_libraries(https-get ten http uri ssl)

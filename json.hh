@@ -50,7 +50,7 @@ public:
 
     std::string dump(size_t flags=JSON_ENCODE_ANY) {
         std::stringstream ss;
-        ss << p.get();
+        json_dump_callback(p.get(), ostream_json_dump_callback, &ss, flags);
         return ss.str();
     }
 

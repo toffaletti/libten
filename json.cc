@@ -3,10 +3,13 @@
 #include <vector>
 #include <boost/lexical_cast.hpp>
 
+#include "logging.hh"
+
 namespace ten {
 
 static bool next_token(const std::string &path, size_t &i, std::string &tok) {
     size_t start = i;
+    bool inquotes = false;
     while (i < path.size()) {
         switch (path[i])  {
         case '/':
@@ -16,13 +19,23 @@ static bool next_token(const std::string &path, size_t &i, std::string &tok) {
         case ':':
         case ',':
         case '=':
-            goto done;
+            if (!inquotes)
+                goto done;
+            break;
+        case '"':
+            if (inquotes) {
+                ++i;
+                goto done;
+            }
+            inquotes = true;
+            break;
         }
         ++i;
     }
 done:
     if (start == i) ++i;
     tok.assign(path.substr(start, i-start));
+    VLOG(5) << "tok: " << tok;
     return !tok.empty();
 }
 
@@ -102,10 +115,13 @@ static void slice_op(jsobj &result, std::list<std::string> &tokens) {
         args.push_back(tokens.front());
         tokens.pop_front();
     }
+    if (tokens.empty()) {
+        throw errorx("path query missing ]");
+    }
     tokens.pop_front(); // pop ']'
 
-    //using ::operator<<;
-    //std::cout << "args: " << args << "\n";
+    using ::operator<<;
+    DVLOG(5) << "args: " << args;
     if (args.size() == 1) {
         size_t index = boost::lexical_cast<size_t>(args.front());
         result = result[index];
@@ -117,6 +133,7 @@ static void slice_op(jsobj &result, std::list<std::string> &tokens) {
         } else if (op == "=") {
             std::string key = args[0];
             jsobj filter(args[2]);
+            DVLOG(5) << "filter: " << filter;
             jsobj tmp(json_array());
             for (size_t i=0; i<result.size(); ++i) {
                 if (result[i][key] == filter) {
