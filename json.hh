@@ -6,6 +6,7 @@
 #include <string>
 #include <ostream>
 #include <sstream>
+#include <functional>
 #include "error.hh"
 
 namespace ten {
@@ -84,6 +85,12 @@ public:
         }
     }
 
+    void set(const std::string &k, const std::string &v) {
+        if (json_object_set_new_nocheck(p.get(), k.c_str(), json_string(v.c_str())) != 0) {
+            throw errorx("error setting key to value");
+        }
+    }
+
     size_t size() const {
         if (json_is_object(p.get())) {
             return json_object_size(p.get());
@@ -107,6 +114,9 @@ public:
     }
 
     jsobj path(const std::string &path);
+
+    typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
+    void visit(const visitor_func_t &visitor);
 };
    
 } // end namespace ten

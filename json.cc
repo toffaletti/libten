@@ -128,6 +128,27 @@ static void slice_op(jsobj &result, std::list<std::string> &tokens) {
     }
 }
 
+static void visit_all(json_t *root, const jsobj::visitor_func_t &visitor) {
+    if (json_is_object(root)) {
+        void *iter = json_object_iter(root);
+        while (iter) {
+            if (!visitor(root, json_object_iter_key(iter), json_object_iter_value(iter))) {
+                return;
+            }
+            visit_all(json_object_iter_value(iter), visitor);
+            iter = json_object_iter_next(root, iter);
+        }
+    } else if (json_is_array(root)) {
+        for (size_t i=0; i<json_array_size(root); ++i) {
+            visit_all(json_array_get(root, i), visitor);
+        }
+    }
+}
+
+void jsobj::visit(const visitor_func_t &visitor) {
+    visit_all(p.get(), visitor);
+}
+
 jsobj jsobj::path(const std::string &path) {
     size_t i = 0;
     std::string tok;
