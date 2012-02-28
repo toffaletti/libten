@@ -123,8 +123,19 @@ static void slice_op(jsobj &result, std::list<std::string> &tokens) {
     using ::operator<<;
     DVLOG(5) << "args: " << args;
     if (args.size() == 1) {
-        size_t index = boost::lexical_cast<size_t>(args.front());
-        result = result[index];
+        try {
+            size_t index = boost::lexical_cast<size_t>(args.front());
+            result = result[index];
+        } catch (boost::bad_lexical_cast &e) {
+            std::string key = args.front();
+            jsobj tmp(json_array());
+            for (size_t i=0; i<result.size(); ++i) {
+                if (result[i][key].ptr()) {
+                    add_result(tmp, result[i].ptr());
+                }
+            }
+            result = tmp;
+        }
     } else if (args.size() == 3) {
         std::string op = args[1];
         if (op == ":") {

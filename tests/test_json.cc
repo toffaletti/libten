@@ -77,3 +77,27 @@ BOOST_AUTO_TEST_CASE(json_test_path2) {
     BOOST_CHECK_EQUAL(jsobj("[{\"type\":1}]"), o.path("/[type=1]"));
 }
 
+BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
+    jsobj o(json);
+    BOOST_REQUIRE(o.ptr());
+
+    static const char a[] = "["
+"      { \"category\": \"fiction\","
+"        \"author\": \"Herman Melville\","
+"        \"title\": \"Moby Dick\","
+"        \"isbn\": \"0-553-21311-3\","
+"        \"price\": 8.99"
+"      },"
+"      { \"category\": \"fiction\","
+"        \"author\": \"J. R. R. Tolkien\","
+"        \"title\": \"The Lord of the Rings\","
+"        \"isbn\": \"0-395-19395-8\","
+"        \"price\": 22.99"
+"      }]";
+    jsobj r(o.path("//book[isbn]"));
+    BOOST_CHECK_EQUAL(jsobj(a), r);
+    
+    jsobj r1(o.path("//book[doesnotexist]"));
+    BOOST_CHECK_EQUAL(0, r1.size());
+}
+
