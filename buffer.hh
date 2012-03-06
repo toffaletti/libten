@@ -3,29 +3,85 @@
 
 #include <memory>
 #include <cassert>
+#include "logging.hh"
 
 namespace ten {
 
-class buffer2 : boost::noncopyable {
+class buffer2 {
+public:
+    struct head {
+        uint32_t capacity;
+        uint32_t front;
+        uint32_t back;
+        uint8_t data[1];
+    } __attribute__((packed));
 private:
-    uint32_t capacity;
-    uint32_t size;
-    uint8_t data[1];
-
-    buffer2(uint32_t size) {
-    }
-public:
-    static std::unique_ptr<buffer2> create(uint32_t capacity) {
-        return std::unique_ptr<buffer2>(new (capacity) buffer2(capacity));
-    }
+    head *h;
 
 public:
-    void *operator new (size_t, uint32_t cap) {
-        return malloc(offsetof(buffer2, data) + cap);
+    buffer2(uint32_t capacity) {
+        h = (head *)malloc(offsetof(head, data) + capacity);
+        memset(h, 0, sizeof(head));
+        h->capacity = capacity;
     }
 
-    void operator delete (void *p) {
-        free(p);
+    void compact() {
+        if (h->front != 0) {
+            memmove(h->data, &h->data[h->front], size());
+            h->back = size();
+            h->front = 0;
+        }
+    }
+
+    void reserve(uint32_t n) {
+        if (n > h->capacity - size()) {
+            compact();
+            uint32_t need = n - (h->capacity - size());
+            uint32_t newcapacity = h->capacity + need;
+            head *tmp = (head *)realloc(h, offsetof(head, data) + newcapacity);
+            if (tmp) {
+                tmp->capacity = newcapacity;
+                // TODO: DVLOG_IF is missing
+                VLOG_IF(4, (h != tmp)) << "realloc returned new pointer: " << h << " " << tmp;
+                h = tmp;
+            } else {
+                throw std::bad_alloc();
+            }
+        } else if (n > h->capacity - h->back) {
+            compact();
+        }
+    }
+
+    void commit(uint32_t n) {
+        if (n > h->capacity - size()) {
+            throw std::runtime_error("commit too big");
+        }
+        h->back += n;
+    }
+
+    void remove(uint32_t n) {
+        if (n > size()) {
+            throw std::runtime_error("remove > size");
+        }
+        h->front += n;
+        if (h->front == h->back) {
+            h->front = 0;
+            h->back = 0;
+        }
+    }
+
+
+    uint8_t *front() const { return &h->data[h->front]; }
+    uint8_t *back() const { return &h->data[h->back]; }
+    uint8_t *end(uint32_t n) const { return &h->data[h->back + n]; }
+    uint8_t *end() const { return &h->data[h->capacity]; }
+
+    uint32_t size() const {
+        return h->back - h->front;
+    }
+
+    ~buffer2() {
+        free(h);
     }
 };
 
