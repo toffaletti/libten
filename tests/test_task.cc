@@ -343,6 +343,27 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
     p.main();
 }
 
+static void deadline_cleared_not_reached() {
+    try {
+        if (true) {
+            deadline dl(100);
+            tasksleep(20);
+            // deadline should be removed at this point
+            BOOST_CHECK(true);
+        }
+        tasksleep(100);
+        BOOST_CHECK(true);
+    } catch (deadline_reached &e) {
+        BOOST_CHECK(false);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(task_deadline_cleared_not_reached) {
+    procmain p;
+    taskspawn(deadline_cleared_not_reached);
+    p.main();
+}
+
 static void deadline_yield() {
     try {
         deadline dl(5);
