@@ -3,8 +3,9 @@ cmake_minimum_required(VERSION 2.8)
 add_executable(prime-sieve prime-sieve.cc)
 target_link_libraries(prime-sieve ten)
 
-add_executable(file-send file-send.cc)
-target_link_libraries(file-send ten)
+# TODO: update example to work with new buffer api after buffer has move
+#add_executable(file-send file-send.cc)
+#target_link_libraries(file-send ten)
 
 add_executable(old-echo-server old-echo-server.cc)
 target_link_libraries(old-echo-server ten)

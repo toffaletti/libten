@@ -10,7 +10,7 @@ const size_t default_stacksize=4096*2;
 
 // sends a file over a tcp socket on port 5500
 // $ nc -l -p 5500 > out & ./file-send libfw.a
-// $ md5sum out libfw.a                                                                                                                                                                                                
+// $ md5sum out libfw.a
 // 30faaa8f73d753d422ef3d0646a38297  out
 // 30faaa8f73d753d422ef3d0646a38297  libfw.a
 
@@ -28,9 +28,8 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
     int bufp = 0;
     for (;;) {
         // create a 4096 byte slice of the buffer
-        buffer::slice bs = buf(bufp*4096, 4096);
         // read block from file
-        ssize_t nr = f.read(bs.data(), bs.size());
+        ssize_t nr = f.read(buf.back(), buf.available());
         if (nr <= 0) break;
         bs.resize(nr);
         // send block on channel to file_sender task

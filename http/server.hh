@@ -172,15 +172,20 @@ private:
 
         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
-        buffer::slice rb = buf(0);
         http_request req;
         for (;;) {
             req.parser_init(&parser);
             bool got_headers = false;
             for (;;) {
-                ssize_t nr = s.recv(rb.data(), rb.size(), timeout_ms);
+                buf.reserve(32*1024);
+                ssize_t nr = s.recv(buf.back(), buf.available(), timeout_ms);
                 if (nr < 0) return;
-                if (req.parse(&parser, rb.data(), nr)) break;
+                buf.commit(nr);
+                if (req.parse(&parser, buf.front(), buf.size())) {
+                    buf.remove(buf.size());
+                    break;
+                }
+                buf.remove(buf.size());
                 if (nr == 0) return;
                 if (!got_headers && !req.method.empty()) {
                     got_headers = true;

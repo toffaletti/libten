@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
     application app("0.0.1", conf);
     namespace po = boost::program_options;
     app.opts.configuration.add_options()
-        ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:8080"),
+        ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
          "http listen address:port")
     ;
     app.parse_args(argc, argv);

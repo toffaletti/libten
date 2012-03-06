@@ -9,16 +9,23 @@
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;
-const size_t default_stacksize=4*1024;
+const size_t default_stacksize=128*1024;
 
 #define SEC2MS(s) (s*1000)
 
-void sock_copy(channel<int> c, netsock &a, netsock &b, buffer::slice rb) {
-    ssize_t nr;
-    while ((nr = a.recv(rb.data(), rb.size())) > 0) {
-        DVLOG(3) << "sock_copy: " << a.s.fd << " to " << b.s.fd << " " << nr << " bytes";
-        ssize_t nw = b.send(rb.data(), nr);
+void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
+    for (;;) {
+        buf.reserve(4*1024);
+        ssize_t nr = a.recv(buf.back(), buf.available());
+        if (nr <= 0) break;
+        buf.commit(nr);
+        ssize_t nw = b.send(buf.front(), buf.size());
+        buf.remove(nw);
     }
+    //while ((nr = a.recv(rb.data(), rb.size())) > 0) {
+    //    DVLOG(3) << "sock_copy: " << a.s.fd << " to " << b.s.fd << " " << nr << " bytes";
+    //    ssize_t nw = b.send(rb.data(), nr);
+    //}
     DVLOG(3) << "shutting down sock_copy: " << a.s.fd << " to " << b.s.fd;
     shutdown(b.s.fd, SHUT_WR);
     a.close();
@@ -39,12 +46,17 @@ void proxy_task(int sock) {
     http_request req;
     req.parser_init(&parser);
 
-    buffer::slice rb = buf(0);
     bool got_headers = false;
     for (;;) {
-        ssize_t nr = s.recv(rb.data(), rb.size(), SEC2MS(5));
+        buf.reserve(4*1024);
+        ssize_t nr = s.recv(buf.back(), buf.available(), SEC2MS(5));
         if (nr < 0) { goto request_read_error; }
-        if (req.parse(&parser, rb.data(), nr)) break;
+        buf.commit(nr);
+        if (req.parse(&parser, buf.front(), buf.size())) {
+            buf.remove(buf.size());
+            break;
+        }
+        buf.remove(buf.size());
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
@@ -77,8 +89,8 @@ void proxy_task(int sock) {
             ssize_t nw = s.send(data.data(), data.size(), SEC2MS(5));
 
             channel<int> c;
-            taskspawn(std::bind(sock_copy, c, std::ref(s), std::ref(cs), rb));
-            taskspawn(std::bind(sock_copy, c, std::ref(cs), std::ref(s), rb));
+            taskspawn(std::bind(sock_copy, c, std::ref(s), std::ref(cs), std::ref(buf)));
+            taskspawn(std::bind(sock_copy, c, std::ref(cs), std::ref(s), std::ref(buf)));
             c.recv();
             c.recv();
             return;
@@ -104,9 +116,12 @@ void proxy_task(int sock) {
             resp.parser_init(&parser);
             bool headers_sent = false;
             for (;;) {
-                ssize_t nr = cs.recv(rb.data(), rb.size(), SEC2MS(5));
+                buf.reserve(4*1024);
+                ssize_t nr = cs.recv(buf.back(), buf.available(), SEC2MS(5));
                 if (nr < 0) { goto response_read_error; }
-                bool complete = resp.parse(&parser, rb.data(), nr);
+                buf.commit(nr);
+                bool complete = resp.parse(&parser, buf.front(), buf.size());
+                buf.remove(buf.size());
                 if (headers_sent == false && resp.status_code) {
                     headers_sent = true;
                     data = resp.data();
@@ -163,7 +178,7 @@ response_send_error:
 void listen_task() {
     netsock s(AF_INET, SOCK_STREAM);
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("0.0.0.0", 8080);
+    address addr("0.0.0.0", 3080);
     s.bind(addr);
     s.getsockname(addr);
     LOG(INFO) << "listening on: " << addr;
