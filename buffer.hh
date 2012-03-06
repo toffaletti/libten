@@ -6,6 +6,29 @@
 
 namespace ten {
 
+class buffer2 : boost::noncopyable {
+private:
+    uint32_t capacity;
+    uint32_t size;
+    uint8_t data[1];
+
+    buffer2(uint32_t size) {
+    }
+public:
+    static std::unique_ptr<buffer2> create(uint32_t capacity) {
+        return std::unique_ptr<buffer2>(new (capacity) buffer2(capacity));
+    }
+
+public:
+    void *operator new (size_t, uint32_t cap) {
+        return malloc(offsetof(buffer2, data) + cap);
+    }
+
+    void operator delete (void *p) {
+        free(p);
+    }
+};
+
 //! reference counted buffer, slices hold reference
 class buffer {
 private:
