@@ -726,7 +726,6 @@ struct io_scheduler {
     }
 
     bool del_timeout(task *t) {
-        if (t->timeout.time_since_epoch().count() == 0) return false;
         return timeouts.erase(t);
     }
 
