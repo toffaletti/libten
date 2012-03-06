@@ -1067,6 +1067,7 @@ deadline::deadline(uint64_t ms) {
 deadline::~deadline() {
     task *t = _this_proc->ctask;
     t->deadline = time_point<monotonic_clock>();
+    _this_proc->sched().timeouts.erase(t);
 }
 
 } // end namespace ten
