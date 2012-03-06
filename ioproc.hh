@@ -9,6 +9,7 @@
 #include "shared_pool.hh"
 #include <fcntl.h>
 #include <cassert>
+#include <exception_ptr.h>
 
 namespace ten {
 
@@ -19,21 +20,11 @@ struct pcall {
     iochannel ch;
     std::function<void ()> vop;
     std::function<boost::any ()> op;
-    std::string errmsg;
+    std::exception_ptr exception;
     boost::any ret;
 
     pcall(const std::function<void ()> &vop_, iochannel &ch_) : ch(ch_), vop(vop_) {}
     pcall(const std::function<boost::any ()> &op_, iochannel &ch_) : ch(ch_), op(op_) {}
-};
-
-struct ioproc_error : public std::exception {
-    std::unique_ptr<pcall> call;
-
-    ioproc_error(std::unique_ptr<pcall> &call_) : call(std::move(call_)) {}
-    ioproc_error(ioproc_error &&other) : call(std::move(other.call)) {}
-    ~ioproc_error() throw () {}
-
-    const char *what() const throw() { return call->errmsg.c_str(); }
 };
 
 void ioproctask(iochannel &);
@@ -67,8 +58,8 @@ inline void iowait(iochannel &reply_chan) {
     // after a task using it has been interrupted? i can't think of one
     try {
         std::unique_ptr<pcall> reply(reply_chan.recv());
-        if (!reply->errmsg.empty()) {
-            throw ioproc_error(reply);
+        if (reply->exception != 0) {
+            std::rethrow_exception(reply->exception);
         }
     } catch (task_interrupted &e) {
         reply_chan.close();
@@ -80,8 +71,8 @@ template <typename ReturnT>
 ReturnT iowait(iochannel &reply_chan) {
     try {
         std::unique_ptr<pcall> reply(reply_chan.recv());
-        if (!reply->errmsg.empty()) {
-            throw ioproc_error(reply);
+        if (reply->exception != 0) {
+            std::rethrow_exception(reply->exception);
         }
         return boost::any_cast<ReturnT>(reply->ret);
     } catch (task_interrupted &e) {

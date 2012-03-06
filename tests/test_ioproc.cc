@@ -64,7 +64,7 @@ static void ioproc_failure() {
     try {
         iocall(io, fail);
         BOOST_CHECK(false);
-    } catch (ioproc_error &e) {
+    } catch (std::runtime_error &e) {
         errmsg = e.what();
     }
     BOOST_CHECK_EQUAL(errmsg, "fail has failed");

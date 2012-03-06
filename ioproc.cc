@@ -32,7 +32,7 @@ void ioproctask(iochannel &ch) {
             }
         } catch (std::exception &e) {
             DVLOG(5) << "ioproc caught exception: " << e.what();
-            call->errmsg = e.what();
+            call->exception = std::current_exception();
         }
 
         // scope for reply iochannel
