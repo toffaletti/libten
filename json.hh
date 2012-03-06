@@ -11,19 +11,50 @@
 
 namespace ten {
 
-inline int ostream_json_dump_callback(const char *buffer, size_t size, void *data) {
-    std::ostream *o = (std::ostream *)data;
-    o->write(buffer, size);
-    return 0;
-}
+enum json_take_t { json_take };
 
-inline std::ostream &operator <<(std::ostream &o, json_t *j) {
-    if (!j) return o;
-    json_dump_callback(j, ostream_json_dump_callback, &o, JSON_ENCODE_ANY);
-    return o;
-}
+template <class J> class smart_json_ptr {
+private:
+    typedef void (smart_json_ptr::*unspecified_bool_type)() const;
+    void true_value() const {}
+    J *p;
+public:
+    // ctor, dtor, assign
+    smart_json_ptr()                          : p() {}
+    explicit smart_json_ptr(J *j)             : p(json_incref(j)) {}
+    smart_json_ptr(J *j, json_take_t)         : p(j) {}
+    ~smart_json_ptr()                         { json_decref(p); }
 
-typedef std::shared_ptr<json_t> json_ptr;
+    // construction and assignment - make the compiler work for a living
+    template <class J2> smart_json_ptr(const smart_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
+    template <class J2> smart_json_ptr(      smart_json_ptr<J2> &&jp) : p(jp.release())          {}
+    template <class J2> smart_json_ptr & operator = (const smart_json_ptr<J2>  &jp) { reset(jp.ptr());    return *this; }
+    template <class J2> smart_json_ptr & operator = (      smart_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
+
+    // object interface
+
+    void reset(J *j) { take(json_incref(j)); }
+    void take(J *j)  { json_decref(p); p = j; }  // must be convenient for use with C code
+    J *release()     { J *j = p; p = nullptr; return j; }
+
+    J * operator -> () const { return p; }
+    J *get() const           { return p; }
+
+    operator unspecified_bool_type () const {
+        return p ? &smart_json_ptr::true_value : nullptr;
+    }
+};
+
+typedef smart_json_ptr<      json_t>       json_ptr;
+typedef smart_json_ptr<const json_t> const_json_ptr;
+
+template <class J> smart_json_ptr<J> make_json_ptr(J *j) { return smart_json_ptr<J>(j); }
+template <class J> smart_json_ptr<J> take_json_ptr(J *j) { return smart_json_ptr<J>(j, json_take); }
+
+std::ostream & operator << (std::ostream &o, const json_t *j);
+inline std::ostream & operator << (std::ostream &o,       json_ptr jp) { return o << jp.get(); }
+inline std::ostream & operator << (std::ostream &o, const_json_ptr jp) { return o << jp.get(); }
+
 
 class jsobj {
 private:
@@ -31,7 +62,7 @@ private:
     void true_value() const {}
     json_ptr p;
 public:
-    jsobj(json_t *j) : p(j, json_decref) {}
+    jsobj(json_t *j) : p(j) {}
     jsobj(const char *s, size_t flags=JSON_DECODE_ANY) {
         load(s, strlen(s), flags);
     }
@@ -41,7 +72,7 @@ public:
 
     void load(const char *s, size_t len, size_t flags=JSON_DECODE_ANY) {
         json_error_t err;
-        p.reset(json_loadb(s, len, flags, &err), json_decref);
+        p.reset(json_loadb(s, len, flags, &err));
         if (!p) {
             // TODO: custom exception
             throw errorx("%s", err.text);
@@ -50,12 +81,16 @@ public:
 
     std::string dump(size_t flags=JSON_ENCODE_ANY) {
         std::stringstream ss;
-        json_dump_callback(p.get(), ostream_json_dump_callback, &ss, flags);
+        ss << p.get();
         return ss.str();
     }
 
     jsobj &operator = (json_t *j) {
-        p.reset(j, json_decref);
+        p.reset(j);
+        return *this;
+    }
+    jsobj &operator = (const json_ptr &jp) {
+        p = jp;
         return *this;
     }
 

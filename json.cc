@@ -7,6 +7,21 @@
 
 namespace ten {
 
+extern "C" {
+    static int ostream_json_dump_callback(const char *buffer, size_t size, void *osptr) {
+        std::ostream *o = (std::ostream *)osptr;
+        o->write(buffer, size);
+        return 0;
+    }
+}
+
+std::ostream & operator << (std::ostream &o, const json_t *j) {
+    if (j)
+        json_dump_callback(j, ostream_json_dump_callback, &o, JSON_ENCODE_ANY);
+    return o;
+}
+
+
 static bool next_token(const std::string &path, size_t &i, std::string &tok) {
     size_t start = i;
     bool inquotes = false;
