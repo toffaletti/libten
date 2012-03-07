@@ -406,7 +406,7 @@ void qutex::lock() {
         CHECK(owner == _this_proc->ctask) << "Qutex: " << this << " owner check failed: " <<
             owner << " != " << _this_proc->ctask << " t:" << t <<
             " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
-    } catch (task_interrupted &e) {
+    } catch (...) {
         std::unique_lock<std::timed_mutex> lk(m);
         if (t == owner) {
             owner = 0;
@@ -1099,7 +1099,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     try {
         t->swap(); 
         lk.lock();
-    } catch (task_interrupted &e) {
+    } catch (...) {
         std::unique_lock<std::timed_mutex> ll(q->m);
         auto i = std::find(waiting.begin(), waiting.end(), t);
         if (i != waiting.end()) {
