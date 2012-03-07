@@ -236,6 +236,7 @@ struct proc {
         task *t = 0;
         if (i != taskpool.end()) {
             t = *i;
+            taskpool.erase(i);
             t->init(f);
         } else {
             t = new task(f, stacksize);
@@ -955,6 +956,7 @@ struct io_scheduler {
                 }
             }
         }
+        DVLOG(5) << "BUG: " << _this_proc->ctask << " is exiting";
     }
 };
 
@@ -1108,6 +1110,7 @@ void proc::deltaskinproc(task *t) {
         --taskcount;
     }
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
+    CHECK(i != alltasks.end());
     alltasks.erase(i);
     DVLOG(5) << "FREEING task: " << t;
     //delete t;
