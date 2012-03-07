@@ -1,8 +1,52 @@
 #include "http_message.hh"
 #include <sstream>
 #include <algorithm>
+#include <unordered_map>
 
 namespace ten {
+
+static std::unordered_map<uint16_t, std::string> http_status_codes = {
+    { 100, "Continue" },
+    { 101, "Switching Protocols" },
+    { 200, "OK" },
+    { 201, "Created" },
+    { 202, "Accepted" },
+    { 203, "Non-Authoritative Information" },
+    { 204, "No Content" },
+    { 205, "Reset Content" },
+    { 206, "Partial Content" },
+    { 300, "Multiple Choices" },
+    { 301, "Moved Permanently" },
+    { 302, "Found" },
+    { 303, "See Other" },
+    { 304, "Not Modified" },
+    { 305, "Use Proxy" },
+    { 307, "Temporary Redirect" },
+    { 400, "Bad Request" },
+    { 401, "Unauthroized" },
+    { 402, "Payment Required" },
+    { 403, "Forbidden" },
+    { 404, "Not Found" },
+    { 405, "Method Not Allowed" },
+    { 406, "Not Acceptable" },
+    { 407, "Proxy Authentication Required" },
+    { 408, "Request Time-out" },
+    { 409, "Conflict" },
+    { 410, "Gone" },
+    { 411, "Length Required" },
+    { 412, "Precondition Failed" },
+    { 413, "Request Entity Too Large" },
+    { 414, "Request-URI Too Large" },
+    { 415, "Unsupported Media Type" },
+    { 416, "Requested range not satisfiable" },
+    { 417, "Expectation Failed" },
+    { 500, "Internal Server Error" },
+    { 501, "Not Implemented" },
+    { 502, "Bad Gateway" },
+    { 503, "Service Unavailable" },
+    { 504, "Gateway Timeout" },
+    { 505, "HTTP Version Not Supported" },
+};
 
 // normalize message header field names.
 static const std::string &normalize_header_name_inplace(std::string &field) {
@@ -108,7 +152,7 @@ static int _on_message_complete(http_parser *p) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
     m->complete = true;
     m->body_length = m->body.size();
-    return 0;
+    return 1; // cause parser to exit, this http_message is complete
 }
 
 static int _request_on_url(http_parser *p, const char *at, size_t length) {
@@ -125,7 +169,7 @@ static int _request_on_headers_complete(http_parser *p) {
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
     m->http_version = ss.str();
 
-    if (p->content_length > 0) {
+    if (p->content_length > 0 && p->content_length != ULLONG_MAX) {
         m->body.reserve(p->content_length);
     }
 
@@ -138,11 +182,10 @@ void http_request::parser_init(struct http_parser *p) {
     clear();
 }
 
-bool http_request::parse(struct http_parser *p, const char *data, size_t len) {
+void http_request::parse(struct http_parser *p, const char *data, size_t &len) {
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = _request_on_url;
-    s.on_reason = NULL;
     s.on_header_field = _on_header_field;
     s.on_header_value = _on_header_value;
     s.on_headers_complete = _request_on_headers_complete;
@@ -150,12 +193,13 @@ bool http_request::parse(struct http_parser *p, const char *data, size_t len) {
     s.on_message_complete = _on_message_complete;
 
     ssize_t nparsed = http_parser_execute(p, &s, data, len);
-    if (nparsed != (ssize_t)len) {
+    if (!complete && nparsed != (ssize_t)len) {
+        len = nparsed;
         throw errorx("%s: %s",
             http_errno_name((http_errno)p->http_errno),
             http_errno_description((http_errno)p->http_errno));
     }
-    return complete;
+    len = nparsed;
 }
 
 std::string http_request::data() const {
@@ -170,12 +214,6 @@ std::string http_request::data() const {
 
 /* http_response_t */
 
-static int _response_on_reason(http_parser *p, const char *at, size_t length) {
-    http_response *m = (http_response *)p->data;
-    m->reason.append(at, length);
-    return 0;
-}
-
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
     m->normalize();
@@ -184,7 +222,7 @@ static int _response_on_headers_complete(http_parser *p) {
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
     m->http_version = ss.str();
 
-    if (p->content_length > 0) {
+    if (p->content_length > 0 && p->content_length != ULLONG_MAX) {
         m->body.reserve(p->content_length);
     }
 
@@ -203,11 +241,10 @@ void http_response::parser_init(struct http_parser *p) {
     clear();
 }
 
-bool http_response::parse(struct http_parser *p, const char *data, size_t len) {
+void http_response::parse(struct http_parser *p, const char *data, size_t &len) {
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = NULL;
-    s.on_reason = _response_on_reason;
     s.on_header_field = _on_header_field;
     s.on_header_value = _on_header_value;
     s.on_headers_complete = _response_on_headers_complete;
@@ -215,17 +252,28 @@ bool http_response::parse(struct http_parser *p, const char *data, size_t len) {
     s.on_message_complete = _on_message_complete;
 
     ssize_t nparsed = http_parser_execute(p, &s, data, len);
-    if (nparsed != (ssize_t)len) {
+    if (!complete && nparsed != (ssize_t)len) {
+        len = nparsed;
         throw errorx("%s: %s",
             http_errno_name((http_errno)p->http_errno),
             http_errno_description((http_errno)p->http_errno));
     }
-    return complete;
+    len = nparsed;
+}
+
+
+const std::string &http_response::reason() const {
+    auto i = http_status_codes.find(status_code);
+    if (i != http_status_codes.end()) {
+        return i->second;
+    }
+    static std::string unknown = "Unknown";
+    return unknown;
 }
 
 std::string http_response::data() const {
     std::stringstream ss;
-    ss << http_version << " " << status_code << " " << reason << "\r\n";
+    ss << http_version << " " << status_code << " " << reason() << "\r\n";
     for (header_list::const_iterator i = headers.begin(); i!=headers.end(); ++i) {
         ss << i->first << ": " << i->second << "\r\n";
     }

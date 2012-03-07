@@ -31,11 +31,13 @@ static void do_get(uri u) {
     http_response resp;
     resp.parser_init(&parser);
 
-    for (;;) {
+    while (!resp.complete) {
         ssize_t nr = s.recv(buf.back(), buf.available());
         if (nr <= 0) { std::cerr << "Error: " << strerror(errno) << "\n"; break; }
         buf.commit(nr);
-        if (resp.parse(&parser, buf.front(), buf.size())) break;
+        size_t len = buf.size();
+        resp.parse(&parser, buf.front(), len);
+        buf.remove(len);
     }
 
     std::cout << "Response:\n" << "--------------\n";

@@ -13,6 +13,7 @@ const size_t default_stacksize=256*1024;
 
 struct my_config : app_config {
     std::string http_address;
+    unsigned int http_threads;
 };
 
 static my_config conf;
@@ -38,7 +39,7 @@ static void log_request(http_server::request &h) {
 static void http_quit(std::shared_ptr<state> st, http_server::request &h) {
     LOG(INFO) << "quit requested over http";
     st->app.quit();
-    h.resp = http_response(200, "OK",
+    h.resp = http_response(200,
         Headers(
         "Connection", "close",
         "Content-Length", 0
@@ -48,7 +49,7 @@ static void http_quit(std::shared_ptr<state> st, http_server::request &h) {
 }
 
 static void http_root(std::shared_ptr<state> st, http_server::request &h) {
-    h.resp = http_response(200, "OK");
+    h.resp = http_response(200);
     h.resp.set_body("Hello World!\n");
     h.send_response();
 }
@@ -62,7 +63,7 @@ static void start_http_server(std::shared_ptr<state> &st) {
     st->http.set_log_callback(log_request);
     st->http.add_route("/quit", std::bind(http_quit, st, _1));
     st->http.add_route("/*", std::bind(http_root, st, _1));
-    st->http.serve(addr, port);
+    st->http.serve(addr, port, conf.http_threads);
 }
 
 static void startup(application &app) {
@@ -78,6 +79,7 @@ int main(int argc, char *argv[]) {
     app.opts.configuration.add_options()
         ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
          "http listen address:port")
+        ("http-threads", po::value<unsigned int>(&conf.http_threads)->default_value(1), "http threads")
     ;
     app.parse_args(argc, argv);
     taskspawn(std::bind(startup, std::ref(app)));

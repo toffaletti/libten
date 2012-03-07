@@ -19,7 +19,7 @@ public:
     //! wrapper around an http request/response
     struct request {
         request(http_request &req_, netsock &sock_)
-            : req(req_), resp(404, "Not Found"), sock(sock_),
+            : req(req_), resp(404), sock(sock_),
             start(std::chrono::monotonic_clock::now()),
             resp_sent(false) {}
 
@@ -106,7 +106,7 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, "Not Found", Headers("Content-Length", 0));
+                resp = http_response(404, Headers("Content-Length", 0));
                 send_response();
             }
 
@@ -178,27 +178,31 @@ private:
             bool got_headers = false;
             for (;;) {
                 buf.reserve(32*1024);
-                ssize_t nr = s.recv(buf.back(), buf.available(), timeout_ms);
-                if (nr < 0) return;
-                buf.commit(nr);
-                if (req.parse(&parser, buf.front(), buf.size())) {
-                    buf.remove(buf.size());
+                ssize_t nr = -1;
+                if (buf.size() == 0) {
+                    nr = s.recv(buf.back(), buf.available(), timeout_ms);
+                    if (nr < 0) return;
+                    buf.commit(nr);
+                }
+                size_t nparse = buf.size();
+                req.parse(&parser, buf.front(), nparse);
+                buf.remove(nparse);
+                if (req.complete) {
+                    // handle request
+                    handle_request(req, s);
                     break;
                 }
-                buf.remove(buf.size());
                 if (nr == 0) return;
                 if (!got_headers && !req.method.empty()) {
                     got_headers = true;
                     if (req.get("Expect") == "100-continue") {
-                        http_response cont_resp(100, "Continue");
+                        http_response cont_resp(100);
                         std::string data = cont_resp.data();
                         ssize_t nw = s.send(data.data(), data.size());
                         (void)nw;
                     }
                 }
             }
-            // handle request
-            handle_request(req, s);
         }
     }
 
@@ -213,7 +217,7 @@ private:
                 try {
                     i->callback(r);
                 } catch (std::exception &e) {
-                    r.resp = http_response(500, "Server Error",
+                    r.resp = http_response(500,
                             Headers("Connection", "close"));
                     std::string msg = e.what();
                     msg += "\n";

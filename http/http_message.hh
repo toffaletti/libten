@@ -115,7 +115,7 @@ struct http_request : http_base {
     }
 
     void parser_init(struct http_parser *p);
-    bool parse(struct http_parser *p, const char *data, size_t len);
+    void parse(struct http_parser *p, const char *data, size_t &len);
 
     std::string data() const;
 
@@ -132,19 +132,16 @@ struct http_request : http_base {
 struct http_response : http_base {
     std::string http_version;
     unsigned long status_code;
-    std::string reason;
     http_request *req;
 
     http_response(http_request *req_) : http_base(), req(req_) {}
 
     http_response(unsigned long status_code_ = 200,
-        const std::string &reason_ = "OK",
         const Headers &headers_ = Headers(),
         const std::string &http_version_ = "HTTP/1.1")
         : http_base(headers_),
         http_version(http_version_),
         status_code(status_code_),
-        reason(reason_),
         req(NULL)
     {
     }
@@ -153,13 +150,14 @@ struct http_response : http_base {
         headers.clear();
         http_version.clear();
         status_code = 0;
-        reason.clear();
         body.clear();
         body_length = 0;
     }
 
+    const std::string &reason() const;
+
     void parser_init(struct http_parser *p);
-    bool parse(struct http_parser *p, const char *data, size_t len);
+    void parse(struct http_parser *p, const char *data, size_t &len);
 
     std::string data() const;
 };

@@ -22,10 +22,6 @@ void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
         ssize_t nw = b.send(buf.front(), buf.size());
         buf.remove(nw);
     }
-    //while ((nr = a.recv(rb.data(), rb.size())) > 0) {
-    //    DVLOG(3) << "sock_copy: " << a.s.fd << " to " << b.s.fd << " " << nr << " bytes";
-    //    ssize_t nw = b.send(rb.data(), nr);
-    //}
     DVLOG(3) << "shutting down sock_copy: " << a.s.fd << " to " << b.s.fd;
     shutdown(b.s.fd, SHUT_WR);
     a.close();
@@ -33,7 +29,7 @@ void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
 }
 
 void send_503_reply(netsock &s) {
-    http_response resp(503, "Gateway Timeout");
+    http_response resp(503);
     std::string data = resp.data();
     ssize_t nw = s.send(data.data(), data.size());
     (void)nw; // ignore
@@ -52,16 +48,15 @@ void proxy_task(int sock) {
         ssize_t nr = s.recv(buf.back(), buf.available(), SEC2MS(5));
         if (nr < 0) { goto request_read_error; }
         buf.commit(nr);
-        if (req.parse(&parser, buf.front(), buf.size())) {
-            buf.remove(buf.size());
-            break;
-        }
-        buf.remove(buf.size());
+        size_t len = buf.size();
+        req.parse(&parser, buf.front(), len);
+        buf.remove(buf.size()); // normally would remove(len)
+        if (req.complete) break;
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
             if (req.get("Expect") == "100-continue") {
-                http_response cont_resp(100, "Continue");
+                http_response cont_resp(100);
                 std::string data = cont_resp.data();
                 ssize_t nw = s.send(data.data(), data.size());
                 (void)nw;
@@ -84,7 +79,7 @@ void proxy_task(int sock) {
                 goto request_connect_error;
             }
 
-            http_response resp(200, "Connected ok");
+            http_response resp(200);
             std::string data = resp.data();
             ssize_t nw = s.send(data.data(), data.size(), SEC2MS(5));
 
@@ -120,8 +115,9 @@ void proxy_task(int sock) {
                 ssize_t nr = cs.recv(buf.back(), buf.available(), SEC2MS(5));
                 if (nr < 0) { goto response_read_error; }
                 buf.commit(nr);
-                bool complete = resp.parse(&parser, buf.front(), buf.size());
-                buf.remove(buf.size());
+                size_t len = buf.size();
+                resp.parse(&parser, buf.front(), len);
+                buf.remove(buf.size()); // normally would remove(len)
                 if (headers_sent == false && resp.status_code) {
                     headers_sent = true;
                     data = resp.data();
@@ -140,7 +136,7 @@ void proxy_task(int sock) {
                     if (nw <= 0) { goto response_send_error; }
                     resp.body.clear();
                 }
-                if (complete) {
+                if (resp.complete) {
                     // send end chunk
                     if (resp.get("Transfer-Encoding") == "chunked") {
                         nw = s.send("0\r\n\r\n", 5);
