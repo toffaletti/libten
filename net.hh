@@ -23,7 +23,8 @@ public:
     virtual ~sockbase() {}
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
-    void listen(int backlog=128) throw (errno_error) { s.listen(backlog); }
+    // use a ridiculous number, kernel will truncate to max
+    void listen(int backlog=100000) throw (errno_error) { s.listen(backlog); }
     bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {
         return s.getpeername(addr);
     }
