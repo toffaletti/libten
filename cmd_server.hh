@@ -39,7 +39,7 @@ private:
     }
 
     void on_connection(netsock &s) {
-        buffer buf(16*1024);
+        buffer buf(4*1024);
 
         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         std::stringstream ss;
@@ -49,7 +49,6 @@ private:
         env["PROMPT"] = "$ ";
 
         ssize_t nw;
-        buffer::slice rb = buf(0);
         if (!welcome.empty()) {
             nw = s.send(welcome.data(), welcome.size());
         }
@@ -58,10 +57,13 @@ private:
             nw = s.send(prompt.data(), prompt.size());
             (void)nw;
             for (;;) {
-                ssize_t nr = s.recv(rb.data(), rb.size());
+                buf.reserve(4*1024);
+                ssize_t nr = s.recv(buf.back(), buf.available());
                 if (nr < 0) return;
+                buf.commit(nr);
                 if (nr == 0) return;
-                ss.write(rb.data(), nr);
+                ss.write(buf.front(), buf.size());
+                buf.remove(buf.size());
                 while (std::getline(ss, line)) {
                     VLOG(3) << "CMD LINE: " << line;
                     args_type args;
