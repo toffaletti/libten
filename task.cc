@@ -70,8 +70,6 @@ struct task {
         }
     }
 
-
-
     template<typename Rep,typename Period, typename ExceptionT>
     timeout_t *add_timeout(const duration<Rep,Period> &dura, ExceptionT e) {
         std::unique_ptr<timeout_t> to(new timeout_t(procnow() + dura));
@@ -672,8 +670,7 @@ struct io_scheduler {
     typedef std::vector<task_poll_state> poll_task_array;
     typedef std::vector<epoll_event> event_vector;
     typedef std::multiset<task *, task_timeout_compare> timeoutset;
-    //! tasks with timeouts set
-    timeoutset timeouts;
+
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
@@ -771,14 +768,12 @@ struct io_scheduler {
     template<typename Rep, typename Period, typename ExceptionT>
     task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura, ExceptionT e) {
         task::timeout_t *to = t->add_timeout(dura, e);
-        timeouts.insert(t);
         return to;
     }
 
     template<typename Rep,typename Period>
     task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura) {
         task::timeout_t *to = t->add_timeout(dura);
-        timeouts.insert(t);
         return to;
     }
 
@@ -817,8 +812,9 @@ struct io_scheduler {
         } else {
             taskstate("poll %u fds for %ul ms", nfds, ms);
         }
+        task::timeout_t *timeout_id = 0;
         if (ms) {
-            add_timeout(t, milliseconds(ms));
+            timeout_id = add_timeout(t, milliseconds(ms));
         }
         add_pollfds(t, fds, nfds);
 
@@ -826,16 +822,21 @@ struct io_scheduler {
         try {
             t->swap();
         } catch (task_interrupted &e) {
-            if (ms) timeouts.erase(t);
+            if (timeout_id) {
+                t->remove_timeout(timeout_id);
+            }
             remove_pollfds(fds, nfds);
             throw;
         }
 
-        if (ms) timeouts.erase(t);
+        if (timeout_id) {
+            t->remove_timeout(timeout_id);
+        }
         return remove_pollfds(fds, nfds);
     }
 
     void fdtask() {
+        timeoutset timeouts;
         taskname("fdtask");
         tasksystem();
         proc *p = _this_proc;
@@ -851,6 +852,13 @@ struct io_scheduler {
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
             std::unique_lock<std::mutex> lk(p->mutex);
+            timeouts.clear();
+            // find tasks with timeouts set
+            for (auto i=p->alltasks.begin(); i<p->alltasks.end(); ++i) {
+                if (!(*i)->timeouts.empty()) {
+                    timeouts.insert(*i);
+                }
+            }
             if (!timeouts.empty()) {
                 t = *timeouts.begin();
                 CHECK(!t->timeouts.empty()) << t << " in timeout list with no timeouts set";
@@ -870,6 +878,8 @@ struct io_scheduler {
                     ms = 0;
                 }
             }
+
+            DVLOG(5) << p->alltasks.size() << " tasks " << timeouts.size() << " t/o tasks";
 
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll %d ms", ms);
@@ -912,7 +922,8 @@ struct io_scheduler {
                         while (p->pi.read(buf, sizeof(buf)) > 0) {}
                     } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
                         // TODO: otherwise we might want to remove fd from epoll
-                        LOG(ERROR) << "event " << i->events << " for fd: " << i->data.fd << " but has no task";
+                        LOG(ERROR) << "event " << i->events << " for fd: "
+                            << i->data.fd << " but has no task";
                     }
                 }
             }
@@ -931,7 +942,6 @@ struct io_scheduler {
                     break;
                 }
             }
-            //timeouts.erase(timeouts.begin(), i);
         }
     }
 };
@@ -944,9 +954,6 @@ void task::remove_timeout(timeout_t *to) {
     auto i = std::find(timeouts.begin(), timeouts.end(), to);
     if (i != timeouts.end()) {
         timeouts.erase(i);
-    }
-    if (timeouts.empty()) {
-        _this_proc->sched().timeouts.erase(this);
     }
 }
 
@@ -967,11 +974,8 @@ void task::swap() {
         timeout_t *to = timeouts.front();
         if (to->when <= procnow()) {
             std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
-            DVLOG(5) << to << " reached, removing.";
+            DVLOG(5) << to << " reached for " << this << " removing.";
             timeouts.pop_front();
-            if (timeouts.empty()) {
-                _this_proc->sched().timeouts.erase(this);
-            }
             if (tmp->exception != 0) {
                 std::rethrow_exception(tmp->exception);
             }
@@ -1060,9 +1064,6 @@ void proc::deltaskinproc(task *t) {
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
     alltasks.erase(i);
     t->cproc = 0;
-    if (_sched) {
-        _sched->timeouts.erase(t);
-    }
     DVLOG(5) << "FREEING task: " << t;
     delete t;
 }
