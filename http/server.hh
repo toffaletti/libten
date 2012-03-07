@@ -167,17 +167,20 @@ private:
 
     void on_connection(netsock &s) {
         // TODO: tuneable buffer sizes
-        buffer buf(32*1024);
+        buffer buf(4*1024);
         http_parser parser;
 
-        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+        // TODO: might want to enable this later after
+        // we know this will be a long-lived connection
+        // otherwise the overhead of the syscall hurts concurrency
+        //s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
         http_request req;
         for (;;) {
             req.parser_init(&parser);
             bool got_headers = false;
             for (;;) {
-                buf.reserve(32*1024);
+                buf.reserve(4*1024);
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
                     nr = s.recv(buf.back(), buf.available(), timeout_ms);
