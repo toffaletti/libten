@@ -8,6 +8,7 @@
 #include "task.hh"
 #include "descriptors.hh"
 
+#include <exception_ptr.h> // in C++11 this has no .h
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <iostream>
@@ -28,6 +29,25 @@ static proclist procs;
 static std::once_flag init_flag;
 
 struct task {
+    struct timeout_t {
+        time_point<monotonic_clock> when;
+        std::exception_ptr exception;
+
+        timeout_t(const time_point<monotonic_clock> &when_)
+            : when(when_) {}
+
+        friend std::ostream &operator <<(std::ostream &o, timeout_t *to) {
+            o << "timeout[" << to->when.time_since_epoch().count() << "]";
+            return o;
+        }
+    };
+
+    struct task_timeout_ordering {
+        bool operator ()(const timeout_t *a, const timeout_t *b) const {
+            return a->when < b->when;
+        }
+    };
+
     char name[256];
     char state[256];
     std::function<void ()> fn;
@@ -35,14 +55,45 @@ struct task {
     uint64_t id;
     proc *cproc;
 
-    time_point<monotonic_clock> timeout;
-    time_point<monotonic_clock> deadline;
+    std::deque<timeout_t *> timeouts;
+
     bool exiting;
     bool systask;
     bool canceled;
     bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
+    ~task() {
+        // free timeouts
+        for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
+            delete *i;
+        }
+    }
+
+
+
+    template<typename Rep,typename Period, typename ExceptionT>
+    timeout_t *add_timeout(const duration<Rep,Period> &dura, ExceptionT e) {
+        std::unique_ptr<timeout_t> to(new timeout_t(procnow() + dura));
+        to->exception = std::copy_exception(e);
+        auto i = std::lower_bound(timeouts.begin(), timeouts.end(), to.get(), task_timeout_ordering());
+        i = timeouts.insert(i, to.release());
+        using ::operator <<;
+        DVLOG(5) << "add timeout w/ ex task: " << this << " timeouts: " << timeouts;
+        return *i;
+    }
+
+    template<typename Rep,typename Period>
+    timeout_t *add_timeout(const duration<Rep,Period> &dura) {
+        std::unique_ptr<timeout_t> to(new timeout_t(procnow() + dura));
+        auto i = std::lower_bound(timeouts.begin(), timeouts.end(), to.get(), task_timeout_ordering());
+        i = timeouts.insert(i, to.release());
+        using ::operator <<;
+        DVLOG(5) << "add timeout task: " << this << " timeouts: " << timeouts;
+        return *i;
+    }
+
+    void remove_timeout(timeout_t *to);
 
     void ready();
     void swap();
@@ -603,7 +654,11 @@ struct io_scheduler {
             // sort by timeout and then pointer value so erase will be able to
             // find exact pointer values when the timeouts are the same
             // which can happen frequently because we try to collate timeouts
-            return a->timeout < b->timeout || (a->timeout == b->timeout && a < b);
+            if (a->timeouts.empty() || b->timeouts.empty()) {
+                return a < b;
+            }
+            return (a->timeouts.front()->when < b->timeouts.front()->when) ||
+                (a->timeouts.front()->when == b->timeouts.front()->when && a < b);
         }
     };
     struct task_poll_state {
@@ -713,20 +768,18 @@ struct io_scheduler {
         return rvalue;
     }
 
-    template<typename Rep,typename Period>
-    void add_timeout(task *t, const duration<Rep,Period> &dura) {
-        t->timeout = _this_proc->now + dura;
-        if (t->deadline.time_since_epoch().count() != 0) {
-            if (t->timeout > t->deadline) {
-                // don't sleep past the deadline
-                t->timeout = t->deadline;
-            }
-        }
+    template<typename Rep, typename Period, typename ExceptionT>
+    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura, ExceptionT e) {
+        task::timeout_t *to = t->add_timeout(dura, e);
         timeouts.insert(t);
+        return to;
     }
 
-    bool del_timeout(task *t) {
-        return timeouts.erase(t);
+    template<typename Rep,typename Period>
+    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura) {
+        task::timeout_t *to = t->add_timeout(dura);
+        timeouts.insert(t);
+        return to;
     }
 
     template<typename Rep,typename Period>
@@ -800,11 +853,12 @@ struct io_scheduler {
             std::unique_lock<std::mutex> lk(p->mutex);
             if (!timeouts.empty()) {
                 t = *timeouts.begin();
-                if (t->timeout <= p->now) {
+                CHECK(!t->timeouts.empty()) << t << " in timeout list with no timeouts set";
+                if (t->timeouts.front()->when <= p->now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = duration_cast<milliseconds>(t->timeout - p->now).count();
+                    ms = duration_cast<milliseconds>(t->timeouts.front()->when - p->now).count();
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
@@ -870,20 +924,30 @@ struct io_scheduler {
             auto i = timeouts.begin();
             for (; i != timeouts.end(); ++i) {
                 t = *i;
-                if (t->timeout <= p->now) {
+                if (t->timeouts.front()->when <= p->now) {
                     DVLOG(5) << "TIMEOUT on task: " << t;
                     t->ready();
                 } else {
                     break;
                 }
             }
-            timeouts.erase(timeouts.begin(), i);
+            //timeouts.erase(timeouts.begin(), i);
         }
     }
 };
 
 const time_point<monotonic_clock> &procnow() {
     return _this_proc->now;
+}
+
+void task::remove_timeout(timeout_t *to) {
+    auto i = std::find(timeouts.begin(), timeouts.end(), to);
+    if (i != timeouts.end()) {
+        timeouts.erase(i);
+    }
+    if (timeouts.empty()) {
+        _this_proc->sched().timeouts.erase(this);
+    }
 }
 
 void task::swap() {
@@ -899,11 +963,21 @@ void task::swap() {
         throw task_interrupted();
     }
 
-    if (deadline.time_since_epoch().count() != 0 && _this_proc->now >= deadline) {
-        // remove deadline so we don't throw twice
-        deadline = time_point<monotonic_clock>();
-        DVLOG(5) << "THROW DEADLINE: " << this;
-        throw deadline_reached();
+    while (!timeouts.empty()) {
+        timeout_t *to = timeouts.front();
+        if (to->when <= procnow()) {
+            std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
+            DVLOG(5) << to << " reached, removing.";
+            timeouts.pop_front();
+            if (timeouts.empty()) {
+                _this_proc->sched().timeouts.erase(this);
+            }
+            if (tmp->exception != 0) {
+                std::rethrow_exception(tmp->exception);
+            }
+        } else {
+            break;
+        }
     }
 }
 
@@ -987,7 +1061,7 @@ void proc::deltaskinproc(task *t) {
     alltasks.erase(i);
     t->cproc = 0;
     if (_sched) {
-        _sched->del_timeout(t);
+        _sched->timeouts.erase(t);
     }
     DVLOG(5) << "FREEING task: " << t;
     delete t;
@@ -1056,18 +1130,12 @@ void rendez::wakeupall() {
 
 deadline::deadline(uint64_t ms) {
     task *t = _this_proc->ctask;
-    if (t->deadline.time_since_epoch().count() != 0) {
-        throw errorx("task %p already has a deadline", t);
-    }
-    t->deadline = _this_proc->now + milliseconds(ms);
-    t->timeout = t->deadline;
-    _this_proc->sched().timeouts.insert(t);
+    timeout_id = _this_proc->sched().add_timeout(t, milliseconds(ms), deadline_reached());
 }
 
 deadline::~deadline() {
     task *t = _this_proc->ctask;
-    t->deadline = time_point<monotonic_clock>();
-    _this_proc->sched().timeouts.erase(t);
+    t->remove_timeout((task::timeout_t *)timeout_id);
 }
 
 } // end namespace ten

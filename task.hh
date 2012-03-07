@@ -102,6 +102,7 @@ bool fdwait(int fd, int rw, uint64_t ms=0);
 // doesn't need to be duplicated
 struct deadline_reached : task_interrupted {};
 struct deadline {
+    void *timeout_id;
     deadline(uint64_t milliseconds);
     ~deadline();
 };
