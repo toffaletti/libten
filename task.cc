@@ -64,6 +64,8 @@ struct task {
     bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
+    void clear();
+    void init(const std::function<void ()> &f);
     ~task();
 
     template<typename Rep,typename Period, typename ExceptionT>
@@ -160,12 +162,23 @@ struct task {
 
 };
 
+struct task_has_size {
+    size_t stack_size;
+
+    task_has_size(size_t stack_size_) : stack_size(stack_size_) {}
+
+    bool operator()(const task *t) const {
+        return t->co.stack_size() == stack_size;
+    }
+};
+
 struct proc {
     io_scheduler *_sched;
     std::thread *thread;
     std::mutex mutex;
     uint64_t nswitch;
     task *ctask;
+    tasklist taskpool;
     tasklist runqueue;
     tasklist alltasks;
     coroutine co;
@@ -218,6 +231,19 @@ struct proc {
 
     void wakeupandunlock(std::unique_lock<std::mutex> &lk);
 
+    task *newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
+        auto i = std::find_if(taskpool.begin(), taskpool.end(), task_has_size(stacksize));
+        task *t = 0;
+        if (i != taskpool.end()) {
+            t = *i;
+            t->init(f);
+        } else {
+            t = new task(f, stacksize);
+        }
+        addtaskinproc(t);
+        return t;
+    }
+
     void addtaskinproc(task *t) {
         ++taskcount;
         alltasks.push_back(t);
@@ -258,8 +284,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
-    task *t = new task(f, stacksize);
-    _this_proc->addtaskinproc(t);
+    task *t = _this_proc->newtaskinproc(f, stacksize);
     t->ready();
     return t->id;
 }
@@ -359,12 +384,15 @@ void taskdumpf(FILE *of) {
 }
 
 task::task(const std::function<void ()> &f, size_t stacksize)
-    : fn(f), co(task::start, this, stacksize), cproc(0), 
-    exiting(false), systask(false), canceled(false), unwinding(false)
+    : co(task::start, this, stacksize)
 {
-    id = ++taskidgen;
-    setname("task[%ju]", id);
-    setstate("new");
+    clear();
+    fn = f;
+}
+
+void task::init(const std::function<void ()> &f) {
+    fn = f;
+    co.restart(task::start, this);
 }
 
 void task::ready() {
@@ -935,14 +963,29 @@ const time_point<monotonic_clock> &procnow() {
 }
 
 task::~task() {
+    clear();
+}
+
+void task::clear() {
+    fn = 0;
+    exiting = false;
+    systask = false;
+    canceled = false;
+    unwinding = false;
+    id = ++taskidgen;
+    setname("task[%ju]", id);
+    setstate("new");
+
     if (!timeouts.empty()) {
         // remove from scheduler timeout list
-        _this_proc->sched().timeout_tasks.remove(this);
+        cproc->sched().timeout_tasks.remove(this);
+        // free timeouts
+        for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
+            delete *i;
+        }
     }
-    // free timeouts
-    for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
-        delete *i;
-    }
+
+    cproc = 0;
 }
 
 void task::remove_timeout(timeout_t *to) {
@@ -1066,9 +1109,11 @@ void proc::deltaskinproc(task *t) {
     }
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
     alltasks.erase(i);
-    t->cproc = 0;
     DVLOG(5) << "FREEING task: " << t;
-    delete t;
+    //delete t;
+    // TODO: just leak tasks for now
+    taskpool.push_back(t);
+    t->clear();
 }
 
 #if 0

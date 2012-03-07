@@ -26,7 +26,7 @@ public:
     //! create a new coroutine
     //
     //! allocates a stack and guard page
-    coroutine(proc f, void *arg=NULL, size_t stack_size=4096)
+    coroutine(proc f, void *arg=0, size_t stack_size=4096)
     {
         // add on size for a guard page
         size_t pgs = getpagesize();
@@ -51,6 +51,14 @@ public:
         ctxt.init(f, arg, stack_start, stack_size);
     }
 
+    void restart(proc f, void *arg=0) {
+        if (stack_start) {
+            ctxt.init(f, arg, stack_start, stack_size());
+        } else {
+            ctxt.init();
+        }
+    }
+
     ~coroutine() {
         if (stack_end) {
 #ifndef NVALGRIND
@@ -70,6 +78,10 @@ public:
     //! save the state of the current coroutine and swap to another
     void swap(coroutine *to) {
         ctxt.swap(&to->ctxt);
+    }
+
+    size_t stack_size() const {
+        return stack_start - stack_end;
     }
 
     //! is this the main stack?
