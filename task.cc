@@ -2,6 +2,7 @@
 #include <condition_variable>
 #include <cassert>
 #include <algorithm>
+#include <list>
 #include "atomic.hh"
 #include "coroutine.hh"
 #include "logging.hh"
@@ -63,12 +64,7 @@ struct task {
     bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
-    ~task() {
-        // free timeouts
-        for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
-            delete *i;
-        }
-    }
+    ~task();
 
     template<typename Rep,typename Period, typename ExceptionT>
     timeout_t *add_timeout(const duration<Rep,Period> &dura, ExceptionT e) {
@@ -649,14 +645,7 @@ void proc::schedule() {
 struct io_scheduler {
     struct task_timeout_compare {
         bool operator ()(const task *a, const task *b) const {
-            // sort by timeout and then pointer value so erase will be able to
-            // find exact pointer values when the timeouts are the same
-            // which can happen frequently because we try to collate timeouts
-            if (a->timeouts.empty() || b->timeouts.empty()) {
-                return a < b;
-            }
-            return (a->timeouts.front()->when < b->timeouts.front()->when) ||
-                (a->timeouts.front()->when == b->timeouts.front()->when && a < b);
+            return (a->timeouts.front()->when < b->timeouts.front()->when);
         }
     };
     struct task_poll_state {
@@ -669,8 +658,9 @@ struct io_scheduler {
     };
     typedef std::vector<task_poll_state> poll_task_array;
     typedef std::vector<epoll_event> event_vector;
-    typedef std::multiset<task *, task_timeout_compare> timeoutset;
 
+    //! tasks with pending timeouts
+    std::list<task *> timeout_tasks;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
@@ -768,12 +758,16 @@ struct io_scheduler {
     template<typename Rep, typename Period, typename ExceptionT>
     task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura, ExceptionT e) {
         task::timeout_t *to = t->add_timeout(dura, e);
+        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
+        timeout_tasks.insert(i, t);
         return to;
     }
 
     template<typename Rep,typename Period>
     task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura) {
         task::timeout_t *to = t->add_timeout(dura);
+        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
+        timeout_tasks.insert(i, t);
         return to;
     }
 
@@ -836,7 +830,6 @@ struct io_scheduler {
     }
 
     void fdtask() {
-        timeoutset timeouts;
         taskname("fdtask");
         tasksystem();
         proc *p = _this_proc;
@@ -852,15 +845,8 @@ struct io_scheduler {
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
             std::unique_lock<std::mutex> lk(p->mutex);
-            timeouts.clear();
-            // find tasks with timeouts set
-            for (auto i=p->alltasks.begin(); i<p->alltasks.end(); ++i) {
-                if (!(*i)->timeouts.empty()) {
-                    timeouts.insert(*i);
-                }
-            }
-            if (!timeouts.empty()) {
-                t = *timeouts.begin();
+            if (!timeout_tasks.empty()) {
+                t = timeout_tasks.front();
                 CHECK(!t->timeouts.empty()) << t << " in timeout list with no timeouts set";
                 if (t->timeouts.front()->when <= p->now) {
                     // epoll_wait must return asap
@@ -878,8 +864,6 @@ struct io_scheduler {
                     ms = 0;
                 }
             }
-
-            DVLOG(5) << p->alltasks.size() << " tasks " << timeouts.size() << " t/o tasks";
 
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll %d ms", ms);
@@ -932,8 +916,8 @@ struct io_scheduler {
             if (lk.owns_lock()) lk.unlock();
             p->now = monotonic_clock::now();
             // wake up sleeping tasks
-            auto i = timeouts.begin();
-            for (; i != timeouts.end(); ++i) {
+            auto i = timeout_tasks.begin();
+            for (; i != timeout_tasks.end(); ++i) {
                 t = *i;
                 if (t->timeouts.front()->when <= p->now) {
                     DVLOG(5) << "TIMEOUT on task: " << t;
@@ -950,10 +934,25 @@ const time_point<monotonic_clock> &procnow() {
     return _this_proc->now;
 }
 
+task::~task() {
+    if (!timeouts.empty()) {
+        // remove from scheduler timeout list
+        _this_proc->sched().timeout_tasks.remove(this);
+    }
+    // free timeouts
+    for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
+        delete *i;
+    }
+}
+
 void task::remove_timeout(timeout_t *to) {
     auto i = std::find(timeouts.begin(), timeouts.end(), to);
     if (i != timeouts.end()) {
         timeouts.erase(i);
+    }
+    if (timeouts.empty()) {
+        // remove from scheduler timeout list
+        _this_proc->sched().timeout_tasks.remove(this);
     }
 }
 
@@ -976,6 +975,10 @@ void task::swap() {
             std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
             DVLOG(5) << to << " reached for " << this << " removing.";
             timeouts.pop_front();
+            if (timeouts.empty()) {
+                // remove from scheduler timeout list
+                _this_proc->sched().timeout_tasks.remove(this);
+            }
             if (tmp->exception != 0) {
                 std::rethrow_exception(tmp->exception);
             }
