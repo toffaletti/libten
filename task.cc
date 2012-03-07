@@ -985,6 +985,7 @@ void task::clear() {
         for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
             delete *i;
         }
+        timeouts.clear();
     }
 
     cproc = 0;
@@ -993,6 +994,7 @@ void task::clear() {
 void task::remove_timeout(timeout_t *to) {
     auto i = std::find(timeouts.begin(), timeouts.end(), to);
     if (i != timeouts.end()) {
+        delete *i;
         timeouts.erase(i);
     }
     if (timeouts.empty()) {
@@ -1077,6 +1079,10 @@ proc::~proc() {
     while (!alltasks.empty()) {
         deltaskinproc(alltasks.front());
     }
+    // free tasks in taskpool
+    for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
+        delete (*i);
+    }
     // must delete _sched *after* tasks because
     // they might try to remove themselves from timeouts set
     delete _sched;
@@ -1112,9 +1118,7 @@ void proc::deltaskinproc(task *t) {
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
     CHECK(i != alltasks.end());
     alltasks.erase(i);
-    DVLOG(5) << "FREEING task: " << t;
-    //delete t;
-    // TODO: just leak tasks for now
+    DVLOG(5) << "POOLING task: " << t;
     taskpool.push_back(t);
     t->clear();
 }
