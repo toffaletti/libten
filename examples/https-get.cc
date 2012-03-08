@@ -27,16 +27,18 @@ static void do_get(uri u) {
     ssize_t nw = s.send(data.c_str(), data.size());
 
     buffer buf(4*1024);
-    buffer::slice rb = buf(0);
 
     http_parser parser;
     http_response resp;
     resp.parser_init(&parser);
 
-    for (;;) {
-        ssize_t nr = s.recv(rb.data(), rb.size());
+    while (!resp.complete) {
+        ssize_t nr = s.recv(buf.back(), buf.available());
         if (nr <= 0) { std::cerr << "Error: " << strerror(errno) << "\n"; break; }
-        if (resp.parse(&parser, rb.data(), nr)) break;
+        buf.commit(nr);
+        size_t len = buf.size();
+        resp.parse(&parser, buf.front(), len);
+        buf.remove(len);
     }
 
     std::cout << "Response:\n" << "--------------\n";

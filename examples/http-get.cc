@@ -7,7 +7,7 @@
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=4096*2;
+const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
     netsock s(AF_INET, SOCK_STREAM);
