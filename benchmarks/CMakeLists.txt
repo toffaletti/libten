@@ -9,3 +9,8 @@ target_link_libraries(server_client ten)
 add_executable(accept-thread EXCLUDE_FROM_ALL  accept-thread.cc)
 target_link_libraries(accept-thread ten)
 
+add_custom_target(benchmarks DEPENDS
+    timer_event_loop
+    server_client
+    accept-thread
+    )
