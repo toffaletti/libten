@@ -5,3 +5,7 @@ target_link_libraries(timer_event_loop ten)
 
 add_executable(server_client EXCLUDE_FROM_ALL server_client.cc)
 target_link_libraries(server_client ten)
+
+add_executable(accept-thread EXCLUDE_FROM_ALL  accept-thread.cc)
+target_link_libraries(accept-thread ten)
+
