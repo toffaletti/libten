@@ -51,7 +51,7 @@ static void startup() {
     s.getsockname(addr);
     int listen_task = taskspawn(std::bind(listener, std::ref(s)));
     taskyield(); // let listener get setup
-    procspawn(std::bind(connecter_spawner, addr, ch));
+    procspawn(std::bind(connecter_spawner, std::ref(addr), ch));
 
     std::unordered_map<int, unsigned int> results;
     for (unsigned i=0; i<1000; ++i) {
