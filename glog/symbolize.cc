@@ -121,7 +121,7 @@ _START_GOOGLE_NAMESPACE_
 // Read up to "count" bytes from file descriptor "fd" into the buffer
 // starting at "buf" while handling short reads and EINTR.  On
 // success, return the number of bytes read.  Otherwise, return -1.
-static ssize_t ReadPersistent(const int fd, void *buf, const size_t count) {
+static ssize_t ReadPersistent(const int fd, void *buf, const ssize_t count) {
   SAFE_ASSERT(fd >= 0);
   SAFE_ASSERT(count >= 0 && count <= std::numeric_limits<ssize_t>::max());
   char *buf0 = reinterpret_cast<char *>(buf);
@@ -158,7 +158,7 @@ static ssize_t ReadFromOffset(const int fd, void *buf,
 // short reads and EINTR.  On success, return true. Otherwise, return
 // false.
 static bool ReadFromOffsetExact(const int fd, void *buf,
-                                const size_t count, const off_t offset) {
+                                const ssize_t count, const off_t offset) {
   ssize_t len = ReadFromOffset(fd, buf, count, offset);
   return len == count;
 }
@@ -186,15 +186,15 @@ GetSectionHeaderByType(const int fd, ElfW(Half) sh_num, const off_t sh_offset,
   // Read at most 16 section headers at a time to save read calls.
   ElfW(Shdr) buf[16];
   for (int i = 0; i < sh_num;) {
-    const ssize_t num_bytes_left = (sh_num - i) * sizeof(buf[0]);
-    const ssize_t num_bytes_to_read =
+    const size_t num_bytes_left = (sh_num - i) * sizeof(buf[0]);
+    const size_t num_bytes_to_read =
         (sizeof(buf) > num_bytes_left) ? num_bytes_left : sizeof(buf);
     const ssize_t len = ReadFromOffset(fd, buf, num_bytes_to_read,
                                        sh_offset + i * sizeof(buf[0]));
     SAFE_ASSERT(len % sizeof(buf[0]) == 0);
-    const ssize_t num_headers_in_buf = len / sizeof(buf[0]);
+    const size_t num_headers_in_buf = len / sizeof(buf[0]);
     SAFE_ASSERT(num_headers_in_buf <= sizeof(buf) / sizeof(buf[0]));
-    for (int j = 0; j < num_headers_in_buf; ++j) {
+    for (size_t j = 0; j < num_headers_in_buf; ++j) {
       if (buf[j].sh_type == type) {
         *out = buf[j];
         return true;
@@ -241,7 +241,7 @@ bool GetSectionHeaderByName(int fd, const char *name, size_t name_len,
     ssize_t n_read = ReadFromOffset(fd, &header_name, name_len, name_offset);
     if (n_read == -1) {
       return false;
-    } else if (n_read != name_len) {
+    } else if (n_read != (ssize_t)name_len) {
       // Short read -- name could be at end of file.
       continue;
     }
@@ -282,9 +282,9 @@ FindSymbol(uint64_t pc, const int fd, char *out, int out_size,
     ElfW(Sym) buf[NUM_SYMBOLS];
     const ssize_t len = ReadFromOffset(fd, &buf, sizeof(buf), offset);
     SAFE_ASSERT(len % sizeof(buf[0]) == 0);
-    const ssize_t num_symbols_in_buf = len / sizeof(buf[0]);
+    const size_t num_symbols_in_buf = len / sizeof(buf[0]);
     SAFE_ASSERT(num_symbols_in_buf <= sizeof(buf)/sizeof(buf[0]));
-    for (int j = 0; j < num_symbols_in_buf; ++j) {
+    for (size_t j = 0; j < num_symbols_in_buf; ++j) {
       const ElfW(Sym)& symbol = buf[j];
       uint64_t start_address = symbol.st_value;
       start_address += symbol_offset;
