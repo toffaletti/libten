@@ -688,7 +688,7 @@ struct io_scheduler {
     typedef std::vector<epoll_event> event_vector;
 
     //! tasks with pending timeouts
-    tasklist timeout_tasks;
+    std::vector<task *> timeout_tasks;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
@@ -810,7 +810,6 @@ struct io_scheduler {
         CHECK(t->timeouts.empty());
         auto i = std::remove(timeout_tasks.begin(), timeout_tasks.end(), t);
         timeout_tasks.erase(i, timeout_tasks.end());
-        //timeout_tasks.remove(this);
     }
 
     bool fdwait(int fd, int rw, uint64_t ms) {
