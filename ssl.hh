@@ -28,7 +28,7 @@ public:
 
     //! false for server mode
     void initssl(SSL_CTX *ctx_, bool client);
-    void initssl(SSL_METHOD *method, bool client);
+    void initssl(const SSL_METHOD *method, bool client);
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     // C++0x move stuff

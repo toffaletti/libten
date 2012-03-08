@@ -251,7 +251,6 @@ sslsock::~sslsock() {
     SSL_CTX_free(ctx);
 }
 
-
 void sslsock::initssl(SSL_CTX *ctx_, bool client) {
     ctx = ctx_;
     BIO *ssl_bio = BIO_new_ssl(ctx, client);
@@ -259,7 +258,7 @@ void sslsock::initssl(SSL_CTX *ctx_, bool client) {
     bio = BIO_push(ssl_bio, net_bio);
 }
 
-void sslsock::initssl(SSL_METHOD *method, bool client) {
+void sslsock::initssl(const SSL_METHOD *method, bool client) {
     initssl(SSL_CTX_new(method), client);
 }
 
@@ -270,7 +269,7 @@ int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
     int status = iodial(io, s.fd, addr, port);
     if (status != 0) return status;
 
-    handshake(); 
+    handshake();
 
     return 0;
 }

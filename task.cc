@@ -9,7 +9,6 @@
 #include "task.hh"
 #include "descriptors.hh"
 
-#include <exception_ptr.h> // in C++11 this has no .h
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <iostream>

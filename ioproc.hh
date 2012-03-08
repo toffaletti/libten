@@ -9,7 +9,7 @@
 #include "shared_pool.hh"
 #include <fcntl.h>
 #include <cassert>
-#include <exception_ptr.h>
+#include <exception>
 
 namespace ten {
 
