@@ -63,7 +63,7 @@ struct task {
     bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
-    void clear();
+    void clear(bool newid=true);
     void init(const std::function<void ()> &f);
     ~task();
 
@@ -970,18 +970,20 @@ const time_point<monotonic_clock> &procnow() {
 }
 
 task::~task() {
-    clear();
+    clear(false);
 }
 
-void task::clear() {
+void task::clear(bool newid) {
     fn = 0;
     exiting = false;
     systask = false;
     canceled = false;
     unwinding = false;
-    id = ++taskidgen;
-    setname("task[%ju]", id);
-    setstate("new");
+    if (newid) {
+        id = ++taskidgen;
+        setname("task[%ju]", id);
+        setstate("new");
+    }
 
     if (!timeouts.empty()) {
         // free timeouts
