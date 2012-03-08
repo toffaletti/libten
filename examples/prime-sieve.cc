@@ -3,7 +3,7 @@
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize = 4096;
+const size_t default_stacksize = 256*1024;
 
 // adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 

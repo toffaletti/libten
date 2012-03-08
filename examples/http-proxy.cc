@@ -9,7 +9,7 @@
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;
-const size_t default_stacksize=128*1024;
+const size_t default_stacksize=256*1024;
 
 #define SEC2MS(s) (s*1000)
 

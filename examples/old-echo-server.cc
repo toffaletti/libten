@@ -4,9 +4,9 @@
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=4096*2;
+const size_t default_stacksize=256*1024;
 
-// this uses task::poll directly instead of task::socket
+// this uses fdwait directly instead of netsock
 
 void echo_task(socket_fd &_s) {
     address client_addr;

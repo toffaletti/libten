@@ -2,7 +2,7 @@
 #include "error.hh"
 
 using namespace ten;
-const size_t default_stacksize=4096;
+const size_t default_stacksize=256*1024;
 
 void go_crazy() {
     throw errorx("weee!");
@@ -18,7 +18,6 @@ void stack_overflow() {
 
 int main(int argc, char *argv[]) {
     procmain p;
-    // need 16k stack for fprintf of the backtrace
-    taskspawn(stack_overflow, 16*1024);
+    taskspawn(stack_overflow);
     return p.main(argc, argv);
 }

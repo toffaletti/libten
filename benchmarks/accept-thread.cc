@@ -29,7 +29,7 @@ void listen_task(channel<int> accept_chan) {
         int sock;
         while ((sock = s.accept(client_addr, SOCK_NONBLOCK)) > 0) {
             VLOG(1) << "accepted " << sock;
-            accept_chan.send(sock);
+            accept_chan.send(std::move(sock));
         }
     }
 }
