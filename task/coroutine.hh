@@ -3,7 +3,7 @@
 #include <boost/utility.hpp>
 #include <vector>
 #include <sys/mman.h>
-#include "context.hh"
+#include "task/context.hh"
 #include "error.hh"
 
 #ifndef NVALGRIND
