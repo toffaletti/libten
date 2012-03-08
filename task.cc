@@ -689,7 +689,7 @@ struct io_scheduler {
     typedef std::vector<epoll_event> event_vector;
 
     //! tasks with pending timeouts
-    std::list<task *> timeout_tasks;
+    tasklist timeout_tasks;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
@@ -805,6 +805,13 @@ struct io_scheduler {
         task *t = _this_proc->ctask;
         add_timeout(t, dura);
         t->swap();
+    }
+
+    void remove_timeout_task(task *t) {
+        CHECK(t->timeouts.empty());
+        auto i = std::remove(timeout_tasks.begin(), timeout_tasks.end(), t);
+        timeout_tasks.erase(i, timeout_tasks.end());
+        //timeout_tasks.remove(this);
     }
 
     bool fdwait(int fd, int rw, uint64_t ms) {
@@ -979,13 +986,13 @@ void task::clear() {
     setstate("new");
 
     if (!timeouts.empty()) {
-        // remove from scheduler timeout list
-        cproc->sched().timeout_tasks.remove(this);
         // free timeouts
         for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
             delete *i;
         }
         timeouts.clear();
+        // remove from scheduler timeout list
+        cproc->sched().remove_timeout_task(this);
     }
 
     cproc = 0;
@@ -999,7 +1006,7 @@ void task::remove_timeout(timeout_t *to) {
     }
     if (timeouts.empty()) {
         // remove from scheduler timeout list
-        _this_proc->sched().timeout_tasks.remove(this);
+        cproc->sched().remove_timeout_task(this);
     }
 }
 
@@ -1024,7 +1031,7 @@ void task::swap() {
             timeouts.pop_front();
             if (timeouts.empty()) {
                 // remove from scheduler timeout list
-                _this_proc->sched().timeout_tasks.remove(this);
+                cproc->sched().remove_timeout_task(this);
             }
             if (tmp->exception != 0) {
                 std::rethrow_exception(tmp->exception);
