@@ -214,7 +214,7 @@ void task::swap() {
 
 void qutex::lock() {
     task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::lock called outside of task:\n" << saved_backtrace().str();
+    CHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::unique_lock<std::timed_mutex> lk(m);
         if (owner == 0 || owner == t) {
@@ -233,27 +233,14 @@ void qutex::lock() {
             " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
     } catch (...) {
         std::unique_lock<std::timed_mutex> lk(m);
-        if (t == owner) {
-            owner = 0;
-            if (!waiting.empty()) {
-                owner = waiting.front();
-                waiting.pop_front();
-            }
-            lk.unlock();
-            if (owner) owner->ready();
-        } else {
-            auto i = std::find(waiting.begin(), waiting.end(), t);
-            if (i != waiting.end()) {
-                waiting.erase(i);
-            }
-        }
+        internal_unlock(lk);
         throw;
     }
 }
 
 bool qutex::try_lock() {
     task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::try_lock called outside of task:\n" << saved_backtrace().str();
+    CHECK(t) << "BUG: qutex::try_lock called outside of task";
     std::unique_lock<std::timed_mutex> lk(m, std::try_to_lock);
     if (lk.owns_lock()) {
         if (owner == 0) {
@@ -265,18 +252,31 @@ bool qutex::try_lock() {
 }
 
 void qutex::unlock() {
-    task *t = 0;
-    {
-        std::unique_lock<std::timed_mutex> lk(m);
+    std::unique_lock<std::timed_mutex> lk(m);
+    internal_unlock(lk);
+}
+
+void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
+    task *t = _this_proc->ctask;
+    CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
+    if (t == owner) {
         if (!waiting.empty()) {
-            t = owner = waiting.front();
+            owner = waiting.front();
             waiting.pop_front();
         } else {
             owner = 0;
         }
         DVLOG(5) << "UNLOCK qutex: " << this << " new owner: " << owner << " waiting: " << waiting.size();
+        lk.unlock();
+        if (owner) owner->ready();
+    } else {
+        // this branch is taken when exception is thrown inside
+        // a task that is currently waiting inside qutex::lock
+        auto i = std::find(waiting.begin(), waiting.end(), t);
+        if (i != waiting.end()) {
+            waiting.erase(i);
+        }
     }
-    if (t) t->ready();
 }
 
 #if 0

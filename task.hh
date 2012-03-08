@@ -63,6 +63,9 @@ struct qutex : boost::noncopyable {
         bool try_lock_until(
                 std::chrono::time_point<Clock,Duration> const&
                 absolute_time);
+private:
+    void internal_unlock(
+        std::unique_lock<std::timed_mutex> &lk);
 };
 
 struct rendez : boost::noncopyable {
