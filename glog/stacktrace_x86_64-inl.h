@@ -32,6 +32,9 @@
 // Produce stack trace using libgcc
 
 extern "C" {
+#if __clang__
+#define __unwind_word__ word
+#endif
 #include <stdlib.h> // for NULL
 #include <unwind.h> // ABI defined unwinder
 }
