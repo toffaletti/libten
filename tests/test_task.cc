@@ -7,7 +7,6 @@
 #include "task.hh"
 
 using namespace ten;
-// needed a larger stack for socket_io_mt
 const size_t default_stacksize=256*1024;
 
 static void bar(std::thread::id p) {
@@ -386,33 +385,6 @@ static void deadline_yield() {
 BOOST_AUTO_TEST_CASE(task_deadline_yield) {
     procmain p;
     taskspawn(deadline_yield);
-    p.main();
-}
-
-void qlocker(qutex &q, rendez &r, int &x) {
-    std::unique_lock<qutex> lk(q);
-    ++x;
-    r.wakeup();
-}
-
-bool is_twenty(int &x) { return x == 20; }
-
-void qutex_task_spawn() {
-    qutex q;
-    rendez r;
-    int x = 0;
-    for (int i=0; i<20; ++i) {
-        procspawn(std::bind(qlocker, std::ref(q), std::ref(r), std::ref(x)));
-        taskyield();
-    }
-    std::unique_lock<qutex> lk(q);
-    r.sleep(lk, std::bind(is_twenty, std::ref(x)));
-    BOOST_CHECK_EQUAL(x, 20);
-}
-
-BOOST_AUTO_TEST_CASE(qutex_test) {
-    procmain p;
-    taskspawn(qutex_task_spawn);
     p.main();
 }
 

@@ -69,14 +69,11 @@ private:
 };
 
 struct rendez : boost::noncopyable {
-    qutex *q;
+    std::timed_mutex m;
     tasklist waiting;
 
-    rendez() : q(0) {}
-    ~rendez() {
-        // TODO: bug if anything is waiting?
-        // lock and clear waiting?
-    }
+    rendez() {}
+    ~rendez();
 
     void sleep(std::unique_lock<qutex> &lk);
 

@@ -181,15 +181,12 @@ void task::remove_timeout(timeout_t *to) {
 }
 
 void task::swap() {
-    if (canceled && !exiting) {
-        DVLOG(5) << "BUG: " << this << "\n" << saved_backtrace().str();
-    }
     // swap to scheduler coroutine
     co.swap(&_this_proc->co);
 
     if (canceled && !unwinding) {
         unwinding = true;
-        DVLOG(5) << "THROW INTERRUPT: " << this;
+        DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
 
@@ -261,14 +258,16 @@ void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
     CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     if (t == owner) {
         if (!waiting.empty()) {
-            owner = waiting.front();
+            t = owner = waiting.front();
             waiting.pop_front();
         } else {
-            owner = 0;
+            t = owner = 0;
         }
         DVLOG(5) << "UNLOCK qutex: " << this << " new owner: " << owner << " waiting: " << waiting.size();
         lk.unlock();
-        if (owner) owner->ready();
+        // must use t here, not owner because
+        // lock has been released
+        if (t) t->ready();
     } else {
         // this branch is taken when exception is thrown inside
         // a task that is currently waiting inside qutex::lock
@@ -298,31 +297,32 @@ bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
-    if (!q) {
-        q = lk.mutex();
-    }
-    CHECK(q == lk.mutex());
-    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
+
     lk.unlock();
+    {
+        std::unique_lock<std::timed_mutex> ll(m);
+        if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+            DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
+            waiting.push_back(t);
+        }
+    }
     try {
         t->swap(); 
         lk.lock();
     } catch (...) {
-        std::unique_lock<std::timed_mutex> ll(q->m);
+        std::unique_lock<std::timed_mutex> ll(m);
         auto i = std::find(waiting.begin(), waiting.end(), t);
         if (i != waiting.end()) {
             waiting.erase(i);
         }
+        lk.lock();
         throw;
     }
 }
 
 void rendez::wakeup() {
+    std::unique_lock<std::timed_mutex> lk(m);
     if (!waiting.empty()) {
-        CHECK(q->owner == _this_proc->ctask);
         task *t = waiting.front();
         waiting.pop_front();
         DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
@@ -331,13 +331,20 @@ void rendez::wakeup() {
 }
 
 void rendez::wakeupall() {
+    std::unique_lock<std::timed_mutex> lk(m);
     while (!waiting.empty()) {
-        CHECK(q->owner == _this_proc->ctask);
         task *t = waiting.front();
         waiting.pop_front();
         DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
         t->ready();
     }
+}
+
+
+rendez::~rendez() {
+    using ::operator<<;
+    std::unique_lock<std::timed_mutex> lk(m);
+    CHECK(waiting.empty()) << "BUG: still waiting: " << waiting;
 }
 
 deadline::deadline(uint64_t ms) {
