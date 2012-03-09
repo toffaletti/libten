@@ -224,10 +224,14 @@ void qutex::lock() {
     }
 
     try {
-        t->swap();
-        CHECK(owner == _this_proc->ctask) << "Qutex: " << this << " owner check failed: " <<
-            owner << " != " << _this_proc->ctask << " t:" << t <<
-            " owner->cproc: " << owner->cproc << " this_proc: " << _this_proc;
+        // loop to handle spurious wakeups from other threads
+        for (;;) {
+            t->swap();
+            std::unique_lock<std::timed_mutex> lk(m);
+            if (owner == _this_proc->ctask) {
+                break;
+            }
+        }
     } catch (...) {
         std::unique_lock<std::timed_mutex> lk(m);
         internal_unlock(lk);
