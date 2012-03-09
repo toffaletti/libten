@@ -41,8 +41,8 @@ struct proc {
     {
         now = monotonic_clock::now();
         add(this);
+        std::unique_lock<std::mutex> lk(mutex);
         if (t) {
-            std::unique_lock<std::mutex> lk(mutex);
             thread = new std::thread(proc::startproc, this, t);
             thread->detach();
         } else {

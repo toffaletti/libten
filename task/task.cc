@@ -129,12 +129,12 @@ void task::ready() {
     if (std::find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
         DVLOG(5) << _this_proc->ctask << " adding task: " << this << " to runqueue for proc: " << p;
         p->runqueue.push_back(this);
-        // XXX: does this need to be outside of the if(!found) ?
-        if (p != _this_proc) {
-            p->wakeupandunlock(lk);
-        }
     } else {
         DVLOG(5) << "found task: " << this << " already in runqueue for proc: " << p;
+    }
+    // XXX: does this need to be outside of the if(!found) ?
+    if (p != _this_proc) {
+        p->wakeupandunlock(lk);
     }
 }
 
@@ -302,14 +302,17 @@ bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
 
-    lk.unlock();
     {
         std::unique_lock<std::timed_mutex> ll(m);
-        if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-            DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
-            waiting.push_back(t);
-        }
+        CHECK(std::find(waiting.begin(), waiting.end(), t) == waiting.end())
+            << "BUG: " << t << " already waiting on rendez " << this;
+        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
+        waiting.push_back(t);
     }
+    // must hold the lock until we're in the waiting list
+    // otherwise another thread might modify the condition and
+    // call wakeup() and waiting would be empty so we'd sleep forever
+    lk.unlock();
     try {
         t->swap(); 
         lk.lock();

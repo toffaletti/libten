@@ -42,8 +42,8 @@ void proc::deltaskinproc(task *t) {
 }
 
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
+    CHECK(lk.mutex() == &mutex);
     if (asleep) {
-        asleep = false;
         cond.notify_one();
     } else if (polling) {
         polling = false;
