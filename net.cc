@@ -1,6 +1,4 @@
 #include "net.hh"
-#include "ioproc.hh"
-#include <netdb.h>
 
 namespace ten {
 
@@ -19,22 +17,6 @@ int netconnect(int fd, const address &addr, unsigned ms) {
         return -1;
     }
     return 0;
-}
-
-int netdial(int fd, const char *addr, uint16_t port) {
-    struct addrinfo *results = 0;
-    struct addrinfo *result = 0;
-    int status = getaddrinfo(addr, NULL, NULL, &results);
-    if (status == 0) {
-        for (result = results; result != NULL; result = result->ai_next) {
-            address addr(result->ai_addr, result->ai_addrlen);
-            addr.port(port);
-            status = netconnect(fd, addr, 0);
-            if (status == 0) break;
-        }
-    }
-    freeaddrinfo(results);
-    return status;
 }
 
 int netaccept(int fd, address &addr, int flags, unsigned timeout_ms) {
@@ -89,10 +71,8 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned timeout
 }
 
 int netsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
-    // need large stack size for getaddrinfo (see dial)
-    // TODO: maybe replace with c-ares from libcurl project
-    ioproc io(8*1024*1024);
-    return iodial(io, s.fd, addr, port);
+    // TODO: use timeout_ms
+    return netdial(s.fd, addr, port);
 }
 
 } // end namespace ten
