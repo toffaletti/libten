@@ -49,18 +49,20 @@ BOOST_AUTO_TEST_CASE(json_test_path1) {
     json r2(o.path("//author"));
     BOOST_CHECK_EQUAL(json(a1), r2);
 
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ > 6))
+    // jansson hashtable uses size_t for hash
+    // we think this is causing the buckets to change on 32bit vs. 64bit
+#if (__SIZEOF_SIZE_T__ == 4)
     static const char a3[] = "[{\"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95}, {\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}, {\"color\": \"red\", \"price\": 19.95}]";
-#else
+#elif (__SIZEOF_SIZE_T__ == 8)
     static const char a3[] = "[{\"color\": \"red\", \"price\": 19.95}, {\"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95}, {\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}]";
 #endif
     json r3(o.path("/store/*"));
     json t3(a3);
     BOOST_CHECK_EQUAL(t3, r3);
 
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ > 6))
+#if (__SIZEOF_SIZE_T__ == 4)
     static const char a4[] = "[8.95, 12.99, 8.99, 22.99, 19.95]";
-#else
+#elif (__SIZEOF_SIZE_T__ == 8)
     static const char a4[] = "[19.95, 8.95, 12.99, 8.99, 22.99]";
 #endif
     json r4(o.path("/store//price"));
