@@ -37,6 +37,17 @@ struct address {
         clear();
     }
 
+    address(int fam, char *a, socklen_t alen, uint16_t port) {
+        family(fam);
+        if (fam == AF_INET) {
+            memcpy(&addr.sa_in.sin_addr, a, alen);
+            addr.sa_in.sin_port = htons(port);
+        } else if (fam == AF_INET6) {
+            memcpy(&addr.sa_in6.sin6_addr, a, alen);
+            addr.sa_in6.sin6_port = htons(port);
+        }
+    }
+
     address(struct sockaddr *a, socklen_t alen) {
         clear();
         memcpy(&addr.sa, a, alen);

@@ -19,14 +19,21 @@ else()
 endif()
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
+if (CARES_LIB AND CARES_INCLUDE)
+    set(RESOLVER_SRC net/cares.cc)
+else(CARES_LIB AND CARES_INCLUDE)
+    set(RESOLVER_SRC net/resolve.cc)
+endif (CARES_LIB AND CARES_INCLUDE)
+
 add_library(ten
     task/task.cc
     task/proc.cc
     error.cc ioproc.cc net.cc zip.cc json.cc ${ASM}
+    ${RESOLVER_SRC}
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
-target_link_libraries(ten rt glog)
+target_link_libraries(ten rt glog ${CARES_LIB})
 
 add_subdirectory(examples)
 add_subdirectory(tests)
