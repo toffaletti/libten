@@ -89,6 +89,10 @@ public:
         return h->capacity - size();
     }
 
+    void clear() {
+        remove(size());
+    }
+
     ~buffer() {
         free(h);
     }
