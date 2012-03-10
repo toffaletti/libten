@@ -259,7 +259,7 @@ void sslsock::initssl(SSL_CTX *ctx_, bool client) {
 }
 
 void sslsock::initssl(const SSL_METHOD *method, bool client) {
-    initssl(SSL_CTX_new(method), client);
+    initssl(SSL_CTX_new((SSL_METHOD *)method), client);
 }
 
 int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
