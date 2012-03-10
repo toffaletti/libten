@@ -1,6 +1,7 @@
 #ifndef TASK_PROC_HH
 #define TASK_PROC_HH
 
+#include <condition_variable>
 #include "descriptors.hh"
 #include "task/private.hh"
 #include "task.hh"

@@ -16,6 +16,10 @@ namespace ten {
 
 using namespace std::chrono;
 
+#if (__GNUC__ >= 4 && (__GNUC_MINOR__ >= 7))
+typedef steady_clock monotonic_clock;
+#endif
+
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
