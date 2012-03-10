@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
         std::istream_iterator<char> it(std::cin);
         std::istream_iterator<char> end;
         std::string input(it, end);
-        jsobj js(input);
+        json js(input);
         if (!conf.query.empty()) {
             js = js.path(conf.query);
         }

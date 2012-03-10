@@ -24,7 +24,7 @@ msgpack::object return_thunk(Result (*f)(Args...), msgpack::object &o, msgpack::
 
     std::tuple<Args...> p;
     convert_helper(o.via.array.ptr, p);
-    Result r = apply_tuple(*f, p);
+    Result r = apply_tuple(*f, std::forward<std::tuple<Args...>>(p));
     return msgpack::object(r, z);
 }
 
