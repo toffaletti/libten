@@ -10,7 +10,7 @@ endif (CMAKE_BUILD_TYPE STREQUAL "Release")
 
 add_library(uri STATIC ${CMAKE_CURRENT_BINARY_DIR}/uri_parser.cc)
 
-add_definitions(-DBOOST_TEST_DYN_LINK)
+#add_definitions(-DBOOST_TEST_DYN_LINK)
 add_executable(test_uri test_uri.cc)
 target_link_libraries(test_uri uri boost_unit_test_framework-mt)
 

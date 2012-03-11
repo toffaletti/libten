@@ -6,7 +6,12 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ten.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ragel.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure.cmake)
 
-add_definitions(-DBOOST_TEST_DYN_LINK)
+if (${CMAKE_EXE_LINKER_FLAGS} MATCHES "-static")
+    message(FATAL_ERROR "static linking not supported http://stackoverflow.com/questions/7090623/c0x-thread-static-linking-problem")
+    add_definitions(-DBOOST_TEST_MAIN)
+else ()
+    add_definitions(-DBOOST_TEST_DYN_LINK)
+endif ()
 
 add_subdirectory(glog)
 include_directories(glog)
@@ -34,7 +39,7 @@ add_library(ten
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
-target_link_libraries(ten rt glog ${CARES_LIB})
+target_link_libraries(ten glog ${CARES_LIB} rt)
 
 add_subdirectory(examples)
 add_subdirectory(tests)
