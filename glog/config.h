@@ -137,15 +137,21 @@
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "0.3.2"
 
+/* The size of `void *', as computed by sizeof; should be set externally. */
+#ifndef SIZEOF_VOID_P
+#  define SIZEOF_VOID_P 8
+#endif
+
 /* How to access the PC from a struct ucontext */
-#define PC_FROM_UCONTEXT uc_mcontext.gregs[REG_RIP]
+#if SIZEOF_VOID_P == 4
+#  define PC_FROM_UCONTEXT uc_mcontext.gregs[REG_EIP]
+#else
+#  define PC_FROM_UCONTEXT uc_mcontext.gregs[REG_RIP]
+#endif
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
 /* #undef PTHREAD_CREATE_JOINABLE */
-
-/* The size of `void *', as computed by sizeof. */
-#define SIZEOF_VOID_P 8
 
 /* Define to 1 if you have the ANSI C header files. */
 /* #undef STDC_HEADERS */
