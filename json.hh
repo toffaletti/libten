@@ -13,43 +13,43 @@ namespace ten {
 
 enum json_take_t { json_take };
 
-template <class J> class smart_json_ptr {
+template <class J> class shared_json_ptr {
 private:
-    typedef void (smart_json_ptr::*unspecified_bool_type)() const;
+    typedef void (shared_json_ptr::*unspecified_bool_type)() const;
     void true_value() const {}
     J *p;
 public:
     // ctor, dtor, assign
-    smart_json_ptr()                          : p() {}
-    explicit smart_json_ptr(J *j)             : p(json_incref(j)) {}
-    smart_json_ptr(J *j, json_take_t)         : p(j) {}
-    ~smart_json_ptr()                         { json_decref(p); }
+    shared_json_ptr()                          : p() {}
+    explicit shared_json_ptr(J *j)             : p(json_incref(j)) {}
+    shared_json_ptr(J *j, json_take_t)         : p(j) {}
+    ~shared_json_ptr()                         { json_decref(p); }
 
     // construction and assignment - make the compiler work for a living
-    template <class J2> smart_json_ptr(const smart_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
-    template <class J2> smart_json_ptr(      smart_json_ptr<J2> &&jp) : p(jp.release())          {}
-    template <class J2> smart_json_ptr & operator = (const smart_json_ptr<J2>  &jp) { reset(jp.ptr());    return *this; }
-    template <class J2> smart_json_ptr & operator = (      smart_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
+    template <class J2> shared_json_ptr(const shared_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
+    template <class J2> shared_json_ptr(      shared_json_ptr<J2> &&jp) : p(jp.release())          {}
+    template <class J2> shared_json_ptr & operator = (const shared_json_ptr<J2>  &jp) { reset(jp.ptr());    return *this; }
+    template <class J2> shared_json_ptr & operator = (      shared_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
 
     // object interface
 
     void reset(J *j) { take(json_incref(j)); }
     void take(J *j)  { json_decref(p); p = j; }  // must be convenient for use with C code
-    J *release()     { J *j = p; p = nullptr; return j; }
 
     J * operator -> () const { return p; }
     J *get() const           { return p; }
+    J *release()             { J *j = p; p = nullptr; return j; }
 
     operator unspecified_bool_type () const {
-        return p ? &smart_json_ptr::true_value : nullptr;
+        return p ? &shared_json_ptr::true_value : nullptr;
     }
 };
 
-typedef smart_json_ptr<      json_t>       json_ptr;
-typedef smart_json_ptr<const json_t> const_json_ptr;
+typedef shared_json_ptr<      json_t>       json_ptr;
+typedef shared_json_ptr<const json_t> const_json_ptr;
 
-template <class J> smart_json_ptr<J> make_json_ptr(J *j) { return smart_json_ptr<J>(j); }
-template <class J> smart_json_ptr<J> take_json_ptr(J *j) { return smart_json_ptr<J>(j, json_take); }
+template <class J> shared_json_ptr<J> make_json_ptr(J *j) { return shared_json_ptr<J>(j); }
+template <class J> shared_json_ptr<J> take_json_ptr(J *j) { return shared_json_ptr<J>(j, json_take); }
 
 std::ostream & operator << (std::ostream &o, const json_t *j);
 inline std::ostream & operator << (std::ostream &o,       json_ptr jp) { return o << jp.get(); }
