@@ -13,6 +13,8 @@
 
 namespace ten {
 
+using namespace std::chrono;
+
 //! simple http server
 class http_server : public netsock_server {
 public:
@@ -20,7 +22,7 @@ public:
     struct request {
         request(http_request &req_, netsock &sock_)
             : req(req_), resp(404), sock(sock_),
-            start(std::chrono::monotonic_clock::now()),
+            start(monotonic_clock::now()),
             resp_sent(false) {}
 
         //! compose a uri from the request uri
@@ -55,7 +57,7 @@ public:
             if (resp.get("Date").empty()) {
                 char buf[128];
                 struct tm tm;
-                time_t now = std::chrono::system_clock::to_time_t(procnow());
+                time_t now = system_clock::to_time_t(procnow());
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
                 resp.set("Date", buf);
             }
@@ -118,7 +120,7 @@ public:
         http_request &req;
         http_response resp;
         netsock &sock;
-        std::chrono::high_resolution_clock::time_point start;
+        high_resolution_clock::time_point start;
         bool resp_sent;
     };
 
