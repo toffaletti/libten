@@ -27,6 +27,9 @@ ostream & operator << (ostream &o, const json_t *j) {
 void json::load(const string &s, unsigned flags) {
     load(s.data(), s.size(), flags);
 }
+void json::load(const char *s, unsigned flags) {
+    load(s, strlen(s), flags);
+}
 void json::load(const char *s, size_t len, unsigned flags) {
     json_error_t err;
     json_ptr p(json_loadb(s, len, flags, &err), json_take);
