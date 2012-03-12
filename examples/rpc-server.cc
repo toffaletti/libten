@@ -33,9 +33,10 @@ static int subtract2(int a, int b) {
 
 static void startup() {
     rpc_server rpc;
-    rpc.add_command("add2", thunk<int, int, int>(add2));
-    rpc.add_command("subtract2", thunk<int, int, int>(subtract2));
-    rpc.add_command("fail", thunk<int>(fail));
+    rpc.add_command("add2", add2);
+    rpc.add_command("add2", add2);
+    rpc.add_command("subtract2", subtract2);
+    rpc.add_command("fail", fail);
     taskspawn(client_task);
     rpc.serve("0.0.0.0", 5500);
 }

@@ -11,6 +11,10 @@ struct io_scheduler;
 
 extern __thread proc *_this_proc;
 
+// TODO: api to register at-proc-exit cleanup functions
+// this can be used to free io_scheduler, or other per-proc
+// resources like dns resolving threads, etc.
+
 struct proc {
     io_scheduler *_sched;
     std::thread *thread;

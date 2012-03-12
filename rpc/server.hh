@@ -22,10 +22,9 @@ public:
     {
     }
 
-    void add_command(const std::string &cmd,
-            const callback_type &callback)
+    template <typename FuncT> void add_command(const std::string &cmd, FuncT f)
     {
-        _cmds[cmd] = callback;
+        _cmds[cmd] = thunk(f);
     }
 
     std::string welcome;

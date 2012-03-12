@@ -1,5 +1,5 @@
-#ifndef UB_SEMA_HH
-#define UB_SEMA_HH
+#ifndef SEMA_HH
+#define SEMA_HH
 
 #include "error.hh"
 #include <boost/utility.hpp>
@@ -37,4 +37,4 @@ protected:
 
 } // end namespace ten
 
-#endif // UB_SEMA_HH
+#endif // SEMA_HH
