@@ -5,6 +5,9 @@
 #include "json.hh"
 #include "logging.hh"
 
+// http://code.google.com/webtoolkit/speedtracer/data-dump-format.html
+// http://code.google.com/p/google-web-toolkit/source/browse/trunk/dev/core/src/com/google/gwt/dev/util/log/speedtracer/SpeedTracerLogger.java
+
 namespace ten {
 using std::ostream;
 using std::move;
@@ -115,39 +118,42 @@ struct event : record {
     }
 };
 
-//! stack based timer for event record
-struct timer {
-    record &r;
-
-    timer(record &r_) : r(r_) {}
-    void stop() { r.finish(); }
-    ~timer() { stop(); }
-};
-
 struct tracer : event {
     uint64_t event_id;
+    std::deque<event *> call_stack;
+
     tracer(uint64_t id, string label) : event(id, label), event_id(0) {
+        call_stack.push_back(this);
     }
 
     uint64_t next_id() {
         return ++event_id;
     }
 
-    event &trace(
+    uint64_t trace_start(
         string label_,
         const char *file_,
         uint32_t line_,
         const char *method_
         )
     {
-        event::children.push_back(
+        event *parent = call_stack.back();
+        parent->children.push_back(
                 event(next_id(),
                     move(label_),
                     file_,
                     line_,
                     method_)
                 );
-        return event::children.back();
+        call_stack.push_back(&parent->children.back());
+        return parent->children.back().id;
+    }
+
+    void trace_end(uint64_t id) {
+        event *e = call_stack.back();
+        CHECK(e->id == id);
+        call_stack.pop_back();
+        e->finish();
     }
 
     json to_json() {
@@ -173,13 +179,35 @@ struct tracer : event {
             ch.apush(i->to_json());
         }
         trace.oset("children", ch);
-        return trace;
+
+        json root(json::object());
+        root.oset("trace", trace);
+        return root;
     }
 
     friend ostream &operator <<(ostream &o, const tracer &t) {
         using ::operator<<;
         o << t.label << " " << duration_cast<milliseconds>(t.duration()).count() << "ms\n" << t.children;
         return o;
+    }
+};
+
+struct trace {
+    tracer &tr;
+    uint64_t id;
+
+    trace(tracer &tr_,
+            string label_,
+            const char *file_,
+            uint32_t line_,
+            const char *method_
+         ) : tr(tr_), id(0)
+    {
+        id = tr.trace_start(label_, file_, line_, method_);
+    }
+
+    ~trace() {
+        tr.trace_end(id);
     }
 };
 
