@@ -130,11 +130,17 @@ struct tracer : event {
         return ++event_id;
     }
 
+    // TODO: allow concurrent traces:
+    // t1
+    // \-- t2
+    // \-------t3
+    // \-----t4
     uint64_t trace_start(
         string label_,
         const char *file_,
         uint32_t line_,
-        const char *method_
+        const char *method_,
+        bool next_level
         )
     {
         event *parent = call_stack.back();
@@ -145,15 +151,31 @@ struct tracer : event {
                     line_,
                     method_)
                 );
-        call_stack.push_back(&parent->children.back());
+        if (next_level) {
+            call_stack.push_back(&parent->children.back());
+        }
         return parent->children.back().id;
     }
 
     void trace_end(uint64_t id) {
         event *e = call_stack.back();
-        CHECK(e->id == id);
-        call_stack.pop_back();
-        e->finish();
+        if (e->id == id) {
+            // TODO: finish should check children
+            // to make sure they are all finished
+            e->finish();
+            call_stack.pop_back();
+            return;
+        } else {
+            // TODO: this would need to walk the call stack
+            // for more advanced concurrency models
+            for (auto i = e->children.begin(); i != e->children.end(); ++i) {
+                if (i->id == id) {
+                    i->finish();
+                    return;
+                }
+            }
+        }
+        LOG(FATAL) << "bad call stack";
     }
 
     json to_json() {
@@ -200,10 +222,11 @@ struct trace {
             string label_,
             const char *file_,
             uint32_t line_,
-            const char *method_
+            const char *method_,
+            bool next_level = true
          ) : tr(tr_), id(0)
     {
-        id = tr.trace_start(label_, file_, line_, method_);
+        id = tr.trace_start(label_, file_, line_, method_, next_level);
     }
 
     ~trace() {
