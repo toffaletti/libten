@@ -1,34 +1,34 @@
 cmake_minimum_required(VERSION 2.8)
 
 add_executable(test_descriptors test_descriptors.cc)
-target_link_libraries(test_descriptors ten boost_unit_test_framework)
+target_link_libraries(test_descriptors ten boost_unit_test_framework-mt)
 
 add_executable(test_task test_task.cc)
-target_link_libraries(test_task ten boost_unit_test_framework)
+target_link_libraries(test_task ten boost_unit_test_framework-mt)
 
 add_executable(test_channel test_channel.cc)
-target_link_libraries(test_channel ten boost_unit_test_framework)
+target_link_libraries(test_channel ten boost_unit_test_framework-mt)
 
 add_executable(test_ioproc test_ioproc.cc)
-target_link_libraries(test_ioproc ten boost_unit_test_framework)
+target_link_libraries(test_ioproc ten boost_unit_test_framework-mt)
 
 add_executable(test_backoff test_backoff.cc)
-target_link_libraries(test_backoff boost_unit_test_framework)
+target_link_libraries(test_backoff boost_unit_test_framework-mt)
 
 add_executable(test_zip test_zip.cc)
-target_link_libraries(test_zip ten boost_unit_test_framework)
+target_link_libraries(test_zip ten boost_unit_test_framework-mt)
 
 add_executable(test_json test_json.cc)
-target_link_libraries(test_json ten jansson boost_unit_test_framework)
+target_link_libraries(test_json ten jansson boost_unit_test_framework-mt)
 
 add_executable(test_buffer test_buffer.cc)
-target_link_libraries(test_buffer ten boost_unit_test_framework)
+target_link_libraries(test_buffer ten boost_unit_test_framework-mt)
 
 add_executable(test_qutex test_qutex.cc)
-target_link_libraries(test_qutex ten boost_unit_test_framework)
+target_link_libraries(test_qutex ten boost_unit_test_framework-mt)
 
 add_executable(test_net test_net.cc)
-target_link_libraries(test_net ten boost_unit_test_framework)
+target_link_libraries(test_net ten boost_unit_test_framework-mt)
 
 add_test(test_descriptors test_descriptors --random)
 add_test(test_task test_task --random)

@@ -29,7 +29,7 @@ add_executable(http-proxy EXCLUDE_FROM_ALL http-proxy.cc)
 target_link_libraries(http-proxy ten http uri)
 
 add_executable(http-server EXCLUDE_FROM_ALL http-server.cc)
-target_link_libraries(http-server ten http uri boost_program_options)
+target_link_libraries(http-server ten http uri boost_program_options-mt)
 
 add_executable(msg-pack EXCLUDE_FROM_ALL msgpack.cc)
 target_link_libraries(msg-pack ten msgpack)
@@ -38,7 +38,7 @@ add_executable(rpc-server EXCLUDE_FROM_ALL rpc-server.cc)
 target_link_libraries(rpc-server ten msgpack)
 
 add_executable(json-path EXCLUDE_FROM_ALL json-path.cc)
-target_link_libraries(json-path ten jansson boost_program_options)
+target_link_libraries(json-path ten jansson boost_program_options-mt)
 
 # optional
 add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
