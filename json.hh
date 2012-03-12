@@ -32,9 +32,11 @@ public:
     ~shared_json_ptr()                         { json_decref(p); }
 
     // construction and assignment - make the compiler work for a living
-    template <class J2> shared_json_ptr(const shared_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
-    template <class J2> shared_json_ptr(      shared_json_ptr<J2> &&jp) : p(jp.release())          {}
-    template <class J2> shared_json_ptr & operator = (const shared_json_ptr<J2>  &jp) { reset(jp.ptr());    return *this; }
+                        shared_json_ptr(              const shared_json_ptr      &jp) : p(json_incref(jp.get())) {}
+    template <class J2> shared_json_ptr(              const shared_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
+    template <class J2> shared_json_ptr(                    shared_json_ptr<J2> &&jp) : p(jp.release())          {}
+                        shared_json_ptr & operator = (const shared_json_ptr      &jp) { reset(jp.get());    return *this; }
+    template <class J2> shared_json_ptr & operator = (const shared_json_ptr<J2>  &jp) { reset(jp.get());    return *this; }
     template <class J2> shared_json_ptr & operator = (      shared_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
 
     // object interface
