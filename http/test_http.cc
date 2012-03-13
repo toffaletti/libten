@@ -30,10 +30,10 @@ BOOST_AUTO_TEST_CASE(http_request_parser_init_test) {
 
 BOOST_AUTO_TEST_CASE(http_request_make1) {
     http_request req("GET", "/test/this?thing=1&stuff=2&fun&good");
-    req.append("user-agent",
+    req.append("User-Agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
-    req.append("host", "localhost:8080");
-    req.append("accept", "*/*");
+    req.append("Host", "localhost:8080");
+    req.append("Accept", "*/*");
 
     static const char *sdata =
     "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
@@ -380,8 +380,8 @@ BOOST_AUTO_TEST_CASE(http_response_constructor) {
 
 BOOST_AUTO_TEST_CASE(http_response_data) {
     http_response resp(200);
-    resp.append("host", "localhost");
-    resp.append("content-length", "0");
+    resp.append("Host", "localhost");
+    resp.append("Content-Length", "0");
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
@@ -400,7 +400,7 @@ BOOST_AUTO_TEST_CASE(http_response_data) {
 BOOST_AUTO_TEST_CASE(http_response_body) {
     http_response resp(200);
 
-    resp.append("host", "localhost");
+    resp.append("Host", "localhost");
 
     static const char *body = "this is a test.\r\nthis is only a test.";
 

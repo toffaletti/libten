@@ -2,6 +2,7 @@
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>
+#include <boost/algorithm/string.hpp>
 
 namespace ten {
 
@@ -48,61 +49,32 @@ static std::unordered_map<uint16_t, std::string> http_status_codes = {
     { 505, "HTTP Version Not Supported" },
 };
 
-// normalize message header field names.
-static const std::string &normalize_header_name_inplace(std::string &field) {
-    bool first_letter = true;
-    for (std::string::iterator i = field.begin(); i!=field.end(); ++i) {
-        if (!first_letter) {
-            char c = tolower(*i);
-            if (c == '_') {
-                c = '-';
-                first_letter = true;
-            } else if (c == '-') {
-                first_letter = true;
-            }
-            *i = c;
-        } else {
-            *i = toupper(*i);
-            first_letter = false;
-        }
-    }
-    return field;
-}
-
-static std::string normalize_header_name(const std::string &field_in) {
-    std::string field(field_in);
-    return normalize_header_name_inplace(field);
-}
-
 struct is_header {
     const std::string &field;
-    is_header(const std::string &normal_field) : field(normal_field) {}
+    is_header(const std::string &field_) : field(field_) {}
 
     bool operator()(const std::pair<std::string, std::string> &header) {
-        return header.first == field;
+        return boost::iequals(header.first, field);
     }
 };
 
 void Headers::set(const std::string &field, const std::string &value) {
-    std::string normal_field = normalize_header_name(field);
     header_list::iterator i = std::find_if(headers.begin(),
-        headers.end(), is_header(normal_field));
+        headers.end(), is_header(field));
     if (i != headers.end()) {
         i->second = value;
     } else {
-        headers.push_back(std::make_pair(normal_field, value));
+        headers.push_back(std::make_pair(field, value));
     }
 }
 
 void Headers::append(const std::string &field, const std::string &value) {
-    std::string normal_field = normalize_header_name(field);
-    headers.push_back(std::make_pair(normal_field, value));
+    headers.push_back(std::make_pair(field, value));
 }
 
 bool Headers::remove(const std::string &field) {
-    std::string normal_field = normalize_header_name(field);
     header_list::iterator i = std::remove_if(headers.begin(),
-        headers.end(), is_header(normal_field));
+        headers.end(), is_header(field));
     if (i != headers.end()) {
         headers.erase(i, headers.end()); // remove *all*
         return true;
@@ -112,17 +84,11 @@ bool Headers::remove(const std::string &field) {
 
 std::string Headers::get(const std::string &field) const {
     header_list::const_iterator i = std::find_if(headers.begin(),
-        headers.end(), is_header(normalize_header_name(field)));
+        headers.end(), is_header(field));
     if (i != headers.end()) {
         return i->second;
     }
     return std::string();
-}
-
-void http_base::normalize() {
-    for (header_list::iterator i=headers.begin(); i!=headers.end(); ++i) {
-        normalize_header_name_inplace(i->first);
-    }
 }
 
 static int _on_header_field(http_parser *p, const char *at, size_t length) {
@@ -163,7 +129,6 @@ static int _request_on_url(http_parser *p, const char *at, size_t length) {
 
 static int _request_on_headers_complete(http_parser *p) {
     http_request *m = reinterpret_cast<http_request*>(p->data);
-    m->normalize();
     m->method = http_method_str((http_method)p->method);
     std::stringstream ss;
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
@@ -216,7 +181,6 @@ std::string http_request::data() const {
 
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
-    m->normalize();
     m->status_code = p->status_code;
     std::stringstream ss;
     ss << "HTTP/" << p->http_major << "." << p->http_minor;

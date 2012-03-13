@@ -82,8 +82,6 @@ struct http_base : Headers {
     explicit http_base(Headers headers_ = Headers()) :
         Headers(move(headers_)), complete(false), body_length(0) {}
 
-    void normalize();
-
     void set_body(const string &body_,
             const string &content_type="")
     {
