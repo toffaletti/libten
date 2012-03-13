@@ -69,8 +69,9 @@ public:
             if (req.http_version == "HTTP/1.0" && req.get("Connection").empty()) {
                 resp.set("Connection", "close");
             }
+
             data = resp.data();
-            if (!resp.body.empty()) {
+            if (!resp.body.empty() && req.method != "HEAD") {
                 data += resp.body;
             }
             ssize_t nw = sock.send(data.data(), data.size());
