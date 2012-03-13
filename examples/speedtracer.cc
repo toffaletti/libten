@@ -85,7 +85,7 @@ static void http_root(shared_ptr<state> st, http_server::request &h) {
 static void http_trace(shared_ptr<state> st, http_server::request &h) {
     if (st->tsess) {
         h.resp = http_response(200);
-        h.resp.set_body(st->tsess->to_json().dump());
+        h.resp.set_body(st->tsess->dump());
     } else {
         h.resp = http_response(404);
     }

@@ -35,7 +35,7 @@ struct session {
 
     session() : start(clock::now()) {}
 
-    json to_json() const;
+    string dump() const;
 };
 
 struct event {
@@ -48,6 +48,7 @@ struct event {
     event(shared_ptr<session> s_, int32_t type_=-2)
         : s(s_), type(type_), start(clock::now()), data(json::object())
     {
+        data.oset("message", "this is a log message");
     }
 
     //! milliseconds since start of session
@@ -58,19 +59,25 @@ struct event {
     json to_json() const {
         json e(json::object());
         e.oset("type", (json_int_t)type);
+        e.oset("typeName", "event");
         e.oset("time", (json_int_t)time().count());
+        e.oset("duration", 10);
         e.oset("data", data);
+        e.oset("color", "Crimson");
+        //e.oset("sequence", 0);
         return e;
     }
 };
 
 
-json session::to_json() const {
+string session::dump() const {
+    stringstream ss;
     json a(json::array());
     for (auto i=children.begin(); i!=children.end(); ++i) {
-        a.apush(i->to_json());
+        ss << i->to_json() << "\n";
+        break;
     }
-    return a;
+    return ss.str();
 }
 
 } // end namespace tracer
