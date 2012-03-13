@@ -40,6 +40,9 @@ target_link_libraries(rpc-server ten msgpack)
 add_executable(json-path EXCLUDE_FROM_ALL json-path.cc)
 target_link_libraries(json-path ten jansson boost_program_options-mt)
 
+add_executable(speedtracer EXCLUDE_FROM_ALL speedtracer.cc)
+target_link_libraries(speedtracer ten http uri jansson boost_program_options-mt)
+
 # optional
 add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
 target_link_libraries(https-get ten http uri ssl)
@@ -57,4 +60,5 @@ add_custom_target(examples DEPENDS
     msg-pack
     rpc-server
     json-path
+    speedtracer
     )
