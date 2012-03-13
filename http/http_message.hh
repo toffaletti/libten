@@ -25,17 +25,17 @@ struct Headers {
     Headers() {}
 
     template <typename ValueT, typename ...Args>
-    Headers(const std::string &header_name, const ValueT &header_value, Args ...args) {
+    Headers(std::string header_name, ValueT header_value, Args ...args) {
         headers.reserve(std::max(HEADER_RESERVE, sizeof...(args)));
-        init(header_name, header_value, args...);
+        init(std::move(header_name), std::move(header_value), std::move(args)...);
     }
 
     // init can go away with delegating constructor support
     void init() {}
     template <typename ValueT, typename ...Args>
-    void init(const std::string &header_name, const ValueT &header_value, Args ...args) {
-        append<ValueT>(header_name, header_value);
-        init(args...);
+    void init(std::string header_name, ValueT header_value, Args ...args) {
+        append<ValueT>(std::move(header_name), std::move(header_value));
+        init(std::move(args)...);
     }
 
     void set(const std::string &field, const std::string &value);
@@ -73,8 +73,8 @@ struct http_base : Headers {
     std::string body;
     size_t body_length;
 
-    explicit http_base(const Headers &headers_ = Headers()) :
-        Headers(headers_), complete(false), body_length(0) {}
+    explicit http_base(Headers headers_ = Headers()) :
+        Headers(std::move(headers_)), complete(false), body_length(0) {}
 
     void normalize();
 
@@ -97,12 +97,12 @@ struct http_request : http_base {
     std::string http_version;
 
     http_request() : http_base() {}
-    http_request(const std::string &method_,
-        const std::string &uri_,
-        const Headers &headers_ = Headers(),
-        const std::string &http_version_ = "HTTP/1.1")
-        : http_base(headers_),
-        method(method_), uri(uri_), http_version(http_version_) {}
+    http_request(std::string method_,
+        std::string uri_,
+        Headers headers_ = Headers(),
+        std::string http_version_ = "HTTP/1.1")
+        : http_base(std::move(headers_)),
+        method(std::move(method_)), uri(std::move(uri_)), http_version(std::move(http_version_)) {}
 
     void clear() {
         headers.clear();
@@ -137,11 +137,11 @@ struct http_response : http_base {
     http_response(http_request *req_) : http_base(), req(req_) {}
 
     http_response(unsigned long status_code_ = 200,
-        const Headers &headers_ = Headers(),
-        const std::string &http_version_ = "HTTP/1.1")
-        : http_base(headers_),
-        http_version(http_version_),
-        status_code(status_code_),
+        Headers headers_ = Headers(),
+        std::string http_version_ = "HTTP/1.1")
+        : http_base(std::move(headers_)),
+        http_version(std::move(http_version_)),
+        status_code(std::move(status_code_)),
         req(NULL)
     {
     }
