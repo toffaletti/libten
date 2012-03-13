@@ -7,7 +7,17 @@
 
 namespace ten {
 
-static std::atomic<uint64_t> taskidgen(0);
+using std::function;
+using std::atomic;
+using std::stringstream;
+using std::mutex;
+using std::timed_mutex;
+using std::unique_lock;
+using std::unique_ptr;
+using std::rethrow_exception;
+using std::try_to_lock;
+
+static atomic<uint64_t> taskidgen(0);
 
 void tasksleep(uint64_t ms) {
     _this_proc->sched().sleep(milliseconds(ms));
@@ -21,7 +31,7 @@ int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
     return _this_proc->sched().poll(fds, nfds, ms);
 }
 
-uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
+uint64_t taskspawn(const function<void ()> &f, size_t stacksize) {
     task *t = _this_proc->newtaskinproc(f, stacksize);
     t->ready();
     return t->id;
@@ -92,8 +102,8 @@ const char *taskstate(const char *fmt, ...)
     return t->state;
 }
 
-std::string taskdump() {
-    std::stringstream ss;
+string taskdump() {
+    stringstream ss;
     proc *p = _this_proc;
     CHECK(p) << "BUG: taskdump called in null proc";
     task *t = 0;
@@ -105,19 +115,19 @@ std::string taskdump() {
 }
 
 void taskdumpf(FILE *of) {
-    std::string dump = taskdump();
+    string dump = taskdump();
     fwrite(dump.c_str(), sizeof(char), dump.size(), of);
     fflush(of);
 }
 
-task::task(const std::function<void ()> &f, size_t stacksize)
+task::task(const function<void ()> &f, size_t stacksize)
     : co(task::start, this, stacksize)
 {
     clear();
     fn = f;
 }
 
-void task::init(const std::function<void ()> &f) {
+void task::init(const function<void ()> &f) {
     fn = f;
     co.restart(task::start, this);
 }
@@ -125,8 +135,8 @@ void task::init(const std::function<void ()> &f) {
 void task::ready() {
     if (exiting) return;
     proc *p = cproc;
-    std::unique_lock<std::mutex> lk(p->mutex);
-    if (std::find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
+    unique_lock<mutex> lk(p->mutex);
+    if (find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
         DVLOG(5) << _this_proc->ctask << " adding task: " << this << " to runqueue for proc: " << p;
         p->runqueue.push_back(this);
     } else {
@@ -169,7 +179,7 @@ void task::clear(bool newid) {
 }
 
 void task::remove_timeout(timeout_t *to) {
-    auto i = std::find(timeouts.begin(), timeouts.end(), to);
+    auto i = find(timeouts.begin(), timeouts.end(), to);
     if (i != timeouts.end()) {
         delete *i;
         timeouts.erase(i);
@@ -193,7 +203,7 @@ void task::swap() {
     while (!timeouts.empty()) {
         timeout_t *to = timeouts.front();
         if (to->when <= procnow()) {
-            std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
+            unique_ptr<timeout_t> tmp(to); // ensure to is freed
             DVLOG(5) << to << " reached for " << this << " removing.";
             timeouts.pop_front();
             if (timeouts.empty()) {
@@ -201,7 +211,7 @@ void task::swap() {
                 cproc->sched().remove_timeout_task(this);
             }
             if (tmp->exception != 0) {
-                std::rethrow_exception(tmp->exception);
+                rethrow_exception(tmp->exception);
             }
         } else {
             break;
@@ -213,7 +223,7 @@ void qutex::lock() {
     task *t = _this_proc->ctask;
     CHECK(t) << "BUG: qutex::lock called outside of task";
     {
-        std::unique_lock<std::timed_mutex> lk(m);
+        unique_lock<timed_mutex> lk(m);
         if (owner == 0 || owner == t) {
             owner = t;
             DVLOG(5) << "LOCK qutex: " << this << " owner: " << owner;
@@ -227,13 +237,13 @@ void qutex::lock() {
         // loop to handle spurious wakeups from other threads
         for (;;) {
             t->swap();
-            std::unique_lock<std::timed_mutex> lk(m);
+            unique_lock<timed_mutex> lk(m);
             if (owner == _this_proc->ctask) {
                 break;
             }
         }
     } catch (...) {
-        std::unique_lock<std::timed_mutex> lk(m);
+        unique_lock<timed_mutex> lk(m);
         internal_unlock(lk);
         throw;
     }
@@ -242,7 +252,7 @@ void qutex::lock() {
 bool qutex::try_lock() {
     task *t = _this_proc->ctask;
     CHECK(t) << "BUG: qutex::try_lock called outside of task";
-    std::unique_lock<std::timed_mutex> lk(m, std::try_to_lock);
+    unique_lock<timed_mutex> lk(m, try_to_lock);
     if (lk.owns_lock()) {
         if (owner == 0) {
             owner = t;
@@ -253,11 +263,11 @@ bool qutex::try_lock() {
 }
 
 void qutex::unlock() {
-    std::unique_lock<std::timed_mutex> lk(m);
+    unique_lock<timed_mutex> lk(m);
     internal_unlock(lk);
 }
 
-void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
+void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
     task *t = _this_proc->ctask;
     CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     if (t == owner) {
@@ -275,7 +285,7 @@ void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
     } else {
         // this branch is taken when exception is thrown inside
         // a task that is currently waiting inside qutex::lock
-        auto i = std::find(waiting.begin(), waiting.end(), t);
+        auto i = find(waiting.begin(), waiting.end(), t);
         if (i != waiting.end()) {
             waiting.erase(i);
         }
@@ -283,9 +293,9 @@ void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
 }
 
 #if 0
-bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
+bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
     task *t = _this_proc->ctask;
-    if (std::find(waiting.begin(), waiting.end(), t) == waiting.end()) {
+    if (find(waiting.begin(), waiting.end(), t) == waiting.end()) {
         DVLOG(5) << "RENDEZ SLEEP PUSH BACK: " << t;
         waiting.push_back(t);
     }
@@ -295,16 +305,16 @@ bool rendez::sleep_for(std::unique_lock<qutex> &lk, unsigned int ms) {
     lk.lock();
     _this_proc->sched().del_timeout(t);
     // if we're not in the waiting list then we were signaled to wakeup
-    return std::find(waiting.begin(), waiting.end(), t) == waiting.end();
+    return find(waiting.begin(), waiting.end(), t) == waiting.end();
 }
 #endif
 
-void rendez::sleep(std::unique_lock<qutex> &lk) {
+void rendez::sleep(unique_lock<qutex> &lk) {
     task *t = _this_proc->ctask;
 
     {
-        std::unique_lock<std::timed_mutex> ll(m);
-        CHECK(std::find(waiting.begin(), waiting.end(), t) == waiting.end())
+        unique_lock<timed_mutex> ll(m);
+        CHECK(find(waiting.begin(), waiting.end(), t) == waiting.end())
             << "BUG: " << t << " already waiting on rendez " << this;
         DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
         waiting.push_back(t);
@@ -317,8 +327,8 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
         t->swap(); 
         lk.lock();
     } catch (...) {
-        std::unique_lock<std::timed_mutex> ll(m);
-        auto i = std::find(waiting.begin(), waiting.end(), t);
+        unique_lock<timed_mutex> ll(m);
+        auto i = find(waiting.begin(), waiting.end(), t);
         if (i != waiting.end()) {
             waiting.erase(i);
         }
@@ -328,7 +338,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
 }
 
 void rendez::wakeup() {
-    std::unique_lock<std::timed_mutex> lk(m);
+    unique_lock<timed_mutex> lk(m);
     if (!waiting.empty()) {
         task *t = waiting.front();
         waiting.pop_front();
@@ -338,7 +348,7 @@ void rendez::wakeup() {
 }
 
 void rendez::wakeupall() {
-    std::unique_lock<std::timed_mutex> lk(m);
+    unique_lock<timed_mutex> lk(m);
     while (!waiting.empty()) {
         task *t = waiting.front();
         waiting.pop_front();
@@ -350,7 +360,7 @@ void rendez::wakeupall() {
 
 rendez::~rendez() {
     using ::operator<<;
-    std::unique_lock<std::timed_mutex> lk(m);
+    unique_lock<timed_mutex> lk(m);
     CHECK(waiting.empty()) << "BUG: still waiting: " << waiting;
 }
 
