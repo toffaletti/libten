@@ -1,13 +1,83 @@
 #include "json.hh"
-#include <list>
-#include <vector>
-#include <boost/lexical_cast.hpp>
-
+#include "error.hh"
 #include "logging.hh"
+#include <boost/lexical_cast.hpp>
+#include <sstream>
+#include <deque>
 
 namespace ten {
+using namespace std;
 
-static bool next_token(const std::string &path, size_t &i, std::string &tok) {
+
+extern "C" {
+    static int ostream_json_dump_callback(const char *buffer, size_t size, void *osptr) {
+        ostream *o = (ostream *)osptr;
+        o->write(buffer, size);
+        return 0;
+    }
+}
+
+ostream & operator << (ostream &o, const json_t *j) {
+    if (j)
+        json_dump_callback(j, ostream_json_dump_callback, &o, JSON_ENCODE_ANY);
+    return o;
+}
+
+
+void json::load(const string &s, unsigned flags) {
+    load(s.data(), s.size(), flags);
+}
+void json::load(const char *s, unsigned flags) {
+    load(s, strlen(s), flags);
+}
+void json::load(const char *s, size_t len, unsigned flags) {
+    json_error_t err;
+    json_ptr p(json_loadb(s, len, flags, &err), json_take);
+    if (!p)
+        throw errorx("%s", err.text);
+    _p = move(p);
+}
+
+string json::dump(unsigned flags) {
+    ostringstream ss;
+    ss << _p;
+    return ss.str();
+}
+
+// simple visit of all objects
+
+void json::visit(const json::visitor_func_t &visitor) {
+    if (is_object()) {
+        for (auto kv : obj()) {
+            if (!visitor(get(), kv.first, kv.second.get()))
+                return;
+            json(kv.second).visit(visitor);
+        }
+    }
+    else if (is_array()) {
+        for (auto j : arr()) {
+            json(j).visit(visitor);
+        }
+    }
+}
+
+// for debugging
+static ostream & operator << (ostream &o, const vector<string> &v) {
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) o << " ";
+        o << v[i];
+    }
+    return o;
+}
+
+static void add_result(json &result, json r) {
+    if (r.is_array())
+        result.aconcat(r);
+    else
+        result.apush(r);
+}
+
+static bool next_path_token(const string &path, size_t &i, string &tok) {
     size_t start = i;
     bool inquotes = false;
     while (i < path.size()) {
@@ -34,178 +104,134 @@ static bool next_token(const std::string &path, size_t &i, std::string &tok) {
     }
 done:
     if (start == i) ++i;
-    tok.assign(path.substr(start, i-start));
+    tok.assign(path.substr(start, i - start));
     VLOG(5) << "tok: " << tok;
     return !tok.empty();
 }
 
-static void add_result(jsobj &result, json_t *r) {
-    if (json_is_array(r)) {
-        json_array_extend(result.ptr(), r);
-    } else {
-        json_array_append(result.ptr(), r);
+static void recursive_elements(json root, json &result, const string &match) {
+    if (root.is_object()) {
+        for (auto kv : root.obj()) {
+            if (kv.first == match)
+                add_result(result, kv.second);
+            recursive_elements(json(kv.second), result, match);
+        }
+    }
+    else if (root.is_array()) {
+        for (auto el : root.arr())
+            recursive_elements(el, result, match);
     }
 }
 
-static void recursive_descent(json_t *root, jsobj &result, const std::string &match) {
-    if (json_is_object(root)) {
-        void *iter = json_object_iter(root);
-        while (iter) {
-            if (strcmp(json_object_iter_key(iter), match.c_str()) == 0) {
-                add_result(result, json_object_iter_value(iter));
-            }
-            recursive_descent(json_object_iter_value(iter), result, match);
-            iter = json_object_iter_next(root, iter);
-        }
-    } else if (json_is_array(root)) {
-        for (size_t i=0; i<json_array_size(root); ++i) {
-            recursive_descent(json_array_get(root, i), result, match);
-        }
-    }
-}
-
-static void match_node(json_t *root, jsobj &result, const std::string &match) {
-    if (json_is_object(root)) {
+static void match_node(json root, json &result, const string &match) {
+    if (root.is_object()) {
         if (match == "*") {
-            // match all
-            void *iter = json_object_iter(root);
-            while (iter) {
-                add_result(result, json_object_iter_value(iter));
-                iter = json_object_iter_next(root, iter);
-            }
-        } else {
-            add_result(result, json_object_get(root, match.c_str()));
+            for (auto kv : root.obj())
+                add_result(result, kv.second);
         }
-    } else if (json_is_array(root)) {
-        for (size_t i=0; i<json_array_size(root); ++i) {
-            json_t *r = json_array_get(root, i);
+        else {
+            add_result(result, root[match]);
+        }
+    }
+    else if (root.is_array()) {
+        for (auto r : root.arr())
             match_node(r, result, match);
-        }
     }
 }
 
-static void select_node(jsobj &result, std::list<std::string> &tokens) {
+static void select_node(json &result, deque<string> &tokens) {
     tokens.pop_front(); // remove '/'
     if (tokens.front() == "/") {
         // recursive decent!
         tokens.pop_front();
-        std::string match = tokens.front();
+        string match = tokens.front();
         tokens.pop_front();
-        jsobj tmp(json_array());
-        recursive_descent(result.ptr(), tmp, match);
+        json tmp(json::array());
+        recursive_elements(result, tmp, match);
         result = tmp;
     } else {
-        std::string match = tokens.front();
+        string match = tokens.front();
         if (match == "[") return;
         tokens.pop_front();
-        jsobj tmp(json_array());
-        match_node(result.ptr(), tmp, match);
-        if (json_array_size(tmp.ptr()) == 1) {
-            result = json_incref(json_array_get(tmp.ptr(), 0));
-        } else {
-            result = tmp;
-        }
+        json tmp(json::array());
+        match_node(result, tmp, match);
+        result = (tmp.asize() == 1) ? tmp(0) : tmp;
     }
 }
 
-static void slice_op(jsobj &result, std::list<std::string> &tokens) {
+static void slice_op(json &result, deque<string> &tokens) {
     tokens.pop_front();
-    std::vector<std::string> args;
+    vector<string> args;
     while (!tokens.empty() && tokens.front() != "]") {
         args.push_back(tokens.front());
         tokens.pop_front();
     }
-    if (tokens.empty()) {
+    if (tokens.empty())
         throw errorx("path query missing ]");
-    }
     tokens.pop_front(); // pop ']'
 
-    using ::operator<<;
     DVLOG(5) << "args: " << args;
     if (args.size() == 1) {
         try {
             size_t index = boost::lexical_cast<size_t>(args.front());
-            result = result[index];
+            result = result(index);
         } catch (boost::bad_lexical_cast &e) {
-            std::string key = args.front();
-            jsobj tmp(json_array());
-            for (size_t i=0; i<result.size(); ++i) {
-                if (result[i][key].ptr()) {
-                    add_result(tmp, result[i].ptr());
-                }
+            string key = args.front();
+            auto tmp(json::array());
+            for (auto r : result.arr()) {
+                if (r[key])
+                    add_result(tmp, r);
             }
             result = tmp;
         }
     } else if (args.size() == 3) {
-        std::string op = args[1];
+        string op = args[1];
         if (op == ":") {
             ssize_t start = boost::lexical_cast<ssize_t>(args[0]);
             ssize_t end = boost::lexical_cast<ssize_t>(args[2]);
-        } else if (op == "=") {
-            std::string key = args[0];
-            jsobj filter(args[2]);
+        }
+        else if (op == "=") {
+            string key = args[0];
+            json filter(args[2]);
             DVLOG(5) << "filter: " << filter;
-            jsobj tmp(json_array());
-            for (size_t i=0; i<result.size(); ++i) {
-                if (result[i][key] == filter) {
-                    add_result(tmp, result[i].ptr());
-                }
+            json tmp(json::array());
+            for (auto r : result.arr()) {
+                if (r[key] == filter)
+                    add_result(tmp, r);
             }
             result = tmp;
         }
     }
 }
 
-static void visit_all(json_t *root, const jsobj::visitor_func_t &visitor) {
-    if (json_is_object(root)) {
-        void *iter = json_object_iter(root);
-        while (iter) {
-            if (!visitor(root, json_object_iter_key(iter), json_object_iter_value(iter))) {
-                return;
-            }
-            visit_all(json_object_iter_value(iter), visitor);
-            iter = json_object_iter_next(root, iter);
-        }
-    } else if (json_is_array(root)) {
-        for (size_t i=0; i<json_array_size(root); ++i) {
-            visit_all(json_array_get(root, i), visitor);
-        }
-    }
-}
-
-void jsobj::visit(const visitor_func_t &visitor) {
-    visit_all(p.get(), visitor);
-}
-
-jsobj jsobj::path(const std::string &path) {
+json json::path(const string &path) {
     size_t i = 0;
-    std::string tok;
-    std::list<std::string> tokens;
-    while (next_token(path, i, tok)) {
+    string tok;
+    deque<string> tokens;
+    while (next_path_token(path, i, tok))
         tokens.push_back(tok);
-    }
 
-    jsobj result = *this;
+    json result = *this;
     while (!tokens.empty()) {
         if (tokens.front() == "/") {
             // select current node
             select_node(result, tokens);
-        } else if (tokens.front() == "*") {
+        }
+        else if (tokens.front() == "*") {
             tokens.pop_front();
-            if (json_is_object(result.ptr())) {
-                json_t *tmp = json_array();
-                void *iter = json_object_iter(result.ptr());
-                while (iter) {
-                    json_array_append(tmp, json_object_iter_value(iter));
-                    iter = json_object_iter_next(result.ptr(), iter);
-                }
+            if (result.is_object()) {
+                auto tmp(json::array());
+                for (auto kv : result.obj())
+                    tmp.apush(kv.second);
                 result = tmp;
             }
-        } else if (tokens.front() == "[") {
+        }
+        else if (tokens.front() == "[") {
             slice_op(result, tokens);
         }
     }
     return result;
 }
 
-} // end namespace ten
+    
+} // TS
