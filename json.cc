@@ -5,6 +5,10 @@
 #include <sstream>
 #include <deque>
 
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
+# define CXX11
+#endif
+
 namespace ten {
 using namespace std;
 
@@ -41,7 +45,7 @@ string json::dump(unsigned flags) {
 
 // simple visit of all objects
 
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ > 4))
+#ifdef CXX11
 void json::visit(const json::visitor_func_t &visitor) {
     if (is_object()) {
         for (auto kv : obj()) {
@@ -67,7 +71,7 @@ void json::visit(const json::visitor_func_t &visitor) {
     }
     else if (is_array()) {
         for (auto j = arr().begin(); j != arr().end(); ++j) {
-            json(*j).visit(visitor);
+            (*j).visit(visitor);
         }
     }
 }
@@ -121,7 +125,7 @@ done:
     return !tok.empty();
 }
 
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ > 4))
+#ifdef CXX11
 static void recursive_elements(json root, json &result, const string &match) {
     if (root.is_object()) {
         for (auto kv : root.obj()) {
@@ -205,7 +209,7 @@ static void select_node(json &result, deque<string> &tokens) {
     }
 }
 
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ > 4))
+#ifdef CXX11
 static void slice_op(json &result, deque<string> &tokens) {
     tokens.pop_front();
     vector<string> args;
@@ -239,7 +243,7 @@ static void slice_op(json &result, deque<string> &tokens) {
         }
         else if (op == "=") {
             string key = args[0];
-            json filter(args[2]);
+            json filter(json::load(args[2]));
             DVLOG(5) << "filter: " << filter;
             json tmp(json::array());
             for (auto r : result.arr()) {
@@ -314,7 +318,7 @@ static void slice_op(json &result, deque<string> &tokens) {
         }
         else if (op == "=") {
             string key = args[0];
-            json filter(args[2]);
+            json filter(json::load(args[2]));
             DVLOG(5) << "filter: " << filter;
             json tmp(json::array());
             for (auto r = result.arr().begin(); r != result.arr().end(); ++r) {
