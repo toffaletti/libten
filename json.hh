@@ -25,9 +25,11 @@ enum json_take_t { json_take };
 
 template <class J> class shared_json_ptr {
 private:
+    J *p;
+
     typedef void (shared_json_ptr::*unspecified_bool_type)() const;
     void true_value() const {}
-    J *p;
+
 public:
     // ctor, dtor, assign
     shared_json_ptr()                          : p() {}
@@ -80,29 +82,33 @@ class json {
     void true_value() const {}
 
   public:
-    // construction and access by json_t*
+    // construction and assignment,
+    //   including a selection of conversions from basic types
 
     json()                                     : _p()             {}
     json(const json  &js)                      : _p(js._p)        {}
     json(      json &&js)                      : _p(move(js._p))  {}
-    template <class J>
-      json(const shared_json_ptr<J>  &p)       : _p(p)            {}
-    template <class J>
-      json(      shared_json_ptr<J> &&p)       : _p(p)            {}
+    json(const json_ptr  &p)                   : _p(p)            {}
+    json(      json_ptr &&p)                   : _p(p)            {}
     explicit json(json_t *j)                   : _p(j)            {}
              json(json_t *j, json_take_t)      : _p(j, json_take) {}
     json & operator = (const json  &js)        { _p = js._p;       return *this; }
     json & operator = (      json &&js)        { _p = move(js._p); return *this; }
-    json(const string &s, unsigned flags = JSON_DECODE_ANY)  { load(s, flags); }
-    json(const char *s, unsigned flags = JSON_DECODE_ANY)    { load(s, strlen(s), flags); }
-    json(const char *s, size_t len, unsigned flags)          { load(s, len, flags); }
+
+    json(const char *s)                        : _p(json_string(s),                 json_take) {}
+    json(const string &s)                      : _p(json_string(s.c_str()),         json_take) {}
+    json(json_int_t i)                         : _p(json_integer(i),                json_take) {}
+    json(int i)                                : _p(json_integer(i),                json_take) {}
+    json(double r)                             : _p(json_real(r),                   json_take) {}
+    json(float r)                              : _p(json_real(r),                   json_take) {}
+    json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
+
+    // manipulation via json_t*
 
     friend json take_json(json_t *j)           { return json(j, json_take); }
-
     void take(json_t *j)                       { _p.take(j); }
     void reset(json_t *j)                      { _p.reset(j); }
-    template <class J>
-      void reset(const shared_json_ptr<J> &j)  { _p = j; }
+    void reset(const json_ptr &p)              { _p = p; }
     json_t *get() const                        { return _p.get(); }
     json_t *release()                          { return _p.release(); }
     json_ptr get_shared() const                { return _p; }
@@ -118,9 +124,9 @@ class json {
 
     // parse and ouput
 
-    void load(const string &s, unsigned flags = JSON_DECODE_ANY);
-    void load(const char *s, unsigned flags = JSON_DECODE_ANY);
-    void load(const char *s, size_t len, unsigned flags);
+    static json load(const string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
+    static json load(const char *s, unsigned flags = JSON_DECODE_ANY)    { return load(s, strlen(s), flags); }
+    static json load(const char *s, size_t len, unsigned flags);
 
     string dump(unsigned flags = JSON_ENCODE_ANY);
 
