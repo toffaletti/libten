@@ -5,10 +5,6 @@
 #include <sstream>
 #include <deque>
 
-#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
-# define CXX11
-#endif
-
 namespace ten {
 using namespace std;
 
@@ -45,7 +41,7 @@ string json::dump(unsigned flags) {
 
 // simple visit of all objects
 
-#ifdef CXX11
+#ifdef TEN_JSON_CXX11
 void json::visit(const json::visitor_func_t &visitor) {
     if (is_object()) {
         for (auto kv : obj()) {
@@ -125,7 +121,7 @@ done:
     return !tok.empty();
 }
 
-#ifdef CXX11
+#ifdef TEN_JSON_CXX11
 static void recursive_elements(json root, json &result, const string &match) {
     if (root.is_object()) {
         for (auto kv : root.obj()) {
@@ -209,7 +205,7 @@ static void select_node(json &result, deque<string> &tokens) {
     }
 }
 
-#ifdef CXX11
+#ifdef TEN_JSON_CXX11
 static void slice_op(json &result, deque<string> &tokens) {
     tokens.pop_front();
     vector<string> args;

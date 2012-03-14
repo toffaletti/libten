@@ -10,10 +10,14 @@
 #include <algorithm>
 #include <functional>
 
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
+# define TEN_JSON_CXX11
+#endif
+
 namespace ten {
 using namespace std;
 
-#if (__GNUC__ <= 4 && (__GNUC_MINOR__ <= 4))
+#ifndef TEN_JSON_CXX11
 const intptr_t nullptr = 0;
 #endif
 
