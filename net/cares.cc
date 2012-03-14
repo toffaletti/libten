@@ -8,7 +8,6 @@
 #include "net.hh"
 #include "ioproc.hh"
 #include "logging.hh"
-//#include "address.hh"
 
 namespace ten {
 
@@ -54,13 +53,16 @@ static void pollfd_to_fd_sets(struct pollfd *fds, int nfds, fd_set *read_fds, fd
 }
 
 struct sock_info {
+    const char *addr;
     int fd;
+    int status;
     uint16_t port;
 };
 
 static void gethostbyname_callback(void *arg, int status, int timeouts, struct hostent *host) {
     sock_info *si = (sock_info *)arg;
     (void)timeouts; // the number of times the quest timed out during request
+    si->status = status;
     if (status != ARES_SUCCESS)
     {
         DVLOG(3) << "CARES: " << ares_strerror(status);
@@ -78,7 +80,7 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
 }
 
 int netdial(int fd, const char *addr, uint16_t port) {
-    sock_info si = {fd, port};
+    sock_info si = {addr, fd, ARES_SUCCESS, port};
     if (_need_init) {
         int status = ares_init(&_channel);
         if (status != ARES_SUCCESS) {
@@ -93,8 +95,7 @@ int netdial(int fd, const char *addr, uint16_t port) {
     fd_set read_fds, write_fds;
     struct timeval *tvp, tv;
     int max_fd, nfds;
-    for (;;)
-    {
+    while (si.status == ARES_SUCCESS) {
         FD_ZERO(&read_fds);
         FD_ZERO(&write_fds);
         max_fd = ares_fds(_channel, &read_fds, &write_fds);
@@ -113,7 +114,15 @@ int netdial(int fd, const char *addr, uint16_t port) {
         pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
         ares_process(_channel, &read_fds, &write_fds);
     }
-    return ARES_SUCCESS;
+    return si.status;
+}
+
+void netinit() {
+    // called once per process
+    int status = ares_library_init(ARES_LIB_INIT_ALL);
+    if (status != ARES_SUCCESS) {
+        LOG(FATAL) << ares_strerror(status);
+    }
 }
 
 } // end namespace ten

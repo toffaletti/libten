@@ -31,4 +31,8 @@ int netdial(int fd, const char *addr, uint16_t port) {
     return iodial(io, fd, addr, port);
 }
 
+void netinit() {
+    // called once per process
+}
+
 } // end namespace ten

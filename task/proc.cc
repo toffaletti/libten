@@ -300,6 +300,8 @@ static void procmain_init() {
         THROW_ON_ERROR(sigaction(SIGUSR1, &act, NULL));
     }
 
+    netinit();
+
     new proc();
 }
 
