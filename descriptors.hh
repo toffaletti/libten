@@ -15,6 +15,7 @@
 #include <sys/uio.h>
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
+#include <sys/eventfd.h>
 #include <signal.h>
 #include <vector>
 
@@ -110,6 +111,24 @@ struct fd_base : boost::noncopyable {
     //! see close() for when this can throw
     ~fd_base() throw (errno_error) {
         if (valid()) close();
+    }
+};
+
+//! eventfd create a file descriptor for event notification
+struct event_fd : fd_base {
+    event_fd(unsigned int initval=0, int flags=0) {
+        fd = ::eventfd(initval, flags);
+        THROW_ON_ERROR(fd);
+    }
+
+    void write(uint64_t val) {
+        THROW_ON_ERROR(fd_base::write(&val, sizeof(val)));
+    }
+
+    uint64_t read() {
+        uint64_t val;
+        THROW_ON_ERROR(fd_base::read(&val, sizeof(val)));
+        return val;
     }
 };
 

@@ -47,8 +47,7 @@ void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
         cond.notify_one();
     } else if (polling) {
         polling = false;
-        ssize_t nw = pi.write("\1", 1);
-        (void)nw;
+        event.write(1);
     }
     lk.unlock();
 }

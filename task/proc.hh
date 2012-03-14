@@ -34,15 +34,15 @@ struct proc {
     bool canceled;
     //! cond used to wake up when runqueue is empty and no epoll
     std::condition_variable cond;
-    //! pipe used to wake up from epoll
-    pipe_fd pi;
+    //! used to wake up from epoll
+    event_fd event;
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
     time_point<monotonic_clock> now;
 
     proc(task *t = 0)
         : _sched(0), nswitch(0), ctask(0),
-        asleep(false), polling(false), canceled(false), pi(O_NONBLOCK), taskcount(0)
+        asleep(false), polling(false), canceled(false), taskcount(0)
     {
         now = monotonic_clock::now();
         add(this);

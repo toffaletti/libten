@@ -75,3 +75,13 @@ BOOST_AUTO_TEST_CASE(signal_fd_test) {
     sigaddset(&sigset, SIGINT);
     signal_fd sig(sigset);
 }
+
+BOOST_AUTO_TEST_CASE(event_fd_test) {
+    event_fd efd;
+    efd.write(1);
+    BOOST_CHECK_EQUAL(efd.read(), 1);
+    efd.write(1);
+    efd.write(2);
+    efd.write(3);
+    BOOST_CHECK_EQUAL(efd.read(), 1+2+3);
+}

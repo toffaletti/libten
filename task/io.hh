@@ -35,16 +35,16 @@ struct io_scheduler {
 
     io_scheduler() : npollfds(0) {
         events.reserve(1000);
-        // add the pipe used to wake up
+        // add the eventfd used to wake up
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN | EPOLLET;
-        int pi_fd = _this_proc->pi.r.fd;
-        ev.data.fd = pi_fd;
-        if (pollfds.size() <= (size_t)pi_fd) {
-            pollfds.resize(pi_fd+1);
+        int e_fd = _this_proc->event.fd;
+        ev.data.fd = e_fd;
+        if (pollfds.size() <= (size_t)e_fd) {
+            pollfds.resize(e_fd+1);
         }
-        efd.add(pi_fd, ev);
+        efd.add(e_fd, ev);
         taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
@@ -245,7 +245,7 @@ struct io_scheduler {
                 efd.wait(events, ms);
                 lk.lock();
                 p->polling = false;
-                int wakeup_pipe_fd = p->pi.r.fd;
+                int e_fd = p->event.fd;
                 lk.unlock();
                 // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
@@ -268,11 +268,10 @@ struct io_scheduler {
                         t->ready();
                     }
 
-                    if (i->data.fd == wakeup_pipe_fd) {
-                        // our wake up pipe was written to
-                        char buf[32];
-                        // clear pipe
-                        while (p->pi.read(buf, sizeof(buf)) > 0) {}
+                    if (i->data.fd == e_fd) {
+                        // our wake up eventfd was written to
+                        // clear events by reading value
+                        p->event.read();
                     } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
                         // TODO: otherwise we might want to remove fd from epoll
                         LOG(ERROR) << "event " << i->events << " for fd: "
