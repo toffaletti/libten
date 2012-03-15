@@ -187,7 +187,9 @@ static void match_node(json root, json &result, const string &match) {
 
 static void select_node(json &result, deque<string> &tokens) {
     tokens.pop_front(); // remove '/'
-    if (tokens.front() == "/") {
+    if (tokens.empty()) {
+        return;
+    } else if (tokens.front() == "/") {
         // recursive decent!
         tokens.pop_front();
         string match = tokens.front();

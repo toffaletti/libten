@@ -4,7 +4,7 @@
 
 using namespace ten;
 
-const char json_text[] = 
+const char json_text[] =
 "{ \"store\": {"
 "    \"book\": ["
 "      { \"category\": \"reference\","
@@ -106,9 +106,26 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
 "      }]";
     json r(o.path("//book[isbn]"));
     BOOST_CHECK_EQUAL(json::load(a), r);
-    
+
     json r1(o.path("//book[doesnotexist]"));
     BOOST_REQUIRE(r1.is_array());
     BOOST_CHECK_EQUAL(0, r1.asize());
 }
 
+BOOST_AUTO_TEST_CASE(json_test_path3) {
+    json o(json::load(json_text));
+    BOOST_REQUIRE(o.get());
+
+    BOOST_CHECK_EQUAL(o, o.path("/"));
+    BOOST_CHECK_EQUAL("Sayings of the Century",
+        o.path("/store/book[category=\"reference\"]/title"));
+
+    static const char text[] = "["
+    "{\"type\":\"a\", \"value\":0},"
+    "{\"type\":\"b\", \"value\":1},"
+    "{\"type\":\"c\", \"value\":2},"
+    "{\"type\":\"c\", \"value\":3}"
+    "]";
+
+    BOOST_CHECK_EQUAL(json(1), json::load(text).path("/[type=\"b\"]/value"));
+}
