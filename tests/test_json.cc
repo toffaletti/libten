@@ -112,6 +112,14 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
     BOOST_CHECK_EQUAL(0, r1.asize());
 }
 
+BOOST_AUTO_TEST_CASE(json_test_truth) {
+    json o(json::object());
+    BOOST_CHECK(o.oget("nothing").is_true() == false);
+    BOOST_CHECK(o.oget("nothing").is_false() == false);
+    BOOST_CHECK(o.oget("nothing").is_null() == false);
+    BOOST_CHECK(!o.oget("nothing"));
+}
+
 BOOST_AUTO_TEST_CASE(json_test_path3) {
     json o(json::load(json_text));
     BOOST_REQUIRE(o.get());
