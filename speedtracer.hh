@@ -48,7 +48,7 @@ struct event {
     event(shared_ptr<session> s_, int32_t type_=-2)
         : s(s_), type(type_), start(clock::now()), data(json::object())
     {
-        data.oset("message", "this is a log message");
+        data.set("message", "this is a log message");
     }
 
     //! milliseconds since start of session
@@ -58,13 +58,13 @@ struct event {
 
     json to_json() const {
         json e(json::object());
-        e.oset("type", (json_int_t)type);
-        e.oset("typeName", "event");
-        e.oset("time", (json_int_t)time().count());
-        e.oset("duration", 10);
-        e.oset("data", data);
-        e.oset("color", "Crimson");
-        //e.oset("sequence", 0);
+        e.set("type", (json_int_t)type);
+        e.set("typeName", "event");
+        e.set("time", (json_int_t)time().count());
+        e.set("duration", 10);
+        e.set("data", data);
+        e.set("color", "Crimson");
+        //e.set("sequence", 0);
         return e;
     }
 };

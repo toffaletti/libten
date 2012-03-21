@@ -9,13 +9,17 @@ namespace ten {
 using namespace std;
 
 
+//----------------------------------------------------------------
+// to/from JSON strings and streams
+//
+
 extern "C" {
-    static int ostream_json_dump_callback(const char *buffer, size_t size, void *osptr) {
-        ostream *o = (ostream *)osptr;
-        o->write(buffer, size);
-        return 0;
-    }
+static int ostream_json_dump_callback(const char *buffer, size_t size, void *osptr) {
+    ostream *o = (ostream *)osptr;
+    o->write(buffer, size);
+    return 0;
 }
+} // "C"
 
 ostream & operator << (ostream &o, const json_t *j) {
     if (j)
@@ -23,6 +27,12 @@ ostream & operator << (ostream &o, const json_t *j) {
     return o;
 }
 
+string json::dump(unsigned flags) {
+    ostringstream ss;
+    if (_p)
+        json_dump_callback(_p.get(), ostream_json_dump_callback, static_cast<ostream *>(&ss), flags);
+    return ss.str();
+}
 
 json json::load(const char *s, size_t len, unsigned flags) {
     json_error_t err;
@@ -30,13 +40,6 @@ json json::load(const char *s, size_t len, unsigned flags) {
     if (!j)
         throw errorx("%s", err.text);
     return j;
-}
-
-string json::dump(unsigned flags) {
-    ostringstream ss;
-    if (_p)
-        json_dump_callback(_p.get(), ostream_json_dump_callback, static_cast<ostream *>(&ss), flags);
-    return ss.str();
 }
 
 // simple visit of all objects
@@ -84,9 +87,9 @@ static ostream & operator << (ostream &o, const vector<string> &v) {
 
 static void add_result(json &result, json r) {
     if (r.is_array())
-        result.aconcat(r);
+        result.concat(r);
     else
-        result.apush(r);
+        result.push(r);
 }
 
 static bool next_path_token(const string &path, size_t &i, string &tok) {
@@ -154,14 +157,14 @@ static void match_node(json root, json &result, const string &match) {
 #else
 static void recursive_elements(json root, json &result, const string &match) {
     if (root.is_object()) {
-        for (auto kv = root.obj().begin(); kv != root.obj().end(); ++kv) {
+        for (auto kv = root.obegin(); kv != root.oend(); ++kv) {
             if ((*kv).first == match)
                 add_result(result, (*kv).second);
             recursive_elements(json((*kv).second), result, match);
         }
     }
     else if (root.is_array()) {
-        for (auto el = root.arr().begin(); el != root.arr().end(); ++el)
+        for (auto el = root.abegin(); el != root.aend(); ++el)
             recursive_elements(*el, result, match);
     }
 }
@@ -169,7 +172,7 @@ static void recursive_elements(json root, json &result, const string &match) {
 static void match_node(json root, json &result, const string &match) {
     if (root.is_object()) {
         if (match == "*") {
-            for (auto kv = root.obj().begin(); kv != root.obj().end(); ++kv) {
+            for (auto kv = root.obegin(); kv != root.oend(); ++kv) {
                 add_result(result, (*kv).second);
             }
         }
@@ -178,7 +181,7 @@ static void match_node(json root, json &result, const string &match) {
         }
     }
     else if (root.is_array()) {
-        for (auto el = root.arr().begin(); el != root.arr().end(); ++el) {
+        for (auto el = root.abegin(); el != root.aend(); ++el) {
             match_node(*el, result, match);
         }
     }
@@ -271,7 +274,7 @@ json json::path(const string &path) {
             if (result.is_object()) {
                 auto tmp(json::array());
                 for (auto kv : result.obj())
-                    tmp.apush(kv.second);
+                    tmp.push(kv.second);
                 result = tmp;
             }
         }
@@ -301,7 +304,7 @@ static void slice_op(json &result, deque<string> &tokens) {
         } catch (boost::bad_lexical_cast &e) {
             string key = args.front();
             auto tmp(json::array());
-            for (auto r = result.arr().begin(); r != result.arr().end(); ++r) {
+            for (auto r = result.abegin(); r != result.aend(); ++r) {
                 if ((*r)[key])
                     add_result(tmp, *r);
             }
@@ -319,7 +322,7 @@ static void slice_op(json &result, deque<string> &tokens) {
             json filter(json::load(args[2]));
             DVLOG(5) << "filter: " << filter;
             json tmp(json::array());
-            for (auto r = result.arr().begin(); r != result.arr().end(); ++r) {
+            for (auto r = result.abegin(); r != result.aend(); ++r) {
                 if ((*r)[key] == filter)
                     add_result(tmp, *r);
             }
@@ -345,8 +348,8 @@ json json::path(const string &path) {
             tokens.pop_front();
             if (result.is_object()) {
                 auto tmp(json::array());
-                for (auto kv = result.obj().begin(); kv != result.obj().end(); ++kv)
-                    tmp.apush((*kv).second);
+                for (auto kv = result.obegin(); kv != result.oend(); ++kv)
+                    tmp.push((*kv).second);
                 result = tmp;
             }
         }

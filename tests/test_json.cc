@@ -114,10 +114,10 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
 
 BOOST_AUTO_TEST_CASE(json_test_truth) {
     json o(json::object());
-    BOOST_CHECK(o.oget("nothing").is_true() == false);
-    BOOST_CHECK(o.oget("nothing").is_false() == false);
-    BOOST_CHECK(o.oget("nothing").is_null() == false);
-    BOOST_CHECK(!o.oget("nothing"));
+    BOOST_CHECK(o.get("nothing").is_true() == false);
+    BOOST_CHECK(o.get("nothing").is_false() == false);
+    BOOST_CHECK(o.get("nothing").is_null() == false);
+    BOOST_CHECK(!o.get("nothing"));
 }
 
 BOOST_AUTO_TEST_CASE(json_test_path3) {
@@ -136,4 +136,20 @@ BOOST_AUTO_TEST_CASE(json_test_path3) {
     "]";
 
     BOOST_CHECK_EQUAL(json(1), json::load(text).path("/[type=\"b\"]/value"));
+}
+
+BOOST_AUTO_TEST_CASE(json_init_list) {
+    json meta{
+        { "foo", 17 },
+        { "bar", 23 },
+        { "baz", true },
+        { "corge", json::array({ 1, 3.14159 }) },
+        { "grault", json::array({ "hello", string("world") }) },
+    };
+    BOOST_REQUIRE(meta);
+    BOOST_REQUIRE(meta.is_object());
+    BOOST_CHECK_EQUAL(meta.osize(), 5);
+    BOOST_CHECK_EQUAL(meta["foo"].integer(), 17);
+    BOOST_CHECK_EQUAL(meta["corge"](0).integer(), 1);
+    BOOST_CHECK_EQUAL(meta["grault"](1).str(), "world");
 }
