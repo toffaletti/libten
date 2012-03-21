@@ -8,7 +8,6 @@
 #endif
 #include <string>
 #include <functional>
-#include <type_traits>
 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
 # define TEN_JSON_CXX11
@@ -107,11 +106,28 @@ class json {
 
     json(const char *s)                        : _p(json_string(s),                 json_take) {}
     json(const string &s)                      : _p(json_string(s.c_str()),         json_take) {}
-    json(json_int_t i)                         : _p(json_integer(i),                json_take) {}
     json(int i)                                : _p(json_integer(i),                json_take) {}
+    json(long i)                               : _p(json_integer(i),                json_take) {}
+    json(long long i)                          : _p(json_integer(i),                json_take) {}
+    json(unsigned u)                           : _p(json_integer(u),                json_take) {}
+    json(unsigned long u)                      : _p(json_integer(u),                json_take) {}
     json(double r)                             : _p(json_real(r),                   json_take) {}
-    json(float r)                              : _p(json_real(r),                   json_take) {}
     json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
+
+    static json object()                 { return json(json_object(),   json_take); }
+    static json array()                  { return json(json_array(),    json_take); }
+    static json str(const char *s)       { return json(s); }
+    static json str(const string &s)     { return json(s); }
+    static json integer(int i)           { return json(i); }
+    static json integer(long i)          { return json(i); }
+    static json integer(long long i)     { return json(i); }
+    static json integer(unsigned u)      { return json(u); }
+    static json integer(unsigned long u) { return json(u); }
+    static json real(double d)           { return json(d); }
+    static json boolean(bool b)          { return json(b); }
+    static json jtrue()                  { return json(json_true(),     json_take); }
+    static json jfalse()                 { return json(json_false(),    json_take); }
+    static json null()                   { return json(json_null(),     json_take); }
 
     // default to building objects, they're more common
     json(initializer_list<pair<const char *, json>> init)
@@ -165,19 +181,6 @@ class json {
     static json load(const char *s, size_t len, unsigned flags);
 
     string dump(unsigned flags = JSON_ENCODE_ANY);
-
-    // construction from basic C++ types
-
-    static json object()               { return json(json_object(),   json_take); }
-    static json array()                { return json(json_array(),    json_take); }
-    static json str(const char *s)     { return json(json_string(s),  json_take); }
-    static json str(const string &s)   { return json(json_string(s.c_str()), json_take); }
-    static json integer(json_int_t i)  { return json(json_integer(i), json_take); }
-    static json real(double f)         { return json(json_real(f),    json_take); }
-    static json boolean(bool b)        { return json(b ? json_true() : json_false(), json_take); }
-    static json jtrue()                { return json(json_true(),     json_take); }
-    static json jfalse()               { return json(json_false(),    json_take); }
-    static json null()                 { return json(json_null(),     json_take); }
 
     // type access
 
@@ -346,15 +349,13 @@ inline ostream & operator << (ostream &o, const json &j) { return o << j.get(); 
 
 inline json to_json(const char *s)    { return json(s); }
 inline json to_json(const string &s)  { return json(s); }
+inline json to_json(int i)            { return json(i); }
+inline json to_json(long i)           { return json(i); }
+inline json to_json(long long i)      { return json(i); }
+inline json to_json(unsigned u)       { return json(u); }
+inline json to_json(unsigned long u)  { return json(u); }
 inline json to_json(double d)         { return json(d); }
-inline json to_json(float f)          { return json(f); }
 inline json to_json(bool b)           { return json(b); }
-
-template <class TN>
-inline typename enable_if<is_integral<TN>::value, json>::type to_json(TN n) {
-    return json(n);
-}
-
 
 } // ten
 
