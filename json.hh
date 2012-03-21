@@ -185,7 +185,7 @@ class json {
     bool is_object()     const  { return json_is_object(get()); }
     bool is_array()      const  { return json_is_array(get()); }
     bool is_aggregate()  const  { return is_array() || is_object(); }
-    bool is_string()     const  { return json_is_integer(get()); }
+    bool is_string()     const  { return json_is_string(get()); }
     bool is_integer()    const  { return json_is_integer(get()); }
     bool is_real()       const  { return json_is_real(get()); }
     bool is_number()     const  { return json_is_number(get()); }
