@@ -18,7 +18,7 @@ namespace ten {
 using namespace std;
 
 #ifndef TEN_JSON_CXX11
-const void * const nullptr = 0;
+const intptr_t nullptr = 0;
 #endif
 
 
@@ -117,13 +117,25 @@ class json {
     json(initializer_list<pair<const char *, json>> init)
         : _p(json_object(), json_take)
     {
+#ifdef TEN_JSON_CXX11
         for (const auto &kv : init)
             set(kv.first, kv.second);
+#else
+        for (auto i = init.begin(); i != init.end(); ++i) {
+            set(i->first, i->second);
+        }
+#endif
     }
     static json array(initializer_list<const json> init) {
         json a(json_array(), json_take);
+#ifdef TEN_JSON_CXX11
         for (const auto &j : init)
             a.push(j);
+#else
+        for (auto i = init.begin(); i != init.end(); ++i) {
+            a.push(*i);
+        }
+#endif
         return a;
     }
 
