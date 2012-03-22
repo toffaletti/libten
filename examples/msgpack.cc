@@ -2,59 +2,78 @@
 #include <string>
 #include <iostream>
 #include <assert.h>
+#include "jsonpack.hh"
+
+using namespace msgpack;
+using namespace ten;
+using namespace std;
 
 struct myclass {
     int num;
-    std::string str;
+    string str;
 
     myclass() : num(616), str("the string") {}
 
     MSGPACK_DEFINE(num, str);
 
-    friend std::ostream &operator << (std::ostream &o, const myclass &m) {
+    friend ostream &operator << (ostream &o, const myclass &m) {
         o << "num: " << m.num << " str: " << m.str;
         return o;
     }
 };
 
 int main(int argc, char *argv[]) {
-    msgpack::sbuffer sbuf;
+    sbuffer sbuf;
     myclass m;
     size_t offset = 0;
 
-    msgpack::pack(sbuf, m);
-    msgpack::pack(sbuf, -1234);
-    msgpack::pack(sbuf, -1.5);
-    msgpack::pack(sbuf, 3.58);
-    msgpack::pack(sbuf, std::string("cool pack"));
+    pack(sbuf, m);
+    pack(sbuf, -1234);
+    pack(sbuf, -1.5);
+    pack(sbuf, 3.58);
+    pack(sbuf, std::string("cool pack"));
 
-    msgpack::zone z;
-    msgpack::object obj;
+    zone z;
+    object obj;
 
-    msgpack::unpack_return r =
-        msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
-    assert(r == msgpack::UNPACK_EXTRA_BYTES);
-    std::cout << "obj: " << obj << "\n";
-    std::cout << obj.as<myclass>() << "\n";
+    unpack_return r =
+        unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_EXTRA_BYTES);
+    cout << "obj: " << obj << "\n";
+    cout << obj.as<myclass>() << "\n";
 
-    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
-    assert(r == msgpack::UNPACK_EXTRA_BYTES);
-    std::cout << "obj: " << obj << "\n";
-    std::cout << obj.as<int>() << "\n";
+    r = unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_EXTRA_BYTES);
+    cout << "obj: " << obj << "\n";
+    cout << obj.as<int>() << "\n";
 
-    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
-    assert(r == msgpack::UNPACK_EXTRA_BYTES);
-    std::cout << "obj: " << obj << "\n";
-    std::cout << obj.as<float>() << "\n";
+    r = unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_EXTRA_BYTES);
+    cout << "obj: " << obj << "\n";
+    cout << obj.as<float>() << "\n";
 
-    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
-    assert(r == msgpack::UNPACK_EXTRA_BYTES);
-    std::cout << "obj: " << obj << "\n";
-    std::cout << obj.as<double>() << "\n";
+    r = unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_EXTRA_BYTES);
+    cout << "obj: " << obj << "\n";
+    cout << obj.as<double>() << "\n";
 
-    r = msgpack::unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
-    assert(r == msgpack::UNPACK_SUCCESS);
-    std::cout << "obj: " << obj << "\n";
-    std::cout << obj.as<std::string>() << "\n";
+    r = unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_SUCCESS);
+    cout << "obj: " << obj << "\n";
+    cout << obj.as<string>() << "\n";
+
+    json j{
+        {"int", 1234},
+        {"double", 1.14},
+        {"string", "abcdef"},
+        {"array", json::array({"string", 42, true, 9.0})},
+    };
+
+    pack(sbuf, j);
+
+    r = unpack(sbuf.data(), sbuf.size(), &offset, &z, &obj);
+    assert(r == UNPACK_SUCCESS);
+    cout << "json: " << obj << "\n";
+    cout << obj.as<json>() << "\n";
     return 0;
 }

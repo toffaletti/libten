@@ -32,7 +32,7 @@ add_executable(http-server EXCLUDE_FROM_ALL http-server.cc)
 target_link_libraries(http-server ten http uri boost_program_options-mt)
 
 add_executable(msg-pack EXCLUDE_FROM_ALL msgpack.cc)
-target_link_libraries(msg-pack ten msgpack)
+target_link_libraries(msg-pack ten jansson msgpack)
 
 add_executable(rpc-server EXCLUDE_FROM_ALL rpc-server.cc)
 target_link_libraries(rpc-server ten msgpack)
