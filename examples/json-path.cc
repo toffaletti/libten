@@ -6,8 +6,12 @@
 #include <boost/algorithm/string.hpp>
 
 #include "json.hh"
+#include "jsonpack.hh"
 
 using namespace ten;
+using namespace std;
+using namespace msgpack;
+
 namespace po = boost::program_options;
 
 struct options {
@@ -39,8 +43,8 @@ struct options {
     }
 };
 
-static void showhelp(options &opts, std::ostream &os = std::cerr) {
-    std::cerr << opts.visible << std::endl;
+static void showhelp(options &opts, ostream &os = cerr) {
+    cerr << opts.visible << endl;
 }
 
 static void parse_args(options &opts, int argc, char *argv[]) {
@@ -57,8 +61,8 @@ static void parse_args(options &opts, int argc, char *argv[]) {
             exit(1);
         }
 
-    } catch (std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl << std::endl;
+    } catch (exception &e) {
+        cerr << "Error: " << e.what() << endl << endl;
         showhelp(opts);
         exit(1);
     }
@@ -66,7 +70,10 @@ static void parse_args(options &opts, int argc, char *argv[]) {
 
 struct config {
     unsigned int indent;
-    std::string query;
+    string input_format;
+    string output_format;
+    string query;
+    bool sort_keys;
 };
 
 static config conf;
@@ -75,29 +82,60 @@ int main(int argc, char *argv[]) {
     options opts;
 
     opts.configuration.add_options()
-        ("indent,i", po::value<unsigned int>(&conf.indent)->default_value(1),
+        ("indent,n", po::value<unsigned int>(&conf.indent)->default_value(1),
          "pretty print with newlines and n spaces")
+        ("in,i", po::value<string>(&conf.input_format)->default_value("json"),
+         "input format: json,msgpack")
+        ("out,o", po::value<string>(&conf.output_format)->default_value("json"),
+         "output format: json,msgpack")
+        ("sort-keys", po::value<bool>(&conf.sort_keys)->zero_tokens(), "sort JSON object keys")
     ;
 
     opts.hidden.add_options()
-        ("query", po::value<std::string>(&conf.query), "json path query")
+        ("query", po::value<string>(&conf.query), "json path query")
     ;
 
     opts.pdesc.add("query", 1);
     parse_args(opts, argc, argv);
 
     try {
-        std::cin >> std::noskipws;
-        std::istream_iterator<char> it(std::cin);
-        std::istream_iterator<char> end;
-        std::string input(it, end);
-        json js(json::load(input));
+        cin >> noskipws;
+        istream_iterator<char> it(cin);
+        istream_iterator<char> end;
+        string input(it, end);
+        json js;
+        
+        if (conf.input_format == "json") {
+            js = json::load(input);
+        } else if (conf.input_format == "msgpack") {
+            size_t offset = 0;
+            zone z;
+            object obj;
+            unpack_return r = unpack(input.data(), input.size(), &offset, &z, &obj);
+            if (r != UNPACK_SUCCESS) {
+                throw std::runtime_error("error unpacking msgpack format");
+            }
+            js = obj.as<json>();
+        }
         if (!conf.query.empty()) {
             js = js.path(conf.query);
         }
-        std::cout << js.dump(JSON_ENCODE_ANY | JSON_INDENT(conf.indent)) << std::endl;
-    } catch (std::exception &e) {
-        std::cerr << "Error: " << e.what() << "\n";
+        if (conf.output_format == "json") {
+            size_t flags = JSON_ENCODE_ANY | JSON_INDENT(conf.indent);
+            if (conf.indent == 0) {
+                flags |= JSON_COMPACT;
+            }
+            if (conf.sort_keys) {
+                flags |= JSON_SORT_KEYS;
+            }
+            cout << js.dump(flags) << endl;
+        } else if (conf.output_format == "msgpack") {
+            sbuffer sbuf;
+            pack(sbuf, js);
+            cout.write(sbuf.data(), sbuf.size());
+        }
+    } catch (exception &e) {
+        cerr << "Error: " << e.what() << "\n";
     }
     return 0;
 }
