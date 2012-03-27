@@ -150,6 +150,6 @@ BOOST_AUTO_TEST_CASE(json_init_list) {
     BOOST_REQUIRE(meta.is_object());
     BOOST_CHECK_EQUAL(meta.osize(), 5);
     BOOST_CHECK_EQUAL(meta["foo"].integer(), 17);
-    BOOST_CHECK_EQUAL(meta["corge"](0).integer(), 1);
-    BOOST_CHECK_EQUAL(meta["grault"](1).str(), "world");
+    BOOST_CHECK_EQUAL(meta["corge"][0].integer(), 1);
+    BOOST_CHECK_EQUAL(meta["grault"][1].str(), "world");
 }

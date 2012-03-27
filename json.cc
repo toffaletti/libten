@@ -206,7 +206,7 @@ static void select_node(json &result, deque<string> &tokens) {
         tokens.pop_front();
         json tmp(json::array());
         match_node(result, tmp, match);
-        result = (tmp.asize() == 1) ? tmp(0) : tmp;
+        result = (tmp.asize() == 1) ? tmp[0] : tmp;
     }
 }
 
@@ -226,7 +226,7 @@ static void slice_op(json &result, deque<string> &tokens) {
     if (args.size() == 1) {
         try {
             size_t index = boost::lexical_cast<size_t>(args.front());
-            result = result(index);
+            result = result[index];
         } catch (boost::bad_lexical_cast &e) {
             string key = args.front();
             auto tmp(json::array());
