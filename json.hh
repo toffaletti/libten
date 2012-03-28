@@ -3,11 +3,16 @@
 
 #include <jansson.h>
 #include <string.h>
+#include <string>
+#include <functional>
+
+#include <limits.h>
 #ifndef JSON_INTEGER_IS_LONG_LONG
 # error Y2038
 #endif
-#include <string>
-#include <functional>
+#if ULONG_MAX > LLONG_MAX
+# error conversion from unsigned long to json_int_t is not safe; remove overloads or use numeric_cast<>
+#endif
 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
 # define TEN_JSON_CXX11
@@ -213,11 +218,10 @@ class json {
     bool set_real(double rv)          { return !json_real_set(   get(), rv); }
 
     // aggregate access
-    // there are more objects than arrays, so arrays get ()
+
+    template <class KEY> json operator [] (KEY key)     { return get(key); }
 
     size_t osize() const                                { return      json_object_size(   get());                    }
-    json operator [] (  const char *key)                { return json(json_object_get(    get(), key));              }
-    json operator [] (const string &key)                { return json(json_object_get(    get(), key.c_str()));      }
     json get(           const char *key)                { return json(json_object_get(    get(), key));              }
     json get(         const string &key)                { return json(json_object_get(    get(), key.c_str()));      }
     bool set(           const char *key, const json &j) { return     !json_object_set(    get(), key,         j.get()); }
@@ -230,7 +234,7 @@ class json {
     bool omerge_missing( const json &oj)                { return     !json_object_update_missing(  get(), oj.get()); }
 
     size_t asize() const                           { return      json_array_size(   get());              }
-    json operator () (size_t i)                    { return json(json_array_get(    get(), i));          }
+    json get(            int i)                    { return json(json_array_get(    get(), i));          }
     json get(         size_t i)                    { return json(json_array_get(    get(), i));          }
     bool set(         size_t i,  const json &j)    { return     !json_array_set(    get(), i, j.get());  }
     bool insert(      size_t i,  const json &j)    { return     !json_array_insert( get(), i, j.get());  }
