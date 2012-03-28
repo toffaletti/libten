@@ -239,8 +239,9 @@ static void slice_op(json &result, deque<string> &tokens) {
     } else if (args.size() == 3) {
         string op = args[1];
         if (op == ":") {
-            ssize_t start = boost::lexical_cast<ssize_t>(args[0]);
-            ssize_t end = boost::lexical_cast<ssize_t>(args[2]);
+            // TODO: make slice ranges work
+            //ssize_t start = boost::lexical_cast<ssize_t>(args[0]);
+            //ssize_t end = boost::lexical_cast<ssize_t>(args[2]);
         }
         else if (op == "=") {
             string key = args[0];
@@ -300,7 +301,7 @@ static void slice_op(json &result, deque<string> &tokens) {
     if (args.size() == 1) {
         try {
             size_t index = boost::lexical_cast<size_t>(args.front());
-            result = result(index);
+            result = result[index];
         } catch (boost::bad_lexical_cast &e) {
             string key = args.front();
             auto tmp(json::array());
