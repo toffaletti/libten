@@ -10,9 +10,6 @@
 #ifndef JSON_INTEGER_IS_LONG_LONG
 # error Y2038
 #endif
-#if ULONG_MAX > LLONG_MAX
-# error conversion from unsigned long to json_int_t is not safe; remove overloads or use numeric_cast<>
-#endif
 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
 # define TEN_JSON_CXX11
@@ -115,7 +112,9 @@ class json {
     json(long i)                               : _p(json_integer(i),                json_take) {}
     json(long long i)                          : _p(json_integer(i),                json_take) {}
     json(unsigned u)                           : _p(json_integer(u),                json_take) {}
+#if ULONG_MAX < LLONG_MAX
     json(unsigned long u)                      : _p(json_integer(u),                json_take) {}
+#endif
     json(double r)                             : _p(json_real(r),                   json_take) {}
     json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
 
@@ -127,7 +126,9 @@ class json {
     static json integer(long i)          { return json(i); }
     static json integer(long long i)     { return json(i); }
     static json integer(unsigned u)      { return json(u); }
+#if ULONG_MAX < LLONG_MAX
     static json integer(unsigned long u) { return json(u); }
+#endif
     static json real(double d)           { return json(d); }
     static json boolean(bool b)          { return json(b); }
     static json jtrue()                  { return json(json_true(),     json_take); }
@@ -357,7 +358,9 @@ inline json to_json(int i)            { return json(i); }
 inline json to_json(long i)           { return json(i); }
 inline json to_json(long long i)      { return json(i); }
 inline json to_json(unsigned u)       { return json(u); }
+#if ULONG_MAX < LLONG_MAX
 inline json to_json(unsigned long u)  { return json(u); }
+#endif
 inline json to_json(double d)         { return json(d); }
 inline json to_json(bool b)           { return json(b); }
 
