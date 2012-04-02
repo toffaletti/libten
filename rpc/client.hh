@@ -19,11 +19,16 @@ class rpc_session {
 };
 #endif
 
+struct rpc_failure : public errorx {
+    rpc_failure(const std::string &msg) : errorx(msg) {}
+};
+
 class rpc_client : public boost::noncopyable {
 public:
-    rpc_client(const std::string &hostname_, uint16_t port_)
+    rpc_client(const std::string &hostname_, uint16_t port_=0)
         : hostname(hostname_), port(port_), msgid(0)
     {
+        parse_host_port(hostname, port);
     }
 
     template <typename Result, typename ...Args>
@@ -35,7 +40,7 @@ public:
 protected:
     netsock s;
     std::string hostname;
-    uint64_t port;
+    uint16_t port;
     uint32_t msgid;
     msgpack::unpacker pac;
 
@@ -44,7 +49,7 @@ protected:
             netsock tmp(AF_INET, SOCK_STREAM);
             std::swap(s, tmp);
             if (s.dial(hostname.c_str(), port) != 0) {
-                throw errorx("rpc client connection failed");
+                throw rpc_failure("dial");
             }
         }
     }
@@ -55,7 +60,7 @@ protected:
             ssize_t nw = s.send(sbuf.data(), sbuf.size());
             if (nw != (ssize_t)sbuf.size()) {
                 s.close();
-                throw errorx("rpc call failed to send");
+                throw rpc_failure("send");
             }
 
             size_t bsize = 4096;
@@ -65,7 +70,7 @@ protected:
                 ssize_t nr = s.recv(pac.buffer(), bsize);
                 if (nr <= 0) {
                     s.close();
-                    throw errorx("rpc client lost connection");
+                    throw rpc_failure("recv");
                 }
                 DVLOG(3) << "client recv: " << nr;
                 pac.buffer_consumed(nr);

@@ -66,7 +66,9 @@ private:
                         msgpack::pack(sbuf, resp);
                     }
                 } else {
-                    msg_response<msgpack::object, std::string> resp(msgpack::object(), "method not found", req.msgid);
+                    std::stringstream ss;
+                    ss << "method '" <<  req.method << "' not found";
+                    msg_response<msgpack::object, std::string> resp(msgpack::object(), ss.str(), req.msgid);
                     msgpack::pack(sbuf, resp);
                 }
 
