@@ -1,4 +1,3 @@
-#include "rpc/thunk.hh"
 #include "rpc/server.hh"
 #include "rpc/client.hh"
 

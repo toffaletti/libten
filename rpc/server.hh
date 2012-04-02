@@ -2,6 +2,7 @@
 #include "task.hh"
 #include "net.hh"
 #include "rpc/protocol.hh"
+#include "rpc/thunk.hh"
 
 #include <sstream>
 #include <boost/utility.hpp>
@@ -22,12 +23,12 @@ public:
     {
     }
 
-    template <typename FuncT> void add_command(const std::string &cmd, FuncT f)
-    {
-        _cmds[cmd] = thunk(f);
-    }
+    template <typename FuncT>
+        void add_command(const std::string &cmd, FuncT f)
+        {
+            _cmds[cmd] = thunk(f);
+        }
 
-    std::string welcome;
 private:
     std::unordered_map<std::string, callback_type> _cmds;
 
