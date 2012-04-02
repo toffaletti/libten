@@ -41,14 +41,14 @@ struct unpack_error : public std::runtime_error {
 class unpacked {
 public:
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-  typedef std::unique_ptr<msgpack::zone> ZonePtr;
+  typedef std::unique_ptr<msgpack_zone, void (*)(msgpack_zone *)> ZonePtr;
   #define Move(x) std::move(x)
 #else
   typedef std::auto_ptr<msgpack::zone> ZonePtr;
   #define Move(x) (x)
 #endif
 
-	unpacked() { }
+	unpacked() : m_zone(0, msgpack_zone_free) { }
 
 	unpacked(object obj, ZonePtr& z) :
 		m_obj(obj), m_zone(Move(z)) { }
@@ -240,7 +240,7 @@ inline bool unpacker::next(unpacked* result)
 
 	} else {
 		result->zone().reset();
-		result->zone() = unpacked::ZonePtr( release_zone() );
+		result->zone() = unpacked::ZonePtr( release_zone(), msgpack_zone_free );
 		result->get() = data();
 		reset();
 		return true;
@@ -316,7 +316,7 @@ inline void unpack(unpacked* result,
 		const char* data, size_t len, size_t* offset)
 {
 	msgpack::object obj;
-	unpacked::ZonePtr z(new zone());
+	unpacked::ZonePtr z(msgpack_zone_new(MSGPACK_ZONE_CHUNK_SIZE), msgpack_zone_free);
 
 	unpack_return ret = (unpack_return)msgpack_unpack(
 			data, len, offset, z.get(),
