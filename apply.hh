@@ -77,7 +77,7 @@ template <
   typename Indices = typename make_indices<0, OpArgs...>::type,
   template <typename...> class T = std::tuple
 >
-auto apply_tuple(Op&& op, T<OpArgs...>&& t)
+auto apply_tuple(Op op, T<OpArgs...>&& t)
   -> typename std::result_of<Op(OpArgs...)>::type
 {
   return apply_tuple_impl<Indices>::apply_tuple(
