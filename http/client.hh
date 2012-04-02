@@ -23,9 +23,10 @@ private:
 public:
     const std::string host;
     const uint16_t port;
+    size_t max_content_length;
 
     http_client(const std::string &host_, uint16_t port_=80)
-        : buf(4*1024), host(host_), port(port_) {}
+        : buf(4*1024), host(host_), port(port_), max_content_length(-1) {}
 
     http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
         try {
@@ -60,6 +61,10 @@ public:
                 size_t len = buf.size();
                 resp.parse(&parser, buf.front(), len);
                 buf.remove(len);
+                if (resp.body.size() >= max_content_length) {
+                    s.reset(); // close this socket, we won't read anymore
+                    return resp;
+                }
             }
             // should not be any data left over in buf
             CHECK(buf.size() == 0);
