@@ -7,6 +7,11 @@
 
 namespace ten {
 
+class http_error : public errorx {
+public:
+    http_error(const std::string &msg) : errorx(msg) {}
+};
+
 class http_client {
 private:
     std::shared_ptr<netsock> s;
@@ -16,7 +21,7 @@ private:
         if (s && s->valid()) return;
         s.reset(new netsock(AF_INET, SOCK_STREAM));
         if (s->dial(host.c_str(), port) != 0) {
-            throw errorx("dial %s:%d failed", host.c_str(), port);
+            throw http_error("dial");
         }
     }
 
@@ -56,7 +61,7 @@ public:
             while (!resp.complete) {
                 buf.reserve(4*1024);
                 ssize_t nr = s->recv(buf.back(), buf.available());
-                if (nr <= 0) { throw errorx("http get error"); }
+                if (nr <= 0) { throw http_error("recv"); }
                 buf.commit(nr);
                 size_t len = buf.size();
                 resp.parse(&parser, buf.front(), len);
