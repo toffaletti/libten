@@ -1,3 +1,6 @@
+#ifndef ZIP_HH
+#define ZIP_HH
+
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
 #define MINIZ_HEADER_FILE_ONLY 1
 #include "miniz.c"
@@ -71,3 +74,4 @@ struct zip_writer {
 };
 
 } // end namespace ten
+#endif

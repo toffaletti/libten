@@ -1,3 +1,6 @@
+#ifndef CMD_SERVER_HH
+#define CMD_SERVER_HH
+
 #include "logging.hh"
 #include "task.hh"
 #include "net.hh"
@@ -7,6 +10,10 @@
 #include <unordered_map>
 #include <vector>
 #include <functional>
+
+#include <boost/utility.hpp>
+#include <boost/algorithm/string.hpp>
+#include <netinet/tcp.h>
 
 namespace ten {
 
@@ -101,3 +108,4 @@ private:
 
 } // end namespace ten 
 
+#endif

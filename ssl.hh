@@ -1,3 +1,5 @@
+#ifndef SSL_SOCK_HH
+#define SSL_SOCK_HH
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include "net.hh"
@@ -86,4 +88,4 @@ public:
 
 
 } // end namespace ten
-
+#endif

@@ -1,3 +1,6 @@
+#ifndef RPC_THUNK_HH
+#define RPC_THUNK_HH
+
 #include "msgpack/msgpack.hpp"
 #include "error.hh"
 #include "apply.hh"
@@ -55,3 +58,4 @@ std::function<msgpack::object (msgpack::object &o, msgpack::zone *z)> thunk(cons
 
 } // end namespace ten
 
+#endif

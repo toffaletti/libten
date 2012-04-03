@@ -1,3 +1,6 @@
+#ifndef RPC_CLIENT_HH
+#define RPC_CLIENT_HH
+
 #include "rpc/protocol.hh"
 
 namespace ten {
@@ -113,4 +116,4 @@ protected:
 };
 
 } // end namespace ten
-
+#endif

@@ -1,3 +1,6 @@
+#ifndef HTTP_SERVER_HH
+#define HTTP_SERVER_HH
+
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <chrono>
@@ -241,3 +244,4 @@ private:
 
 } // end namespace ten
 
+#endif

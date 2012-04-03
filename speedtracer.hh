@@ -1,3 +1,6 @@
+#ifndef SPEEDTRACER_HH
+#define SPEEDTRACER_HH
+
 #include <chrono>
 #include <deque>
 #include <vector>
@@ -83,3 +86,4 @@ string session::dump() const {
 } // end namespace tracer
 
 } // end namespace ten
+#endif

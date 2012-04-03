@@ -1,3 +1,6 @@
+#ifndef RPC_SERVER_HH
+#define RPC_SERVER_HH
+
 #include "logging.hh"
 #include "task.hh"
 #include "net.hh"
@@ -83,4 +86,4 @@ private:
 };
 
 } // end namespace ten 
-
+#endif

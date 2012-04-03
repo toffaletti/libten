@@ -1,3 +1,6 @@
+#ifndef JSONPACK_HH
+#define JSONPACK_HH
+
 #include "msgpack/msgpack.hpp"
 #include "json.hh"
 
@@ -122,3 +125,4 @@ packer<Stream>& operator<< (packer<Stream>& o, const json& v)
 }
 
 } // end namespace msgpack
+#endif
