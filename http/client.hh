@@ -105,7 +105,7 @@ protected:
     uint16_t port;
 
     std::shared_ptr<http_client> new_resource() {
-        VLOG(3) << "new http_client resource " << host;
+        VLOG(3) << "new http_client resource " << host << ":" << port;
         return std::make_shared<http_client>(host, port);
     }
 };
