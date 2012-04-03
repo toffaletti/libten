@@ -24,10 +24,10 @@ static void fd_sets_to_pollfd(fd_set *read_fds, fd_set *write_fds, int max_fd, s
     for (int fd = 0; fd<max_fd; fd++) {
         fds[ifd].fd = fd;
         if (FD_ISSET(fd, read_fds)) {
-            fds[ifd].events |= POLLIN;
+            fds[ifd].events |= EPOLLIN;
         }
         if (FD_ISSET(fd, write_fds)) {
-            fds[ifd].events |= POLLOUT;
+            fds[ifd].events |= EPOLLOUT;
         }
         // only increment the fd index if it exists in the fd sets
         if (fds[ifd].events != 0) {
@@ -43,10 +43,10 @@ static void pollfd_to_fd_sets(struct pollfd *fds, int nfds, fd_set *read_fds, fd
     FD_ZERO(read_fds);
     FD_ZERO(write_fds);
     for (int i = 0; i<nfds; i++) {
-        if (fds[i].revents & POLLIN) {
+        if (fds[i].revents & EPOLLIN) {
             FD_SET(fds[i].fd, read_fds);
         }
-        if (fds[i].revents & POLLOUT) {
+        if (fds[i].revents & EPOLLOUT) {
             FD_SET(fds[i].fd, write_fds);
         }
     }
@@ -70,10 +70,11 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
     }
 
     int n = 0;
+    si->status = ECONNREFUSED;
     while (host->h_addr_list && host->h_addr_list[n]) {
         address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        status = netconnect(si->fd, addr, 0);
-        if (status == 0) break;
+        si->status = netconnect(si->fd, addr, 0);
+        if (si->status == 0) break;
 
         n++;
     }
