@@ -62,14 +62,14 @@ struct io_scheduler {
             uint32_t events = pollfds[fd].events;
 
             if (fds[i].events & EPOLLIN) {
-                CHECK(pollfds[fd].t_in == 0);
+                CHECK(pollfds[fd].t_in == 0) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
                 pollfds[fd].t_in = t;
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
-                CHECK(pollfds[fd].t_out == 0);
+                CHECK(pollfds[fd].t_out == 0) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
                 pollfds[fd].t_out = t;
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
@@ -184,7 +184,7 @@ struct io_scheduler {
         DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
         try {
             t->swap();
-        } catch (task_interrupted &e) {
+        } catch (...) {
             if (timeout_id) {
                 t->remove_timeout(timeout_id);
             }

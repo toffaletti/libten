@@ -11,8 +11,12 @@
 
 namespace ten {
 
-static __thread int _need_init = 1;
-static __thread ares_channel _channel;
+struct channel_destroyer {
+    ares_channel channel;
+    ~channel_destroyer() {
+        ares_destroy(channel);
+    }
+};
 
 // convert read and write fd_set to pollfd
 // max_fd pollfds will be malloced and returned in fds_p
@@ -81,17 +85,14 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
 }
 
 int netdial(int fd, const char *addr, uint16_t port) {
+    channel_destroyer cd;
     sock_info si = {addr, fd, ARES_SUCCESS, port};
-    if (_need_init) {
-        int status = ares_init(&_channel);
-        if (status != ARES_SUCCESS) {
-            ares_destroy(_channel);
-            return status;
-        }
-        _need_init = 0;
+    int status = ares_init(&cd.channel);
+    if (status != ARES_SUCCESS) {
+        return status;
     }
 
-    ares_gethostbyname(_channel, addr, AF_INET, gethostbyname_callback, &si);
+    ares_gethostbyname(cd.channel, addr, AF_INET, gethostbyname_callback, &si);
 
     fd_set read_fds, write_fds;
     struct timeval *tvp, tv;
@@ -99,21 +100,19 @@ int netdial(int fd, const char *addr, uint16_t port) {
     while (si.status == ARES_SUCCESS) {
         FD_ZERO(&read_fds);
         FD_ZERO(&write_fds);
-        max_fd = ares_fds(_channel, &read_fds, &write_fds);
+        max_fd = ares_fds(cd.channel, &read_fds, &write_fds);
         if (max_fd == 0)
             break;
 
         struct pollfd *fds;
         fd_sets_to_pollfd(&read_fds, &write_fds, max_fd, &fds, &nfds);
         std::unique_ptr<struct pollfd, void (*)(void *)> fds_p(fds, free);
-        tvp = ares_timeout(_channel, NULL, &tv);
-        // TODO: get timeout working
-        // include tvp->tv_usec in timeout
-        if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) == -1) {
-            /* TODO: handle errors here */
+        tvp = ares_timeout(cd.channel, NULL, &tv);
+        if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
+            pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
+            ares_process(cd.channel, &read_fds, &write_fds);
         }
-        pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
-        ares_process(_channel, &read_fds, &write_fds);
+
     }
     return si.status;
 }
