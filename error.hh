@@ -23,20 +23,20 @@ struct saved_backtrace {
 //! useful for coroutines because the stack is lost switching contexts
 class backtrace_exception : public std::exception {
 public:
-    backtrace_exception() {}
-
-    std::string str() { return bt.str(); }
+    std::string backtrace_str() { return bt.str(); }
 private:
     saved_backtrace bt;
 };
 
 //! exception that sets what() based on current errno value
 struct errno_error : backtrace_exception {
+private:
     char _buf[256];
     const char *_what;
     //! the value of errno when this exception was created
     int _error;
 
+public:
     //! \param err the error as specified by errno
     errno_error(int err = errno) : _error(err) {
         // requires GNU specific strerror_r
@@ -50,8 +50,10 @@ struct errno_error : backtrace_exception {
 
 //! construct a what() string in printf() format
 struct errorx : backtrace_exception {
+private:
     char _buf[256];
 
+public:
     //! \param fmt printf-style format string
     errorx(const char *fmt, ...) __attribute__((format (printf, 2, 3))) {
         _buf[0] = 0;
@@ -67,7 +69,7 @@ struct errorx : backtrace_exception {
     }
 
     //! \return a string describing the error
-    const char *what() const throw () { return _buf; }
+    const char *what() const throw() { return _buf; }
 };
 
 //! macro to throw if exp returns -1
