@@ -46,7 +46,7 @@ private:
 public:
     //! create a new channel
     //! \param capacity number of items to buffer. the default is 0, unbuffered.
-    channel(typename impl::size_type capacity=0, bool autoclose_=false)
+    explicit channel(typename impl::size_type capacity=0, bool autoclose_=false)
         : m(std::make_shared<impl>(capacity)), autoclose(autoclose_)
     {
     }
@@ -80,7 +80,6 @@ public:
 
     //! receive data
     T recv() {
-        T item;
         std::unique_lock<qutex> l(m->qtx);
         bool unbuffered = m->capacity == 0;
         if (unbuffered) {
@@ -97,7 +96,7 @@ public:
         }
 
         --m->unread;
-        item = std::move(m->queue.front());
+        T item(std::move(m->queue.front()));
         m->queue.pop();
         if (unbuffered) {
             // shrink capacity again so sends will block
