@@ -8,7 +8,9 @@
 
 namespace ten {
 
-struct channel_closed_error : std::exception {};
+struct channel_closed_error : std::exception {
+    virtual const char *what() const throw () { return "ten::channel_closed_error"; }
+};
 
 //! send and receive data between tasks in FIFO order
 //
