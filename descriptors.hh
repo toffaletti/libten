@@ -292,7 +292,7 @@ struct socket_fd : fd_base {
 
     //! wrapper around recv()
     ssize_t recvfrom(void *buf, size_t len, address &addr, int flags=0) __attribute__((warn_unused_result)) {
-        socklen_t addrlen = sizeof(address);
+        socklen_t addrlen = addr.maxlen();
         return ::recvfrom(fd, buf, len, flags, addr.sockaddr(), &addrlen);
     }
 
@@ -304,7 +304,7 @@ struct socket_fd : fd_base {
     //! \param addr returns the address of the peer connected to the socket fd
     //! \return true on success, false if socket is not connected
     bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {
-        socklen_t addrlen = addr.addrlen();
+        socklen_t addrlen = addr.maxlen();
         if (::getpeername(fd, addr.sockaddr(), &addrlen) == 0) {
             return true;
         } else if (errno != ENOTCONN) {
@@ -317,7 +317,7 @@ struct socket_fd : fd_base {
 
     //! \param addr returns the address to which the socket fd is bound
     void getsockname(address &addr) throw (errno_error) {
-        socklen_t addrlen = addr.addrlen();
+        socklen_t addrlen = addr.maxlen();
         THROW_ON_ERROR(::getsockname(fd, addr.sockaddr(), &addrlen));
     }
 
@@ -364,7 +364,7 @@ struct socket_fd : fd_base {
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
     //! \return the file descriptor for the peer socket or -1 on error
     int accept(address &addr, int flags=0) __attribute__((warn_unused_result)) {
-        socklen_t addrlen = addr.addrlen();
+        socklen_t addrlen = addr.maxlen();
         return ::accept4(fd, addr.sockaddr(), &addrlen, flags);
     }
 

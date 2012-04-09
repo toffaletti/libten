@@ -83,6 +83,11 @@ struct address {
         return family() == AF_INET ? sizeof(addr.sa_in) : sizeof(addr.sa_in6);
     }
 
+    //! \return maximum supported address size
+    static size_t maxlen() {
+        return sizeof(addr.sa_stor);
+    }
+
     //! \return a struct sockaddr pointer to the backing storage
     struct sockaddr *sockaddr() const {
         // cast away const cause i'm evil
