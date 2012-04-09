@@ -143,7 +143,15 @@ struct address {
     //! output address in addr:port format
     friend std::ostream &operator<< (std::ostream &out, const address &addr) {
         char buf[INET6_ADDRSTRLEN];
-        out << addr.ntop(buf, sizeof(buf)) << ":" << addr.port();
+        if (addr.ntop(buf, sizeof(buf))) {
+            out << buf;
+            if (addr.port()) {
+                out << ":" << addr.port();
+            }
+        }
+        else {
+            out << "{invalid_address}";
+        }
         return out;
     }
 };
