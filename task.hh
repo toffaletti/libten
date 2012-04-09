@@ -53,7 +53,11 @@ struct qutex : boost::noncopyable {
     tasklist waiting;
     task *owner;
 
-    qutex() : owner(0) {}
+    qutex() : owner(0) {
+        // a simple memory barrier would be sufficient here
+        std::unique_lock<std::timed_mutex> lk(m);
+    }
+    ~qutex() {}
 
     void lock();
     void unlock();
