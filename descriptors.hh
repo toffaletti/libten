@@ -63,8 +63,17 @@ struct fd_base : boost::noncopyable {
     int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
 
     //! make fd nonblocking by setting O_NONBLOCK flag
+    void setblock(bool block = true) throw (errno_error) {
+        int flags;
+        THROW_ON_ERROR((flags = fcntl(F_GETFL)));
+        if (block)
+            flags &= O_NONBLOCK;
+        else
+            flags |= O_NONBLOCK;
+        THROW_ON_ERROR(fcntl(F_SETFL, flags));
+    }
     void setnonblock() throw (errno_error) {
-        THROW_ON_ERROR(fcntl(F_SETFL, fcntl(F_GETFL)|O_NONBLOCK));
+        setblock(false);
     }
 
     //! true if fd != -1
