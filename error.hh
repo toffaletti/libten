@@ -31,10 +31,10 @@ private:
 //! exception that sets what() based on current errno value
 struct errno_error : backtrace_exception {
 private:
-    char _buf[256];
-    const char *_what;
     //! the value of errno when this exception was created
     int _error;
+    char _buf[128];
+    const char *_what;
 
 public:
     //! \param err the error as specified by errno
@@ -43,9 +43,18 @@ public:
         // _what might be _buf or an internal static string
         _what = strerror_r(_error, _buf, sizeof(_buf));
     }
+    errno_error(const errno_error &ee) { copy(ee); }
+    errno_error & operator = (const errno_error &ee) { copy(ee); return *this; }
 
     //! \return string result from strerror_r
     const char *what() const throw() { return _what; }
+
+  private:
+    void copy(const errno_error &ee) {
+        _error = ee._error;
+        memcpy(_buf, ee._buf, sizeof _buf);
+        _what = (ee._what == ee._buf) ? _buf : ee._what;
+    }
 };
 
 //! construct a what() string in printf() format
@@ -83,11 +92,11 @@ public:
         throw errno_error(); \
     }
 
-#define THROW_ON_NONZERO(exp) \
-    { \
+#define THROW_ON_NONZERO_ERRNO(exp) \
+    do { \
         int _rv = (exp); \
         if (_rv != 0) throw errno_error(_rv); \
-    }
+    } while (0)
 
 } // end namespace ten
 

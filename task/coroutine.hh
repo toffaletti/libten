@@ -36,7 +36,7 @@ public:
         size_t real_size = stack_size;
 #endif
         int r = posix_memalign((void **)&stack_end, pgs, real_size);
-        THROW_ON_NONZERO(r);
+        THROW_ON_NONZERO_ERRNO(r);
 #ifndef NDEBUG
         // protect the guard page
         THROW_ON_ERROR(mprotect(stack_end, pgs, PROT_NONE));
