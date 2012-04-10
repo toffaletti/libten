@@ -23,35 +23,46 @@ struct saved_backtrace {
 //! useful for coroutines because the stack is lost switching contexts
 class backtrace_exception : public std::exception {
 public:
-    backtrace_exception() {}
-
-    std::string str() { return bt.str(); }
+    std::string backtrace_str() { return bt.str(); }
 private:
     saved_backtrace bt;
 };
 
 //! exception that sets what() based on current errno value
 struct errno_error : backtrace_exception {
-    char _buf[256];
-    const char *_what;
+private:
     //! the value of errno when this exception was created
     int _error;
+    char _buf[128];
+    const char *_what;
 
+public:
     //! \param err the error as specified by errno
     errno_error(int err = errno) : _error(err) {
         // requires GNU specific strerror_r
         // _what might be _buf or an internal static string
         _what = strerror_r(_error, _buf, sizeof(_buf));
     }
+    errno_error(const errno_error &ee) { copy(ee); }
+    errno_error & operator = (const errno_error &ee) { copy(ee); return *this; }
 
     //! \return string result from strerror_r
     const char *what() const throw() { return _what; }
+
+  private:
+    void copy(const errno_error &ee) {
+        _error = ee._error;
+        memcpy(_buf, ee._buf, sizeof _buf);
+        _what = (ee._what == ee._buf) ? _buf : ee._what;
+    }
 };
 
 //! construct a what() string in printf() format
 struct errorx : backtrace_exception {
+private:
     char _buf[256];
 
+public:
     //! \param fmt printf-style format string
     errorx(const char *fmt, ...) __attribute__((format (printf, 2, 3))) {
         _buf[0] = 0;
@@ -67,7 +78,7 @@ struct errorx : backtrace_exception {
     }
 
     //! \return a string describing the error
-    const char *what() const throw () { return _buf; }
+    const char *what() const throw() { return _buf; }
 };
 
 //! macro to throw if exp returns -1
@@ -81,11 +92,11 @@ struct errorx : backtrace_exception {
         throw errno_error(); \
     }
 
-#define THROW_ON_NONZERO(exp) \
-    { \
+#define THROW_ON_NONZERO_ERRNO(exp) \
+    do { \
         int _rv = (exp); \
         if (_rv != 0) throw errno_error(_rv); \
-    }
+    } while (0)
 
 } // end namespace ten
 

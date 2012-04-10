@@ -16,7 +16,7 @@ extern __thread proc *_this_proc;
 // this can be used to free io_scheduler, or other per-proc
 // resources like dns resolving threads, etc.
 
-struct proc {
+struct proc : boost::noncopyable {
     io_scheduler *_sched;
     std::thread *thread;
     std::mutex mutex;
@@ -40,23 +40,7 @@ struct proc {
     //! current time cached in a few places through the event loop
     time_point<monotonic_clock> now;
 
-    proc(task *t = 0)
-        : _sched(0), nswitch(0), ctask(0),
-        asleep(false), polling(false), canceled(false), taskcount(0)
-    {
-        now = monotonic_clock::now();
-        add(this);
-        std::unique_lock<std::mutex> lk(mutex);
-        if (t) {
-            thread = new std::thread(proc::startproc, this, t);
-            thread->detach();
-        } else {
-            // main thread proc
-            _this_proc = this;
-            thread = 0;
-        }
-    }
-
+    explicit proc(task *t = 0);
     ~proc();
 
     void schedule();

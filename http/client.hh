@@ -31,7 +31,7 @@ public:
     size_t max_content_length;
 
     http_client(const std::string &host_, uint16_t port_=80)
-        : buf(4*1024), host(host_), port(port_), max_content_length(-1) {}
+        : buf(4*1024), host(host_), port(port_), max_content_length(~(size_t)0) {}
 
     http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
         uri u;

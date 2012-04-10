@@ -10,7 +10,7 @@ namespace ten {
 //! wrapper around anonymous POSIX semaphore
 class semaphore : boost::noncopyable {
 public:
-    semaphore(unsigned int value = 0) {
+    explicit semaphore(unsigned int value = 0) {
         THROW_ON_ERROR(sem_init(&s, 0, value));
     }
 
