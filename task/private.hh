@@ -120,7 +120,7 @@ struct task {
         } catch (task_interrupted &e) {
             DVLOG(5) << t << " interrupted ";
         } catch (backtrace_exception &e) {
-            LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.str();
+            LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
             std::exit(2);
         } catch (std::exception &e) {
             LOG(ERROR) << "unhandled error in " << t << ": " << e.what();

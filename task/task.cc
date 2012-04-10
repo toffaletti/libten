@@ -364,9 +364,9 @@ rendez::~rendez() {
     CHECK(waiting.empty()) << "BUG: still waiting: " << waiting;
 }
 
-deadline::deadline(uint64_t ms) {
+deadline::deadline(milliseconds ms) {
     task *t = _this_proc->ctask;
-    timeout_id = _this_proc->sched().add_timeout(t, milliseconds(ms), deadline_reached());
+    timeout_id = _this_proc->sched().add_timeout(t, ms, deadline_reached());
 }
 
 deadline::~deadline() {

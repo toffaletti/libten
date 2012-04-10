@@ -21,7 +21,7 @@ int netconnect(int fd, const address &addr, unsigned ms) {
 
 int netaccept(int fd, address &addr, int flags, unsigned timeout_ms) {
     int nfd;
-    socklen_t addrlen = addr.addrlen();
+    socklen_t addrlen = addr.maxlen();
     while ((nfd = ::accept4(fd, addr.sockaddr(), &addrlen, flags | SOCK_NONBLOCK)) < 0) {
         if (errno == EINTR)
             continue;

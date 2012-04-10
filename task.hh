@@ -50,13 +50,15 @@ const time_point<monotonic_clock> &procnow();
 
 struct qutex : boost::noncopyable {
     std::timed_mutex m;
-    task *owner;
     tasklist waiting;
+    task *owner;
 
-    qutex() {
+    qutex() : owner(0) {
+        // a simple memory barrier would be sufficient here
         std::unique_lock<std::timed_mutex> lk(m);
-        owner = 0;
     }
+    ~qutex() {}
+
     void lock();
     void unlock();
     bool try_lock();
@@ -108,7 +110,7 @@ bool fdwait(int fd, int rw, uint64_t ms=0);
 struct deadline_reached : task_interrupted {};
 struct deadline : boost::noncopyable {
     void *timeout_id;
-    deadline(uint64_t milliseconds);
+    deadline(milliseconds ms);
     ~deadline();
 };
 

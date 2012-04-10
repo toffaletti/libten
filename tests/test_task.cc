@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
 
 static void deadline_timer() {
     try {
-        deadline dl(100);
+        deadline dl(milliseconds(100));
         tasksleep(200);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
@@ -302,7 +302,7 @@ static void deadline_timer() {
 
 static void deadline_not_reached() {
     try {
-        deadline dl(100);
+        deadline dl(milliseconds(100));
         tasksleep(50);
         BOOST_CHECK(true);
     } catch (deadline_reached &e) {
@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_timer) {
 
 static void deadline_cleared() {
     try {
-        deadline dl(10);
+        deadline dl(milliseconds(10));
         tasksleep(20000);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
@@ -345,7 +345,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
 static void deadline_cleared_not_reached() {
     try {
         if (true) {
-            deadline dl(100);
+            deadline dl(milliseconds(100));
             tasksleep(20);
             // deadline should be removed at this point
             BOOST_CHECK(true);
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared_not_reached) {
 
 static void deadline_yield() {
     try {
-        deadline dl(5);
+        deadline dl(milliseconds(5));
         for (;;) {
             taskyield();
         }

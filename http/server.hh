@@ -104,7 +104,9 @@ public:
             address addr;
             if (sock.getpeername(addr)) {
                 char buf[INET6_ADDRSTRLEN];
-                return addr.ntop(buf, sizeof(buf));
+                if (addr.ntop(buf, sizeof(buf))) {
+                    return buf;
+                }
             }
             return "";
         }

@@ -101,7 +101,7 @@ void proc::schedule() {
             }
         }
     } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what() << "\n" << e.str();
+        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what() << "\n" << e.backtrace_str();
         std::exit(2);
     } catch (std::exception &e) {
         LOG(ERROR) << "unhandled error in proc::schedule: " << e.what();
@@ -109,6 +109,22 @@ void proc::schedule() {
     }
 }
 
+proc::proc(task *t)
+  : _sched(0), nswitch(0), ctask(0),
+    asleep(false), polling(false), canceled(false), taskcount(0)
+{
+    now = monotonic_clock::now();
+    add(this);
+    std::unique_lock<std::mutex> lk(mutex);
+    if (t) {
+        thread = new std::thread(proc::startproc, this, t);
+        thread->detach();
+    } else {
+        // main thread proc
+        _this_proc = this;
+        thread = 0;
+    }
+}
 
 proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
