@@ -3,6 +3,8 @@
 
 #include "rpc/protocol.hh"
 
+using namespace msgpack::rpc;
+
 namespace ten {
 
 #if 0

@@ -16,7 +16,7 @@ static void do_get(uri u) {
     if (u.port == 0) u.port = 80;
     s.dial(u.host.c_str(), u.port);
 
-    http_request r("GET", u.compose(true));
+    http_request r("GET", u.compose_path());
     // HTTP/1.1 requires host header
     r.append("Host", u.host); 
 

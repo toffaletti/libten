@@ -52,6 +52,7 @@ struct uri {
 
     void normalize();
 
+    std::string compose_path() { return compose(true); }
     std::string compose(bool path_only=false);
 
     void transform(uri &base, uri &relative);

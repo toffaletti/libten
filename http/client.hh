@@ -34,23 +34,33 @@ public:
         : buf(4*1024), host(host_), port(port_), max_content_length(-1) {}
 
     http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
+        uri u;
+        u.scheme = "http";
+        u.host = host;
+        u.port = port;
+        u.path = path;
+        u.normalize();
+
+        http_request r(method, u.compose_path());
+        // HTTP/1.1 requires host header
+        r.set("Host", u.host); 
+        r.body = data;
+        return perform(r);
+    }
+
+    http_response perform(http_request &r) {
+        if (r.body.size()) {
+            r.set("Content-Length", r.body.size());
+        }
+
         try {
             ensure_connection();
-            uri u;
-            u.scheme = "http";
-            u.host = host;
-            u.port = port;
-            u.path = path;
-            u.normalize();
-
-            http_request r(method, u.compose(true));
-            // HTTP/1.1 requires host header
-            r.append("Host", u.host); 
-            r.append("Content-Length", data.size());
 
             std::string hdata = r.data();
             ssize_t nw = s->send(hdata.c_str(), hdata.size());
-            nw = s->send(data.c_str(), data.size());
+            if (r.body.size()) {
+                nw = s->send(r.body.c_str(), r.body.size());
+            }
 
             http_parser parser;
             http_response resp;

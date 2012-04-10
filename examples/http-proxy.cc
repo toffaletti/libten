@@ -95,7 +95,7 @@ void proxy_task(int sock) {
                 goto request_connect_error;
             }
 
-            http_request r(req.method, u.compose(true));
+            http_request r(req.method, u.compose_path());
             // HTTP/1.1 requires host header
             r.append("Host", u.host);
             r.headers = req.headers;
