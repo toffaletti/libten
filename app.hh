@@ -17,7 +17,7 @@ static int set_maxrlimit(int resource, rlim_t &max)
 {
     struct rlimit rl;
     if (getrlimit(resource, &rl) == -1) {
-    return -1;
+        return -1;
     }
     VLOG(3) << "resource: " << resource << " rlim_cur: " << rl.rlim_cur << " rlim_max: " << rl.rlim_max;
     max = rl.rlim_cur = rl.rlim_max;
