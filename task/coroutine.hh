@@ -26,14 +26,14 @@ public:
     //! create a new coroutine
     //
     //! allocates a stack and guard page
-    coroutine(proc f, void *arg=0, size_t stack_size=4096)
+    coroutine(proc f, void *arg=0, size_t stack_size_=4096)
     {
         // add on size for a guard page
         size_t pgs = getpagesize();
 #ifndef NDEBUG
-        size_t real_size = stack_size + pgs;
+        size_t real_size = stack_size_ + pgs;
 #else
-        size_t real_size = stack_size;
+        size_t real_size = stack_size_;
 #endif
         int r = posix_memalign((void **)&stack_end, pgs, real_size);
         THROW_ON_NONZERO(r);
@@ -43,12 +43,12 @@ public:
         stack_end += pgs;
 #endif
         // stack grows down on x86 & x86_64
-        stack_start = stack_end + stack_size;
+        stack_start = stack_end + stack_size_;
 #ifndef NVALGRIND
         valgrind_stack_id =
             VALGRIND_STACK_REGISTER(stack_start, stack_end);
 #endif
-        ctxt.init(f, arg, stack_start, stack_size);
+        ctxt.init(f, arg, stack_start, stack_size_);
     }
 
     void restart(proc f, void *arg=0) {

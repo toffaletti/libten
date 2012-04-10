@@ -106,7 +106,7 @@ bool fdwait(int fd, int rw, uint64_t ms=0);
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated
 struct deadline_reached : task_interrupted {};
-struct deadline {
+struct deadline : boost::noncopyable {
     void *timeout_id;
     deadline(uint64_t milliseconds);
     ~deadline();

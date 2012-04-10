@@ -111,7 +111,7 @@ struct uri {
 
     struct match_char {
         char c;
-        match_char(char c) : c(c) {}
+        match_char(char c_) : c(c_) {}
         bool operator()(char x) const { return x == c; }
     };
     typedef std::vector<std::string> split_vector;

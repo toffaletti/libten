@@ -332,11 +332,11 @@ static void slice_op(json &result, deque<string> &tokens) {
     }
 }
 
-json json::path(const string &path) {
+json json::path(const string &path_) {
     size_t i = 0;
     string tok;
     deque<string> tokens;
-    while (next_path_token(path, i, tok))
+    while (next_path_token(path_, i, tok))
         tokens.push_back(tok);
 
     json result = *this;

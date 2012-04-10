@@ -114,7 +114,7 @@ proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
     if (thread == 0) {
         {
-            std::unique_lock<std::mutex> lk(procsmutex);
+            std::unique_lock<std::mutex> plk(procsmutex);
             for (auto i=procs.begin(); i!= procs.end(); ++i) {
                 if (*i == this) continue;
                 (*i)->cancel();
@@ -123,7 +123,7 @@ proc::~proc() {
         for (;;) {
             // TODO: remove this busy loop in favor of sleeping the proc
             {
-                std::unique_lock<std::mutex> lk(procsmutex);
+                std::unique_lock<std::mutex> plk(procsmutex);
                 size_t np = procs.size();
                 if (np == 1)
                     break;
@@ -178,84 +178,6 @@ static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
     taskdumpf();
 }
 
-static void backtrace_handler(int sig_num, siginfo_t *info, void *ctxt) {
-    // http://stackoverflow.com/questions/77005/how-to-generate-a-stacktrace-when-my-gcc-c-app-crashes
-    // TODO: maybe use the google logging demangler that doesn't alloc
-    hack::ucontext *uc = (hack::ucontext *)ctxt;
-
-    // Get the address at the time the signal was raised from the instruction pointer
-#if __i386__
-    void *caller_address = (void *) uc->uc_mcontext.eip;
-#elif __amd64__
-    void *caller_address = (void *) uc->uc_mcontext.rip;
-#else
-    #error "arch not supported"
-#endif
-
-    fprintf(stderr, "signal %d (%s), address is %p from %p\n",
-        sig_num, strsignal(sig_num), info->si_addr,
-        (void *)caller_address);
-
-    void *array[50];
-    int size = backtrace(array, 50);
-
-    // overwrite sigaction with caller's address
-    array[1] = caller_address;
-
-    char **messages = backtrace_symbols(array, size);
-
-    // skip first stack frame (points here)
-    for (int i = 1; i < size && messages != NULL; ++i) {
-        char *mangled_name = 0, *offset_begin = 0, *offset_end = 0;
-
-        // find parantheses and +address offset surrounding mangled name
-        for (char *p = messages[i]; *p; ++p) {
-            if (*p == '(') {
-                mangled_name = p;
-            } else if (*p == '+') {
-                offset_begin = p;
-            } else if (*p == ')') {
-                offset_end = p;
-                break;
-            }
-        }
-
-        // if the line could be processed, attempt to demangle the symbol
-        if (mangled_name && offset_begin && offset_end &&
-            mangled_name < offset_begin)
-        {
-            *mangled_name++ = '\0';
-            *offset_begin++ = '\0';
-            *offset_end++ = '\0';
-
-            int status;
-            char * real_name = abi::__cxa_demangle(mangled_name, 0, 0, &status);
-
-            if (status == 0) {
-                // if demangling is successful, output the demangled function name
-                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
-                    << real_name << "+" << offset_begin << offset_end
-                    << std::endl;
-
-            } else {
-                // otherwise, output the mangled function name
-                std::cerr << "[bt]: (" << i << ") " << messages[i] << " : "
-                    << mangled_name << "+" << offset_begin << offset_end
-                    << std::endl;
-            }
-            free(real_name);
-        } else {
-            // otherwise, print the whole line
-            std::cerr << "[bt]: (" << i << ") " << messages[i] << std::endl;
-        }
-    }
-    std::cerr << std::endl;
-
-    free(messages);
-
-    exit(EXIT_FAILURE);
-}
-
 static void procmain_init() {
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
     stack_t ss;
@@ -271,18 +193,7 @@ static void procmain_init() {
     FLAGS_logtostderr = true;
 
     struct sigaction act;
-    // XXX: google glog handles this for us
-    // in a more signal safe manner (no malloc)
-#if 0
-    // install SIGSEGV handler
-    act.sa_sigaction = backtrace_handler;
-    act.sa_flags = SA_RESTART | SA_SIGINFO;
-    THROW_ON_ERROR(sigaction(SIGSEGV, &act, NULL));
-    // install SIGABRT handler
-    act.sa_sigaction = backtrace_handler;
-    act.sa_flags = SA_RESTART | SA_SIGINFO;
-    THROW_ON_ERROR(sigaction(SIGABRT, &act, NULL));
-#endif
+
     // ignore SIGPIPE
     memset(&act, 0, sizeof(act));
     THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));

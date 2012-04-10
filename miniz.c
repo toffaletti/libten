@@ -3013,15 +3013,15 @@ static mz_bool mz_zip_reader_read_central_dir(mz_zip_archive *pZip, mz_uint32 fl
   cur_file_ofs = MZ_MAX((mz_int64)pZip->m_archive_size - (mz_int64)sizeof(buf_u32), 0);
   for ( ; ; )
   {
-    int i, n = (int)MZ_MIN(sizeof(buf_u32), pZip->m_archive_size - cur_file_ofs);
-    if (pZip->m_pRead(pZip->m_pIO_opaque, cur_file_ofs, pBuf, n) != (mz_uint)n)
+    int ii, ni = (int)MZ_MIN(sizeof(buf_u32), pZip->m_archive_size - cur_file_ofs);
+    if (pZip->m_pRead(pZip->m_pIO_opaque, cur_file_ofs, pBuf, ni) != (mz_uint)ni)
       return MZ_FALSE;
-    for (i = n - 4; i >= 0; --i)
-      if (MZ_READ_LE32(pBuf + i) == MZ_ZIP_END_OF_CENTRAL_DIR_HEADER_SIG)
+    for (ii = ni - 4; ii >= 0; --ii)
+      if (MZ_READ_LE32(pBuf + ii) == MZ_ZIP_END_OF_CENTRAL_DIR_HEADER_SIG)
         break;
-    if (i >= 0)
+    if (ii >= 0)
     {
-      cur_file_ofs += i;
+      cur_file_ofs += ii;
       break;
     }
     if ((!cur_file_ofs) || ((pZip->m_archive_size - cur_file_ofs) >= (0xFFFF + MZ_ZIP_END_OF_CENTRAL_DIR_HEADER_SIZE)))

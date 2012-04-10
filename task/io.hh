@@ -59,7 +59,7 @@ struct io_scheduler {
                 pollfds.resize(fd+1);
             }
             ev.data.fd = fd;
-            uint32_t events = pollfds[fd].events;
+            uint32_t saved_events = pollfds[fd].events;
 
             if (fds[i].events & EPOLLIN) {
                 CHECK(pollfds[fd].t_in == 0) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
@@ -77,9 +77,9 @@ struct io_scheduler {
 
             ev.events = pollfds[fd].events;
 
-            if (events == 0) {
+            if (saved_events == 0) {
                 THROW_ON_ERROR(efd.add(fd, ev));
-            } else if (events != pollfds[fd].events) {
+            } else if (saved_events != pollfds[fd].events) {
                 THROW_ON_ERROR(efd.modify(fd, ev));
             }
             ++npollfds;
@@ -148,16 +148,16 @@ struct io_scheduler {
     }
 
     bool fdwait(int fd, int rw, uint64_t ms) {
-        short events = 0;
+        short events_ = 0;
         switch (rw) {
             case 'r':
-                events |= EPOLLIN;
+                events_ |= EPOLLIN;
                 break;
             case 'w':
-                events |= EPOLLOUT;
+                events_ |= EPOLLOUT;
                 break;
         }
-        pollfd fds = {fd, events, 0};
+        pollfd fds = {fd, events_, 0};
         if (poll(&fds, 1, ms) > 0) {
             if ((fds.revents & EPOLLERR) || (fds.revents & EPOLLHUP)) {
                 return false;

@@ -40,14 +40,14 @@ struct address {
         clear();
     }
 
-    address(int fam, char *a, socklen_t alen, uint16_t port) {
+    address(int fam, char *a, socklen_t alen, uint16_t port_) {
         family(fam);
         if (fam == AF_INET) {
             memcpy(&addr.sa_in.sin_addr, a, alen);
-            addr.sa_in.sin_port = htons(port);
+            addr.sa_in.sin_port = htons(port_);
         } else if (fam == AF_INET6) {
             memcpy(&addr.sa_in6.sin6_addr, a, alen);
-            addr.sa_in6.sin6_port = htons(port);
+            addr.sa_in6.sin6_port = htons(port_);
         }
     }
 

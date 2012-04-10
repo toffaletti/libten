@@ -390,7 +390,7 @@ class LineReader {
   //
   // Note: if the last line doesn't end with '\n', the line will be
   // dropped.  It's an intentional behavior to make the code simple.
-  bool ReadLine(const char **bol, const char **eol) {
+  bool ReadLine(const char **bolp, const char **eolp) {
     if (BufferIsEmpty()) {  // First time.
       const ssize_t num_bytes = ReadPersistent(fd_, buf_, buf_len_);
       if (num_bytes <= 0) {  // EOF or error.
@@ -423,8 +423,8 @@ class LineReader {
     }
     *eol_ = '\0';  // Replace '\n' with '\0'.
 
-    *bol = bol_;
-    *eol = eol_;
+    *bolp = bol_;
+    *eolp = eol_;
     return true;
   }
 

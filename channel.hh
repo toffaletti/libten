@@ -67,7 +67,7 @@ public:
     //! send data
     typename impl::size_type send(T &&p) {
         std::unique_lock<qutex> l(m->qtx);
-        typename impl::size_type unread = m->unread;
+        typename impl::size_type ret = m->unread;
         while (m->is_full() && !m->closed) {
             m->not_full.sleep(l);
         }
@@ -75,7 +75,7 @@ public:
         m->queue.push(std::move(p));
         ++m->unread;
         m->not_empty.wakeup();
-        return unread;
+        return ret;
     }
 
     //! receive data

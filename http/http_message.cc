@@ -147,7 +147,7 @@ void http_request::parser_init(struct http_parser *p) {
     clear();
 }
 
-void http_request::parse(struct http_parser *p, const char *data, size_t &len) {
+void http_request::parse(struct http_parser *p, const char *data_, size_t &len) {
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = _request_on_url;
@@ -157,7 +157,7 @@ void http_request::parse(struct http_parser *p, const char *data, size_t &len) {
     s.on_body = _on_body;
     s.on_message_complete = _on_message_complete;
 
-    ssize_t nparsed = http_parser_execute(p, &s, data, len);
+    ssize_t nparsed = http_parser_execute(p, &s, data_, len);
     if (!complete && nparsed != (ssize_t)len) {
         len = nparsed;
         throw errorx("%s: %s",
@@ -205,7 +205,7 @@ void http_response::parser_init(struct http_parser *p) {
     clear();
 }
 
-void http_response::parse(struct http_parser *p, const char *data, size_t &len) {
+void http_response::parse(struct http_parser *p, const char *data_, size_t &len) {
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = NULL;
@@ -215,7 +215,7 @@ void http_response::parse(struct http_parser *p, const char *data, size_t &len) 
     s.on_body = _on_body;
     s.on_message_complete = _on_message_complete;
 
-    ssize_t nparsed = http_parser_execute(p, &s, data, len);
+    ssize_t nparsed = http_parser_execute(p, &s, data_, len);
     if (!complete && nparsed != (ssize_t)len) {
         len = nparsed;
         throw errorx("%s: %s",
