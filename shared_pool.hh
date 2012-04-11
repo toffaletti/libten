@@ -1,7 +1,7 @@
 #ifndef SHARED_POOL_HH
 #define SHARED_POOL_HH
 
-#include "task.hh"
+#include "task/rendez.hh"
 #include "logging.hh"
 
 #include <boost/call_traits.hpp>
