@@ -5,9 +5,13 @@
 
 namespace ten {
 
-using namespace std::chrono;
-
 template <typename DurationT> class backoff {
+private:
+    std::minstd_rand eng;
+    std::tr1::variate_generator<std::minstd_rand, std::tr1::uniform_real<float>> rand;
+    DurationT min_delay;
+    DurationT max_delay;
+    uint64_t retry;
 public:
     backoff(const DurationT &min_delay_, const DurationT &max_delay_)
         : eng(time(0)), rand(eng, std::tr1::uniform_real<float>(0.0, 1.0)),
@@ -25,13 +29,6 @@ public:
         ++retry;
         return DurationT(rep);
     }
-
-protected:
-    std::minstd_rand eng;
-    std::tr1::variate_generator<std::minstd_rand, std::tr1::uniform_real<float>> rand;
-    DurationT min_delay;
-    DurationT max_delay;
-    uint64_t retry;
 };
 
 } // end namespace ten

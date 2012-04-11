@@ -49,7 +49,7 @@ public:
     //! \return string result from strerror_r
     const char *what() const throw() { return _what; }
 
-  private:
+private:
     void copy(const errno_error &ee) {
         _error = ee._error;
         memcpy(_buf, ee._buf, sizeof _buf);

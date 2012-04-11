@@ -76,6 +76,8 @@ else(CARES_LIB AND CARES_INCLUDE)
 endif (CARES_LIB AND CARES_INCLUDE)
 
 add_library(ten
+    task/rendez.cc
+    task/qutex.cc
     task/task.cc
     task/proc.cc
     error.cc ioproc.cc net.cc zip.cc json.cc ${ASM}

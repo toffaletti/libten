@@ -48,53 +48,6 @@ void procshutdown();
 // returns cached time, not precise
 const time_point<monotonic_clock> &procnow();
 
-struct qutex : boost::noncopyable {
-    std::timed_mutex m;
-    tasklist waiting;
-    task *owner;
-
-    qutex() : owner(0) {
-        // a simple memory barrier would be sufficient here
-        std::unique_lock<std::timed_mutex> lk(m);
-    }
-    ~qutex() {}
-
-    void lock();
-    void unlock();
-    bool try_lock();
-    template<typename Rep,typename Period>
-        bool try_lock_for(
-                std::chrono::duration<Rep,Period> const&
-                relative_time);
-    template<typename Clock,typename Duration>
-        bool try_lock_until(
-                std::chrono::time_point<Clock,Duration> const&
-                absolute_time);
-private:
-    void internal_unlock(
-        std::unique_lock<std::timed_mutex> &lk);
-};
-
-struct rendez : boost::noncopyable {
-    std::timed_mutex m;
-    tasklist waiting;
-
-    rendez() {}
-    ~rendez();
-
-    void sleep(std::unique_lock<qutex> &lk);
-
-    template <typename Predicate>
-    void sleep(std::unique_lock<qutex> &lk, Predicate pred) {
-        while (!pred()) {
-            sleep(lk);
-        }
-    }
-
-    void wakeup();
-    void wakeupall();
-};
-
 struct procmain {
     procmain();
 

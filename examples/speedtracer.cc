@@ -8,7 +8,7 @@
 #include "channel.hh"
 #include <boost/lexical_cast.hpp>
 #include "channel.hh"
-#include "speedtracer.hh"
+#include "net/speedtracer.hh"
 
 using namespace ten;
 using namespace std;

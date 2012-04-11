@@ -47,7 +47,7 @@ add_executable(memg EXCLUDE_FROM_ALL memg.cc)
 target_link_libraries(memg ten boost_program_options-mt)
 
 # optional
-add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../ssl.cc)
+add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../net/ssl.cc)
 target_link_libraries(https-get ten http uri ssl)
 
 add_custom_target(examples DEPENDS

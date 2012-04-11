@@ -2,7 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <thread>
 #include "semaphore.hh"
-#include "task.hh"
+#include "task/rendez.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

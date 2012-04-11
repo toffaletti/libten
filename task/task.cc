@@ -1,4 +1,3 @@
-#include <condition_variable>
 #include <cassert>
 #include <algorithm>
 #include "task/private.hh"
@@ -11,11 +10,9 @@ using std::function;
 using std::atomic;
 using std::stringstream;
 using std::mutex;
-using std::timed_mutex;
 using std::unique_lock;
 using std::unique_ptr;
 using std::rethrow_exception;
-using std::try_to_lock;
 
 static atomic<uint64_t> taskidgen(0);
 
@@ -217,151 +214,6 @@ void task::swap() {
             break;
         }
     }
-}
-
-void qutex::lock() {
-    task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::lock called outside of task";
-    {
-        unique_lock<timed_mutex> lk(m);
-        if (owner == 0 || owner == t) {
-            owner = t;
-            DVLOG(5) << "LOCK qutex: " << this << " owner: " << owner;
-            return;
-        }
-        DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << owner;
-        waiting.push_back(t);
-    }
-
-    try {
-        // loop to handle spurious wakeups from other threads
-        for (;;) {
-            t->swap();
-            unique_lock<timed_mutex> lk(m);
-            if (owner == _this_proc->ctask) {
-                break;
-            }
-        }
-    } catch (...) {
-        unique_lock<timed_mutex> lk(m);
-        internal_unlock(lk);
-        throw;
-    }
-}
-
-bool qutex::try_lock() {
-    task *t = _this_proc->ctask;
-    CHECK(t) << "BUG: qutex::try_lock called outside of task";
-    unique_lock<timed_mutex> lk(m, try_to_lock);
-    if (lk.owns_lock()) {
-        if (owner == 0) {
-            owner = t;
-            return true;
-        }
-    }
-    return false;
-}
-
-void qutex::unlock() {
-    unique_lock<timed_mutex> lk(m);
-    internal_unlock(lk);
-}
-
-void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
-    task *t = _this_proc->ctask;
-    CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
-    if (t == owner) {
-        if (!waiting.empty()) {
-            t = owner = waiting.front();
-            waiting.pop_front();
-        } else {
-            t = owner = 0;
-        }
-        DVLOG(5) << "UNLOCK qutex: " << this << " new owner: " << owner << " waiting: " << waiting.size();
-        lk.unlock();
-        // must use t here, not owner because
-        // lock has been released
-        if (t) t->ready();
-    } else {
-        // this branch is taken when exception is thrown inside
-        // a task that is currently waiting inside qutex::lock
-        auto i = find(waiting.begin(), waiting.end(), t);
-        if (i != waiting.end()) {
-            waiting.erase(i);
-        }
-    }
-}
-
-#if 0
-bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
-    task *t = _this_proc->ctask;
-    if (find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ SLEEP PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
-    lk.unlock();
-    _this_proc->sched().add_timeout(t, ms);
-    t->swap();
-    lk.lock();
-    _this_proc->sched().del_timeout(t);
-    // if we're not in the waiting list then we were signaled to wakeup
-    return find(waiting.begin(), waiting.end(), t) == waiting.end();
-}
-#endif
-
-void rendez::sleep(unique_lock<qutex> &lk) {
-    task *t = _this_proc->ctask;
-
-    {
-        unique_lock<timed_mutex> ll(m);
-        CHECK(find(waiting.begin(), waiting.end(), t) == waiting.end())
-            << "BUG: " << t << " already waiting on rendez " << this;
-        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
-    // must hold the lock until we're in the waiting list
-    // otherwise another thread might modify the condition and
-    // call wakeup() and waiting would be empty so we'd sleep forever
-    lk.unlock();
-    try {
-        t->swap(); 
-        lk.lock();
-    } catch (...) {
-        unique_lock<timed_mutex> ll(m);
-        auto i = find(waiting.begin(), waiting.end(), t);
-        if (i != waiting.end()) {
-            waiting.erase(i);
-        }
-        lk.lock();
-        throw;
-    }
-}
-
-void rendez::wakeup() {
-    unique_lock<timed_mutex> lk(m);
-    if (!waiting.empty()) {
-        task *t = waiting.front();
-        waiting.pop_front();
-        DVLOG(5) << "RENDEZ " << this << " wakeup: " << t;
-        t->ready();
-    }
-}
-
-void rendez::wakeupall() {
-    unique_lock<timed_mutex> lk(m);
-    while (!waiting.empty()) {
-        task *t = waiting.front();
-        waiting.pop_front();
-        DVLOG(5) << "RENDEZ " << this << " wakeupall: " << t;
-        t->ready();
-    }
-}
-
-
-rendez::~rendez() {
-    using ::operator<<;
-    unique_lock<timed_mutex> lk(m);
-    CHECK(waiting.empty()) << "BUG: still waiting: " << waiting;
 }
 
 deadline::deadline(milliseconds ms) {
