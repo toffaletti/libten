@@ -18,5 +18,6 @@ BOOST_AUTO_TEST_CASE(basic_io) {
     hello_world(m);
 
     m.flush();
+
     f.write(m.ptr(), m.size());
 }

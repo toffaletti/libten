@@ -17,14 +17,13 @@ public:
     reader(const reader &other) = delete;
     reader &operator =(const reader &other) = delete;
 
-    size_t read(char *buf, size_t n) __attribute__((warn_unused_result))
+    ssize_t read(char *buf, size_t n)
     {
         struct iovec iov[] = {{(void *)buf, n}};
         return readv(iov, 1);
     }
 
-    virtual size_t readv(const struct iovec *iov, int iovcnt)
-        __attribute__((warn_unused_result)) = 0;
+    virtual ssize_t readv(const struct iovec *iov, int iovcnt) = 0;
 
     virtual ~reader() {}
 };
@@ -37,47 +36,36 @@ public:
     writer(const writer &other) = delete;
     writer &operator =(const writer &other) = delete;
     
-    size_t write(const std::string &s) __attribute__((warn_unused_result))
+    ssize_t write(const std::string &s)
     {
         return write(s.c_str(), s.size());
     }
 
-    size_t write(const char *buf, size_t n) __attribute__((warn_unused_result))
+    ssize_t write(const char *buf, size_t n)
     {
         const struct iovec iov[] = {{(void *)buf, n}};
         return writev(iov, 1);
     }
 
-    virtual size_t writev(const struct iovec *iov, int iovcnt)
-        __attribute__((warn_unused_result)) = 0;
+    virtual ssize_t writev(const struct iovec *iov, int iovcnt) = 0;
 
     virtual ~writer() {}
 };
 
-class fwriter_base : public io::writer {
+class stream_base {
 public:
-    explicit fwriter_base(FILE *f_=0) : f(f_) {}
+    explicit stream_base(FILE *f_=0) : f(f_) {}
 
-    virtual ~fwriter_base() {
+    virtual ~stream_base() {
         close();
-    }
-
-    virtual size_t writev(const struct iovec *iov, int iovcnt)
-        __attribute__((warn_unused_result))
-    {
-        size_t ret = 0;
-        for (int i=0; i<iovcnt; ++i) {
-            if (!fwrite(iov[i].iov_base, iov[i].iov_len, 1, f)) {
-                return ferror(f);
-            }
-            ret += iov[i].iov_len;
-        }
-        return ret;
     }
 
     void flush() {
         THROW_ON_NONZERO_ERRNO(fflush(f));
     }
+
+    bool eof() { return feof(f); }
+    bool error() { return feof(f); }
 
     void close() {
         if (f) {
@@ -90,10 +78,41 @@ protected:
     FILE *f;
 };
 
-class memstream : public io::fwriter_base {
+class stream : public stream_base {
+public:
+    virtual ssize_t writev(const struct iovec *iov, int iovcnt)
+    {
+        ssize_t ret = 0;
+        for (int i=0; i<iovcnt; ++i) {
+            if (!fwrite(iov[i].iov_base, iov[i].iov_len, 1, f)) {
+                return ferror(f);
+            }
+            ret += iov[i].iov_len;
+        }
+        return ret;
+    }
+
+    virtual ssize_t readv(const struct iovec *iov, int iovcnt)
+    {
+        ssize_t ret = 0;
+        for (int i=0; i<iovcnt; ++i) {
+            size_t nr = fread(iov[i].iov_base, 1, iov[i].iov_len, f);
+            ret += nr;
+            if (nr < iov[i].iov_len) break;
+        }
+        return ret;
+    }
+};
+
+class memstream : public stream, public io::writer  {
 public:
     memstream() : _ptr(0), _size(0) {
-        fwriter_base::f = open_memstream(&_ptr, &_size);
+        f = open_memstream(&_ptr, &_size);
+    }
+
+    virtual ssize_t writev(const struct iovec *iov, int iovcnt) {
+        // silly that this is needed...
+        return stream::writev(iov, iovcnt);
     }
 
     //! must flush before calling this
@@ -114,6 +133,25 @@ public:
 private:
     char *_ptr;
     size_t _size;
+
+    //! cannot read memstream
+    virtual ssize_t readv(const struct iovec *iov, int iovcnt) { return 0; }
+};
+
+class filestream : public stream, public io::writer, public io::reader {
+public:
+    filestream(const std::string &path, const char *mode) {
+        f = fopen(path.c_str(), mode);
+        THROW_ON_NULL(f);
+    }
+
+    virtual ssize_t writev(const struct iovec *iov, int iovcnt) {
+        return stream::writev(iov, iovcnt);
+    }
+
+    virtual ssize_t readv(const struct iovec *iov, int iovcnt) {
+        return stream::readv(iov, iovcnt);
+    }
 };
 
 class fd_base : public io::reader, public io::writer {
@@ -172,14 +210,12 @@ public:
         setblock(false);
     }
 
-    virtual size_t readv(const struct iovec *iov, int iovcnt)
-        __attribute__((warn_unused_result))
+    virtual ssize_t readv(const struct iovec *iov, int iovcnt)
     {
         return ::readv(fd, iov, iovcnt);
     }
 
-    virtual size_t writev(const struct iovec *iov, int iovcnt)
-        __attribute__((warn_unused_result))
+    virtual ssize_t writev(const struct iovec *iov, int iovcnt)
     {
         return ::writev(fd, iov, iovcnt);
     }
