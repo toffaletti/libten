@@ -25,11 +25,13 @@ struct channel_closed_error : std::exception {
 //! channels are thread and task safe.
 template <typename T, typename ContainerT = std::deque<T> > class channel {
 private:
-    struct impl : boost::noncopyable {
+    struct impl {
         typedef typename ContainerT::size_type size_type;
 
         impl(size_type capacity_=0) : capacity(capacity_), unread(0),
             queue(ContainerT()), closed(false) {}
+        impl(const impl &) = delete;
+        impl &operator =(const impl &) = delete;
 
         // unbuffered channels use 0 capacity so send
         // will block waiting for recv on empty channel

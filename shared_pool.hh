@@ -5,7 +5,6 @@
 #include "logging.hh"
 
 #include <boost/call_traits.hpp>
-#include <boost/utility.hpp>
 #include <set>
 #include <deque>
 
@@ -16,7 +15,7 @@ namespace detail {
 }
 
 template <typename ResourceT, typename ScopeT = detail::scoped_resource<ResourceT> >
-class shared_pool : boost::noncopyable {
+class shared_pool {
 public:
     // use this scoped_resource type to RAII resources from the pool
     typedef ScopeT scoped_resource;
@@ -31,6 +30,9 @@ public:
         _new_resource(alloc_),
         _max(max_)
     {}
+
+    shared_pool(const shared_pool &) = delete;
+    shared_pool &operator =(const shared_pool &) = delete;
 
     size_t size() {
         std::unique_lock<qutex> lk(_mut);

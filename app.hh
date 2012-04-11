@@ -101,6 +101,9 @@ public:
         global_app = this;
     }
 
+    application(const application &) = delete;
+    application &operator = (const application &) = delete;
+
     ~application() {
         ShutdownGoogleLogging();
     }

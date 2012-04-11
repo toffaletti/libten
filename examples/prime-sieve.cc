@@ -1,5 +1,4 @@
 #include "channel.hh"
-#include <boost/bind.hpp>
 #include <iostream>
 
 using namespace ten;
@@ -24,12 +23,12 @@ void filter(channel<int> in, channel<int> out, int prime) {
 
 void primes() {
     channel<int> ch;
-    taskspawn(boost::bind(generate, ch));
+    taskspawn(std::bind(generate, ch));
     for (int i=0; i<100; ++i) {
         int prime = ch.recv();
         std::cout << prime << "\n";
         channel<int> out;
-        taskspawn(boost::bind(filter, ch, out, prime));
+        taskspawn(std::bind(filter, ch, out, prime));
         ch = out;
     }
     exit(0);

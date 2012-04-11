@@ -6,7 +6,6 @@
 #include <mutex>
 #include <deque>
 #include <poll.h>
-#include <boost/utility.hpp>
 #include "logging.hh"
 
 //! user must define
@@ -61,9 +60,13 @@ bool fdwait(int fd, int rw, uint64_t ms=0);
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated
 struct deadline_reached : task_interrupted {};
-struct deadline : boost::noncopyable {
+struct deadline {
     void *timeout_id;
     deadline(milliseconds ms);
+
+    deadline(const deadline &) = delete;
+    deadline &operator =(const deadline &) = delete;
+
     ~deadline();
 };
 

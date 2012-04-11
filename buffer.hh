@@ -6,7 +6,7 @@
 
 namespace ten {
 
-class buffer : boost::noncopyable {
+class buffer {
 public:
     struct head {
         uint32_t capacity;
@@ -23,6 +23,9 @@ public:
         memset(h, 0, sizeof(head));
         h->capacity = capacity;
     }
+
+    buffer(const buffer &) = delete;
+    buffer &operator =(const buffer &) = delete;
 
     void compact() {
         if (h->front != 0) {

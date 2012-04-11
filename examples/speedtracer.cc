@@ -22,12 +22,14 @@ struct my_config : app_config {
 
 static my_config conf;
 
-struct state : boost::noncopyable {
+struct state {
     application &app;
     http_server http;
     shared_ptr<tracer::session> tsess;
 
     state(application &app_) : app(app_) {}
+    state(const state &) = delete;
+    state &operator =(const state &) = delete;
 };
 
 static void log_request(http_server::request &h) {

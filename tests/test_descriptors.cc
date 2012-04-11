@@ -1,6 +1,5 @@
 #define BOOST_TEST_MODULE descriptor test
 #include <boost/test/unit_test.hpp>
-#include <boost/bind.hpp>
 #include "descriptors.hh"
 
 using namespace ten;

@@ -13,13 +13,17 @@ int netaccept(int fd, address &addr, int flags, unsigned ms);
 ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned ms);
 ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned ms);
 
-class sockbase : boost::noncopyable {
+class sockbase {
 public:
     socket_fd s;
 
     sockbase(int fd=-1) throw (errno_error) : s(fd) {}
     sockbase(int domain, int type, int protocol=0) throw (errno_error)
         : s(domain, type | SOCK_NONBLOCK, protocol) {}
+
+    sockbase(const sockbase &) = delete;
+    sockbase &operator =(const sockbase &) = delete;
+
     virtual ~sockbase() {}
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }

@@ -5,7 +5,6 @@
 #include "logging.hh"
 #include "net.hh"
 #include "channel.hh"
-#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;

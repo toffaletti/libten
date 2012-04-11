@@ -28,13 +28,16 @@ struct rpc_failure : public errorx {
     rpc_failure(const std::string &msg) : errorx(msg) {}
 };
 
-class rpc_client : public boost::noncopyable {
+class rpc_client {
 public:
     rpc_client(const std::string &hostname_, uint16_t port_=0)
         : hostname(hostname_), port(port_), msgid(0)
     {
         parse_host_port(hostname, port);
     }
+
+    rpc_client(const rpc_client &) = delete;
+    rpc_client &operator(const rpc_client &) = delete;
 
     template <typename Result, typename ...Args>
         Result call(const std::string &method, Args ...args) {

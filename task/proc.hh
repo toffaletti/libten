@@ -16,7 +16,7 @@ extern __thread proc *_this_proc;
 // this can be used to free io_scheduler, or other per-proc
 // resources like dns resolving threads, etc.
 
-struct proc : boost::noncopyable {
+struct proc {
     io_scheduler *_sched;
     std::thread *thread;
     std::mutex mutex;
@@ -41,6 +41,10 @@ struct proc : boost::noncopyable {
     time_point<monotonic_clock> now;
 
     explicit proc(task *t = 0);
+
+    proc(const proc &) = delete;
+    proc &operator =(const proc &) = delete;
+
     ~proc();
 
     void schedule();

@@ -2,17 +2,19 @@
 #define SEMA_HH
 
 #include "error.hh"
-#include <boost/utility.hpp>
 #include <semaphore.h>
 
 namespace ten {
 
 //! wrapper around anonymous POSIX semaphore
-class semaphore : boost::noncopyable {
+class semaphore {
 public:
     explicit semaphore(unsigned int value = 0) {
         THROW_ON_ERROR(sem_init(&s, 0, value));
     }
+
+    semaphore(const semaphore &) = delete;
+    semaphore &operator =(const semaphore &) = delete;
 
     //! increment (unlock) the semaphore
     void post() {

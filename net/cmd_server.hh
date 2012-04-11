@@ -6,12 +6,10 @@
 #include "net.hh"
 
 #include <sstream>
-#include <boost/utility.hpp>
 #include <unordered_map>
 #include <vector>
 #include <functional>
 
-#include <boost/utility.hpp>
 #include <boost/algorithm/string.hpp>
 #include <netinet/tcp.h>
 

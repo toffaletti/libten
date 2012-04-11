@@ -5,7 +5,7 @@
 
 namespace ten {
 
-class qutex : boost::noncopyable {
+class qutex {
 private:
     std::timed_mutex _m;
     tasklist _waiting;

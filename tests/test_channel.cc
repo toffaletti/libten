@@ -1,10 +1,8 @@
 #define BOOST_TEST_MODULE channel test
 #include <boost/test/unit_test.hpp>
-#include <boost/bind.hpp>
 #include "descriptors.hh"
 #include "semaphore.hh"
 #include "channel.hh"
-#include "task.hh"
 
 using namespace ten;
 const size_t default_stacksize=245*1024;

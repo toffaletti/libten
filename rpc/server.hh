@@ -8,7 +8,6 @@
 #include "rpc/thunk.hh"
 
 #include <sstream>
-#include <boost/utility.hpp>
 #include <unordered_map>
 #include <vector>
 #include <functional>

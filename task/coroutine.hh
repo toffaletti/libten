@@ -1,6 +1,5 @@
 #ifndef COROUTINE_HH
 #define COROUTINE_HH
-#include <boost/utility.hpp>
 #include <vector>
 #include <sys/mman.h>
 #include "task/context.hh"
@@ -16,9 +15,12 @@ namespace ten {
 //
 //! each coroutine allocates it own stack with a guard page.
 //! it uses context to swap between stacks.
-class coroutine : boost::noncopyable {
+class coroutine {
 public:
     typedef void (*proc)(void *);
+
+    coroutine(const coroutine &) = delete;
+    coroutine &operator =(const coroutine &) = delete;
 
     //! this represents the main coroutine
     coroutine() : stack_start(0), stack_end(0) { ctxt.init(); }

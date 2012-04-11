@@ -4,7 +4,6 @@
 #include "error.hh"
 #include "address.hh"
 
-#include <boost/utility.hpp>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -35,15 +34,16 @@ namespace ten {
 //! contains methods common to most file descriptors
 //! in C++0x this should be movable, but not copyable
 //! close is called in destructor
-struct fd_base : boost::noncopyable {
+struct fd_base {
     //! the file descriptor
     int fd;
 
     //! \param fd_ the file descriptor
     fd_base(int fd_=-1) : fd(fd_) {}
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
+    fd_base(const fd_base &) = delete;
+    fd_base &operator =(const fd_base &) = delete;
+
     fd_base(fd_base &&other) : fd(-1) {
         std::swap(fd, other.fd);
     }
@@ -54,7 +54,6 @@ struct fd_base : boost::noncopyable {
         }
         return *this;
     }
-#endif
 
     bool operator == (int fd_) const { return fd == fd_; }
 
