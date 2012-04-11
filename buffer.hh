@@ -15,23 +15,23 @@ public:
         char data[1];
     } __attribute__((packed));
 private:
-    head *h;
+    head *_h;
 
 public:
     buffer(uint32_t capacity) {
-        h = (head *)malloc(offsetof(head, data) + capacity);
-        memset(h, 0, sizeof(head));
-        h->capacity = capacity;
+        _h = (head *)malloc(offsetof(head, data) + capacity);
+        memset(_h, 0, sizeof(head));
+        _h->capacity = capacity;
     }
 
     buffer(const buffer &) = delete;
     buffer &operator =(const buffer &) = delete;
 
     void compact() {
-        if (h->front != 0) {
-            memmove(h->data, &h->data[h->front], size());
-            h->back = size();
-            h->front = 0;
+        if (_h->front != 0) {
+            memmove(_h->data, &_h->data[_h->front], size());
+            _h->back = size();
+            _h->front = 0;
         }
     }
 
@@ -39,13 +39,13 @@ public:
         if (n > potential()) {
             compact();
             uint32_t need = n - potential();
-            uint32_t newcapacity = h->capacity + need;
-            head *tmp = (head *)realloc(h, offsetof(head, data) + newcapacity);
+            uint32_t newcapacity = _h->capacity + need;
+            head *tmp = (head *)realloc(_h, offsetof(head, data) + newcapacity);
             if (tmp) {
                 tmp->capacity = newcapacity;
                 // TODO: DVLOG_IF is missing
                 //VLOG_IF(4, (h != tmp)) << "realloc returned new pointer: " << h << " " << tmp;
-                h = tmp;
+                _h = tmp;
             } else {
                 throw std::bad_alloc();
             }
@@ -58,38 +58,38 @@ public:
         if (n > available()) {
             throw std::runtime_error("commit too big");
         }
-        h->back += n;
+        _h->back += n;
     }
 
     void remove(uint32_t n) {
         if (n > size()) {
             throw std::runtime_error("remove > size");
         }
-        h->front += n;
-        if (h->front == h->back) {
-            h->front = 0;
-            h->back = 0;
+        _h->front += n;
+        if (_h->front == _h->back) {
+            _h->front = 0;
+            _h->back = 0;
         }
     }
 
-    char *front() const { return &h->data[h->front]; }
-    char *back() const { return &h->data[h->back]; }
-    char *end(uint32_t n) const { return &h->data[h->back + n]; }
-    char *end() const { return &h->data[h->capacity]; }
+    char *front() const { return &_h->data[_h->front]; }
+    char *back() const { return &_h->data[_h->back]; }
+    char *end(uint32_t n) const { return &_h->data[_h->back + n]; }
+    char *end() const { return &_h->data[_h->capacity]; }
 
     //! size of commited space
     uint32_t size() const {
-        return h->back - h->front;
+        return _h->back - _h->front;
     }
 
     //! space available to be commited
     uint32_t available() const {
-        return (h->capacity - h->back);
+        return (_h->capacity - _h->back);
     }
 
     //! available after compaction
     uint32_t potential() const {
-        return h->capacity - size();
+        return _h->capacity - size();
     }
 
     void clear() {
@@ -97,7 +97,7 @@ public:
     }
 
     ~buffer() {
-        free(h);
+        free(_h);
     }
 };
 

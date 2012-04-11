@@ -22,7 +22,18 @@ public:
     typedef std::deque<std::shared_ptr<ResourceT> > queue_type;
     typedef std::set<std::shared_ptr<ResourceT> > set_type;
     typedef std::function<std::shared_ptr<ResourceT> ()> alloc_func;
+protected:
+    template <typename TT> friend class detail::scoped_resource;
 
+    qutex _mut;
+    rendez _not_empty;
+    queue_type _q;
+    set_type _set;
+    std::string _name;
+    alloc_func _new_resource;
+    ssize_t _max;
+
+public:
     shared_pool(const std::string &name_,
             const alloc_func &alloc_,
             ssize_t max_ = -1)
@@ -48,16 +59,6 @@ public:
     const std::string &name() const { return _name; }
 
 protected:
-    template <typename TT> friend class detail::scoped_resource;
-
-    qutex _mut;
-    rendez _not_empty;
-    queue_type _q;
-    set_type _set;
-    std::string _name;
-    alloc_func _new_resource;
-    ssize_t _max;
-
     bool is_not_empty() const { return !_q.empty(); }
 
     std::shared_ptr<ResourceT> acquire() {
@@ -159,7 +160,10 @@ namespace detail {
 template <typename T> class scoped_resource {
 public:
     typedef typename boost::call_traits<shared_pool<T> >::reference poolref;
-
+protected:
+    poolref _pool;
+    std::shared_ptr<T> _c;
+public:
     explicit scoped_resource(poolref p)
         : _pool(p) {
             _c = _pool.acquire();
@@ -195,9 +199,6 @@ public:
         return _c.get();
     }
 
-protected:
-    poolref _pool;
-    std::shared_ptr<T> _c;
 };
 
 } // end detail namespace

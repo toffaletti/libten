@@ -17,6 +17,13 @@ public:
     typedef std::unordered_map<Key, typename cache_list::iterator> cache_map;
     typedef typename cache_list::iterator iterator;
 
+private:
+    cache_list _list; // stores items sorted by MRU -> LRU
+    cache_map _map; // stores key => iterator pointer to list
+    size_t _entries; // keep our own constant time size for _list
+    size_t _limit; // max number of entries
+
+public:
     lru(size_t limit) : _map(limit*2), _entries(0), _limit(limit) { }
 
     // will update lru if key is found
@@ -102,11 +109,6 @@ public:
     size_t capacity() const { return _limit; }
     size_t size() const { return _entries; }
 
-protected:
-    cache_list _list; // stores items sorted by MRU -> LRU
-    cache_map _map; // stores key => iterator pointer to list
-    size_t _entries; // keep our own constant time size for _list
-    size_t _limit; // max number of entries
 };
 
 } // namespace

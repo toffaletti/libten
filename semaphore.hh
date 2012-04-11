@@ -8,9 +8,11 @@ namespace ten {
 
 //! wrapper around anonymous POSIX semaphore
 class semaphore {
+private:
+    sem_t _s;
 public:
     explicit semaphore(unsigned int value = 0) {
-        THROW_ON_ERROR(sem_init(&s, 0, value));
+        THROW_ON_ERROR(sem_init(&_s, 0, value));
     }
 
     semaphore(const semaphore &) = delete;
@@ -18,23 +20,21 @@ public:
 
     //! increment (unlock) the semaphore
     void post() {
-        THROW_ON_ERROR(sem_post(&s));
+        THROW_ON_ERROR(sem_post(&_s));
     }
 
     //! decrement (lock) the semaphore
     //
     //! blocks if the value drops below 0
     void wait() {
-        THROW_ON_ERROR(sem_wait(&s));
+        THROW_ON_ERROR(sem_wait(&_s));
     }
 
     // TODO: sem_trywait and sem_timedwait
 
     ~semaphore() {
-        THROW_ON_ERROR(sem_destroy(&s));
+        THROW_ON_ERROR(sem_destroy(&_s));
     }
-protected:
-    sem_t s;
 };
 
 } // end namespace ten
