@@ -37,7 +37,7 @@ public:
     }
 
     rpc_client(const rpc_client &) = delete;
-    rpc_client &operator(const rpc_client &) = delete;
+    rpc_client &operator =(const rpc_client &) = delete;
 
     template <typename Result, typename ...Args>
         Result call(const std::string &method, Args ...args) {
