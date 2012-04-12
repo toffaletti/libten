@@ -85,6 +85,20 @@ template <class J> shared_json_ptr<J> take_json_ptr(J *j) { return shared_json_p
 // type-safe convenient json_t access
 //
 
+// we prefer this enum for C++ because we want JSON_INVALID
+// otherwise we'd use json_type.   maybe should change jansson
+enum ten_json_type {
+    TEN_JSON_OBJECT  = ::JSON_OBJECT,
+    TEN_JSON_ARRAY   = ::JSON_ARRAY,
+    TEN_JSON_STRING  = ::JSON_STRING,
+    TEN_JSON_INTEGER = ::JSON_INTEGER,
+    TEN_JSON_REAL    = ::JSON_REAL,
+    TEN_JSON_TRUE    = ::JSON_TRUE,
+    TEN_JSON_FALSE   = ::JSON_FALSE,
+    TEN_JSON_NULL    = ::JSON_NULL,
+    JSON_INVALID     = -1
+};
+
 class json {
   private:
     json_ptr _p;
@@ -190,7 +204,7 @@ class json {
 
     // type access
 
-    json_type type()     const  { json_t *j = get(); return j ? json_typeof(j) : (json_type)-1; }
+    ten_json_type type() const  { json_t *j = get(); return j ? (ten_json_type)json_typeof(j) : JSON_INVALID; }
     bool is_object()     const  { return json_is_object(get()); }
     bool is_array()      const  { return json_is_array(get()); }
     bool is_aggregate()  const  { return is_array() || is_object(); }
