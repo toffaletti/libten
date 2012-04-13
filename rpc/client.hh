@@ -2,6 +2,8 @@
 #define RPC_CLIENT_HH
 
 #include "rpc/protocol.hh"
+#include "shared_pool.hh"
+#include <boost/lexical_cast.hpp>
 
 using namespace msgpack::rpc;
 
@@ -119,6 +121,39 @@ protected:
             return rpcall<Result>(pk, sbuf, args...);
         }
 };
+
+class rpc_pool : public shared_pool<rpc_client> {
+public:
+
+    rpc_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
+        : shared_pool<rpc_client>(
+                "rpc:" + host_ + ":" + boost::lexical_cast<std::string>(port_),
+            std::bind(&rpc_pool::new_resource, this),
+            max_conn
+        ),
+        host(host_), port(port_) {}
+
+    rpc_pool(const std::string &host_, ssize_t max_conn)
+        : shared_pool<rpc_client>("rpc:" + host_,
+            std::bind(&rpc_pool::new_resource, this),
+            max_conn
+        ),
+        host(host_), port(0)
+    {
+        parse_host_port(host, port);
+    }
+
+protected:
+    std::string host;
+    uint16_t port;
+
+    std::shared_ptr<rpc_client> new_resource() {
+        VLOG(3) << "new rpc_client resource " << host << ":" << port;
+        return std::make_shared<rpc_client>(host, port);
+    }
+};
+
+
 
 } // end namespace ten
 #endif
