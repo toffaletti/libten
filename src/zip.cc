@@ -1,6 +1,6 @@
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
 extern "C" {
-#include "miniz.c"
+#include "ten/miniz.c"
 }
 
 #include "ten/zip.hh"
