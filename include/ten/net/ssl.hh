@@ -2,8 +2,8 @@
 #define SSL_SOCK_HH
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
-#include "net.hh"
-#include "error.hh"
+#include "ten/net.hh"
+#include "ten/error.hh"
 
 namespace ten {
 

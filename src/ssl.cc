@@ -1,5 +1,5 @@
-#include "ssl.hh"
-#include "ioproc.hh"
+#include "ten/net/ssl.hh"
+#include "ten/ioproc.hh"
 #include <openssl/err.h>
 #include <arpa/inet.h>
 
@@ -263,10 +263,7 @@ void sslsock::initssl(const SSL_METHOD *method, bool client) {
 }
 
 int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
-    // need large stack size for getaddrinfo (see dial)
-    // TODO: maybe replace with c-ares from libcurl project
-    ioproc io(8*1024*1024);
-    int status = iodial(io, s.fd, addr, port);
+    int status = netdial(s.fd, addr, port);
     if (status != 0) return status;
 
     handshake();

@@ -69,11 +69,15 @@ endif()
 SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 if (CARES_LIB AND CARES_INCLUDE)
-    set(RESOLVER_SRC net/cares.cc)
+    set(RESOLVER_SRC src/cares.cc)
 else(CARES_LIB AND CARES_INCLUDE)
     set(CARES_LIB "")
-    set(RESOLVER_SRC net/resolve.cc)
+    set(RESOLVER_SRC src/resolve.cc)
 endif (CARES_LIB AND CARES_INCLUDE)
+
+if (OPENSSL_FOUND)
+    set(SSL_SRC src/ssl.cc)
+endif (OPENSSL_FOUND)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
@@ -83,10 +87,11 @@ add_library(ten
     task/proc.cc
     src/error.cc src/ioproc.cc src/net.cc src/zip.cc src/json.cc ${ASM}
     ${RESOLVER_SRC}
+    ${SSL_SRC}
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
-target_link_libraries(ten glog ${CARES_LIB} rt)
+target_link_libraries(ten glog ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
 add_subdirectory(examples)
 add_subdirectory(tests)

@@ -4,7 +4,7 @@
 #include "ten/logging.hh"
 #include "ten/net.hh"
 #include "ten/channel.hh"
-#include "net/speedtracer.hh"
+#include "ten/net/speedtracer.hh"
 #include "http/server.hh"
 #include "uri/uri.hh"
 #include <boost/lexical_cast.hpp>

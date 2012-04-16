@@ -1,5 +1,6 @@
 get_filename_component(CWD ${CMAKE_CURRENT_LIST_FILE} PATH)
 include(${CWD}/defaults.cmake)
+include(FindOpenSSL)
 
 #add_definitions(-DUSE_UCONTEXT)
 add_definitions(-DUSE_BOOST_FCONTEXT)

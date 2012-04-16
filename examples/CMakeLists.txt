@@ -46,9 +46,11 @@ target_link_libraries(speedtracer ten http uri jansson boost_program_options-mt)
 add_executable(memg EXCLUDE_FROM_ALL memg.cc)
 target_link_libraries(memg ten boost_program_options-mt)
 
-# optional
-add_executable(https-get EXCLUDE_FROM_ALL https-get.cc ../net/ssl.cc)
-target_link_libraries(https-get ten http uri ssl)
+if (OPENSSL_FOUND)
+    add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)
+    target_link_libraries(https-get ten http uri)
+    set(HTTPS_GET https-get)
+endif (OPENSSL_FOUND)
 
 add_custom_target(examples DEPENDS
     prime-sieve
@@ -65,4 +67,5 @@ add_custom_target(examples DEPENDS
     json-path
     speedtracer
     memg
+    ${HTTPS_GET}
     )
