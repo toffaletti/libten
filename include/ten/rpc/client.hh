@@ -2,7 +2,7 @@
 #define RPC_CLIENT_HH
 
 #include "ten/shared_pool.hh"
-#include "rpc/protocol.hh"
+#include "ten/rpc/protocol.hh"
 #include <boost/lexical_cast.hpp>
 
 using namespace msgpack::rpc;

@@ -4,8 +4,8 @@
 #include "ten/logging.hh"
 #include "ten/task.hh"
 #include "ten/net.hh"
-#include "rpc/protocol.hh"
-#include "rpc/thunk.hh"
+#include "ten/rpc/protocol.hh"
+#include "ten/rpc/thunk.hh"
 
 #include <sstream>
 #include <unordered_map>

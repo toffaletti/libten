@@ -1,5 +1,5 @@
-#include "rpc/server.hh"
-#include "rpc/client.hh"
+#include "ten/rpc/server.hh"
+#include "ten/rpc/client.hh"
 
 using namespace ten;
 using namespace msgpack::rpc;
