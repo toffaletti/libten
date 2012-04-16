@@ -23,13 +23,13 @@ add_executable(backtrace EXCLUDE_FROM_ALL backtrace.cc)
 target_link_libraries(backtrace ten)
 
 add_executable(http-get EXCLUDE_FROM_ALL http-get.cc)
-target_link_libraries(http-get ten uri)
+target_link_libraries(http-get ten)
 
 add_executable(http-proxy EXCLUDE_FROM_ALL http-proxy.cc)
-target_link_libraries(http-proxy ten uri)
+target_link_libraries(http-proxy ten)
 
 add_executable(http-server EXCLUDE_FROM_ALL http-server.cc)
-target_link_libraries(http-server ten uri boost_program_options-mt)
+target_link_libraries(http-server ten boost_program_options-mt)
 
 add_executable(msg-pack EXCLUDE_FROM_ALL msgpack.cc)
 target_link_libraries(msg-pack ten jansson msgpack)
@@ -41,14 +41,14 @@ add_executable(json-path EXCLUDE_FROM_ALL json-path.cc)
 target_link_libraries(json-path ten jansson msgpack boost_program_options-mt)
 
 add_executable(speedtracer EXCLUDE_FROM_ALL speedtracer.cc)
-target_link_libraries(speedtracer ten uri jansson boost_program_options-mt)
+target_link_libraries(speedtracer ten jansson boost_program_options-mt)
 
 add_executable(memg EXCLUDE_FROM_ALL memg.cc)
 target_link_libraries(memg ten boost_program_options-mt)
 
 if (OPENSSL_FOUND)
     add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)
-    target_link_libraries(https-get ten uri)
+    target_link_libraries(https-get ten)
     set(HTTPS_GET https-get)
 endif (OPENSSL_FOUND)
 

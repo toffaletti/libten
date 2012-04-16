@@ -2,7 +2,7 @@
 #include "ten/buffer.hh"
 #include "ten/net/ssl.hh"
 #include "ten/http/http_message.hh"
-#include "uri/uri.hh"
+#include "ten/uri.hh"
 
 #include <iostream>
 

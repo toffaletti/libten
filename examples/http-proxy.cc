@@ -4,8 +4,7 @@
 #include "ten/net.hh"
 #include "ten/channel.hh"
 #include "ten/http/http_message.hh"
-
-#include "uri/uri.hh"
+#include "ten/uri.hh"
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;

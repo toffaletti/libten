@@ -1,4 +1,4 @@
-#include "uri.hh"
+#include "ten/uri.hh"
 #include <sstream>
 
 namespace ten {

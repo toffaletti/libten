@@ -81,6 +81,9 @@ endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
 
+add_subdirectory(src)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
     task/rendez.cc
@@ -91,16 +94,15 @@ add_library(ten
     ${RESOLVER_SRC}
     ${SSL_SRC}
     src/http_message.cc src/http_parser.c
+    ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
     boost.context/libs/context/src/fcontext.cpp)
-add_dependencies(ten libglog)
+add_dependencies(ten libglog ragel_uri_parser)
 
 target_link_libraries(ten glog ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
 add_subdirectory(examples)
 add_subdirectory(tests)
 add_subdirectory(benchmarks)
-
-add_subdirectory(uri)
 
 add_subdirectory(jansson)
 add_subdirectory(stringencoders)

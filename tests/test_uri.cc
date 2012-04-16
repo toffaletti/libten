@@ -2,7 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <stdio.h>
 
-#include "uri.hh"
+#include "ten/uri.hh"
 
 using namespace ten;
 
