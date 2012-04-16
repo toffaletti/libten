@@ -1,0 +1,5 @@
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    ragel_gen(uri_parser -G2)
+else (CMAKE_BUILD_TYPE STREQUAL "Release")
+    ragel_gen(uri_parser)
+endif (CMAKE_BUILD_TYPE STREQUAL "Release")
