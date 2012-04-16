@@ -1,8 +1,8 @@
 #include <cassert>
 #include <algorithm>
-#include "task/private.hh"
-#include "task/proc.hh"
-#include "task/io.hh"
+#include "private.hh"
+#include "proc.hh"
+#include "io.hh"
 
 namespace ten {
 

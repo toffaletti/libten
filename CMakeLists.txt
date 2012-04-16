@@ -86,10 +86,10 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPER
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
-    task/rendez.cc
-    task/qutex.cc
-    task/task.cc
-    task/proc.cc
+    src/rendez.cc
+    src/qutex.cc
+    src/task.cc
+    src/proc.cc
     src/error.cc src/ioproc.cc src/net.cc src/zip.cc src/json.cc ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}

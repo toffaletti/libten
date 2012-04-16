@@ -1,5 +1,5 @@
-#include "task/qutex.hh"
-#include "task/proc.hh"
+#include "ten/task/qutex.hh"
+#include "proc.hh"
 
 namespace ten {
 

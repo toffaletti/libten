@@ -1,7 +1,7 @@
 #ifndef TASK_IO_HH
 #define TASK_IO_HH
 
-#include "task/proc.hh"
+#include "proc.hh"
 
 namespace ten {
 

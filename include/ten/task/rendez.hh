@@ -1,7 +1,7 @@
 #ifndef RENDEZ_HH
 #define RENDEZ_HH
 
-#include "task/qutex.hh"
+#include "ten/task/qutex.hh"
 
 namespace ten {
 

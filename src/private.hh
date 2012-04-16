@@ -7,7 +7,7 @@
 #include "ten/task.hh"
 #include "ten/logging.hh"
 #include "ten/atomic.hh"
-#include "task/coroutine.hh"
+#include "ten/task/coroutine.hh"
 
 namespace ten {
 

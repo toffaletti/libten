@@ -4,7 +4,7 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/task.hh"
-#include "task/private.hh"
+#include "private.hh"
 
 namespace ten {
 
