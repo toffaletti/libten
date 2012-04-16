@@ -79,6 +79,8 @@ if (OPENSSL_FOUND)
     set(SSL_SRC src/ssl.cc)
 endif (OPENSSL_FOUND)
 
+add_definitions(-DHTTP_PARSER_STRICT=0)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
     task/rendez.cc
@@ -88,6 +90,7 @@ add_library(ten
     src/error.cc src/ioproc.cc src/net.cc src/zip.cc src/json.cc ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}
+    src/http_message.cc src/http_parser.c
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
 
@@ -98,7 +101,6 @@ add_subdirectory(tests)
 add_subdirectory(benchmarks)
 
 add_subdirectory(uri)
-add_subdirectory(http)
 
 add_subdirectory(jansson)
 add_subdirectory(stringencoders)

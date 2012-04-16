@@ -1,7 +1,7 @@
 #define BOOST_TEST_MODULE http_message test
 #include <boost/test/unit_test.hpp>
 
-#include "http_message.hh"
+#include "ten/http/http_message.hh"
 
 using namespace ten;
 

@@ -11,7 +11,7 @@
 #include "ten/logging.hh"
 #include "ten/task.hh"
 #include "ten/net.hh"
-#include "http/http_message.hh"
+#include "ten/http/http_message.hh"
 #include "uri/uri.hh"
 
 namespace ten {
