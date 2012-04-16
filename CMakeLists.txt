@@ -58,7 +58,7 @@ else ()
 endif()
 
 add_subdirectory(glog)
-include_directories(glog)
+#include_directories(glog)
 
 include_directories(boost.context)
 if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
@@ -84,7 +84,6 @@ add_definitions(-DHTTP_PARSER_STRICT=0)
 add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
     src/rendez.cc
     src/qutex.cc
