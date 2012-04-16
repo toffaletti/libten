@@ -1,5 +1,5 @@
-#include "task.hh"
-#include "error.hh"
+#include "ten/task.hh"
+#include "ten/error.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

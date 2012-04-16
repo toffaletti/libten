@@ -1,8 +1,8 @@
-#include "task.hh"
-#include "buffer.hh"
+#include "ten/task.hh"
+#include "ten/buffer.hh"
+#include "ten/net.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
-#include "net.hh"
 
 #include <iostream>
 

@@ -1,6 +1,6 @@
 #define BOOST_TEST_MODULE zip test
 #include <boost/test/unit_test.hpp>
-#include "zip.hh"
+#include "ten/zip.hh"
 
 using namespace ten;
 

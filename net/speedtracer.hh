@@ -6,8 +6,8 @@
 #include <vector>
 #include <string>
 #include <ostream>
-#include "json.hh"
-#include "logging.hh"
+#include "ten/json.hh"
+#include "ten/logging.hh"
 
 // TODO: rework this to have a trace and event classes
 // trace holds the list of events

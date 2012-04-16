@@ -2,9 +2,9 @@
 #define TASK_PROC_HH
 
 #include <condition_variable>
-#include "descriptors.hh"
+#include "ten/descriptors.hh"
+#include "ten/task.hh"
 #include "task/private.hh"
-#include "task.hh"
 
 namespace ten {
 

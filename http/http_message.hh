@@ -8,7 +8,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include "http_parser.h"
-#include "error.hh"
+#include "ten/error.hh"
 
 namespace ten {
 

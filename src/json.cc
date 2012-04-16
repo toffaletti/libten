@@ -1,6 +1,6 @@
-#include "json.hh"
-#include "error.hh"
-#include "logging.hh"
+#include "ten/json.hh"
+#include "ten/error.hh"
+#include "ten/logging.hh"
 #include <boost/lexical_cast.hpp>
 #include <sstream>
 #include <deque>

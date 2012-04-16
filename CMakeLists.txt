@@ -75,6 +75,7 @@ else(CARES_LIB AND CARES_INCLUDE)
     set(RESOLVER_SRC net/resolve.cc)
 endif (CARES_LIB AND CARES_INCLUDE)
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(ten
     task/rendez.cc
     task/qutex.cc

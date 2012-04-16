@@ -1,7 +1,7 @@
 #include <thread>
-#include "semaphore.hh"
+#include "ten/semaphore.hh"
 #include "task/rendez.hh"
-#include "logging.hh"
+#include "ten/logging.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

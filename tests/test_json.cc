@@ -1,6 +1,6 @@
 #define BOOST_TEST_MODULE json test
 #include <boost/test/unit_test.hpp>
-#include "json.hh"
+#include "ten/json.hh"
 
 using namespace ten;
 

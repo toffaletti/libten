@@ -1,6 +1,6 @@
-#include "task.hh"
-#include "net.hh"
-#include "channel.hh"
+#include "ten/task.hh"
+#include "ten/net.hh"
+#include "ten/channel.hh"
 #include <iostream>
 #include <unordered_map>
 

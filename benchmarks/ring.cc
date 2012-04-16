@@ -1,5 +1,5 @@
-#include "task.hh"
-#include "channel.hh"
+#include "ten/task.hh"
+#include "ten/channel.hh"
 #include <iostream>
 #include <boost/lexical_cast.hpp>
 #include <chrono>

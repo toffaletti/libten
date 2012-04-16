@@ -5,8 +5,8 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/algorithm/string.hpp>
 
-#include "json.hh"
-#include "jsonpack.hh"
+#include "ten/json.hh"
+#include "ten/jsonpack.hh"
 
 using namespace ten;
 using namespace std;

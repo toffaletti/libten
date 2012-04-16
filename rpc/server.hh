@@ -1,9 +1,9 @@
 #ifndef RPC_SERVER_HH
 #define RPC_SERVER_HH
 
-#include "logging.hh"
-#include "task.hh"
-#include "net.hh"
+#include "ten/logging.hh"
+#include "ten/task.hh"
+#include "ten/net.hh"
 #include "rpc/protocol.hh"
 #include "rpc/thunk.hh"
 

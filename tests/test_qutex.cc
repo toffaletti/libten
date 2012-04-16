@@ -1,7 +1,7 @@
 #define BOOST_TEST_MODULE qutex test
 #include <boost/test/unit_test.hpp>
 #include <thread>
-#include "semaphore.hh"
+#include "ten/semaphore.hh"
 #include "task/rendez.hh"
 
 using namespace ten;

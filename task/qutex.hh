@@ -1,7 +1,7 @@
 #ifndef QUTEX_HH
 #define QUTEX_HH
 
-#include "task.hh"
+#include "ten/task.hh"
 
 namespace ten {
 

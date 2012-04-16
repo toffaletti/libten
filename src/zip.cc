@@ -3,7 +3,7 @@ extern "C" {
 #include "miniz.c"
 }
 
-#include "zip.hh"
+#include "ten/zip.hh"
 
 namespace ten {
 

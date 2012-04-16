@@ -1,6 +1,6 @@
-#include "task.hh"
-#include "channel.hh"
-#include "net.hh"
+#include "ten/task.hh"
+#include "ten/channel.hh"
+#include "ten/net.hh"
 #include <sstream>
 #include <iostream>
 #include <list>

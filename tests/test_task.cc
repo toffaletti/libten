@@ -1,10 +1,10 @@
 #define BOOST_TEST_MODULE task test
 #include <boost/test/unit_test.hpp>
 #include <thread>
-#include "descriptors.hh"
-#include "semaphore.hh"
-#include "channel.hh"
-#include "task.hh"
+#include "ten/descriptors.hh"
+#include "ten/semaphore.hh"
+#include "ten/channel.hh"
+#include "ten/task.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

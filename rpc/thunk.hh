@@ -2,8 +2,8 @@
 #define RPC_THUNK_HH
 
 #include "msgpack/msgpack.hpp"
-#include "error.hh"
-#include "apply.hh"
+#include "ten/error.hh"
+#include "ten/apply.hh"
 
 namespace ten {
 

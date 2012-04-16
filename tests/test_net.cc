@@ -1,6 +1,6 @@
 #define BOOST_TEST_MODULE net test
 #include <boost/test/unit_test.hpp>
-#include "net.hh"
+#include "ten/net.hh"
 
 using namespace ten;
 

@@ -1,6 +1,6 @@
 #define BOOST_TEST_MODULE speedtracer test
 #include <boost/test/unit_test.hpp>
-#include "channel.hh"
+#include "ten/channel.hh"
 #include "net/speedtracer.hh"
 
 using namespace ten;

@@ -5,9 +5,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include "net.hh"
-#include "ioproc.hh"
-#include "logging.hh"
+#include "ten/net.hh"
+#include "ten/ioproc.hh"
+#include "ten/logging.hh"
 
 namespace ten {
 

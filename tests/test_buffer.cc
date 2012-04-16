@@ -1,6 +1,6 @@
 #define BOOST_TEST_MODULE buffer test
 #include <boost/test/unit_test.hpp>
-#include "buffer.hh"
+#include "ten/buffer.hh"
 
 using namespace ten;
 

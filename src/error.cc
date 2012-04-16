@@ -1,4 +1,4 @@
-#include "error.hh"
+#include "ten/error.hh"
 
 #include <execinfo.h>
 #include <cxxabi.h>

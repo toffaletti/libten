@@ -1,8 +1,8 @@
 #ifndef RPC_CLIENT_HH
 #define RPC_CLIENT_HH
 
+#include "ten/shared_pool.hh"
 #include "rpc/protocol.hh"
-#include "shared_pool.hh"
 #include <boost/lexical_cast.hpp>
 
 using namespace msgpack::rpc;

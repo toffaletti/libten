@@ -4,10 +4,10 @@
 #include <memory>
 #include <thread>
 
-#include "task.hh"
+#include "ten/task.hh"
+#include "ten/logging.hh"
+#include "ten/atomic.hh"
 #include "task/coroutine.hh"
-#include "logging.hh"
-#include "atomic.hh"
 
 namespace ten {
 

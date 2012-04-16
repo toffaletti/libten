@@ -1,6 +1,6 @@
-#include "app.hh"
-#include "net.hh"
-#include "buffer.hh"
+#include "ten/app.hh"
+#include "ten/net.hh"
+#include "ten/buffer.hh"
 #include <unordered_map>
 #include <boost/algorithm/string.hpp>
 

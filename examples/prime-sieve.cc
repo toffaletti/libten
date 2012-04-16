@@ -1,4 +1,4 @@
-#include "channel.hh"
+#include "ten/channel.hh"
 #include <iostream>
 
 using namespace ten;

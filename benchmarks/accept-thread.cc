@@ -1,8 +1,8 @@
-#include "task.hh"
-#include "channel.hh"
-#include "net.hh"
+#include "ten/task.hh"
+#include "ten/channel.hh"
+#include "ten/net.hh"
+#include "ten/logging.hh"
 #include <iostream>
-#include "logging.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

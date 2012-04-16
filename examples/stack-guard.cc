@@ -1,4 +1,4 @@
-#include "task.hh"
+#include "ten/task.hh"
 
 using namespace ten;
 const size_t default_stacksize=256*1024;

@@ -1,10 +1,11 @@
-#include "task.hh"
-#include "buffer.hh"
+#include "ten/task.hh"
+#include "ten/buffer.hh"
+#include "ten/logging.hh"
+#include "ten/net.hh"
+#include "ten/channel.hh"
+
 #include "http/http_message.hh"
 #include "uri/uri.hh"
-#include "logging.hh"
-#include "net.hh"
-#include "channel.hh"
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;

@@ -2,7 +2,7 @@
 #include <string>
 #include <iostream>
 #include <assert.h>
-#include "jsonpack.hh"
+#include "ten/jsonpack.hh"
 
 using namespace msgpack;
 using namespace ten;

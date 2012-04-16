@@ -2,8 +2,8 @@
 #define COROUTINE_HH
 #include <vector>
 #include <sys/mman.h>
+#include "ten/error.hh"
 #include "task/context.hh"
-#include "error.hh"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>

@@ -7,12 +7,12 @@
 #include <functional>
 #include <netinet/tcp.h>
 
-#include "buffer.hh"
-#include "logging.hh"
-#include "task.hh"
+#include "ten/buffer.hh"
+#include "ten/logging.hh"
+#include "ten/task.hh"
+#include "ten/net.hh"
 #include "http/http_message.hh"
 #include "uri/uri.hh"
-#include "net.hh"
 
 namespace ten {
 

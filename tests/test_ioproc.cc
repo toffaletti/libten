@@ -1,7 +1,7 @@
 #define BOOST_TEST_MODULE ioproc test
 #include <boost/test/unit_test.hpp>
-#include "ioproc.hh"
-#include "descriptors.hh"
+#include "ten/ioproc.hh"
+#include "ten/descriptors.hh"
 
 using namespace ten;
 
