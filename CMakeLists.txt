@@ -80,7 +80,7 @@ add_library(ten
     task/qutex.cc
     task/task.cc
     task/proc.cc
-    error.cc ioproc.cc net.cc zip.cc json.cc ${ASM}
+    src/error.cc src/ioproc.cc src/net.cc src/zip.cc src/json.cc ${ASM}
     ${RESOLVER_SRC}
     boost.context/libs/context/src/fcontext.cpp)
 add_dependencies(ten libglog)
