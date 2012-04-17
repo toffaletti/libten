@@ -1,9 +1,9 @@
 #ifndef CMD_SERVER_HH
 #define CMD_SERVER_HH
 
-#include "logging.hh"
-#include "task.hh"
-#include "net.hh"
+#include "ten/logging.hh"
+#include "ten/task.hh"
+#include "ten/net.hh"
 
 #include <sstream>
 #include <unordered_map>
