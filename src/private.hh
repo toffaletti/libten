@@ -77,8 +77,8 @@ struct task {
     void swap();
 
     void exit() {
-        exiting = true;
         fn = 0;
+        exiting = true;
         swap();
     }
 

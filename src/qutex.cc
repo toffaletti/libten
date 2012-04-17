@@ -17,7 +17,7 @@ void qutex::lock() {
             DVLOG(5) << "LOCK qutex: " << this << " owner: " << _owner;
             return;
         }
-        DVLOG(5) << "LOCK waiting: " << this << " add: " << t <<  " owner: " << _owner;
+        DVLOG(5) << "QUTEX[" << this << "] lock waiting add: " << t <<  " owner: " << _owner;
         _waiting.push_back(t);
     }
 
@@ -58,6 +58,7 @@ void qutex::unlock() {
 void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
     task *t = _this_proc->ctask;
     CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
+    DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
     if (t == _owner) {
         if (!_waiting.empty()) {
             t = _owner = _waiting.front();
