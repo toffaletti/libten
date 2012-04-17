@@ -58,13 +58,14 @@ template <class T> inline T integral_cast(const json &j) {
         throw errorx("%lld: out of range for %s", i, typeid(T).name());
     return static_cast<T>(i);
 };
-template <> short         json_traits_conv<short        >::cast(const json &j) { return integral_cast<short        >(j); }
-template <> int           json_traits_conv<int          >::cast(const json &j) { return integral_cast<int          >(j); }
-template <> long          json_traits_conv<long         >::cast(const json &j) { return integral_cast<long         >(j); }
-template <> long long     json_traits_conv<long long    >::cast(const json &j) { return integral_cast<long long    >(j); }
-template <> unsigned      json_traits_conv<unsigned     >::cast(const json &j) { return integral_cast<unsigned     >(j); }
+template <> short          json_traits_conv<short         >::cast(const json &j) { return integral_cast<short         >(j); }
+template <> int            json_traits_conv<int           >::cast(const json &j) { return integral_cast<int           >(j); }
+template <> long           json_traits_conv<long          >::cast(const json &j) { return integral_cast<long          >(j); }
+template <> long long      json_traits_conv<long long     >::cast(const json &j) { return integral_cast<long long     >(j); }
+template <> unsigned short json_traits_conv<unsigned short>::cast(const json &j) { return integral_cast<unsigned short>(j); }
+template <> unsigned       json_traits_conv<unsigned      >::cast(const json &j) { return integral_cast<unsigned      >(j); }
 #if ULONG_MAX < LLONG_MAX
-template <> unsigned long json_traits_conv<unsigned long>::cast(const json &j) { return integral_cast<unsigned long>(j); }
+template <> unsigned long  json_traits_conv<unsigned long >::cast(const json &j) { return integral_cast<unsigned long >(j); }
 #endif
 
 // json string
@@ -83,7 +84,12 @@ template <> double json_traits_conv<double>::cast(const json &j) {
 template <> float json_traits_conv<float>::cast(const json &j) {
     if (!j.is_real()) throw errorx("not real: %s", j.dump().c_str());
     auto n = j.real();
-    if (n < numeric_limits<float>::min() || n > numeric_limits<float>::max())
+#ifdef TEN_JSON_CXX11
+    constexpr float lowest = numeric_limits<float>::lowest();
+#else
+    const float lowest = -numeric_limits<float>::max();
+#endif
+    if (n < lowest || n > numeric_limits<float>::max())
         throw errorx("out of range for float: %g", n);
     return j.real();
 }

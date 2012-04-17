@@ -422,13 +422,14 @@ template <> struct json_traits<const char *> {
 };
 
 // integer
-template <> struct json_traits<short        > : public json_traits_conv<short        > {};
-template <> struct json_traits<int          > : public json_traits_conv<int          > {};
-template <> struct json_traits<long         > : public json_traits_conv<long         > {};
-template <> struct json_traits<long long    > : public json_traits_conv<long long    > {};
-template <> struct json_traits<unsigned     > : public json_traits_conv<unsigned     > {};
+template <> struct json_traits<short         > : public json_traits_conv<short         > {};
+template <> struct json_traits<int           > : public json_traits_conv<int           > {};
+template <> struct json_traits<long          > : public json_traits_conv<long          > {};
+template <> struct json_traits<long long     > : public json_traits_conv<long long     > {};
+template <> struct json_traits<unsigned short> : public json_traits_conv<unsigned short> {};
+template <> struct json_traits<unsigned      > : public json_traits_conv<unsigned      > {};
 #if ULONG_MAX < LLONG_MAX
-template <> struct json_traits<unsigned long> : public json_traits_conv<unsigned long> {};
+template <> struct json_traits<unsigned long > : public json_traits_conv<unsigned long > {};
 #endif
 
 // real
