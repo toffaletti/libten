@@ -1,5 +1,6 @@
-#ifndef COROUTINE_HH
-#define COROUTINE_HH
+#ifndef LIBTEN_TASK_COROUTINE_HH
+#define LIBTEN_TASK_COROUTINE_HH
+
 #include <vector>
 #include <sys/mman.h>
 #include "ten/error.hh"
@@ -105,4 +106,4 @@ private:
 
 } // end namespace ten 
 
-#endif // COROUTINE_HH
+#endif // LIBTEN_TASK_COROUTINE_HH

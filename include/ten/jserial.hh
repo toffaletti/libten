@@ -1,5 +1,5 @@
-#ifndef LIBTEN_SERIAL_HH
-#define LIBTEN_SERIAL_HH
+#ifndef LIBTEN_JSERIAL_HH
+#define LIBTEN_JSERIAL_HH
 
 #include "ten/json.hh"
 #include "ten/error.hh"
@@ -180,4 +180,4 @@ template <class T> inline json jsave_dyn(T &t) { JSave ar(save_dynamic); ar << t
 
 } // ten
 
-#endif // LIBTEN_SERIAL_HH
+#endif // LIBTEN_JSERIAL_HH

@@ -1,5 +1,6 @@
-#ifndef SSL_SOCK_HH
-#define SSL_SOCK_HH
+#ifndef LIBTEN_NET_SSL_HH
+#define LIBTEN_NET_SSL_HH
+
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include "ten/net.hh"
@@ -86,7 +87,6 @@ public:
 
 };
 
-
-
 } // end namespace ten
-#endif
+
+#endif // LIBTEN_NET_SSL_HH

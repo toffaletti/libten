@@ -1,5 +1,5 @@
-#ifndef HTTP_CLIENT_HH
-#define HTTP_CLIENT_HH
+#ifndef LIBTEN_HTTP_CLIENT_HH
+#define LIBTEN_HTTP_CLIENT_HH
 
 #include "ten/http/http_message.hh"
 #include "ten/shared_pool.hh"
@@ -126,5 +126,5 @@ protected:
 };
 
 } // end namespace ten
-#endif // HTTP_CLIENT_HH
 
+#endif // LIBTEN_HTTP_CLIENT_HH

@@ -1,5 +1,5 @@
-#ifndef NETSOCK_HH
-#define NETSOCK_HH
+#ifndef LIBTEN_NET_HH
+#define LIBTEN_NET_HH
 
 #include "descriptors.hh"
 #include "task.hh"
@@ -223,4 +223,4 @@ protected:
 
 } // end namespace ten
 
-#endif // NETSOCK_HH
+#endif // LIBTEN_NET_HH

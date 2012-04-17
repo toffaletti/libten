@@ -1,5 +1,5 @@
-#ifndef IOPROC_HH
-#define IOPROC_HH
+#ifndef LIBTEN_IOPROC_HH
+#define LIBTEN_IOPROC_HH
 
 #include "task.hh"
 #include "channel.hh"
@@ -148,5 +148,4 @@ template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n
 
 } // end namespace ten 
 
-#endif // IOPROC_HH
-
+#endif // LIBTEN_IOPROC_HH
