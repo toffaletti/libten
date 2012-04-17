@@ -5,6 +5,7 @@
 #include <string.h>
 #include <string>
 #include <functional>
+#include <type_traits>
 
 #include <limits.h>
 #ifndef JSON_INTEGER_IS_LONG_LONG
@@ -201,7 +202,7 @@ class json {
     static json load(const char *s, unsigned flags = JSON_DECODE_ANY)    { return load(s, strlen(s), flags); }
     static json load(const char *s, size_t len, unsigned flags);
 
-    string dump(unsigned flags = JSON_ENCODE_ANY);
+    string dump(unsigned flags = JSON_ENCODE_ANY) const;
 
     // type access
 
@@ -367,6 +368,8 @@ inline ostream & operator << (ostream &o, const json &j) { return o << j.get(); 
 // to_json(), by analogy with to_string()
 //
 
+inline json to_json(const json & j)   { return j; }
+inline json to_json(      json &&j)   { return j; }
 inline json to_json(const char *s)    { return json(s); }
 inline json to_json(const string &s)  { return json(s); }
 inline json to_json(int i)            { return json(i); }
@@ -378,6 +381,59 @@ inline json to_json(unsigned long u)  { return json(u); }
 #endif
 inline json to_json(double d)         { return json(d); }
 inline json to_json(bool b)           { return json(b); }
+
+
+//----------------------------------------------------------------
+// metaprogramming
+//
+
+// conversions do not work for unspecified types
+template <class T> struct json_traits {
+    typedef T type;
+    static const bool can_make = false;    // to_json(T) works
+    static const bool can_cast = false;    // trait<T>::cast() works
+};
+
+// convenience base class for conversions that work
+template <class T> struct json_traits_conv {
+    typedef T type;
+    static const bool can_make = true;
+    static const bool can_cast = true;
+    static T cast(const json &j);              // default decl for most cases
+};
+
+// json_cast<> function, a la lexical_cast<>
+template <class T, class TT = typename std::enable_if<json_traits<T>::can_cast>::type>
+inline T json_cast(const json &j) {
+    return json_traits<T>::cast(j);
+}
+
+
+// string
+template <> struct json_traits<string> : public json_traits_conv<string> {};
+template <> struct json_traits<const char *> {
+    typedef const char *type;
+    static const bool can_make = true;   // makes copy
+    static const bool can_cast = false;  // sorry, private pointer
+};
+
+// integer
+template <> struct json_traits<short        > : public json_traits_conv<short        > {};
+template <> struct json_traits<int          > : public json_traits_conv<int          > {};
+template <> struct json_traits<long         > : public json_traits_conv<long         > {};
+template <> struct json_traits<long long    > : public json_traits_conv<long long    > {};
+template <> struct json_traits<unsigned     > : public json_traits_conv<unsigned     > {};
+#if ULONG_MAX < LLONG_MAX
+template <> struct json_traits<unsigned long> : public json_traits_conv<unsigned long> {};
+#endif
+
+// real
+template <> struct json_traits<double> : public json_traits_conv<double> {};
+template <> struct json_traits<float>  : public json_traits_conv<float>  {};
+
+// boolean
+template <> struct json_traits<bool> : public json_traits_conv<bool> {};
+
 
 } // ten
 

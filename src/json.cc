@@ -27,7 +27,7 @@ ostream & operator << (ostream &o, const json_t *j) {
     return o;
 }
 
-string json::dump(unsigned flags) {
+string json::dump(unsigned flags) const {
     ostringstream ss;
     if (_p)
         json_dump_callback(_p.get(), ostream_json_dump_callback, static_cast<ostream *>(&ss), flags);
@@ -42,7 +42,63 @@ json json::load(const char *s, size_t len, unsigned flags) {
     return j;
 }
 
+//
+// metaprogramming for conversions
+//
+
+// json integer
+
+template <class T> inline T integral_cast(const json &j) {
+    if (!j.is_integer()) throw errorx("not integral: %s", j.dump().c_str());
+    auto i = j.integer();
+    if ((numeric_limits<T>::is_signed
+           ? i < numeric_limits<T>::min()
+           : i < 0)
+        || i > numeric_limits<T>::max())
+        throw errorx("%lld: out of range for %s", i, typeid(T).name());
+    return static_cast<T>(i);
+};
+template <> short         json_traits_conv<short        >::cast(const json &j) { return integral_cast<short        >(j); }
+template <> int           json_traits_conv<int          >::cast(const json &j) { return integral_cast<int          >(j); }
+template <> long          json_traits_conv<long         >::cast(const json &j) { return integral_cast<long         >(j); }
+template <> long long     json_traits_conv<long long    >::cast(const json &j) { return integral_cast<long long    >(j); }
+template <> unsigned      json_traits_conv<unsigned     >::cast(const json &j) { return integral_cast<unsigned     >(j); }
+#if ULONG_MAX < LLONG_MAX
+template <> unsigned long json_traits_conv<unsigned long>::cast(const json &j) { return integral_cast<unsigned long>(j); }
+#endif
+
+// json string
+
+template <> string json_traits_conv<string>::cast(const json &j) {
+    if (!j.is_string()) throw errorx("not string: %s", j.dump().c_str());
+    return j.str();
+}
+
+// json real
+
+template <> double json_traits_conv<double>::cast(const json &j) {
+    if (!j.is_real()) throw errorx("not real: %s", j.dump().c_str());
+    return j.real();
+}
+template <> float json_traits_conv<float>::cast(const json &j) {
+    if (!j.is_real()) throw errorx("not real: %s", j.dump().c_str());
+    auto n = j.real();
+    if (n < numeric_limits<float>::min() || n > numeric_limits<float>::max())
+        throw errorx("out of range for float: %g", n);
+    return j.real();
+}
+
+// json boolean
+
+template <> bool json_traits_conv<bool>::cast(const json &j) {
+    if (!j.is_boolean()) throw errorx("not boolean: %s", j.dump().c_str());
+    return j.boolean();
+}
+
+
+//
 // simple visit of all objects
+//
 
 #ifdef TEN_JSON_CXX11
 void json::visit(const json::visitor_func_t &visitor) {
@@ -76,7 +132,10 @@ void json::visit(const json::visitor_func_t &visitor) {
 }
 #endif
 
-// for debugging
+//
+// path
+//
+
 static ostream & operator << (ostream &o, const vector<string> &v) {
     for (size_t i = 0; i < v.size(); ++i) {
         if (i) o << " ";
