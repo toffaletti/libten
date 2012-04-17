@@ -1,6 +1,6 @@
 #include <netdb.h>
-#include "net.hh"
-#include "ioproc.hh"
+#include "ten/net.hh"
+#include "ten/ioproc.hh"
 
 namespace ten {
 
