@@ -181,7 +181,6 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
     test_conv_num<long long>();
     test_conv_num<unsigned short>();
     test_conv_num<unsigned>();
-    test_conv_num<unsigned short>();
 #if ULONG_MAX < LLONG_MAX
     test_conv_num<unsigned long>();
 #endif
