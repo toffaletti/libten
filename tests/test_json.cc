@@ -153,3 +153,41 @@ BOOST_AUTO_TEST_CASE(json_init_list) {
     BOOST_CHECK_EQUAL(meta["corge"][0].integer(), 1);
     BOOST_CHECK_EQUAL(meta["grault"][1].str(), "world");
 }
+
+template <class T>
+inline void test_conv(T val, json j, json_type t) {
+    json j2 = to_json(val);
+    BOOST_CHECK_EQUAL(j2.type(), t);
+    BOOST_CHECK_EQUAL(j, j2);
+    T val2 = json_cast<T>(j2);
+    BOOST_CHECK_EQUAL(val, val2);
+}
+
+template <class T, json_type TYPE = JSON_INTEGER>
+inline void test_conv_num() {
+    typedef numeric_limits<T> lim;
+    T range[5] = { lim::min(), T(-1), 0, T(1), lim::max() };
+    for (unsigned i = 0; i < 5; ++i)
+        test_conv<T>(range[i], json(range[i]), TYPE);
+}
+
+BOOST_AUTO_TEST_CASE(json_conversions) {
+    test_conv<string>(string("hello"), json::str("hello"), JSON_STRING);
+    BOOST_CHECK_EQUAL(to_json("world"), json::str("world"));
+
+    test_conv_num<short>();
+    test_conv_num<int>();
+    test_conv_num<long>();
+    test_conv_num<long long>();
+    test_conv_num<unsigned short>();
+    test_conv_num<unsigned>();
+#if ULONG_MAX < LLONG_MAX
+    test_conv_num<unsigned long>();
+#endif
+
+    test_conv_num<double, JSON_REAL>();
+    test_conv_num<float,  JSON_REAL>();
+
+    test_conv<bool>(true,  json::jtrue(),  JSON_TRUE);
+    test_conv<bool>(false, json::jfalse(), JSON_FALSE);
+}
