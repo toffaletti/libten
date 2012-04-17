@@ -16,15 +16,15 @@ public:
 //! basic http client
 class http_client {
 private:
-    std::shared_ptr<netsock> s;
-    buffer buf;
-    std::string host;
-    uint16_t port;
+    std::shared_ptr<netsock> _s;
+    buffer _buf;
+    std::string _host;
+    uint16_t _port;
 
     void ensure_connection() {
-        if (s && s->valid()) return;
-        s.reset(new netsock(AF_INET, SOCK_STREAM));
-        if (s->dial(host.c_str(), port) != 0) {
+        if (_s && _s->valid()) return;
+        _s.reset(new netsock(AF_INET, SOCK_STREAM));
+        if (_s->dial(_host.c_str(), _port) != 0) {
             throw http_error("dial");
         }
     }
@@ -33,16 +33,19 @@ public:
     size_t max_content_length;
 
     http_client(const std::string &host_, uint16_t port_=80)
-        : buf(4*1024), host(host_), port(port_), max_content_length(~(size_t)0)
+        : _buf(4*1024), _host(host_), _port(port_), max_content_length(~(size_t)0)
     {
-        parse_host_port(host, port);
+        parse_host_port(_host, _port);
     }
+
+    std::string host() const { return _host; }
+    uint16_t port() const { return _port; }
 
     http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
         uri u;
         u.scheme = "http";
-        u.host = host;
-        u.port = port;
+        u.host = _host;
+        u.port = _port;
         u.path = path;
         u.normalize();
 
@@ -62,36 +65,36 @@ public:
             ensure_connection();
 
             std::string hdata = r.data();
-            ssize_t nw = s->send(hdata.c_str(), hdata.size());
+            ssize_t nw = _s->send(hdata.c_str(), hdata.size());
             if (r.body.size()) {
-                nw = s->send(r.body.c_str(), r.body.size());
+                nw = _s->send(r.body.c_str(), r.body.size());
             }
 
             http_parser parser;
             http_response resp;
             resp.parser_init(&parser);
 
-            buf.clear();
+            _buf.clear();
 
             while (!resp.complete) {
-                buf.reserve(4*1024);
-                ssize_t nr = s->recv(buf.back(), buf.available());
+                _buf.reserve(4*1024);
+                ssize_t nr = _s->recv(_buf.back(), _buf.available());
                 if (nr <= 0) { throw http_error("recv"); }
-                buf.commit(nr);
-                size_t len = buf.size();
-                resp.parse(&parser, buf.front(), len);
-                buf.remove(len);
+                _buf.commit(nr);
+                size_t len = _buf.size();
+                resp.parse(&parser, _buf.front(), len);
+                _buf.remove(len);
                 if (resp.body.size() >= max_content_length) {
-                    s.reset(); // close this socket, we won't read anymore
+                    _s.reset(); // close this socket, we won't read anymore
                     return resp;
                 }
             }
-            // should not be any data left over in buf
-            CHECK(buf.size() == 0);
+            // should not be any data left over in _buf
+            CHECK(_buf.size() == 0);
 
             return resp;
         } catch (errorx &e) {
-            s.reset();
+            _s.reset();
             throw;
         }
     }
@@ -113,15 +116,15 @@ public:
             std::bind(&http_pool::new_resource, this),
             max_conn
         ),
-        host(host_), port(port_) {}
+        _host(host_), _port(port_) {}
 
 protected:
-    std::string host;
-    uint16_t port;
+    std::string _host;
+    uint16_t _port;
 
     std::shared_ptr<http_client> new_resource() {
-        VLOG(3) << "new http_client resource " << host << ":" << port;
-        return std::make_shared<http_client>(host, port);
+        VLOG(3) << "new http_client resource " << _host << ":" << _port;
+        return std::make_shared<http_client>(_host, _port);
     }
 };
 
