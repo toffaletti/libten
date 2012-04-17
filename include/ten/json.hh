@@ -408,6 +408,10 @@ inline T json_cast(const json &j) {
     return json_traits<T>::cast(j);
 }
 
+// identity
+template <> struct json_traits<json> : public json_traits_conv<json> {
+    static json cast(const json &j) { return j; }
+};
 
 // string
 template <> struct json_traits<string> : public json_traits_conv<string> {};
