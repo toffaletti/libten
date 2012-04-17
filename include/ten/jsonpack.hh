@@ -1,5 +1,5 @@
-#ifndef JSONPACK_HH
-#define JSONPACK_HH
+#ifndef LIBTEN_JSONPACK_HH
+#define LIBTEN_JSONPACK_HH
 
 #include "msgpack/msgpack.hpp"
 #include "ten/json.hh"
@@ -128,4 +128,5 @@ packer<Stream>& operator<< (packer<Stream>& o, const json& v)
 }
 
 } // end namespace msgpack
-#endif
+
+#endif // LIBTEN_JSONPACK_HH

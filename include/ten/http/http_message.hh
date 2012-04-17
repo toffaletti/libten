@@ -1,5 +1,5 @@
-#ifndef HTTP_HH
-#define HTTP_HH
+#ifndef LIBTEN_HTTP_MESSAGE_HH
+#define LIBTEN_HTTP_MESSAGE_HH
 
 #include <string>
 #include <vector>
@@ -171,4 +171,5 @@ struct http_response : http_base {
 };
 
 } // end namespace ten
-#endif // HTTP_HH
+
+#endif // LIBTEN_HTTP_MESSAGE_HH

@@ -1,5 +1,5 @@
-#ifndef RENDEZ_HH
-#define RENDEZ_HH
+#ifndef LIBTEN_TASK_RENDEZ_HH
+#define LIBTEN_TASK_RENDEZ_HH
 
 #include "ten/task/qutex.hh"
 
@@ -32,4 +32,4 @@ public:
 
 } // namespace
 
-#endif
+#endif // LIBTEN_TASK_RENDEZ_HH

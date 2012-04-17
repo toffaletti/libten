@@ -1,5 +1,5 @@
-#ifndef HTTP_SERVER_HH
-#define HTTP_SERVER_HH
+#ifndef LIBTEN_HTTP_SERVER_HH
+#define LIBTEN_HTTP_SERVER_HH
 
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
@@ -246,4 +246,4 @@ private:
 
 } // end namespace ten
 
-#endif
+#endif // LIBTEN_HTTP_SERVER_HH

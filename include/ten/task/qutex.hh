@@ -1,5 +1,5 @@
-#ifndef QUTEX_HH
-#define QUTEX_HH
+#ifndef LIBTEN_TASK_QUTEX_HH
+#define LIBTEN_TASK_QUTEX_HH
 
 #include "ten/task.hh"
 
@@ -38,4 +38,5 @@ private:
 };
 
 } // namespace
-#endif
+
+#endif // LIBTEN_TASK_QUTEX_HH

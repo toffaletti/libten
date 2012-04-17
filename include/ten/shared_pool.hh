@@ -1,5 +1,5 @@
-#ifndef SHARED_POOL_HH
-#define SHARED_POOL_HH
+#ifndef LIBTEN_SHARED_POOL_HH
+#define LIBTEN_SHARED_POOL_HH
 
 #include "task/rendez.hh"
 #include "ten/logging.hh"
@@ -208,4 +208,4 @@ public:
 
 } // end namespace ten
 
-#endif // SHARED_POOL_HH
+#endif // LIBTEN_SHARED_POOL_HH

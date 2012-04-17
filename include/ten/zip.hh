@@ -1,5 +1,5 @@
-#ifndef ZIP_HH
-#define ZIP_HH
+#ifndef LIBTEN_ZIP_HH
+#define LIBTEN_ZIP_HH
 
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
 #define MINIZ_HEADER_FILE_ONLY 1
@@ -76,4 +76,5 @@ struct zip_writer {
 };
 
 } // end namespace ten
-#endif
+
+#endif // LIBTEN_ZIP_HH

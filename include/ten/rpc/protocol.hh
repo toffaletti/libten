@@ -1,5 +1,5 @@
-#ifndef MSGPACK_RPC_PROTOCOL_H__
-#define MSGPACK_RPC_PROTOCOL_H__
+#ifndef LIBTEN_RPC_PROTOCOL_HH
+#define LIBTEN_RPC_PROTOCOL_HH
 
 #include <msgpack.hpp>
 
@@ -102,5 +102,4 @@ struct msg_notify {
 }  // namespace rpc
 }  // namespace msgpack
 
-#endif /* msgpack/rpc/protocol.h */
-
+#endif // LIBTEN_RPC_PROTOCOL_HH
