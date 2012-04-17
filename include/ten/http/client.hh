@@ -1,9 +1,9 @@
 #ifndef HTTP_CLIENT_HH
 #define HTTP_CLIENT_HH
 
-#include "http/http_message.hh"
-#include "shared_pool.hh"
-#include "buffer.hh"
+#include "ten/http/http_message.hh"
+#include "ten/shared_pool.hh"
+#include "ten/buffer.hh"
 
 namespace ten {
 
