@@ -5,6 +5,8 @@
 
 namespace ten {
 
+//! calculate back off times for retrying operations
+//! based on algorithm used by tcp
 template <typename DurationT> class backoff {
 private:
     std::minstd_rand _eng;

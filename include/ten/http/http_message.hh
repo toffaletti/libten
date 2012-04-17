@@ -25,6 +25,7 @@ typedef vector<header_pair> header_list;
 
 const size_t HEADER_RESERVE = 5;
 
+//! http headers
 struct Headers {
     header_list headers;
 
@@ -74,6 +75,7 @@ struct Headers {
         }
 };
 
+//! base class for http request and response
 struct http_base : Headers {
     bool complete;
     string body;
@@ -95,6 +97,7 @@ struct http_base : Headers {
     }
 };
 
+//! http request
 struct http_request : http_base {
     string method;
     string uri;
@@ -133,6 +136,7 @@ struct http_request : http_base {
     }
 };
 
+//! http response
 struct http_response : http_base {
     string http_version;
     unsigned long status_code;

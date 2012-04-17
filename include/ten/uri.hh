@@ -17,6 +17,9 @@ namespace ten {
  * http://tools.ietf.org/html/rfc3986#section-6
  */
 
+//! uniform resource locator
+//
+//! parser based on ebnf in rfc3986, relaxed for the real-world
 struct uri {
     std::string scheme;
     std::string userinfo;

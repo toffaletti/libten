@@ -81,6 +81,7 @@ struct options {
     }
 };
 
+//! helper for a libten application with logging, config, and versioning
 class application {
 public:
     options opts;

@@ -5,6 +5,7 @@
 
 namespace ten {
 
+//! task aware condition rendezvous point
 class rendez {
 private:
     std::timed_mutex _m;

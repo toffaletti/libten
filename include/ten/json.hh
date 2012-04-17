@@ -99,6 +99,7 @@ enum ten_json_type {
     JSON_INVALID     = -1
 };
 
+//! represent JSON values
 class json {
   private:
     json_ptr _p;

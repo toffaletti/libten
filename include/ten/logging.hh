@@ -7,7 +7,7 @@
 
 namespace ten {
 
-// helper for debugging hash issues
+//! hexify memory
 template <typename T> std::string to_hex(T &in) {
   static const char hexs[] = "0123456789ABCDEF";
   std::stringstream ss;

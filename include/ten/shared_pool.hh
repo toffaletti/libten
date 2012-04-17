@@ -2,7 +2,7 @@
 #define SHARED_POOL_HH
 
 #include "task/rendez.hh"
-#include "logging.hh"
+#include "ten/logging.hh"
 
 #include <boost/call_traits.hpp>
 #include <set>
@@ -14,6 +14,9 @@ namespace detail {
     template <typename T> class scoped_resource;
 }
 
+//! thread and task safe pool of shared resources
+//
+//! useful for connection pools and other types of shared resources
 template <typename ResourceT, typename ScopeT = detail::scoped_resource<ResourceT> >
 class shared_pool {
 public:

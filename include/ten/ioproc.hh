@@ -16,6 +16,7 @@ namespace ten {
 struct pcall;
 typedef channel<std::unique_ptr<pcall> > iochannel;
 
+//! remote call in another thread
 struct pcall {
     iochannel ch;
     std::function<void ()> vop;
@@ -29,6 +30,7 @@ struct pcall {
 
 void ioproctask(iochannel &);
 
+//! a pool of threads for making blocking calls
 struct ioproc {
     iochannel ch;
     std::vector<uint64_t> tids;
@@ -52,6 +54,7 @@ struct ioproc {
     }
 };
 
+//! wait on an iochannel for a call to complete
 inline void iowait(iochannel &reply_chan) {
     // TODO: maybe this close logic needs to be in channel itself?
     // is there ever a case where you'd want a channel to stay open
@@ -67,6 +70,7 @@ inline void iowait(iochannel &reply_chan) {
     }
 }
 
+//! wait on an iochannel for a call to complete with a result
 template <typename ReturnT>
 ReturnT iowait(iochannel &reply_chan) {
     try {
@@ -81,6 +85,7 @@ ReturnT iowait(iochannel &reply_chan) {
     }
 }
 
+//! make an iocall, but dont wait for it to complete
 template <typename ReturnT>
 void iocallasync(
         ioproc &io,
@@ -100,6 +105,7 @@ inline void iocallasync(
     io.ch.send(std::move(call));
 }
 
+//! make an iocall and wait for the result
 template <typename ReturnT>
 ReturnT iocall(
         ioproc &io,
@@ -111,6 +117,7 @@ ReturnT iocall(
     return iowait<ReturnT>(reply_chan);
 }
 
+//! make an iocall and wait for it to complete
 inline void iocall(
         ioproc &io,
         const std::function<void ()> &vop,

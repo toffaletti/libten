@@ -17,6 +17,7 @@ namespace ten {
 
 template <typename T> bool is_empty(const T &c) { return c.empty(); }
 
+//! telnet-like command server
 class cmd_server : public netsock_server {
 public:
     typedef std::unordered_map<std::string, std::string> env_type;

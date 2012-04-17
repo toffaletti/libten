@@ -18,6 +18,7 @@ struct sslerror : public backtrace_exception {
 BIO_METHOD *BIO_s_netfd(void);
 BIO *BIO_new_netfd(int fd, int close_flag);
 
+//! task io aware SSL wrapper
 class sslsock : public sockbase {
 public:
     SSL_CTX *ctx;

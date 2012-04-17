@@ -18,7 +18,7 @@ namespace ten {
 
 using namespace std::chrono;
 
-//! simple http server
+//! basic http server
 class http_server : public netsock_server {
 public:
     //! wrapper around an http request/response

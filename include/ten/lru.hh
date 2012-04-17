@@ -7,6 +7,7 @@
 
 namespace ten {
 
+//! bounded mapping container that ages out least recently used items
 template <typename Key, typename Mapped>
 class lru {
 public:

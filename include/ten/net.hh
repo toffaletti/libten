@@ -7,12 +7,18 @@
 
 namespace ten {
 
+//! connect fd using task io scheduling
 int netconnect(int fd, const address &addr, unsigned ms);
+//! perform address resolution and connect fd, task friendly
 int netdial(int fd, const char *addr, uint16_t port);
+//! task friendly accept
 int netaccept(int fd, address &addr, int flags, unsigned ms);
+//! task friendly recv
 ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned ms);
+//! task friendly send
 ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned ms);
 
+//! pure-virtual wrapper around socket_fd
 class sockbase {
 public:
     socket_fd s;
@@ -85,6 +91,7 @@ public:
     }
 };
 
+//! task friendly socket wrapper
 class netsock : public sockbase {
 public:
     netsock(int fd=-1) throw (errno_error) : sockbase(fd) {}
@@ -135,6 +142,7 @@ public:
 
 };
 
+//! task/proc aware socket server
 class netsock_server {
 public:
     netsock_server(const std::string &protocol_name_,

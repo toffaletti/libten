@@ -10,6 +10,7 @@
 
 namespace ten {
 
+//! capture the current stack trace
 struct saved_backtrace {
     void *array[50];
     int size;
@@ -81,17 +82,19 @@ public:
     const char *what() const throw() { return _buf; }
 };
 
-//! macro to throw if exp returns -1
+//! macro to throw errno_error if exp returns -1
 #define THROW_ON_ERROR(exp) \
     if ((exp) == -1) { \
         throw errno_error(); \
     }
 
+//! macro to throw errno_error if exp returns NULL
 #define THROW_ON_NULL(exp) \
     if ((exp) == NULL) { \
         throw errno_error(); \
     }
 
+//! macro to throw errno_error if exp != 0
 #define THROW_ON_NONZERO_ERRNO(exp) \
     do { \
         int _rv = (exp); \

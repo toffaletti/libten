@@ -7,11 +7,13 @@
 
 namespace ten {
 
+//! thrown on http network errors
 class http_error : public errorx {
 public:
     http_error(const std::string &msg) : errorx(msg) {}
 };
 
+//! basic http client
 class http_client {
 private:
     std::shared_ptr<netsock> s;

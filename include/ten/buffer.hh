@@ -6,6 +6,13 @@
 
 namespace ten {
 
+//! wrapper around a malloced buffer used for io
+//
+//! buffer keeps track of its capacity and how much is used.
+//! before reading, call reserve() to make sure there is enough
+//! space at back to read into. after reading call commit()
+//! when writing use front() and size(). after writing use
+//! remove().
 class buffer {
 public:
     struct head {
@@ -27,6 +34,8 @@ public:
     buffer(const buffer &) = delete;
     buffer &operator =(const buffer &) = delete;
 
+    //! force commited memory to be moved to the front of the buffer
+    //! making the most space available at the back
     void compact() {
         if (_h->front != 0) {
             memmove(_h->data, &_h->data[_h->front], size());
@@ -35,6 +44,8 @@ public:
         }
     }
 
+    //! reserve n bytes past back
+    //! this can either compact() or realloc() to make room
     void reserve(uint32_t n) {
         if (n > potential()) {
             compact();
@@ -54,6 +65,7 @@ public:
         }
     }
 
+    //! mark n bytes after back as used
     void commit(uint32_t n) {
         if (n > available()) {
             throw std::runtime_error("commit too big");
@@ -61,6 +73,7 @@ public:
         _h->back += n;
     }
 
+    //! move front towards back by n bytes
     void remove(uint32_t n) {
         if (n > size()) {
             throw std::runtime_error("remove > size");
@@ -72,7 +85,9 @@ public:
         }
     }
 
+    //! read from here
     char *front() const { return &_h->data[_h->front]; }
+    //! write to here
     char *back() const { return &_h->data[_h->back]; }
     char *end(uint32_t n) const { return &_h->data[_h->back + n]; }
     char *end() const { return &_h->data[_h->capacity]; }

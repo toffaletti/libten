@@ -11,6 +11,7 @@
 
 namespace ten {
 
+//! read a zip archive
 struct zip_reader {
     mz_zip_archive arc;
 
@@ -39,6 +40,7 @@ struct zip_reader {
 };
 
 
+//! write a zip archive
 struct zip_writer {
     mz_zip_archive arc;
 

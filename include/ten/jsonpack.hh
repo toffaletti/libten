@@ -2,7 +2,10 @@
 #define JSONPACK_HH
 
 #include "msgpack/msgpack.hpp"
-#include "json.hh"
+#include "ten/json.hh"
+
+//! \file
+//! convert between msgpack and json
 
 namespace msgpack {
 

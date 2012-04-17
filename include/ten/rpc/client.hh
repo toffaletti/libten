@@ -26,10 +26,12 @@ class rpc_session {
 };
 #endif
 
+//! exception thrown when rpc call fails on transport
 struct rpc_failure : public errorx {
     rpc_failure(const std::string &msg) : errorx(msg) {}
 };
 
+//! client to rpc_server. based on msgpack-rpc
 class rpc_client {
 public:
     rpc_client(const std::string &hostname_, uint16_t port_=0)
@@ -41,6 +43,7 @@ public:
     rpc_client(const rpc_client &) = delete;
     rpc_client &operator =(const rpc_client &) = delete;
 
+    //! make a remote procedure call and wait for the result
     template <typename Result, typename ...Args>
         Result call(const std::string &method, Args ...args) {
             uint32_t mid = ++msgid;

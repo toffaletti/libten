@@ -5,6 +5,7 @@
 
 namespace ten {
 
+//! task aware mutex
 class qutex {
 private:
     std::timed_mutex _m;
