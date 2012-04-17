@@ -18,6 +18,8 @@ class http_client {
 private:
     std::shared_ptr<netsock> s;
     buffer buf;
+    std::string host;
+    uint16_t port;
 
     void ensure_connection() {
         if (s && s->valid()) return;
@@ -28,12 +30,13 @@ private:
     }
 
 public:
-    const std::string host;
-    const uint16_t port;
     size_t max_content_length;
 
     http_client(const std::string &host_, uint16_t port_=80)
-        : buf(4*1024), host(host_), port(port_), max_content_length(~(size_t)0) {}
+        : buf(4*1024), host(host_), port(port_), max_content_length(~(size_t)0)
+    {
+        parse_host_port(host, port);
+    }
 
     http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
         uri u;
