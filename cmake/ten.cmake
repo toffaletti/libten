@@ -5,6 +5,7 @@ include(FindOpenSSL)
 #add_definitions(-DUSE_UCONTEXT)
 add_definitions(-DUSE_BOOST_FCONTEXT)
 
+include_directories(${CWD}/..) # for stlencoders and stringencoders
 include_directories(${CWD}/../include)
 include_directories(${CWD}/../jansson)
 include_directories(${CWD}/../msgpack)

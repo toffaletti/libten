@@ -7,13 +7,13 @@ Heavily inspired by python-gevent, state-threads, plan9, and go-lang.
 Features
 --------
 
-  * coroutines (boost.context)
+  * coroutines (built on boost.context)
   * typed channels for communicating between threads and coroutines
-  * http client and server (based on http-parser)
+  * http client and server (built on http-parser)
   * fast uri parser (ragel generated)
-  * JSON parser (jansson)
+  * JSON parser (wrapper around jansson)
   * logging (glog)
-  * rpc (based on msgpack)
+  * rpc (built on msgpack)
   * epoll event loop
 
 Dependencies
