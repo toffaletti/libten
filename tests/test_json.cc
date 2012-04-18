@@ -211,7 +211,6 @@ inline bool operator == (const corge &a, const corge &b) {
 BOOST_AUTO_TEST_CASE(json_serial) {
     corge c1(42, "grault");
     auto j = jsave_all(c1);
-    cout << "json: " << j.dump() << endl;
     corge c2;
     JLoad(j) >> c2;
     BOOST_CHECK(c1 == c2);
