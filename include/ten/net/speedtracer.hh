@@ -60,9 +60,9 @@ struct event {
 
     json to_json() const {
         json e(json::object());
-        e.set("type", (json_int_t)type);
+        e.set("type", type);
         e.set("typeName", "event");
-        e.set("time", (json_int_t)time().count());
+        e.set("time", time().count());
         e.set("duration", 10);
         e.set("data", data);
         e.set("color", "Crimson");
