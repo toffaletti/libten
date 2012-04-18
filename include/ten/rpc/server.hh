@@ -1,5 +1,5 @@
-#ifndef RPC_SERVER_HH
-#define RPC_SERVER_HH
+#ifndef LIBTEN_RPC_SERVER_HH
+#define LIBTEN_RPC_SERVER_HH
 
 #include "ten/logging.hh"
 #include "ten/task.hh"
@@ -85,4 +85,5 @@ private:
 };
 
 } // end namespace ten 
-#endif
+
+#endif // LIBTEN_RPC_SERVER_HH

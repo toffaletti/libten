@@ -1,5 +1,5 @@
-#ifndef URI_HH
-#define URI_HH
+#ifndef LIBTEN_URI_HH
+#define LIBTEN_URI_HH
 
 #include <string>
 #include <utility>
@@ -127,4 +127,4 @@ struct uri {
 
 } // end namespace ten
 
-#endif // URI_HH
+#endif // LIBTEN_URI_HH

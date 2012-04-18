@@ -1,5 +1,5 @@
-#ifndef CMD_SERVER_HH
-#define CMD_SERVER_HH
+#ifndef LIBTEN_NET_CMD_SERVER_HH
+#define LIBTEN_NET_CMD_SERVER_HH
 
 #include "ten/logging.hh"
 #include "ten/task.hh"
@@ -107,4 +107,4 @@ private:
 
 } // end namespace ten 
 
-#endif
+#endif // LIBTEN_NET_CMD_SERVER_HH

@@ -1,5 +1,5 @@
-#ifndef RPC_CLIENT_HH
-#define RPC_CLIENT_HH
+#ifndef LIBTEN_RPC_CLIENT_HH
+#define LIBTEN_RPC_CLIENT_HH
 
 #include "ten/shared_pool.hh"
 #include "ten/rpc/protocol.hh"
@@ -156,7 +156,6 @@ protected:
     }
 };
 
-
-
 } // end namespace ten
-#endif
+
+#endif // LIBTEN_RPC_CLIENT_HH

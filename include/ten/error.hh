@@ -1,5 +1,5 @@
-#ifndef ERROR_HH
-#define ERROR_HH
+#ifndef LIBTEN_ERROR_HH
+#define LIBTEN_ERROR_HH
 
 #include <exception>
 #include <cstdarg>
@@ -103,5 +103,4 @@ public:
 
 } // end namespace ten
 
-#endif // ERROR_HH
-
+#endif // LIBTEN_ERROR_HH

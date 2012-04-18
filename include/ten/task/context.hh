@@ -1,6 +1,5 @@
-#ifndef CONTEXT_HH
-#define CONTEXT_HH
-
+#ifndef LIBTEN_TASK_CONTEXT_HH
+#define LIBTEN_TASK_CONTEXT_HH
 
 //! \file
 //! context handles switching stacks
@@ -70,6 +69,4 @@ struct context : boost_fcontext_t {
 #error "no context implementation chosen"
 #endif
 
-
-#endif // CONTEXT_HH
-
+#endif // LIBTEN_TASK_CONTEXT_HH

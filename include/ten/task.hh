@@ -1,5 +1,5 @@
-#ifndef TASK_HH
-#define TASK_HH
+#ifndef LIBTEN_TASK_HH
+#define LIBTEN_TASK_HH
 
 #include <chrono>
 #include <functional>
@@ -90,5 +90,4 @@ struct deadline {
 
 } // end namespace ten
 
-#endif // TASK_HH
-
+#endif // LIBTEN_TASK_HH

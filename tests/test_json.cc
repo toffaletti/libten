@@ -1,6 +1,7 @@
 #define BOOST_TEST_MODULE json test
 #include <boost/test/unit_test.hpp>
 #include "ten/json.hh"
+#include "ten/jserial.hh"
 
 using namespace ten;
 
@@ -190,4 +191,40 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
 
     test_conv<bool>(true,  json::jtrue(),  JSON_TRUE);
     test_conv<bool>(false, json::jfalse(), JSON_FALSE);
+}
+
+struct corge {
+    int foo;
+    string bar;
+
+    corge() : foo(), bar() {}
+    corge(int foo_, string bar_) : foo(foo_), bar(bar_) {}
+};
+template <class AR>
+inline AR & operator & (AR &ar, corge &c) {
+    return ar & kv("foo", c.foo) & kv("bar", c.bar);
+}
+inline bool operator == (const corge &a, const corge &b) {
+    return a.foo == b.foo && a.bar == b.bar;
+}
+
+BOOST_AUTO_TEST_CASE(json_serial) {
+    corge c1(42, "grault");
+    auto j = jsave_all(c1);
+    cout << "json: " << j.dump() << endl;
+    corge c2;
+    JLoad(j) >> c2;
+    BOOST_CHECK(c1 == c2);
+
+#if 0
+    map<string, int> m;
+    JLoad(j) >> m;
+    cout << "map:";
+    for (auto v : m)
+        cout << " " << v.first << ":" << v.second;
+    cout << endl;
+    BOOST_CHECK_EQUAL(m.size(), 5);
+    BOOST_CHECK(m.find("bucks") != m.end());
+    BOOST_CHECK_EQUAL(m["bucks"], 1);
+#endif
 }

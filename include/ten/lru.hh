@@ -1,5 +1,5 @@
-#ifndef LRU_HH
-#define LRU_HH
+#ifndef LIBTEN_LRU_HH
+#define LIBTEN_LRU_HH
 
 #include <unordered_map>
 #include <list>
@@ -113,4 +113,5 @@ public:
 };
 
 } // namespace
-#endif
+
+#endif // LIBTEN_LRU_HH

@@ -1,5 +1,5 @@
-#ifndef SEMA_HH
-#define SEMA_HH
+#ifndef LIBTEN_SEMAPHORE_HH
+#define LIBTEN_SEMAPHORE_HH
 
 #include "error.hh"
 #include <semaphore.h>
@@ -39,4 +39,4 @@ public:
 
 } // end namespace ten
 
-#endif // SEMA_HH
+#endif // LIBTEN_SEMAPHORE_HH

@@ -1,5 +1,5 @@
-#ifndef LOGGING_HH
-#define LOGGING_HH
+#ifndef LIBTEN_LOGGING_HH
+#define LIBTEN_LOGGING_HH
 
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
@@ -20,4 +20,4 @@ template <typename T> std::string to_hex(T &in) {
 
 } // end namespace ten
 
-#endif // LOGGING_HH
+#endif // LIBTEN_LOGGING_HH

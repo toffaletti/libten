@@ -1,3 +1,6 @@
+#ifndef LIBTEN_BACKOFF_HH
+#define LIBTEN_BACKOFF_HH
+
 #include <chrono>
 #include <algorithm>
 #include <random>
@@ -34,3 +37,5 @@ public:
 };
 
 } // end namespace ten
+
+#endif // LIBTEN_BACKOFF_HH

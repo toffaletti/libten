@@ -1,11 +1,11 @@
-#ifndef SPEEDTRACER_HH
-#define SPEEDTRACER_HH
+#ifndef LIBTEN_NET_SPEEDTRACER_HH
+#define LIBTEN_NET_SPEEDTRACER_HH
 
 #include <chrono>
 #include <deque>
 #include <vector>
 #include <string>
-#include <ostream>
+#include <sstream>
 #include "ten/json.hh"
 #include "ten/logging.hh"
 
@@ -17,7 +17,6 @@
 // http://code.google.com/p/google-web-toolkit/source/browse/trunk/dev/core/src/com/google/gwt/dev/util/log/speedtracer/SpeedTracerLogger.java
 
 namespace ten {
-using std::ostream;
 using std::move;
 using std::string;
 using namespace std::chrono;
@@ -72,10 +71,8 @@ struct event {
     }
 };
 
-
 string session::dump() const {
-    stringstream ss;
-    json a(json::array());
+    std::ostringstream ss;
     for (auto i=children.begin(); i!=children.end(); ++i) {
         ss << i->to_json() << "\n";
         break;
@@ -84,6 +81,6 @@ string session::dump() const {
 }
 
 } // end namespace tracer
-
 } // end namespace ten
-#endif
+
+#endif // LIBTEN_NET_SPEEDTRACER_HH
