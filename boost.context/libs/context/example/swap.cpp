@@ -9,7 +9,6 @@
 #include <string>
 
 #include <boost/context/all.hpp>
-#include <boost/move/move.hpp>
 
 int x = 7;
 void fn( int);

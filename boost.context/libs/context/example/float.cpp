@@ -9,7 +9,6 @@
 #include <string>
 
 #include <boost/context/all.hpp>
-#include <boost/move/move.hpp>
 
 void fn( double d)
 {

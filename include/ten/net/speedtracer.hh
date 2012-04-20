@@ -19,6 +19,8 @@
 namespace ten {
 using std::move;
 using std::string;
+using std::vector;
+using std::shared_ptr;
 using namespace std::chrono;
 
 #define TRACE \
