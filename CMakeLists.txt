@@ -104,7 +104,6 @@ add_subdirectory(tests)
 add_subdirectory(benchmarks)
 
 add_subdirectory(jansson)
-add_subdirectory(stringencoders)
 add_subdirectory(msgpack)
 
 add_custom_target(world DEPENDS
