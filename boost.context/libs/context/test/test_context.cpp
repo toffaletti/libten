@@ -77,7 +77,7 @@ void test_case_1()
         boost::contexts::stack_unwind, boost::contexts::return_to_caller);
     BOOST_CHECK( ! ctx1);
     BOOST_CHECK( ctx2);
-    ctx1 = boost::move( ctx2);
+    ctx1 = std::move( ctx2);
     BOOST_CHECK( ctx1);
     BOOST_CHECK( ! ctx2);
 }
