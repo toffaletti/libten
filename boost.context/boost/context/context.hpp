@@ -10,7 +10,6 @@
 #include <boost/assert.hpp>
 #include <boost/bind.hpp>
 #include <boost/config.hpp>
-#include <boost/move/move.hpp>
 #include <boost/preprocessor/repetition.hpp>
 #include <boost/type_traits/is_convertible.hpp>
 #include <boost/type_traits/remove_reference.hpp>
@@ -261,7 +260,7 @@ BOOST_PP_REPEAT_FROM_TO( 1, BOOST_CONTEXT_ARITY, BOOST_CONTEXT_CTOR, ~)
     context & operator=( BOOST_RV_REF( context) other)
     {
         if ( this == & other) return * this;
-        context tmp( boost::move( other) );
+        context tmp( std::move( other) );
         swap( tmp);
         return * this;
     }

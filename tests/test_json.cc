@@ -1,8 +1,11 @@
 #define BOOST_TEST_MODULE json test
 #include <boost/test/unit_test.hpp>
-#include "ten/json.hh"
-#include "ten/jserial.hh"
+#include <ten/json.hh>
+#include <ten/jserial.hh>
+#include <ten/jserial_seq.hh>
+#include <ten/jserial_assoc.hh>
 
+using namespace std;
 using namespace ten;
 
 const char json_text[] =
@@ -194,11 +197,10 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
 }
 
 struct corge {
-    int foo;
-    string bar;
+    int foo, bar;
 
     corge() : foo(), bar() {}
-    corge(int foo_, string bar_) : foo(foo_), bar(bar_) {}
+    corge(int foo_, int bar_) : foo(foo_), bar(bar_) {}
 };
 template <class AR>
 inline AR & operator & (AR &ar, corge &c) {
@@ -209,21 +211,25 @@ inline bool operator == (const corge &a, const corge &b) {
 }
 
 BOOST_AUTO_TEST_CASE(json_serial) {
-    corge c1(42, "grault");
+    corge c1(42, 17);
     auto j = jsave_all(c1);
     corge c2;
     JLoad(j) >> c2;
     BOOST_CHECK(c1 == c2);
 
-#if 0
     map<string, int> m;
     JLoad(j) >> m;
-    cout << "map:";
-    for (auto v : m)
-        cout << " " << v.first << ":" << v.second;
-    cout << endl;
-    BOOST_CHECK_EQUAL(m.size(), 5);
-    BOOST_CHECK(m.find("bucks") != m.end());
-    BOOST_CHECK_EQUAL(m["bucks"], 1);
-#endif
+    BOOST_CHECK_EQUAL(m.size(), 2);
+    BOOST_CHECK(m.find("foo") != m.end());
+    BOOST_CHECK(m.find("bar") != m.end());
+    BOOST_CHECK_EQUAL(m["foo"], 42);
+    BOOST_CHECK_EQUAL(m["bar"], 17);
+
+    flat_map<string, int> f;
+    JLoad(j) >> f;
+    BOOST_CHECK_EQUAL(f.size(), 2);
+    BOOST_CHECK(f.find("foo") != f.end());
+    BOOST_CHECK(f.find("bar") != f.end());
+    BOOST_CHECK_EQUAL(f["foo"], 42);
+    BOOST_CHECK_EQUAL(f["bar"], 17);
 }
