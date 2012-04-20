@@ -10,7 +10,7 @@ using std::move;
 
 template <class AR, class T, class X = typename std::enable_if<AR::is_save>::type>
 inline AR & operator >> (AR &ar, maybe<T> &m) {
-    if (_j) {
+    if (ar.source()) {
         T t;
         ar >> t;
         m = move(t);
@@ -18,7 +18,7 @@ inline AR & operator >> (AR &ar, maybe<T> &m) {
     return ar;
 }
 
-template <class AR, class T, class X = typename std::enable_if<AR::is_load>::type>>
+template <class AR, class T, class X = typename std::enable_if<AR::is_load>::type>
 inline AR & operator << (AR &ar, maybe<T> &m) {
     if (m.ok())
         ar << m.get_ref();
@@ -27,4 +27,4 @@ inline AR & operator << (AR &ar, maybe<T> &m) {
 
 } // ten
 
-#endif LIBTEN_JSERIAL_MAYBE_HH
+#endif // LIBTEN_JSERIAL_MAYBE_HH
