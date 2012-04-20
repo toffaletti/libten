@@ -225,6 +225,7 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     BOOST_CHECK_EQUAL(m["foo"], 42);
     BOOST_CHECK_EQUAL(m["bar"], 17);
 
+#if BOOST_VERSION >= 104800
     flat_map<string, int> f;
     JLoad(j) >> f;
     BOOST_CHECK_EQUAL(f.size(), 2);
@@ -232,4 +233,5 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     BOOST_CHECK(f.find("bar") != f.end());
     BOOST_CHECK_EQUAL(f["foo"], 42);
     BOOST_CHECK_EQUAL(f["bar"], 17);
+#endif
 }

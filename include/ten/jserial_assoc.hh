@@ -1,7 +1,10 @@
 #ifndef LIBTEN_JSERIAL_ASSOC_HH
 #define LIBTEN_JSERIAL_ASSOC_HH
 
+#include <boost/version.hpp>
+#if BOOST_VERSION > 104800
 #include <boost/container/flat_map.hpp>
+#endif
 #include <ten/jserial.hh>
 #include <map>
 #include <unordered_map>
@@ -10,7 +13,9 @@ namespace ten {
 using std::move;
 using std::map;
 using std::unordered_map;
+#if BOOST_VERSION >= 104800
 using boost::container::flat_map;
+#endif
 
 //
 // associative collections
@@ -49,12 +54,16 @@ struct json_traits<map<K, M, A>> : public json_traits_assoc<map<K, M, A>> {};
 template <class K, class M, class A>
 struct json_traits<unordered_map<K, M, A>> : public json_traits_assoc<unordered_map<K, M, A>> {};
 
+#if BOOST_VERSION >= 104800
 template <class K, class M, class A>
 struct json_traits<flat_map<K, M, A>> : public json_traits_assoc<flat_map<K, M, A>> {};
+#endif
 
 template <class K, class M, class A> inline json to_json(const map<K, M, A> &m)           { return to_json_assoc(m); }
 template <class K, class M, class A> inline json to_json(const unordered_map<K, M, A> &m) { return to_json_assoc(m); }
+#if BOOST_VERSION >= 104800
 template <class K, class M, class A> inline json to_json(const flat_map<K, M, A> &m)      { return to_json_assoc(m); }
+#endif
 
 } // ten
 
