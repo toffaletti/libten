@@ -3,7 +3,6 @@
 
 #include "ten/json.hh"
 #include "ten/error.hh"
-#include "ten/maybe.hh"
 #include <type_traits>
 
 namespace ten {
@@ -39,6 +38,7 @@ class JSave {
     save_mode _mode;
 
   public:
+    static const bool is_archive = true;
     static const bool is_save = true;
     static const bool is_load = false;
 
@@ -64,18 +64,11 @@ class JSave {
         return *this;
     }
 
-    template <class T, class X = typename enable_if<json_traits<T>::can_make>::type>
+    template <class T, class X = typename std::enable_if<json_traits<T>::can_make>::type>
     JSave & operator & (T &&t) {
         json j(to_json(t));
         req_empty_for(j);
         _j = move(j);
-        return *this;
-    }
-
-    template <class T>
-    JSave & operator & (maybe<T> &m) {
-        if (m.ok())
-            *this & m.get_ref();
         return *this;
     }
 
@@ -116,6 +109,7 @@ class JLoad {
     unsigned _version;
 
   public:
+    static const bool is_archive = true;
     static const bool is_save = false;
     static const bool is_load = true;
 
@@ -136,24 +130,15 @@ class JLoad {
         return *this;
     }
 
-    template <class T, class X = typename enable_if<json_traits<T>::can_cast>::type>
+    template <class T, class X = typename std::enable_if<json_traits<T>::can_cast>::type>
     JLoad & operator & (T &t) {
         t = json_cast<T>(_j);
         return *this;
     }
 
-    template <class T>
-    JLoad & operator & (maybe<T> &m) {
-        if (_j) {
-            T t;
-            *this & t;
-            m = move(t);
-        }
-        return *this;
-    }
-
     // kv pair specialization
 
+    // operator >> is respecialized because parameter is not ref
     template <class V>
     JLoad & operator >> (KV<V &> f) {
         return *this & f;
