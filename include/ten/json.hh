@@ -17,7 +17,10 @@
 #endif
 
 namespace ten {
-using namespace std;
+using std::move;
+using std::string;
+using std::pair;
+using std::initializer_list;
 
 #ifndef TEN_JSON_CXX11
 const intptr_t nullptr = 0;
@@ -28,7 +31,7 @@ const intptr_t nullptr = 0;
 // streams meet json_t
 //
 
-ostream & operator << (ostream &o, const json_t *j);
+std::ostream & operator << (std::ostream &o, const json_t *j);
 
 
 //----------------------------------------------------------------
@@ -72,7 +75,7 @@ public:
         return p ? &shared_json_ptr::true_value : nullptr;
     }
 
-    friend ostream & operator << (ostream &o, const shared_json_ptr &jp) { return o << jp.get(); }
+    friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) { return o << jp.get(); }
 };
 
 typedef shared_json_ptr<      json_t>       json_ptr;
@@ -264,7 +267,7 @@ class json {
 
     json path(const string &path);
 
-    typedef function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
+    typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
     void visit(const visitor_func_t &visitor);
 
     // interfaces specific to object and array
@@ -361,7 +364,7 @@ class json {
     arr_view arr()  { return arr_view(get()); }
 };
 
-inline ostream & operator << (ostream &o, const json &j) { return o << j.get(); }
+inline std::ostream & operator << (std::ostream &o, const json &j) { return o << j.get(); }
 
 
 //----------------------------------------------------------------
