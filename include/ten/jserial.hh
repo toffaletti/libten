@@ -77,7 +77,8 @@ class JSave {
     template <class V>
     JSave & operator & (KV<V> f) {
         req_obj_for(f.key);
-        auto jv = result(JSave(_version, _mode) & f.value);
+        JSave js(_version, _mode);
+        auto jv = result(js & f.value);
         if (jv)
             _j.set(f.key, move(jv));
         return *this;
@@ -148,8 +149,10 @@ class JLoad {
     JLoad & operator & (KV<V &> f) {
         req_obj_for(f.key);
         json jv(_j[f.key]);
-        if (jv)
-            JLoad(move(jv), _version) & f.value;
+        if (jv) {
+            JLoad js(move(jv), _version);
+            js & f.value;
+        }
         return *this;
     }
 
