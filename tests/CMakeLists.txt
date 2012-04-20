@@ -30,9 +30,6 @@ target_link_libraries(test_qutex ten boost_unit_test_framework-mt)
 add_executable(test_net test_net.cc)
 target_link_libraries(test_net ten boost_unit_test_framework-mt)
 
-add_executable(test_speedtracer test_speedtracer.cc)
-target_link_libraries(test_speedtracer ten jansson boost_unit_test_framework-mt)
-
 add_executable(test_http test_http.cc)
 target_link_libraries(test_http ten boost_unit_test_framework-mt)
 
@@ -49,6 +46,5 @@ add_test(test_json test_json --random)
 add_test(test_buffer test_buffer --random)
 add_test(test_qutex test_qutex --random)
 add_test(test_net test_net --random)
-add_test(test_speedtracer test_speedtracer --random)
 add_test(test_http test_http --random)
 add_test(test_uri test_uri --random)
