@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2011 Thomas Kemmer <tkemmer@computer.org>
- * 
+ * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
+ *
  * http://code.google.com/p/stlencoders/
- * 
+ *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -10,10 +10,10 @@
  * modify, merge, publish, distribute, sublicense, and/or sell copies
  * of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,46 +24,35 @@
  * SOFTWARE.
  */
 
-#ifndef STLENCODERS_DECSTR_HPP
-#define STLENCODERS_DECSTR_HPP
+#ifndef STLENCODERS_ERROR_HPP
+#define STLENCODERS_ERROR_HPP
 
-#include <cstring>
-#include <cwchar>
+#include <stdexcept>
 
 namespace stlencoders {
-    namespace impl {
-        inline int decstr(const char* s, char c) {
-            if (const char* p = std::strchr(s, c)) {
-                return p - s;
-            } else {
-                return -1;
-            }
-        }
+    class decode_error : public std::runtime_error {
+    public:
+        explicit decode_error(const std::string& arg)
+        : runtime_error(arg) { }
+    };
 
-        inline int decstr(const wchar_t* s, wchar_t c) {
-            if (const wchar_t* p = std::wcschr(s, c)) {
-                return p - s;
-            } else {
-                return -1;
-            }
-    	}
+    class invalid_character : public decode_error {
+    public:
+        explicit invalid_character(const std::string& arg)
+        : decode_error(arg) { }
+    };
 
-        inline int decistr(const char* s, char c) {
-            if (const char* p = std::strchr(s, c)) {
-                return (p - s) / 2;
-            } else {
-                return -1;
-            }
-        }
+    class invalid_padding : public decode_error {
+    public:
+        explicit invalid_padding(const std::string& arg)
+        : decode_error(arg) { }
+    };
 
-        inline int decistr(const wchar_t* s, wchar_t c) {
-            if (const wchar_t* p = std::wcschr(s, c)) {
-                return (p - s) / 2;
-            } else {
-                return -1;
-            }
-    	}
-    }
+    class invalid_length : public decode_error {
+    public:
+        explicit invalid_length(const std::string& arg)
+        : decode_error(arg) { }
+    };
 }
 
 #endif

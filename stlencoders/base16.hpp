@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2011 Thomas Kemmer <tkemmer@computer.org>
- * 
+ * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
+ *
  * http://code.google.com/p/stlencoders/
- * 
+ *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -10,10 +10,10 @@
  * modify, merge, publish, distribute, sublicense, and/or sell copies
  * of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -27,114 +27,100 @@
 #ifndef STLENCODERS_BASE16_HPP
 #define STLENCODERS_BASE16_HPP
 
-#include "base16impl.hpp"
-
-#include <cwchar>
-#include <stdexcept>
+#include "error.hpp"
+#include "lookup.hpp"
+#include "traits.hpp"
 
 /**
-   \brief stlencoders namespace
+   @brief stlencoders namespace
 */
 namespace stlencoders {
+    namespace detail {
+        template<char C> struct base16_table { enum { value = 0xff }; };
+
+        template<> struct base16_table<'0'> { enum { value = 0x00 }; };
+        template<> struct base16_table<'1'> { enum { value = 0x01 }; };
+        template<> struct base16_table<'2'> { enum { value = 0x02 }; };
+        template<> struct base16_table<'3'> { enum { value = 0x03 }; };
+        template<> struct base16_table<'4'> { enum { value = 0x04 }; };
+        template<> struct base16_table<'5'> { enum { value = 0x05 }; };
+        template<> struct base16_table<'6'> { enum { value = 0x06 }; };
+        template<> struct base16_table<'7'> { enum { value = 0x07 }; };
+        template<> struct base16_table<'8'> { enum { value = 0x08 }; };
+        template<> struct base16_table<'9'> { enum { value = 0x09 }; };
+        template<> struct base16_table<'A'> { enum { value = 0x0a }; };
+        template<> struct base16_table<'B'> { enum { value = 0x0b }; };
+        template<> struct base16_table<'C'> { enum { value = 0x0c }; };
+        template<> struct base16_table<'D'> { enum { value = 0x0d }; };
+        template<> struct base16_table<'E'> { enum { value = 0x0e }; };
+        template<> struct base16_table<'F'> { enum { value = 0x0f }; };
+
+        template<> struct base16_table<'a'> { enum { value = base16_table<'A'>::value }; };
+        template<> struct base16_table<'b'> { enum { value = base16_table<'B'>::value }; };
+        template<> struct base16_table<'c'> { enum { value = base16_table<'C'>::value }; };
+        template<> struct base16_table<'d'> { enum { value = base16_table<'D'>::value }; };
+        template<> struct base16_table<'e'> { enum { value = base16_table<'E'>::value }; };
+        template<> struct base16_table<'f'> { enum { value = base16_table<'F'>::value }; };
+    }
+
+    /**
+       @brief base16 traits template
+    */
     template<class charT> struct base16_traits;
 
     /**
        @brief base16 character traits
     */
-    template<> struct base16_traits<char> {
+    template<>
+    struct base16_traits<char> {
         typedef char char_type;
 
-    	typedef int int_type;
+    	typedef unsigned char int_type;
 
-    	static char_type encode_lower(int_type c) {
-            return "0123456789abcdef"[c];
+        static bool eq(const char_type& lhs, const char_type& rhs) {
+            return lhs == rhs;
         }
 
-    	static char_type encode_upper(int_type c) {
+        static bool eq_int_type(const int_type& lhs, const int_type& rhs) {
+            return lhs == rhs;
+        }
+
+    	static char_type to_char_type(const int_type& c) {
+            return to_char_type_upper(c);
+        }
+
+    	static char_type to_char_type_upper(const int_type& c) {
             return "0123456789ABCDEF"[c];
     	}
 
-    	static int_type decode(char_type c) {
-            return impl::dectbl<impl::b16>(c);
+    	static char_type to_char_type_lower(const int_type& c) {
+            return "0123456789abcdef"[c];
+        }
+
+    	static int_type to_int_type(const char_type& c) {
+            return lookup<detail::base16_table>(c, inv());
     	}
 
-        static int_type nchar() {
-            return -1;
+        static int_type inv() {
+            return detail::base16_table<'\0'>::value;
         }
     };
 
     /**
        @brief base16 wide character traits
     */
-    template<> struct base16_traits<wchar_t> {
-        typedef wchar_t char_type;
-
-    	typedef int int_type;
-
-    	static char_type encode_lower(int_type c) {
-            return L"0123456789abcdef"[c];
-        }
-
-    	static char_type encode_upper(int_type c) {
-            return L"0123456789ABCDEF"[c];
-    	}
-
-    	static int_type decode(char_type c) {
-            const wchar_t* s = L"00112233445566778899AaBbCcDdEeFf";
-            if (const wchar_t* p = std::wcschr(s, c)) {
-                return (p - s) / 2;
-            } else {
-                return -1;
-            }
-    	}
-
-        static int_type nchar() {
-            return -1;
-        }
+    template<>
+    struct base16_traits<wchar_t>
+    : public detail::wchar_encoding_traits<base16_traits> {
     };
 
     /**
        @brief base16 encoder/decoder
     */
-    template<class charT, class traits = base16_traits<charT> > 
+    template<class charT, class traits = base16_traits<charT> >
     class base16 {
     private:
-        struct nskip {
-            bool operator()(charT) const { 
-                throw std::runtime_error("base16 decode error"); 
-            }
-        };
-
-        struct lower_encoder {
-            charT operator()(typename traits::int_type c) const { 
-                return traits::encode_lower(c); 
-            }
-        };
-
-        struct upper_encoder {
-            charT operator()(typename traits::int_type c) const { 
-                return traits::encode_upper(c); 
-            }
-        };
-
-#ifdef STLENCODERS_DEFAULT_ENCODE_UPPER
-        typedef upper_encoder default_encoder;
-#else
-        typedef lower_encoder default_encoder;
-#endif
-
-        template<class InputIterator, class OutputIterator, class Encoder>
-        static OutputIterator encode(InputIterator first, InputIterator last, 
-                                     OutputIterator result, Encoder enc)
-        {
-            while (first != last) {
-            	typename traits::int_type c = *first++ & 0xff;
-            	*result++ = enc((c >> 4) & 0x0f);
-            	*result++ = enc(c & 0x0f);
-            }
-
-            return result;
-        }
+        struct noskip { };
 
     public:
         /**
@@ -143,76 +129,94 @@ namespace stlencoders {
         typedef charT char_type;
 
         /**
+           @brief integral type
+        */
+        typedef typename traits::int_type int_type;
+
+        /**
            @brief traits type
         */
     	typedef traits traits_type;
 
         /**
-           @brief base16 encode a range of bytes
+           @brief base16 encode a range of octets
 
            @param first an input iterator to the first position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param last an input iterator to the final position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param result an output iterator to the initial position in
-           the destination octet sequence
+           the destination character sequence
 
            @return an iterator to the last element of the destination
            sequence
         */
         template<class InputIterator, class OutputIterator>
-        static OutputIterator encode(InputIterator first, InputIterator last, 
-                                     OutputIterator result)
+        static OutputIterator encode(
+            InputIterator first, InputIterator last, OutputIterator result
+            )
         {
-            return encode(first, last, result, default_encoder());
+            for (; first != last; ++first) {
+                int_type c = *first;
+            	*result = traits::to_char_type((c & 0xff) >> 4);
+                ++result;
+            	*result = traits::to_char_type((c & 0x0f));
+                ++result;
+            }
+
+            return result;
         }
 
         /**
-           @brief base16 encode a range of bytes using the lowercase
+           @brief base16 encode a range of octets using the lowercase
            encoding alphabet
 
            @param first an input iterator to the first position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param last an input iterator to the final position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param result an output iterator to the initial position in
-           the destination octet sequence
+           the destination character sequence
 
            @return an iterator to the last element of the destination
            sequence
         */
         template<class InputIterator, class OutputIterator>
-        static OutputIterator encode_lower(InputIterator first, InputIterator last, 
-                                           OutputIterator result)
+        static OutputIterator encode_lower(
+            InputIterator first, InputIterator last, OutputIterator result
+            )
         {
-            return encode(first, last, result, lower_encoder());
+            typedef lower_encoding_traits<traits> lower_traits;
+            return base16<charT, lower_traits>::encode(first, last, result);
         }
 
         /**
-           @brief base16 encode a range of bytes using the uppercase
+           @brief base16 encode a range of octets using the uppercase
            encoding alphabet
 
            @param first an input iterator to the first position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param last an input iterator to the final position in the
-           byte sequence to be encoded
+           octet sequence to be encoded
 
            @param result an output iterator to the initial position in
-           the destination octet sequence
+           the destination character sequence
 
            @return an iterator to the last element of the destination
            sequence
         */
         template<class InputIterator, class OutputIterator>
-        static OutputIterator encode_upper(InputIterator first, InputIterator last, 
-                                           OutputIterator result)
+        static OutputIterator encode_upper(
+            InputIterator first, InputIterator last, OutputIterator result
+            )
         {
-            return encode(first, last, result, upper_encoder());
+            typedef upper_encoding_traits<traits> upper_traits;
+            return base16<charT, upper_traits>::encode(first, last, result);
         }
 
         /**
@@ -226,15 +230,16 @@ namespace stlencoders {
 
            @param result an output iterator to the initial position in
            the destination octet sequence
-           
+
            @return an iterator to the last element of the destination
            sequence
         */
         template<class InputIterator, class OutputIterator>
-            static OutputIterator decode(InputIterator first, InputIterator last, 
-                                         OutputIterator result)
+        static OutputIterator decode(
+            InputIterator first, InputIterator last, OutputIterator result
+            )
         {
-            return decode(first, last, result, nskip());
+            return decode(first, last, result, noskip());
         }
 
         /**
@@ -248,37 +253,35 @@ namespace stlencoders {
 
            @param result an output iterator to the initial position in
            the destination octet sequence
-           
-           @param ignore a function object that, when applied to a
+
+           @param skip a function object that, when applied to a
            character not in the encoding set, returns true if the
-           character is to be ignored, false if decoding is to be
-           stopped, or throws an exception which is propagated to the
-           caller
+           character is to be ignored, or false if decoding is to be
+           stopped by throwing an exception
 
            @return an iterator to the last element of the destination
            sequence
         */
         template<class InputIterator, class OutputIterator, class Predicate>
-        static OutputIterator decode(InputIterator first, InputIterator last, 
-                                     OutputIterator result, Predicate ignore)
+        static OutputIterator decode(
+            InputIterator first, InputIterator last, OutputIterator result,
+            Predicate skip
+            )
         {
-            typename traits::char_type c;
-            typename traits::int_type c0, c1;
-
-            outer: while (first != last) {
-                if ((c0 = traits::decode(c = *first++)) != traits::nchar()) {
-                    while (first != last) {
-                        if ((c1 = traits::decode(c = *first++)) != traits::nchar()) {
-                            *result++ = (c0 << 4) | c1;
-                            goto outer;
-                        } else if (!ignore(c)) {
-                            return result;
-                        } 
-                    }
-                } else if (!ignore(c)) {
+            do {
+                int_type c0 = seek(first, last, skip);
+                if (traits::eq_int_type(c0, traits::inv())) {
                     return result;
                 }
-            }
+
+                int_type c1 = seek(first, last, skip);
+                if (traits::eq_int_type(c1, traits::inv())) {
+                    throw invalid_length("base16 decode error");
+                }
+
+                *result = c0 << 4 | c1;
+                ++result;
+            } while (first != last);
 
             return result;
         }
@@ -290,7 +293,7 @@ namespace stlencoders {
 
            @return the maximum size of the encoded character sequence
         */
-        template<class sizeT> 
+        template<class sizeT>
         static sizeT max_encode_size(sizeT n) {
             return n * 2;
         }
@@ -305,6 +308,47 @@ namespace stlencoders {
         template<class sizeT>
         static sizeT max_decode_size(sizeT n) {
             return n / 2;
+        }
+
+    private:
+        template<class InputIterator, class Predicate>
+        static int_type seek(
+            InputIterator& first, const InputIterator& last, Predicate& skip
+            )
+        {
+            while (first != last) {
+                char_type c = *first;
+                ++first;
+
+                int_type v = traits::to_int_type(c);
+                if (!traits::eq_int_type(v, traits::inv())) {
+                    return v;
+                } else if (!skip(c)) {
+                    throw invalid_character("base16 decode error");
+                }
+            }
+
+            return traits::inv();
+        }
+
+        template<class InputIterator>
+        static int_type seek(
+            InputIterator& first, const InputIterator& last, noskip&
+            )
+        {
+            if (first != last) {
+                char_type c = *first;
+                ++first;
+
+                int_type v = traits::to_int_type(c);
+                if (!traits::eq_int_type(v, traits::inv())) {
+                    return v;
+                } else {
+                    throw invalid_character("base16 decode error");
+                }
+            }
+
+            return traits::inv();
         }
     };
 }
