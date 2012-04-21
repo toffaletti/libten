@@ -98,8 +98,8 @@ namespace stlencoders {
             LUT<'\374'>::value, LUT<'\375'>::value, LUT<'\376'>::value, LUT<'\377'>::value
         };
 
-        if (static_cast<unsigned char>(c) < 256)
-            return table[static_cast<unsigned char>(c)];
+        if (static_cast<unsigned>(c) < sizeof(table))
+            return table[static_cast<unsigned>(c)];
         else
             return def;
     }
