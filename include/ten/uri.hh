@@ -108,6 +108,7 @@ public:
     public:
         typedef std::vector<std::pair<std::string, std::string>> params_type;
         typedef params_type::iterator iterator;
+        typedef params_type::const_iterator const_iterator;
     private:
         params_type _params;
     public:
@@ -143,6 +144,12 @@ public:
         params_type::iterator find(const std::string &k) {
             return std::find_if(_params.begin(), _params.end(), query_match<std::string>(k));
         }
+
+        iterator begin() { return _params.begin(); }
+        const_iterator cbegin() { return _params.cbegin(); }
+
+        iterator end() { return _params.end(); }
+        const_iterator cend() { return _params.cend(); }
 
         template <typename ParamT> bool get(const std::string &k, ParamT &v) const {
             auto i = find(k);
