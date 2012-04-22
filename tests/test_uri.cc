@@ -68,10 +68,10 @@ BOOST_AUTO_TEST_CASE(uri_parse_query) {
     static const char uri1[] = "http://example.com:3010/path/search.proto?q=%D0%BF%D1%83%D1%82%D0%B8%D0%BD";
     uri u(uri1);
     u.normalize();
-    uri::query_params params = u.parse_query();
+    uri::query_params params = u.query_part();
     // NOTE: the string below should appear as russian
     BOOST_CHECK_EQUAL(params.size(), 1);
-    BOOST_CHECK_EQUAL(uri::find_param(params, "q")->second, "путин");
+    BOOST_CHECK_EQUAL(params.find("q")->second, "путин");
 }
 
 BOOST_AUTO_TEST_CASE(uri_parse_dups) {
@@ -93,11 +93,10 @@ BOOST_AUTO_TEST_CASE(uri_transform) {
     /* examples from http://tools.ietf.org/html/rfc3986#section-5.4.1 */
     static const char base_uri[] = "http://a/b/c/d;p?q";
 
-    uri b;
+    uri b(base_uri);
     uri t;
     uri r;
 
-    BOOST_CHECK(b.parse(base_uri, strlen(base_uri)));
     r.path = "g";
     t.transform(b, r);
     BOOST_CHECK_EQUAL("http://a/b/c/g", t.compose());
@@ -343,7 +342,7 @@ BOOST_AUTO_TEST_CASE(uri_normalize_one_slash) {
     BOOST_CHECK_EQUAL("/", u.path);
     u.clear();
 
-    BOOST_CHECK(u.parse(uri2, strlen(uri2)));
+    u.assign(uri2);
     u.normalize();
     BOOST_CHECK_EQUAL("/", u.path);
 }
@@ -363,14 +362,14 @@ BOOST_AUTO_TEST_CASE(uri_normalize) {
     u.clear();
 
     const char uri2[] = "http://host/../";
-    BOOST_CHECK(u.parse(uri2, strlen(uri2)));
+    u.assign(uri2);
     u.normalize();
     BOOST_CHECK_EQUAL("/", u.path);
     BOOST_CHECK_EQUAL("host", u.host);
     u.clear();
 
     static const char uri3[] = "http://host/./";
-    BOOST_CHECK(u.parse(uri3, strlen(uri3)));
+    u.assign(uri3);
     u.normalize();
     BOOST_CHECK_EQUAL("/", u.path);
     BOOST_CHECK_EQUAL("host", u.host);
@@ -378,9 +377,8 @@ BOOST_AUTO_TEST_CASE(uri_normalize) {
 
 BOOST_AUTO_TEST_CASE(uri_parse_parts) {
     const char uri1[] = "http://example.com/path/to/something?query=string#frag";
-    uri u;
+    uri u(uri1);
 
-    BOOST_CHECK(u.parse(uri1, strlen(uri1)));
     BOOST_CHECK_EQUAL("http", u.scheme);
     BOOST_CHECK_EQUAL("example.com", u.host);
     BOOST_CHECK_EQUAL("/path/to/something", u.path);
@@ -388,7 +386,7 @@ BOOST_AUTO_TEST_CASE(uri_parse_parts) {
     BOOST_CHECK_EQUAL("#frag", u.fragment);
 
     const char uri2[] = "http://jason:password@example.com:5555/path/to/";
-    BOOST_CHECK(u.parse(uri2, strlen(uri2)));
+    u.assign(uri2);
     BOOST_CHECK_EQUAL("http", u.scheme);
     BOOST_CHECK_EQUAL("jason:password", u.userinfo);
     BOOST_CHECK_EQUAL("example.com", u.host);
@@ -396,13 +394,10 @@ BOOST_AUTO_TEST_CASE(uri_parse_parts) {
     BOOST_CHECK_EQUAL(5555, u.port);
 
     const char uri3[] = "http://baduri;f[303fds";
-    const char *error_at = NULL;
-    BOOST_CHECK(!u.parse(uri3, strlen(uri3), &error_at));
-    BOOST_CHECK(error_at != NULL);
-    BOOST_CHECK_EQUAL("[303fds", error_at);
+    BOOST_CHECK_THROW(u.assign(uri3), uri_error);
 
     const char uri4[] = "https://example.com:23999";
-    BOOST_CHECK(u.parse(uri4, strlen(uri4)));
+    u.assign(uri4);
     BOOST_CHECK_EQUAL("https", u.scheme);
     BOOST_CHECK_EQUAL("example.com", u.host);
     BOOST_CHECK_EQUAL(23999, u.port);
@@ -411,7 +406,7 @@ BOOST_AUTO_TEST_CASE(uri_parse_parts) {
     BOOST_CHECK(u.fragment.empty());
 
     const char uri5[] = "svn+ssh://jason:password@example.com:22/thing/and/stuff";
-    BOOST_CHECK(u.parse(uri5, strlen(uri5)));
+    u.assign(uri5);
     BOOST_CHECK_EQUAL("svn+ssh", u.scheme);
     BOOST_CHECK_EQUAL("jason:password", u.userinfo);
     BOOST_CHECK_EQUAL("example.com", u.host);
@@ -421,3 +416,10 @@ BOOST_AUTO_TEST_CASE(uri_parse_parts) {
     BOOST_CHECK(u.fragment.empty());
 }
 
+BOOST_AUTO_TEST_CASE(uri_query_parts) {
+    uri u;
+    u.query = uri::query_params("this", "that ",
+            "thing", 1234,
+            "stuff", false).str();
+    BOOST_CHECK_EQUAL(u.query, "?this=that+&thing=1234&stuff=0");
+}

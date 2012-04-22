@@ -433,9 +433,8 @@ std::string uri::decode(const std::string& src)
   return result;
 }
 
-uri::query_params uri::parse_query() {
-  query_params result;
-  if (query.size() <= 1) return result;
+uri::query_params::query_params(const std::string &query) {
+  if (query.size() <= 1) return;
   uri::split_vector splits;
   // skip the ? at the start of query
   std::string query_ = query.substr(1);
@@ -443,12 +442,11 @@ uri::query_params uri::parse_query() {
   for (uri::split_vector::iterator i = splits.begin(); i!=splits.end(); ++i) {
     size_t pos = i->find_first_of('=');
     if (pos != std::string::npos) {
-      result.push_back(std::make_pair(decode(i->substr(0, pos)), decode(i->substr(pos+1))));
+      _params.push_back(std::make_pair(decode(i->substr(0, pos)), decode(i->substr(pos+1))));
     } else {
-      result.push_back(std::make_pair(*i, ""));
+      _params.push_back(std::make_pair(*i, ""));
     }
   }
-  return result;
 }
 
 } // end namespace ten
