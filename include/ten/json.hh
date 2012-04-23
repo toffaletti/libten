@@ -28,10 +28,10 @@ const intptr_t nullptr = 0;
 
 
 //----------------------------------------------------------------
-// streams meet json_t
+// streams meet json_t (just barely)
 //
 
-std::ostream & operator << (std::ostream &o, const json_t *j);
+void dump(std::ostream &o, const json_t *j, unsigned flags = JSON_ENCODE_ANY);
 
 
 //----------------------------------------------------------------
@@ -75,7 +75,10 @@ public:
         return p ? &shared_json_ptr::true_value : nullptr;
     }
 
-    friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) { return o << jp.get(); }
+    friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) {
+        dump(o, jp.get());
+        return o;
+    }
 };
 
 typedef shared_json_ptr<      json_t>       json_ptr;
@@ -199,13 +202,18 @@ class json {
         return !(lhs == rhs);
     }
 
-    // parse and ouput
+    // parse and output
 
     static json load(const string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
     static json load(const char *s, unsigned flags = JSON_DECODE_ANY)    { return load(s, strlen(s), flags); }
     static json load(const char *s, size_t len, unsigned flags);
 
     string dump(unsigned flags = JSON_ENCODE_ANY) const;
+
+    friend std::ostream & operator << (std::ostream &o, const json &j) {
+        ten::dump(o, j.get());
+        return o;
+    }
 
     // type access
 
@@ -363,8 +371,6 @@ class json {
     };
     arr_view arr()  { return arr_view(get()); }
 };
-
-inline std::ostream & operator << (std::ostream &o, const json &j) { return o << j.get(); }
 
 
 //----------------------------------------------------------------
