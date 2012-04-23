@@ -26,6 +26,8 @@ public:
         _msg = ss.str();
     }
 
+    virtual ~uri_error() throw () {}
+
     const char *what() const throw() {
         return _msg.c_str();
     }
