@@ -18,7 +18,7 @@ inline json to_json(SafeInt<I> i)             { return to_json(i.Ref()); }
 
 template <class AR, class I, class X = typename std::enable_if<AR::is_archive>::type>
 inline AR & operator & (AR &ar, SafeInt<I> &si) {
-    ar & si.Ref();
+    ar & *si.Ptr();
     return ar;
 }
 

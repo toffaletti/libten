@@ -15,16 +15,15 @@ using namespace std;
 
 extern "C" {
 static int ostream_json_dump_callback(const char *buffer, size_t size, void *osptr) {
-    ostream *o = (ostream *)osptr;
+    ostream *o = reinterpret_cast<ostream *>(osptr);
     o->write(buffer, size);
     return 0;
 }
 } // "C"
 
-ostream & operator << (ostream &o, const json_t *j) {
+void dump(ostream &o, const json_t *j, unsigned flags) {
     if (j)
-        json_dump_callback(j, ostream_json_dump_callback, &o, JSON_ENCODE_ANY);
-    return o;
+        json_dump_callback(j, ostream_json_dump_callback, &o, flags);
 }
 
 string json::dump(unsigned flags) const {
