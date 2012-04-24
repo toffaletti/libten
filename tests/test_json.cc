@@ -5,6 +5,7 @@
 #include <ten/jserial_maybe.hh>
 #include <ten/jserial_seq.hh>
 #include <ten/jserial_assoc.hh>
+#include <ten/jserial_enum.hh>
 
 using namespace std;
 using namespace ten;
@@ -211,6 +212,15 @@ inline bool operator == (const corge &a, const corge &b) {
     return a.foo == b.foo && a.bar == b.bar;
 }
 
+
+enum captain { kirk, picard, janeway, sisko };
+constexpr array<const char *, 4> captain_names = {{ "kirk", "picard", "janeway", "sisko" }};
+template <class AR>
+inline AR & operator & (AR &ar, captain &c) {
+    return serialize_enum(ar, c, captain_names);
+}
+
+
 BOOST_AUTO_TEST_CASE(json_serial) {
     corge c1(42, 17);
     auto j = jsave_all(c1);
@@ -249,4 +259,12 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     JLoad(j) >> a;
     BOOST_CHECK(a.ok());
     BOOST_CHECK_EQUAL(a.get(), 17);
+
+
+    captain c = janeway;
+    j = jsave_all(c);
+    BOOST_CHECK_EQUAL(j, "janeway");
+    j = "kirk";
+    JLoad(j) >> c;
+    BOOST_CHECK_EQUAL(c, kirk);
 }
