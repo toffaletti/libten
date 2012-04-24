@@ -2,6 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <ten/json.hh>
 #include <ten/jserial.hh>
+#include <ten/jserial_maybe.hh>
 #include <ten/jserial_seq.hh>
 #include <ten/jserial_assoc.hh>
 
@@ -234,4 +235,18 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     BOOST_CHECK_EQUAL(f["foo"], 42);
     BOOST_CHECK_EQUAL(f["bar"], 17);
 #endif
+
+    maybe<int> a;
+    j = jsave_all(a);
+    BOOST_CHECK(!j);
+    a = 42;
+    j = jsave_all(a);
+    BOOST_CHECK_EQUAL(j, 42);
+
+    a.reset();
+    BOOST_CHECK(!a.ok());
+    j = 17;
+    JLoad(j) >> a;
+    BOOST_CHECK(a.ok());
+    BOOST_CHECK_EQUAL(a.get(), 17);
 }
