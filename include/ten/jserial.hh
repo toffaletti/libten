@@ -48,13 +48,17 @@ class JSave {
     save_mode mode()   const { return _mode; }
     unsigned version() const { return _version; }
 
+    // make one like the other but without memory
+    JSave clone() const  { return JSave(_version, _mode); }
+
     // public value extraction
     friend json result(const JSave  &ar)  { return ar._j; }
     friend json result(      JSave &&ar)  { return move(ar._j); }
 
-    // operator << works on save only
-    template <class T>
-    JSave & operator << (T &&t) { return *this & t; }
+    // operator << works on save only,
+    template <class T> JSave & operator << (T &t)           { return *this & t; }
+    template <class V> JSave & operator << (     KV<V &> f) { return *this & f; }
+    template <class V> JSave & operator << (ConstKV<V &> f) { return *this & f; }
 
     // save functions
 
@@ -65,7 +69,7 @@ class JSave {
     }
 
     template <class T, class X = typename std::enable_if<json_traits<T>::can_make>::type>
-    JSave & operator & (T &&t) {
+    JSave & operator & (const T &t) {
         json j(to_json(t));
         req_empty_for(j);
         _j = move(j);
@@ -77,7 +81,7 @@ class JSave {
     template <class V>
     JSave & operator & (KV<V> f) {
         req_obj_for(f.key);
-        JSave js(_version, _mode);
+        auto js = clone();
         auto jv = result(js & f.value);
         if (jv)
             _j.set(f.key, move(jv));
@@ -120,9 +124,13 @@ class JLoad {
     json source()      const { return _j; }
     unsigned version() const { return _version; }
 
-    // operator >> works on load only
-    template <class T>
-    JLoad & operator >> (T &t) { return *this & t; }
+    // make one like the other but without memory
+    JLoad clone() const  { return JLoad(_version); }
+
+    // operator >> works on load only,
+    template <class T> JLoad & operator >> (T &t)           { return *this & t; }
+    template <class V> JLoad & operator >> (     KV<V &> f) { return *this & f; }  // not ref
+    template <class V> JLoad & operator >> (ConstKV<V &> f) { return *this & f; }  // not ref
 
     // load functions
 
@@ -135,14 +143,6 @@ class JLoad {
     JLoad & operator & (T &t) {
         t = json_cast<T>(_j);
         return *this;
-    }
-
-    // kv pair specialization
-
-    // operator >> is respecialized because parameter is not ref
-    template <class V>
-    JLoad & operator >> (KV<V &> f) {
-        return *this & f;
     }
 
     template <class V>

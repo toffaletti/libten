@@ -8,20 +8,30 @@
 namespace ten {
 using std::move;
 
-template <class AR, class T, class X = typename std::enable_if<AR::is_save>::type>
-inline AR & operator >> (AR &ar, maybe<T> &m) {
-    if (ar.source()) {
-        T t;
-        ar >> t;
-        m = move(t);
-    }
-    return ar;
+namespace detail {
+    template <bool Save> struct serialize_maybe;
+    template <> struct serialize_maybe<true> {
+        template <class AR, class T>
+        static void serialize(AR &ar, maybe<T> &m) {
+            if (m.ok())
+                ar << m.get_ref();
+        }
+    };
+    template <> struct serialize_maybe<false> {
+        template <class AR, class T>
+        static void serialize(AR &ar, maybe<T> &m) {
+            if (ar.source()) {
+                T t;
+                ar >> t;
+                m = move(t);
+            }
+        }
+    };
 }
 
-template <class AR, class T, class X = typename std::enable_if<AR::is_load>::type>
-inline AR & operator << (AR &ar, maybe<T> &m) {
-    if (m.ok())
-        ar << m.get_ref();
+template <class AR, class T>
+inline AR & operator & (AR &ar, maybe<T> &m) {
+    detail::serialize_maybe<AR::is_save>::serialize(ar, m);
     return ar;
 }
 
