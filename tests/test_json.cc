@@ -6,6 +6,7 @@
 #include <ten/jserial_seq.hh>
 #include <ten/jserial_assoc.hh>
 #include <ten/jserial_enum.hh>
+#include <array>
 
 using namespace std;
 using namespace ten;
@@ -214,7 +215,7 @@ inline bool operator == (const corge &a, const corge &b) {
 
 
 enum captain { kirk, picard, janeway, sisko };
-constexpr array<const char *, 4> captain_names = {{ "kirk", "picard", "janeway", "sisko" }};
+const array<string, 4> captain_names = {{ "kirk", "picard", "janeway", "sisko" }};
 template <class AR>
 inline AR & operator & (AR &ar, captain &c) {
     return serialize_enum(ar, c, captain_names);
