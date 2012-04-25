@@ -6,32 +6,29 @@
 #include <type_traits>
 
 namespace ten {
-using std::move;
 
 namespace detail {
-    template <bool Save> struct serialize_maybe;
-    template <> struct serialize_maybe<true> {
-        template <class AR, class T>
-        static void serialize(AR &ar, maybe<T> &m) {
-            if (m.ok())
-                ar << m.get_ref();
-        }
-    };
-    template <> struct serialize_maybe<false> {
-        template <class AR, class T>
-        static void serialize(AR &ar, maybe<T> &m) {
-            if (ar.source()) {
-                T t;
-                ar >> t;
-                m = move(t);
-            }
-        }
-    };
+using std::move;
+
+template <class AR, class T>
+inline void serialize(AR &ar, maybe<T> &m, std::true_type) {
+    if (m.ok())
+        ar << m.get_ref();
 }
 
 template <class AR, class T>
+inline void serialize(AR &ar, maybe<T> &m, std::false_type) {
+    if (ar.source()) {
+        T t;
+        ar >> t;
+        m = move(t);
+    }
+}
+} // detail
+
+template <class AR, class T>
 inline AR & operator & (AR &ar, maybe<T> &m) {
-    detail::serialize_maybe<AR::is_save>::serialize(ar, m);
+    detail::serialize(ar, m, typename AR::is_save());
     return ar;
 }
 

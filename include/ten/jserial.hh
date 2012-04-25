@@ -38,9 +38,9 @@ class JSave {
     save_mode _mode;
 
   public:
-    static const bool is_archive = true;
-    static const bool is_save = true;
-    static const bool is_load = false;
+    using is_archive = std::true_type;
+    using is_save    = std::true_type;
+    using is_load    = std::false_type;
 
     explicit JSave(unsigned ver = 0, save_mode mode = save_all)
         : _version(ver), _mode(mode) {}
@@ -114,9 +114,9 @@ class JLoad {
     unsigned _version;
 
   public:
-    static const bool is_archive = true;
-    static const bool is_save = false;
-    static const bool is_load = true;
+    using is_archive = std::true_type;
+    using is_save    = std::false_type;
+    using is_load    = std::true_type;
 
     JLoad(const json & j, unsigned ver = 0) : _j(j), _version(ver) {}
     JLoad(      json &&j, unsigned ver = 0) : _j(j), _version(ver) {}
