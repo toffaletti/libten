@@ -1,11 +1,13 @@
 #define BOOST_TEST_MODULE json test
 #include <boost/test/unit_test.hpp>
 #include <ten/json.hh>
+#ifdef TEN_JSON_CXX11
 #include <ten/jserial.hh>
 #include <ten/jserial_maybe.hh>
 #include <ten/jserial_seq.hh>
 #include <ten/jserial_assoc.hh>
 #include <ten/jserial_enum.hh>
+#endif
 #include <array>
 
 using namespace std;
@@ -199,6 +201,7 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
     test_conv<bool>(false, json::jfalse(), JSON_FALSE);
 }
 
+#ifdef TEN_JSON_CXX11
 struct corge {
     int foo, bar;
 
@@ -269,3 +272,5 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     JLoad(j) >> c;
     BOOST_CHECK_EQUAL(c, kirk);
 }
+
+#endif // TEN_JSON_CXX11
