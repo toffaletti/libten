@@ -218,6 +218,7 @@ BOOST_AUTO_TEST_CASE(json_create) {
 }
 
 #ifdef TEN_JSON_CXX11
+
 struct corge {
     int foo, bar;
 
