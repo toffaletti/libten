@@ -201,6 +201,22 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
     test_conv<bool>(false, json::jfalse(), JSON_FALSE);
 }
 
+BOOST_AUTO_TEST_CASE(json_create) {
+    json obj1{};
+    BOOST_CHECK(obj1);
+    obj1.set("test", "set");
+    BOOST_CHECK(obj1.get("test"));
+    json root{
+        {"obj1", obj1}
+    };
+    BOOST_CHECK_EQUAL(root.get("obj1"), obj1);
+    obj1.set("this", "that");
+    json obj2{};
+    BOOST_CHECK_EQUAL(root.get("obj1").get("this").str(), "that");
+    obj1.set("obj2", obj2);
+    BOOST_CHECK_EQUAL(root.get("obj1").get("obj2"), obj2);
+}
+
 #ifdef TEN_JSON_CXX11
 struct corge {
     int foo, bar;
