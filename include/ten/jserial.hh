@@ -5,6 +5,10 @@
 #include "ten/error.hh"
 #include <type_traits>
 
+// FIXME: in theory I shouldn't have to do this, but SafeInt<> defines
+//   operator &.  revisit on rename to archive().
+#include "ten/SafeInt3.hpp"
+
 namespace ten {
 using std::move;
 
@@ -95,6 +99,12 @@ class JSave {
         return *this;
     }
 
+    // SafeInt<> specialization - because SafeInt<> has operator &
+    template <class I>
+    JSave & operator & (SafeInt<I> &si) {
+        return *this & *si.Ptr();
+    }
+
   protected:
     // convenience for save functions
     void req_empty_for(const json &jn) {
@@ -154,6 +164,12 @@ class JLoad {
             js & f.value;
         }
         return *this;
+    }
+
+    // SafeInt<> specialization - because SafeInt<> has operator &
+    template <class I>
+    JLoad & operator & (SafeInt<I> &si) {
+        return *this & *si.Ptr();
     }
 
   protected:

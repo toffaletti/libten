@@ -16,11 +16,13 @@ template <class I>
 inline json to_json(SafeInt<I> i)             { return to_json(i.Ref()); }
 
 
+#if 0 // This has moved to jserial due to SafeInt<> having an operator &
 template <class AR, class I, class X = typename std::enable_if<AR::is_archive>::type>
 inline AR & operator & (AR &ar, SafeInt<I> &si) {
     ar & *si.Ptr();
     return ar;
 }
+#endif
 
 } // ten
 
