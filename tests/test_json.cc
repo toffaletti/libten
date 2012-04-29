@@ -281,7 +281,6 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     BOOST_CHECK(a.ok());
     BOOST_CHECK_EQUAL(a.get(), 17);
 
-
     captain c = janeway;
     j = jsave_all(c);
     BOOST_CHECK_EQUAL(j, "janeway");
