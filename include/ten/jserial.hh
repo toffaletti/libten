@@ -44,6 +44,9 @@ class json_archive {
 
     json_archive(unsigned ver = 0, archive_mode mode = archive_all) : _version(ver), _mode(mode) {}
 
+    json_archive(const json_archive &) = delete;
+    void operator = (const json_archive &) = delete;
+
   public:
     using is_archive = std::true_type;
 
@@ -75,7 +78,7 @@ class json_saver : public json_archive {
     using is_save    = std::true_type;
     using is_load    = std::false_type;
 
-    bool empty() const  { return _j; }
+    bool empty() const  { return !_j; }
 
     // public value extraction
     friend json result(const json_saver &ar)   { return ar._j; }
@@ -95,11 +98,10 @@ class json_saver : public json_archive {
     template <class V>
     friend void serialize(json_saver &ar, kvt<V&> f) {
         ar.req_obj_for(f.key);
-        json_saver ar2(ar);
+        json_saver ar2(ar._version, ar._mode);
         serialize(ar2, f.value);
-        auto j2(result(ar2));
-        if (j2)
-            ar._j.set(f.key, move(j2));
+        if (!ar2.empty())
+            ar._j.set(f.key, result(ar2));
     }
     template <class V>
     friend void serialize(json_saver &ar, const_kvt<V&> f) {
@@ -161,7 +163,7 @@ class json_loader : public json_archive {
     using is_save    = std::false_type;
     using is_load    = std::true_type;
 
-    bool empty() const  { return _j; }
+    bool empty() const  { return !_j; }
 
     // serialization, main interface
     friend void serialize (json_loader &ar, json &j) {
