@@ -8,7 +8,6 @@
 namespace ten {
 
 namespace detail {
-using std::move;
 
 template <class AR, class T>
 inline void serialize(AR &ar, maybe<T> &m, std::true_type) {
@@ -21,7 +20,7 @@ inline void serialize(AR &ar, maybe<T> &m, std::false_type) {
     if (ar.source()) {
         T t;
         ar >> t;
-        m = move(t);
+        m = std::move(t);
     }
 }
 } // detail
