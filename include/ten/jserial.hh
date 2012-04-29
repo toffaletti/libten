@@ -160,8 +160,8 @@ class JLoad {
         req_obj_for(f.key);
         json jv(_j[f.key]);
         if (jv) {
-            JLoad js(move(jv), _version);
-            js & f.value;
+            JLoad subload(move(jv), _version);
+            subload & f.value;
         }
         return *this;
     }
