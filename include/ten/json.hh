@@ -427,8 +427,8 @@ template <class T> struct json_traits_conv {
 };
 
 // json_cast<> function, a la lexical_cast<>
-template <class T, class TT = typename std::enable_if<json_traits<T>::can_cast>::type>
-inline T json_cast(const json &j) {
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_cast, T>::type json_cast(const json &j) {
     return json_traits<T>::cast(j);
 }
 

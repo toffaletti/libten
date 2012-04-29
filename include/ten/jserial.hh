@@ -10,177 +10,226 @@
 #include "ten/SafeInt3.hpp"
 
 namespace ten {
-using std::move;
 
-// KV<> wraps a named field
-// ConstKV<> wraps a named field that is not dynamic
+// kvt<> wraps a named field
+// const_kvt<> wraps a named field that is not dynamic
 
-template <class V> struct KV {
+template <class V> struct kvt {
     const char *key;
     V &&value;
-    KV(const char *k, V &&v) : key(k), value(v) {}
+    kvt(const char *k, V &&v) : key(k), value(v) {}
 };
-template <class V> struct ConstKV : public KV<V> {
-    ConstKV(const char *k, V &&v) : KV<V>(k, v) {}
-};
-
-template <class V>      KV<V>       kv(const char *k, V &&v) { return      KV<V>(k, v); }
-template <class V> ConstKV<V> const_kv(const char *k, V &&v) { return ConstKV<V>(k, v); }
-
-
-// JSave
-
-enum save_mode {
-    save_all,
-    save_dynamic
+template <class V> struct const_kvt : public kvt<V> {
+    const_kvt(const char *k, V &&v) : kvt<V>(k, v) {}
 };
 
-class JSave {
-  private:
+template <class V> inline kvt<            V&>       kv(const char *k,       V &v) { return {k, v}; }
+template <class V> inline kvt<      const V&>       kv(const char *k, const V &v) { return {k, v}; }
+template <class V> inline const_kvt<      V&> const_kv(const char *k,       V &v) { return {k, v}; }
+template <class V> inline const_kvt<const V&> const_kv(const char *k, const V &v) { return {k, v}; }
+
+
+// json_archive, now with virtuality!
+
+enum archive_mode {
+    archive_dynamic,
+    archive_all
+};
+
+class json_archive {
+  protected:
     json _j;
     unsigned _version;
-    save_mode _mode;
+    archive_mode _mode;
+
+    json_archive(unsigned ver = 0, archive_mode mode = archive_all) : _version(ver), _mode(mode) {}
 
   public:
     using is_archive = std::true_type;
+
+    virtual bool is_save_v() const = 0;
+    bool is_load_v() const { return !is_save_v(); }
+
+    unsigned version() const   { return _version; }
+    archive_mode mode() const   { return _mode; }
+
+    bool empty() const  { return empty_v(); }
+    virtual bool empty_v() const = 0;
+
+    virtual void vserialize(json &j) = 0;
+    virtual void vserialize(json &j, const char *key, archive_mode min_mode) = 0;
+
+    json_archive & operator & (json &j)            { vserialize(j); return *this; }
+    json_archive & operator & (      kvt<json&> f) { vserialize(f.value, f.key, archive_dynamic); return *this; }
+    json_archive & operator & (const_kvt<json&> f) { vserialize(f.value, f.key, archive_all);     return *this; }
+};
+
+
+// json_saver
+
+class json_saver : public json_archive {
+  public:
+    explicit json_saver(unsigned ver = 0, archive_mode mode = archive_all)
+        : json_archive(ver, mode) {}
+
     using is_save    = std::true_type;
     using is_load    = std::false_type;
 
-    explicit JSave(unsigned ver = 0, save_mode mode = save_all)
-        : _version(ver), _mode(mode) {}
-
-    save_mode mode()   const { return _mode; }
-    unsigned version() const { return _version; }
-
-    // make one like the other but without memory
-    JSave clone() const  { return JSave(_version, _mode); }
+    bool empty() const  { return _j; }
 
     // public value extraction
-    friend json result(const JSave  &ar)  { return ar._j; }
-    friend json result(      JSave &&ar)  { return move(ar._j); }
+    friend json result(const json_saver &ar)   { return ar._j; }
+    friend json result(      json_saver &&ar)  { return move(ar._j); }
 
-    // operator << works on save only,
-    template <class T> JSave & operator << (T &t)           { return *this & t; }
-    template <class V> JSave & operator << (     KV<V &> f) { return *this & f; }
-    template <class V> JSave & operator << (ConstKV<V &> f) { return *this & f; }
-
-    // save functions
-
-    JSave & operator & (const json &j) {
-        req_empty_for(j);
-        _j = j;
-        return *this;
+    // serialization, main interface
+    friend void serialize (json_saver &ar, const json &j) {
+        ar.req_empty_for(j);
+        ar._j = j;
+    }
+    template <class T, class Enable = typename std::enable_if<json_traits<T>::can_make>::type>
+    friend void serialize(json_saver &ar, const T &t) {
+        serialize(ar, to_json(t));
     }
 
-    template <class T, class X = typename std::enable_if<json_traits<T>::can_make>::type>
-    JSave & operator & (const T &t) {
-        json j(to_json(t));
-        req_empty_for(j);
-        _j = move(j);
-        return *this;
-    }
-
-    // kv pair specialization
-
+    // kvt<> and const_kvt<> specialization
     template <class V>
-    JSave & operator & (KV<V> f) {
-        req_obj_for(f.key);
-        auto js = clone();
-        auto jv = result(js & f.value);
-        if (jv)
-            _j.set(f.key, move(jv));
-        return *this;
+    friend void serialize(json_saver &ar, kvt<V&> f) {
+        ar.req_obj_for(f.key);
+        json_saver ar2(ar);
+        serialize(ar2, f.value);
+        auto j2(result(ar2));
+        if (j2)
+            ar._j.set(f.key, move(j2));
     }
-
     template <class V>
-    JSave & operator & (ConstKV<V> kv) {
-        if (_mode == save_all)
-            *this & static_cast<KV<V>&>(kv);
-        return *this;
+    friend void serialize(json_saver &ar, const_kvt<V&> f) {
+        if (ar._mode > archive_dynamic)
+            serialize(static_cast<kvt<V&> &>(f));
     }
 
     // SafeInt<> specialization - because SafeInt<> has operator &
     template <class I>
-    JSave & operator & (SafeInt<I> &si) {
-        return *this & *si.Ptr();
+    friend void serialize(json_saver &ar, const SafeInt<I> &si) {
+        serialize(ar, *si.Ptr());
     }
+
+    // runtime polymorphic interface - premade json only
+    bool is_save_v() const override {
+        return true;
+    }
+    bool empty_v() const override {
+        return empty();
+    }
+    void vserialize(json &j) override {
+        serialize(*this, j);
+    }
+    void vserialize(json &j, const char *key, archive_mode min_mode) override {
+        if (_mode >= min_mode)
+            serialize(*this, kv(key, j));
+    }
+
+    // eye candy
+    template <class T> json_saver & operator &  (T &t)            { serialize(*this, t); return *this; }
+    template <class V> json_saver & operator &  (      kvt<V&> f) { serialize(*this, f); return *this; }
+    template <class V> json_saver & operator &  (const_kvt<V&> f) { serialize(*this, f); return *this; }
+
+    template <class T> json_saver & operator << (T &t)            { serialize(*this, t); return *this; }
+    template <class V> json_saver & operator << (      kvt<V&> f) { serialize(*this, f); return *this; }
+    template <class V> json_saver & operator << (const_kvt<V&> f) { serialize(*this, f); return *this; }
 
   protected:
     // convenience for save functions
     void req_empty_for(const json &jn) {
-        if (_j) throw errorx("JSave multiple: %s & %s", _j.dump().c_str(), jn.dump().c_str());
+        if (_j) throw errorx("json_saver multiple: %s & %s", _j.dump().c_str(), jn.dump().c_str());
     }
     void req_obj_for(const char *key) {
         if (!_j) _j = json::object();
-        else if (!_j.is_object()) throw errorx("JSave key '%s' to non-object: %s", key, _j.dump().c_str());
+        else if (!_j.is_object()) throw errorx("json_saver key '%s' to non-object: %s", key, _j.dump().c_str());
     }
 };
 
 
-// JLoad
+// json_loader
 
-class JLoad {
-    json _j;
-    unsigned _version;
-
+class json_loader : public json_archive {
   public:
-    using is_archive = std::true_type;
+    explicit json_loader(const json & j, unsigned ver = 0, archive_mode mode = archive_all)
+        : json_archive(ver, mode) { _j = j; }
+    explicit json_loader(      json &&j, unsigned ver = 0, archive_mode mode = archive_all)
+        : json_archive(ver, mode) { _j = j; }
+
     using is_save    = std::false_type;
     using is_load    = std::true_type;
 
-    JLoad(const json & j, unsigned ver = 0) : _j(j), _version(ver) {}
-    JLoad(      json &&j, unsigned ver = 0) : _j(j), _version(ver) {}
+    bool empty() const  { return _j; }
 
-    json source()      const { return _j; }
-    unsigned version() const { return _version; }
-
-    // make one like the other but without memory
-    JLoad clone() const  { return JLoad(_version); }
-
-    // operator >> works on load only,
-    template <class T> JLoad & operator >> (T &t)           { return *this & t; }
-    template <class V> JLoad & operator >> (     KV<V &> f) { return *this & f; }  // not ref
-    template <class V> JLoad & operator >> (ConstKV<V &> f) { return *this & f; }  // not ref
-
-    // load functions
-
-    JLoad & operator & (json &j) {
-        j = _j;
-        return *this;
+    // serialization, main interface
+    friend void serialize (json_loader &ar, json &j) {
+        j = ar._j;
+    }
+    template <class T, class Enable = typename std::enable_if<json_traits<T>::can_cast>::type>
+    friend void serialize(json_loader &ar, T &t) {
+        t = json_cast<T>(ar._j);
     }
 
-    template <class T, class X = typename std::enable_if<json_traits<T>::can_cast>::type>
-    JLoad & operator & (T &t) {
-        t = json_cast<T>(_j);
-        return *this;
-    }
-
+    // kvt<> and const_kvt<> specialization
     template <class V>
-    JLoad & operator & (KV<V &> f) {
-        req_obj_for(f.key);
-        json jv(_j[f.key]);
+    friend void serialize(json_loader &ar, kvt<V&> f) {
+        ar.req_obj_for(f.key);
+        json jv(ar._j[f.key]);
         if (jv) {
-            JLoad subload(move(jv), _version);
-            subload & f.value;
+            json_loader ar2(std::move(jv), ar._version, ar._mode);
+            serialize(ar2, f.value);
         }
-        return *this;
+    }
+    template <class V>
+    friend void serialize(json_loader &ar, const_kvt<V> f) {
+        if (ar._mode > archive_dynamic)
+            serialize(ar, static_cast<kvt<V> &>(f));
     }
 
     // SafeInt<> specialization - because SafeInt<> has operator &
     template <class I>
-    JLoad & operator & (SafeInt<I> &si) {
-        return *this & *si.Ptr();
+    friend void serialize(json_loader &ar, SafeInt<I> &si) {
+        serialize(ar, *si.Ptr());
     }
+
+    // runtime polymorphic interface - premade json only
+    bool is_save_v() const override {
+        return false;
+    }
+    bool empty_v() const override {
+        return empty();
+    }
+    void vserialize(json &j) override {
+        serialize(*this, j);
+    }
+    void vserialize(json &j, const char *key, archive_mode min_mode) override {
+        if (_mode >= min_mode)
+            serialize(*this, kv(key, j));
+    }
+
+    // eye candy
+    template <class T> json_loader & operator &  (T &t)            { serialize(*this, t); return *this; }
+    template <class V> json_loader & operator &  (      kvt<V&> f) { serialize(*this, f); return *this; }
+    template <class V> json_loader & operator &  (const_kvt<V&> f) { serialize(*this, f); return *this; }
+
+    template <class T> json_loader & operator >> (T &t)            { serialize(*this, t); return *this; }
+    template <class V> json_loader & operator >> (      kvt<V&> f) { serialize(*this, f); return *this; }
+    template <class V> json_loader & operator >> (const_kvt<V&> f) { serialize(*this, f); return *this; }
 
   protected:
     // convenience for load functions
     void req_obj_for(const char *key) {
-        if (!_j.is_object()) throw errorx("JLoad key '%s' from non-object %s", key, _j.dump().c_str());
+        if (!_j.is_object()) throw errorx("json_loader key '%s' from non-object %s", key, _j.dump().c_str());
     }
 };
 
-template <class T> inline json jsave_all(T &t) { JSave ar(save_all);     ar << t; return result(move(ar)); }
-template <class T> inline json jsave_dyn(T &t) { JSave ar(save_dynamic); ar << t; return result(move(ar)); }
+
+// global functions
+
+template <class T> inline json jsave_all(const T &t) { json_saver ar(0, archive_all);     ar << const_cast<T&>(t); return result(std::move(ar)); }
+template <class T> inline json jsave_dyn(const T &t) { json_saver ar(0, archive_dynamic); ar << const_cast<T&>(t); return result(std::move(ar)); }
 
 } // ten
 
