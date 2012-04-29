@@ -114,6 +114,18 @@ class json {
     typedef void (json::*unspecified_bool_type)() const;
     void true_value() const {}
 
+    // autovivify array or object
+    json_t *_o_get() {
+        if (!_p)
+            _p.take(json_object());
+        return get();
+    }
+    json_t *_a_get() {
+        if (!_p)
+            _p.take(json_array());
+        return get();
+    }
+
   public:
     // construction and assignment,
     //   including a selection of conversions from basic types
@@ -196,7 +208,10 @@ class json {
     // equivalence
 
     friend bool operator == (const json &lhs, const json &rhs) {
-        return json_equal(lhs._p.get(), rhs._p.get());
+        // jansson doesn't think null pointers are equal
+        auto jl = lhs._p.get();
+        auto jr = rhs._p.get();
+        return (!jl && !jr) || json_equal(jl, jr);
     }
     friend bool operator != (const json &lhs, const json &rhs) {
         return !(lhs == rhs);
@@ -252,8 +267,8 @@ class json {
     size_t osize() const                                { return      json_object_size(   get());                    }
     json get(           const char *key)                { return json(json_object_get(    get(), key));              }
     json get(         const string &key)                { return json(json_object_get(    get(), key.c_str()));      }
-    bool set(           const char *key, const json &j) { return     !json_object_set(    get(), key,         j.get()); }
-    bool set(         const string &key, const json &j) { return     !json_object_set(    get(), key.c_str(), j.get()); }
+    bool set(           const char *key, const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
+    bool set(         const string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
     bool erase(         const char *key)                { return     !json_object_del(    get(), key);               }
     bool erase(       const string &key)                { return     !json_object_del(    get(), key.c_str());       }
     bool oclear()                                       { return     !json_object_clear(  get());                    }
@@ -264,7 +279,7 @@ class json {
     size_t asize() const                           { return      json_array_size(   get());              }
     json get(            int i)                    { return json(json_array_get(    get(), i));          }
     json get(         size_t i)                    { return json(json_array_get(    get(), i));          }
-    bool set(         size_t i,  const json &j)    { return     !json_array_set(    get(), i, j.get());  }
+    bool set(         size_t i,  const json &j)    { return     !json_array_set( _a_get(), i, j.get());  }
     bool insert(      size_t i,  const json &j)    { return     !json_array_insert( get(), i, j.get());  }
     bool erase(       size_t i)                    { return     !json_array_remove( get(), i);           }
     bool arr_clear()                               { return     !json_array_clear(  get());              }
