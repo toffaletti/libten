@@ -196,7 +196,10 @@ class json {
     // equivalence
 
     friend bool operator == (const json &lhs, const json &rhs) {
-        return json_equal(lhs._p.get(), rhs._p.get());
+        // jansson doesn't think null pointers are equal
+        auto jl = lhs._p.get();
+        auto jr = rhs._p.get();
+        return (!jl && !jr) || json_equal(jl, jr);
     }
     friend bool operator != (const json &lhs, const json &rhs) {
         return !(lhs == rhs);
