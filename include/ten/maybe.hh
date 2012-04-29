@@ -35,7 +35,7 @@ template <class T> class maybe {
     maybe(const maybe  &m)                : _ok() { if (m.ok()) reset(          m.get_ref() ); }
     maybe(      maybe &&m)                : _ok() { if (m.ok()) reset(std::move(m.get_ref())); }
     maybe & operator = (const maybe  &m)  { if (m.ok()) reset(          m.get_ref() ); else reset(); return *this; }
-    maybe & operator = (const maybe &&m)  { if (m.ok()) reset(std::move(m.get_ref())); else reset(); return *this; }
+    maybe & operator = (      maybe &&m)  { if (m.ok()) reset(std::move(m.get_ref())); else reset(); return *this; }
     maybe & operator = (nothing_t)        { reset(); return *this; }
     ~maybe()                              { reset(); }
 
