@@ -6,7 +6,6 @@
 #include <utility>
 
 namespace ten {
-using std::move;
 
 //----------------------------------------------------------------
 // maybe<>
@@ -33,10 +32,10 @@ template <class T> class maybe {
     maybe(nothing_t)                      : _ok() {}
     maybe(const T  &val)                  : _ok() { reset(val); }
     maybe(      T &&val)                  : _ok() { reset(val); }
-    maybe(const maybe  &m)                : _ok() { if (m.ok()) reset(     m.get_ref() ); }
-    maybe(      maybe &&m)                : _ok() { if (m.ok()) reset(move(m.get_ref())); }
-    maybe & operator = (const maybe  &m)  { if (m.ok()) reset(     m.get_ref() ); else reset(); return *this; }
-    maybe & operator = (const maybe &&m)  { if (m.ok()) reset(move(m.get_ref())); else reset(); return *this; }
+    maybe(const maybe  &m)                : _ok() { if (m.ok()) reset(          m.get_ref() ); }
+    maybe(      maybe &&m)                : _ok() { if (m.ok()) reset(std::move(m.get_ref())); }
+    maybe & operator = (const maybe  &m)  { if (m.ok()) reset(          m.get_ref() ); else reset(); return *this; }
+    maybe & operator = (      maybe &&m)  { if (m.ok()) reset(std::move(m.get_ref())); else reset(); return *this; }
     maybe & operator = (nothing_t)        { reset(); return *this; }
     ~maybe()                              { reset(); }
 

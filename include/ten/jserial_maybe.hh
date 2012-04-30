@@ -8,29 +8,38 @@
 namespace ten {
 
 namespace detail {
-using std::move;
 
 template <class AR, class T>
 inline void serialize(AR &ar, maybe<T> &m, std::true_type) {
     if (m.ok())
-        ar << m.get_ref();
+        ar & m.get_ref();
 }
 
 template <class AR, class T>
 inline void serialize(AR &ar, maybe<T> &m, std::false_type) {
-    if (ar.source()) {
+    if (!ar.empty()) {
         T t;
-        ar >> t;
-        m = move(t);
+        ar & t;
+        m = std::move(t);
     }
 }
 } // detail
 
-template <class AR, class T>
-inline AR & operator & (AR &ar, maybe<T> &m) {
-    detail::serialize(ar, m, typename AR::is_save());
-    return ar;
+// static
+template <class AR, class T, class IsSave = typename AR::is_save>
+inline void serialize(AR &ar, maybe<T> &m) {
+    detail::serialize(ar, m, IsSave());
 }
+
+// virtual
+template <class T>
+inline void serialize(json_archive &ar, maybe<T> &m) {
+    if (ar.is_save_v())
+        detail::serialize(ar, m, std::true_type());
+    else
+        detail::serialize(ar, m, std::false_type());
+}
+
 
 } // ten
 

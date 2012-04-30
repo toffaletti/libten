@@ -2,7 +2,7 @@
 #define LIBTEN_JSERIAL_ASSOC_HH
 
 #include <boost/version.hpp>
-#if BOOST_VERSION > 104800
+#if BOOST_VERSION >= 104800
 #include <boost/container/flat_map.hpp>
 #endif
 #include <ten/jserial.hh>
@@ -34,35 +34,31 @@ struct json_traits_assoc : public json_traits<typename Assoc::mapped_type> {
             a.insert(value_type(jel.first, json_traits<mapped_type>::cast(jel.second)));
         return a;
     }
-};
 
-template <class Assoc>
-inline json to_json_assoc(const Assoc &a) {
-    json j{};
-    for (auto const & el : a)
-        j.set(el.first, to_json(el.second));
-    return j;
-}
+    static json make(const Assoc &a) {
+        json j({});
+        for (auto const & el : a)
+            j.set(el.first, json_traits<mapped_type>::make(el.second));
+        return j;
+    }
+};
 
 //
 // map<>, unordered_map<>, flat_map<>
 //
 
 template <class K, class M, class A>
-struct json_traits<map<K, M, A>> : public json_traits_assoc<map<K, M, A>> {};
+struct json_traits<map<K, M, A>> 
+    : public json_traits_assoc<map<K, M, A>> {};
 
 template <class K, class M, class A>
-struct json_traits<unordered_map<K, M, A>> : public json_traits_assoc<unordered_map<K, M, A>> {};
+struct json_traits<unordered_map<K, M, A>>
+    : public json_traits_assoc<unordered_map<K, M, A>> {};
 
 #if BOOST_VERSION >= 104800
 template <class K, class M, class A>
-struct json_traits<flat_map<K, M, A>> : public json_traits_assoc<flat_map<K, M, A>> {};
-#endif
-
-template <class K, class M, class A> inline json to_json(const map<K, M, A> &m)           { return to_json_assoc(m); }
-template <class K, class M, class A> inline json to_json(const unordered_map<K, M, A> &m) { return to_json_assoc(m); }
-#if BOOST_VERSION >= 104800
-template <class K, class M, class A> inline json to_json(const flat_map<K, M, A> &m)      { return to_json_assoc(m); }
+struct json_traits<flat_map<K, M, A>>
+    : public json_traits_assoc<flat_map<K, M, A>> {};
 #endif
 
 } // ten
