@@ -414,8 +414,8 @@ inline json to_json(bool b)           { return json(b); }
 // conversions do not work for unspecified types
 template <class T> struct json_traits {
     typedef T type;
-    static const bool can_make = false;    // to_json(T) works
-    static const bool can_cast = false;    // trait<T>::cast() works
+    static const bool can_make = false;    // trait<T>::make() -> json works
+    static const bool can_cast = false;    // trait<T>::cast() -> T    works
 };
 
 // convenience base class for conversions that work
@@ -423,18 +423,29 @@ template <class T> struct json_traits_conv {
     typedef T type;
     static const bool can_make = true;
     static const bool can_cast = true;
+
+    static json make(T t) { return json(t); }
     static T cast(const json &j);              // default decl for most cases
 };
 
 // json_cast<> function, a la lexical_cast<>
 template <class T>
-inline typename std::enable_if<json_traits<T>::can_cast, T>::type json_cast(const json &j) {
+inline typename std::enable_if<json_traits<T>::can_cast, T>::type
+json_cast(const json &j) {
     return json_traits<T>::cast(j);
+}
+
+// make_json<> function, rather like to_json() but with a precise type
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_cast, T>::type
+make_json(T t) {
+    return json_traits<T>::make(t);
 }
 
 // identity
 template <> struct json_traits<json> : public json_traits_conv<json> {
     static json cast(const json &j) { return j; }
+    static json make(const json &j) { return j; }
 };
 
 // string
@@ -443,6 +454,8 @@ template <> struct json_traits<const char *> {
     typedef const char *type;
     static const bool can_make = true;   // makes copy
     static const bool can_cast = false;  // sorry, private pointer
+
+    static json make(const char *s) { return json(s); }
 };
 
 // integer

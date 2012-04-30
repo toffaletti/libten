@@ -2,6 +2,7 @@
 #define LIBTEN_JSERIAL_SEQ_HH
 
 #include <ten/jserial.hh>
+#include <array>
 #include <vector>
 
 namespace ten {
@@ -23,23 +24,26 @@ struct json_traits_seq : public json_traits<typename Seq::value_type> {
             s.push_back(json_traits<value_type>::cast(jel));
         return s;
     }
+
+    static json make(const Seq &s) {
+        json j(json::array());
+        for (auto const & el : s)
+            j.push(json_traits<value_type>::make(el));
+        return j;
+    }
 };
 
-template <class Seq>
-inline json to_json_seq(const Seq &s) {
-    json j(json::array());
-    for (auto const & el : s)
-        j.push(to_json(el));
-    return j;
-}
+// array<>
+
+template <class T, size_t N>
+struct json_traits<std::array<T, N>>
+    : public json_traits_seq<std::array<T, N>> {};
 
 // vector<>
 
 template <class T, class A>
-struct json_traits<std::vector<T, A>> : public json_traits_seq<std::vector<T, A>> {};
-
-template <class T, class A>
-inline json to_json(const std::vector<T, A> &v) { return to_json_seq(v); }
+struct json_traits<std::vector<T, A>>
+    : public json_traits_seq<std::vector<T, A>> {};
 
 } // ten
 

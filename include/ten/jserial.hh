@@ -124,7 +124,7 @@ class json_saver : public json_archive {
     }
     template <class T, class Enable = typename std::enable_if<json_traits<T>::can_make>::type>
     friend void serialize(json_saver &ar, const T &t) {
-        serialize(ar, to_json(t));
+        serialize(ar, json_traits<T>::make(t));
     }
 
     // kvt<> and const_kvt<> specialization
@@ -204,7 +204,7 @@ class json_loader : public json_archive {
     }
     template <class T, class Enable = typename std::enable_if<json_traits<T>::can_cast>::type>
     friend void serialize(json_loader &ar, T &t) {
-        t = json_cast<T>(ar._j);
+        t = json_traits<T>::cast(ar._j);
     }
 
     // kvt<> and const_kvt<> specialization

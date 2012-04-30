@@ -13,7 +13,7 @@ using std::string;
 
 namespace detail {
 template <class AR, class E, class Iter>
-inline void serialize_enum(AR &ar, E &e, Iter names_start, Iter names_end, std::true_type) {
+inline void serialize_enum(AR &ar, E &e, Iter names_start, Iter /*names_end*/, std::true_type) {
     json j = json::str(*(names_start + (ptrdiff_t)e));
     ar & j;
 }
