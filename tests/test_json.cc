@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
 }
 
 BOOST_AUTO_TEST_CASE(json_test_truth) {
-    json o(json::object());
+    json o({}); // empty init list
     BOOST_CHECK(o.get("nothing").is_true() == false);
     BOOST_CHECK(o.get("nothing").is_false() == false);
     BOOST_CHECK(o.get("nothing").is_null() == false);
@@ -202,9 +202,9 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
 }
 
 BOOST_AUTO_TEST_CASE(json_create) {
-    json obj1;
-    obj1.set("test", "set");
+    json obj1({});
     BOOST_CHECK(obj1);
+    obj1.set("test", "set");
     BOOST_CHECK(obj1.get("test"));
     json root{
         {"obj1", obj1}
