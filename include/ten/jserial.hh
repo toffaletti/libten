@@ -36,6 +36,9 @@ enum archive_mode {
     archive_all
 };
 
+class json_saver;
+class json_loader;
+
 class json_archive {
   protected:
     json _j;
@@ -62,9 +65,39 @@ class json_archive {
     virtual void vserialize(json &j) = 0;
     virtual void vserialize(json &j, const char *key, archive_mode min_mode) = 0;
 
-    json_archive & operator & (json &j)            { vserialize(j); return *this; }
-    json_archive & operator & (      kvt<json&> f) { vserialize(f.value, f.key, archive_dynamic); return *this; }
-    json_archive & operator & (const_kvt<json&> f) { vserialize(f.value, f.key, archive_all);     return *this; }
+    template <class T> json_archive & operator & (T &t) {
+        bool is_save = is_save_v();
+        json j;
+        if (is_save) {
+            j = result(json_saver(_version, _mode) & t);
+            if (!j)
+                return *this;
+        }
+        vserialize(j);
+        if (!is_save)
+            json_loader(j, _version, _mode) & t;
+        return *this;
+    }
+
+    template <class T> json_archive & operator & (kvt<T&> f) {
+        bool is_save = is_save_v();
+        json j;
+        if (is_save) {
+            j = result(json_saver(_version, _mode) & f.value);
+            if (!j)
+                return *this;
+        }
+        vserialize(j, f.key, archive_all);
+        if (!is_save && j)
+            json_loader(j, _version, _mode) & f.value;
+        return *this;
+    }
+
+    template <class T> json_archive & operator & (const_kvt<T&> f) {
+        if (_mode >= archive_dynamic)
+            *this & static_cast<kvt<T&> &>(f);
+        return *this;
+    }
 };
 
 
@@ -106,7 +139,7 @@ class json_saver : public json_archive {
     template <class V>
     friend void serialize(json_saver &ar, const_kvt<V&> f) {
         if (ar._mode > archive_dynamic)
-            serialize(static_cast<kvt<V&> &>(f));
+            serialize(ar, static_cast<kvt<V&> &>(f));
     }
 
     // SafeInt<> specialization - because SafeInt<> has operator &
