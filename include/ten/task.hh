@@ -16,7 +16,9 @@ namespace ten {
 extern void netinit();
 
 #if (__GNUC__ >= 4 && (__GNUC_MINOR__ >= 7))
-typedef std::chrono::steady_clock std::chrono::monotonic_clock;
+typedef std::chrono::steady_clock monotonic_clock;
+#else
+using std::chrono::monotonic_clock;
 #endif
 
 //! exception to unwind stack on taskcancel
@@ -54,7 +56,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 void procshutdown();
 
 //! return cached time from event loop, not precise
-const std::chrono::time_point<std::chrono::monotonic_clock> &procnow();
+const std::chrono::time_point<monotonic_clock> &procnow();
 
 //! main entry point for tasks
 struct procmain {

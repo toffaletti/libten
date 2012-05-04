@@ -235,7 +235,7 @@ deadline::~deadline() {
 
 milliseconds deadline::remaining() const {
     task::timeout_t *timeout = (task::timeout_t *)timeout_id;
-    std::chrono::time_point<std::chrono::monotonic_clock> now = procnow();
+    std::chrono::time_point<monotonic_clock> now = procnow();
     if (now > timeout->when) {
         return milliseconds(0);
     }
