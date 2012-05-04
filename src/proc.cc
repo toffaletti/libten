@@ -113,7 +113,7 @@ proc::proc(task *t)
   : _sched(0), nswitch(0), ctask(0),
     asleep(false), polling(false), canceled(false), taskcount(0)
 {
-    now = monotonic_clock::now();
+    now = steady_clock::now();
     add(this);
     std::unique_lock<std::mutex> lk(mutex);
     if (t) {
@@ -245,7 +245,7 @@ int procmain::main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
 }
 
-const time_point<monotonic_clock> &procnow() {
+const time_point<steady_clock> &procnow() {
     return _this_proc->now;
 }
 

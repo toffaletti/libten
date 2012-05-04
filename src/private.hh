@@ -3,10 +3,10 @@
 
 #include <memory>
 #include <thread>
+#include <atomic>
 
 #include "ten/task.hh"
 #include "ten/logging.hh"
-#include "ten/atomic.hh"
 #include "ten/task/coroutine.hh"
 
 using namespace std::chrono;
@@ -15,10 +15,10 @@ namespace ten {
 
 struct task {
     struct timeout_t {
-        time_point<monotonic_clock> when;
+        time_point<steady_clock> when;
         std::exception_ptr exception;
 
-        timeout_t(const time_point<monotonic_clock> &when_)
+        timeout_t(const time_point<steady_clock> &when_)
             : when(when_) {}
 
         friend std::ostream &operator <<(std::ostream &o, timeout_t *to) {

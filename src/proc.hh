@@ -38,7 +38,7 @@ struct proc {
     event_fd event;
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
-    time_point<monotonic_clock> now;
+    time_point<steady_clock> now;
 
     explicit proc(task *t = 0);
 

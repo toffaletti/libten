@@ -27,7 +27,7 @@ struct state : boost::noncopyable {
 
 static void log_request(http_server::request &h) {
     using namespace std::chrono;
-    auto stop = monotonic_clock::now();
+    auto stop = steady_clock::now();
     VLOG(1) << h.agent_ip() << " " <<
         h.req.method << " " <<
         h.req.uri << " " <<

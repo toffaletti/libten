@@ -203,10 +203,10 @@ struct io_scheduler {
         tasksystem();
         proc *p = _this_proc;
         for (;;) {
-            p->now = monotonic_clock::now();
+            p->now = steady_clock::now();
             // let everyone else run
             taskyield();
-            p->now = monotonic_clock::now();
+            p->now = steady_clock::now();
             task *t = 0;
 
             int ms = -1;
@@ -282,7 +282,7 @@ struct io_scheduler {
 
             // must unlock before calling task::ready
             if (lk.owns_lock()) lk.unlock();
-            p->now = monotonic_clock::now();
+            p->now = steady_clock::now();
             // wake up sleeping tasks
             auto i = timeout_tasks.begin();
             for (; i != timeout_tasks.end(); ++i) {

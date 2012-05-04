@@ -20,7 +20,7 @@ Dependencies
 ____________
 
   * cmake >= 2.8
-  * g++ >= 4.4.3
+  * g++ >= 4.7.0
   * libssl-dev >= 0.9.8
   * libboost-dev >= 1.40
   * libboost-date-time-dev >= 1.40
