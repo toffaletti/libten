@@ -194,6 +194,7 @@ public:
     }
 
     void done() {
+        if (!_c) return;
         _pool.release(_c);
         _c.reset();
     }
