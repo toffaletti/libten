@@ -9,6 +9,8 @@
 #include "ten/atomic.hh"
 #include "ten/task/coroutine.hh"
 
+using namespace std::chrono;
+
 namespace ten {
 
 struct task {

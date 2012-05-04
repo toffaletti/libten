@@ -15,10 +15,8 @@ namespace ten {
 
 extern void netinit();
 
-using namespace std::chrono;
-
 #if (__GNUC__ >= 4 && (__GNUC_MINOR__ >= 7))
-typedef steady_clock monotonic_clock;
+typedef std::chrono::steady_clock std::chrono::monotonic_clock;
 #endif
 
 //! exception to unwind stack on taskcancel
@@ -56,7 +54,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 void procshutdown();
 
 //! return cached time from event loop, not precise
-const time_point<monotonic_clock> &procnow();
+const std::chrono::time_point<std::chrono::monotonic_clock> &procnow();
 
 //! main entry point for tasks
 struct procmain {
@@ -78,12 +76,20 @@ struct deadline_reached : task_interrupted {};
 
 //! schedule a deadline to interrupt task with
 //! deadline_reached after milliseconds
-struct deadline {
+class deadline {
+private:
     void *timeout_id;
-    deadline(milliseconds ms);
+public:
+    deadline(std::chrono::milliseconds ms);
 
     deadline(const deadline &) = delete;
     deadline &operator =(const deadline &) = delete;
+
+    //! milliseconds remaining on the deadline
+    std::chrono::milliseconds remaining() const;
+    
+    //! cancel the deadline
+    void cancel();
 
     ~deadline();
 };

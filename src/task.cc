@@ -221,9 +221,25 @@ deadline::deadline(milliseconds ms) {
     timeout_id = _this_proc->sched().add_timeout(t, ms, deadline_reached());
 }
 
+void deadline::cancel() {
+    if (timeout_id) {
+        task *t = _this_proc->ctask;
+        t->remove_timeout((task::timeout_t *)timeout_id);
+        timeout_id = 0;
+    }
+}
+
 deadline::~deadline() {
-    task *t = _this_proc->ctask;
-    t->remove_timeout((task::timeout_t *)timeout_id);
+    cancel();
+}
+
+milliseconds deadline::remaining() const {
+    task::timeout_t *timeout = (task::timeout_t *)timeout_id;
+    std::chrono::time_point<std::chrono::monotonic_clock> now = procnow();
+    if (now > timeout->when) {
+        return milliseconds(0);
+    }
+    return duration_cast<milliseconds>(timeout->when - now);
 }
 
 } // end namespace ten

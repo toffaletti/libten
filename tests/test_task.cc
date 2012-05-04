@@ -7,6 +7,7 @@
 #include "ten/task.hh"
 
 using namespace ten;
+using namespace std::chrono;
 const size_t default_stacksize=256*1024;
 
 static void bar(std::thread::id p) {
