@@ -108,6 +108,14 @@ public:
         return _h->capacity - size();
     }
 
+    //! copy bytes out of buffer
+    uint32_t drain(char *out, uint32_t out_size) {
+        uint32_t nbytes = std::min(size(), out_size);
+        memcpy(out, front(), nbytes);
+        remove(nbytes);
+        return nbytes;
+    }
+
     void clear() {
         remove(size());
     }

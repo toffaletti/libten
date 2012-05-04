@@ -3,6 +3,15 @@
 
 #include "ten/http/http_message.hh"
 
+///////////////////////
+#include <iosfwd>
+#include <boost/iostreams/categories.hpp>
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <iostream>
+#include "ten/buffer.hh"
+
 using namespace ten;
 
 BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
@@ -524,4 +533,180 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     BOOST_CHECK_EQUAL(resp.body_length, 76);
 
     BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
+}
+
+
+///////////////////////////////////////
+using namespace boost::iostreams;
+
+namespace cb {
+int _on_body(http_parser *p, const char *at, size_t length);
+int _on_headers_complete(http_parser *p);
+}
+
+class http_input_filter_base {
+private:
+    struct http_parser p;
+    struct http_parser_settings stg;
+    buffer overflow;
+public:
+    // TODO: protected/friend
+    char *buf;
+    size_t pos;
+    bool headers_complete;
+
+    void init(enum http_parser_type type) {
+        http_parser_init(&p, type);
+        p.data = this;
+        stg.on_body = cb::_on_body;
+        stg.on_headers_complete = cb::_on_headers_complete;
+    }
+public:
+    typedef char char_type;
+    typedef multichar_input_filter_tag category;
+
+    http_input_filter_base() : stg({}), overflow(1024) {}
+
+    http_input_filter_base(const http_input_filter_base &) = delete;
+    http_input_filter_base &operator =(const http_input_filter_base &) = delete;
+
+    template<typename Source>
+        void read_header(Source &src) {
+            headers_complete = false;
+            overflow.clear();
+            while (!headers_complete) {
+                // http://dev.chromium.org/spdy/spdy-whitepaper
+                // "typical header sizes of 700-800 bytes is common"
+                overflow.reserve(1024);
+                std::streamsize nr = boost::iostreams::read(src, overflow.back(), overflow.available());
+                if (nr < 0) break;
+                overflow.commit(nr);
+                ssize_t nparsed = http_parser_execute(&p, &stg, overflow.front(), overflow.size());
+                overflow.remove(nparsed);
+            }
+        }
+
+    template<typename Source>
+        std::streamsize read(Source &src, char *s, std::streamsize n) {
+            //if (!headers_complete) {
+            //    read_header(src);
+            //    std::cerr << "headers read, returning 0\n";
+            //    return 0;
+            //}
+            //if (overflow.size()) {
+            //    return overflow.drain(s, n);
+            //}
+            std::streamsize nr = boost::iostreams::read(src, s, n);
+            if (nr > 0) {
+                buf = s;
+                pos = 0;
+                ssize_t nparsed = http_parser_execute(&p, &stg, s, n);
+                //std::cout << "(nparsed: " << nparsed << ")";
+                return pos;
+            }
+            return nr;
+        }
+};
+
+template <typename MessageT>
+class http_input_filter : public http_input_filter_base {
+private:
+    MessageT &_m;
+public:
+    explicit http_input_filter(MessageT &m) : _m(m) {
+        if (std::is_same<MessageT, http_request>::value) {
+            init(HTTP_REQUEST); 
+        } else if (std::is_same<MessageT, http_response>::value) {
+            init(HTTP_RESPONSE); 
+        }
+    }
+};
+
+namespace cb {
+int _on_body(http_parser *p, const char *at, size_t length) {
+    http_input_filter_base *m = reinterpret_cast<http_input_filter_base *>(p->data);
+    memmove(&m->buf[m->pos], at, length);
+    m->pos += length;
+    return 0;
+}
+
+int _on_headers_complete(http_parser *p) {
+    http_input_filter_base *m = reinterpret_cast<http_input_filter_base *>(p->data);
+    m->headers_complete = true;
+    return 0;
+}
+
+}
+
+BOOST_AUTO_TEST_CASE(http_stream_req) {
+    static char sdata[] =
+    "GET /test/1 HTTP/1.1\r\n"
+    "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
+    "Host: localhost:8080\r\n"
+    "Accept: */*\r\n"
+    "\r\n"
+#if 0
+    "GET /test/2 HTTP/1.1\r\n"
+    "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
+    "Host: localhost:8080\r\n"
+    "Accept: */*\r\n"
+    "\r\n"
+#endif
+    ;
+
+
+    filtering_istream in;
+    http_request req;
+    http_input_filter<http_request> fil(req);
+    in.push(boost::ref(fil));
+    in.push(basic_array_source<char>(sdata));
+
+    std::cout << "req(";
+    boost::iostreams::copy(in, std::cout);
+    std::cout << ")qer;\n";
+}
+
+BOOST_AUTO_TEST_CASE(http_stream_resp) {
+    static char sdata[] =
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/plain\r\n"
+    "Transfer-Encoding: chunked\r\n\r\n"
+    "25\r\n"
+    "This is the data in the first chunk\r\n\r\n"
+    "1C\r\n"
+    "and this is the second one\r\n\r\n"
+    "3\r\n"
+    "con\r\n"
+    "8\r\n"
+    "sequence\r\n"
+    "0\r\n"
+    "\r\n";
+
+    filtering_istream in;
+    http_response resp;
+    http_input_filter<http_response> fil(resp);
+    // setting buffer to >= read size seems to allow
+    // seekg to work so we can rewind after reading past
+    // the end of the header and then read the full body
+    in.push(boost::ref(fil), 4096);
+    in.push(basic_array_source<char>(sdata));
+
+    char buf[6];
+    std::streamsize nr = boost::iostreams::read(in, buf, sizeof(buf));
+    std::cerr << "nr: " << nr << "\n";
+    std::cerr << "state: " << in.rdstate() << "\n";
+    // TODO: fail/bad bit gets set on seekg even though it seems to succeed
+    // perhaps this is because http_input_filter is not seekable?
+    //in.seekg(nr, std::ios_base::beg);
+    in.seekg(nr * -1, std::ios_base::cur);
+    // clearing the error seems to work until i can figure out how
+    // to make seekg not set the bad bit
+    in.clear();
+
+    while (in) {
+        std::streamsize nr = boost::iostreams::read(in, buf, sizeof(buf));
+        //std::cerr << "nr: " << nr << "\n";
+        if (nr <= 0 ) break;
+        boost::iostreams::write(std::cout, buf, nr);
+    }
 }
