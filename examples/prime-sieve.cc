@@ -31,7 +31,7 @@ void primes() {
         taskspawn(std::bind(filter, ch, out, prime));
         ch = out;
     }
-    exit(0);
+    procshutdown();
 }
 
 int main(int argc, char *argv[]) {
