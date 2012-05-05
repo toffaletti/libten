@@ -198,7 +198,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 void procshutdown() {
-    proc *p = _this_proc;
+    proc *p = this_proc();
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         task *t = *i;
         if (t == p->ctask) continue; // don't add ourself to the runqueue
@@ -251,20 +251,20 @@ static void procmain_init() {
 
 procmain::procmain() {
     std::call_once(init_flag, procmain_init);
-    if (_this_proc == 0) {
+    if (this_proc() == 0) {
         // needed for tests which call procmain a lot
         new proc();
     }
 }
 
 int procmain::main(int argc, char *argv[]) {
-    std::unique_ptr<proc> p(_this_proc);
+    std::unique_ptr<proc> p(this_proc());
     p->schedule();
     return EXIT_SUCCESS;
 }
 
 const time_point<steady_clock> &procnow() {
-    return _this_proc->now;
+    return this_proc()->now;
 }
 
 } // end namespace ten
