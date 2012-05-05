@@ -18,6 +18,24 @@ static std::mutex procsmutex;
 static proclist procs;
 static std::once_flag init_flag;
 
+static void set_this_proc(proc *p) {
+    _this_proc = p;
+}
+
+inline proc *this_proc() {
+    return _this_proc;
+}
+
+void proc::startproc(proc *p_, task *t) {
+    set_this_proc(p_);
+    std::unique_ptr<proc> p(p_);
+    p->addtaskinproc(t);
+    t->ready();
+    DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
+    p->schedule();
+    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
+}
+
 void proc::add(proc *p) {
     std::unique_lock<std::mutex> lk(procsmutex);
     procs.push_back(p);
@@ -121,7 +139,7 @@ proc::proc(task *t)
         thread->detach();
     } else {
         // main thread proc
-        _this_proc = this;
+        set_this_proc(this);
         thread = 0;
     }
 }
@@ -168,7 +186,7 @@ proc::~proc() {
     lk.unlock();
     del(this);
     DVLOG(5) << "proc freed: " << this;
-    _this_proc = 0;
+    set_this_proc(0);
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {

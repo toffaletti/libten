@@ -8,7 +8,7 @@ using std::timed_mutex;
 using std::unique_lock;
 
 void rendez::sleep(unique_lock<qutex> &lk) {
-    task *t = _this_proc->ctask;
+    task *t = this_proc()->ctask;
 
     {
         unique_lock<timed_mutex> ll(_m);
@@ -57,16 +57,16 @@ void rendez::wakeupall() {
 
 #if 0
 bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
-    task *t = _this_proc->ctask;
+    task *t = this_proc()->ctask;
     if (find(waiting.begin(), waiting.end(), t) == waiting.end()) {
         DVLOG(5) << "RENDEZ SLEEP PUSH BACK: " << t;
         waiting.push_back(t);
     }
     lk.unlock();
-    _this_proc->sched().add_timeout(t, ms);
+    this_proc()->sched().add_timeout(t, ms);
     t->swap();
     lk.lock();
-    _this_proc->sched().del_timeout(t);
+    this_proc()->sched().del_timeout(t);
     // if we're not in the waiting list then we were signaled to wakeup
     return find(waiting.begin(), waiting.end(), t) == waiting.end();
 }

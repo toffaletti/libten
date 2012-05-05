@@ -8,7 +8,7 @@ using std::unique_lock;
 using std::try_to_lock;
 
 void qutex::lock() {
-    task *t = _this_proc->ctask;
+    task *t = this_proc()->ctask;
     CHECK(t) << "BUG: qutex::lock called outside of task";
     {
         unique_lock<timed_mutex> lk(_m);
@@ -26,7 +26,7 @@ void qutex::lock() {
         for (;;) {
             t->swap();
             unique_lock<timed_mutex> lk(_m);
-            if (_owner == _this_proc->ctask) {
+            if (_owner == this_proc()->ctask) {
                 break;
             }
         }
@@ -38,7 +38,7 @@ void qutex::lock() {
 }
 
 bool qutex::try_lock() {
-    task *t = _this_proc->ctask;
+    task *t = this_proc()->ctask;
     CHECK(t) << "BUG: qutex::try_lock called outside of task";
     unique_lock<timed_mutex> lk(_m, try_to_lock);
     if (lk.owns_lock()) {
@@ -56,7 +56,7 @@ void qutex::unlock() {
 }
 
 void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
-    task *t = _this_proc->ctask;
+    task *t = this_proc()->ctask;
     CHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
     if (t == _owner) {

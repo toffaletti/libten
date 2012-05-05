@@ -39,7 +39,7 @@ struct io_scheduler {
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN | EPOLLET;
-        int e_fd = _this_proc->event.fd;
+        int e_fd = this_proc()->event.fd;
         ev.data.fd = e_fd;
         if (pollfds.size() <= (size_t)e_fd) {
             pollfds.resize(e_fd+1);
@@ -136,7 +136,7 @@ struct io_scheduler {
 
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
-        task *t = _this_proc->ctask;
+        task *t = this_proc()->ctask;
         add_timeout(t, dura);
         t->swap();
     }
@@ -168,7 +168,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-        task *t = _this_proc->ctask;
+        task *t = this_proc()->ctask;
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
@@ -201,7 +201,7 @@ struct io_scheduler {
     void fdtask() {
         taskname("fdtask");
         tasksystem();
-        proc *p = _this_proc;
+        proc *p = this_proc();
         for (;;) {
             p->now = steady_clock::now();
             // let everyone else run
@@ -295,7 +295,7 @@ struct io_scheduler {
                 }
             }
         }
-        DVLOG(5) << "BUG: " << _this_proc->ctask << " is exiting";
+        DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";
     }
 };
 

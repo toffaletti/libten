@@ -10,7 +10,7 @@ namespace ten {
 
 struct io_scheduler;
 
-extern __thread proc *_this_proc;
+proc *this_proc();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc
@@ -88,15 +88,7 @@ struct proc {
     static void add(proc *p);
     static void del(proc *p);
 
-    static void startproc(proc *p_, task *t) {
-        _this_proc = p_;
-        std::unique_ptr<proc> p(p_);
-        p->addtaskinproc(t);
-        t->ready();
-        DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
-        p->schedule();
-        DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
-    }
+    static void startproc(proc *p_, task *t);
 
 };
 
