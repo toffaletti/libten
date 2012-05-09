@@ -12,7 +12,7 @@ void qutex::lock() {
     CHECK(t) << "BUG: qutex::lock called outside of task";
     {
         unique_lock<timed_mutex> lk(_m);
-        if (_owner == 0 || _owner == t) {
+        if (_owner == nullptr || _owner == t) {
             _owner = t;
             DVLOG(5) << "LOCK qutex: " << this << " owner: " << _owner;
             return;
@@ -42,7 +42,7 @@ bool qutex::try_lock() {
     CHECK(t) << "BUG: qutex::try_lock called outside of task";
     unique_lock<timed_mutex> lk(_m, try_to_lock);
     if (lk.owns_lock()) {
-        if (_owner == 0) {
+        if (_owner == nullptr) {
             _owner = t;
             return true;
         }
@@ -64,7 +64,7 @@ void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
             t = _owner = _waiting.front();
             _waiting.pop_front();
         } else {
-            t = _owner = 0;
+            t = _owner = nullptr;
         }
         DVLOG(5) << "UNLOCK qutex: " << this
             << " new owner: " << _owner

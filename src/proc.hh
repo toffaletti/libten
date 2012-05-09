@@ -40,7 +40,7 @@ struct proc {
     //! current time cached in a few places through the event loop
     time_point<steady_clock> now;
 
-    explicit proc(task *t = 0);
+    explicit proc(task *t = nullptr);
 
     proc(const proc &) = delete;
     proc &operator =(const proc &) = delete;
@@ -65,7 +65,7 @@ struct proc {
 
     task *newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
         auto i = std::find_if(taskpool.begin(), taskpool.end(), task_has_size(stacksize));
-        task *t = 0;
+        task *t = nullptr;
         if (i != taskpool.end()) {
             t = *i;
             taskpool.erase(i);

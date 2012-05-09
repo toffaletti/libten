@@ -17,7 +17,7 @@ struct io_scheduler {
         task *t_out; // POLLOUT task
         pollfd *p_out; // pointer to pollfd structure that is on the task's stack
         uint32_t events; // events this fd is registered for
-        task_poll_state() : t_in(0), p_in(0), t_out(0), p_out(0), events(0) {}
+        task_poll_state() : t_in(nullptr), p_in(nullptr), t_out(nullptr), p_out(nullptr), events(0) {}
     };
     typedef std::vector<task_poll_state> poll_task_array;
     typedef std::vector<epoll_event> event_vector;
@@ -62,14 +62,14 @@ struct io_scheduler {
             uint32_t saved_events = pollfds[fd].events;
 
             if (fds[i].events & EPOLLIN) {
-                CHECK(pollfds[fd].t_in == 0) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
+                CHECK(pollfds[fd].t_in == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
                 pollfds[fd].t_in = t;
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
-                CHECK(pollfds[fd].t_out == 0) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
+                CHECK(pollfds[fd].t_out == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
                 pollfds[fd].t_out = t;
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
@@ -93,14 +93,14 @@ struct io_scheduler {
             if (fds[i].revents) rvalue++;
 
             if (pollfds[fd].p_in == &fds[i]) {
-                pollfds[fd].t_in = 0;
-                pollfds[fd].p_in = 0;
+                pollfds[fd].t_in = nullptr;
+                pollfds[fd].p_in = nullptr;
                 pollfds[fd].events ^= EPOLLIN;
             }
 
             if (pollfds[fd].p_out == &fds[i]) {
-                pollfds[fd].t_out = 0;
-                pollfds[fd].p_out = 0;
+                pollfds[fd].t_out = nullptr;
+                pollfds[fd].p_out = nullptr;
                 pollfds[fd].events ^= EPOLLOUT;
             }
 
@@ -175,7 +175,7 @@ struct io_scheduler {
         } else {
             taskstate("poll %u fds for %ul ms", nfds, ms);
         }
-        task::timeout_t *timeout_id = 0;
+        task::timeout_t *timeout_id = nullptr;
         if (ms) {
             timeout_id = add_timeout(t, milliseconds(ms));
         }
@@ -207,7 +207,7 @@ struct io_scheduler {
             // let everyone else run
             taskyield();
             p->now = steady_clock::now();
-            task *t = 0;
+            task *t = nullptr;
 
             int ms = -1;
             // lock must be held while determining whether or not we'll be
@@ -272,7 +272,7 @@ struct io_scheduler {
                         // our wake up eventfd was written to
                         // clear events by reading value
                         p->event.read();
-                    } else if (pollfds[fd].t_in == 0 && pollfds[fd].t_out == 0) {
+                    } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
                         // TODO: otherwise we might want to remove fd from epoll
                         LOG(ERROR) << "event " << i->events << " for fd: "
                             << i->data.fd << " but has no task";

@@ -36,9 +36,9 @@ bool taskcancel(uint64_t id);
 //! mark the current task as a system task
 void tasksystem();
 //! set/get current task state
-const char *taskstate(const char *fmt=0, ...);
+const char *taskstate(const char *fmt=nullptr, ...);
 //! set/get current task name
-const char * taskname(const char *fmt=0, ...);
+const char * taskname(const char *fmt=nullptr, ...);
 //! get a dump of all task names and state for the current proc
 std::string taskdump();
 //! write task dump to FILE stream
@@ -56,7 +56,7 @@ const std::chrono::time_point<std::chrono::steady_clock> &procnow();
 struct procmain {
     procmain();
 
-    int main(int argc=0, char *argv[]=0);
+    int main(int argc=0, char *argv[]=nullptr);
 };
 
 //! sleep current task for milliseconds

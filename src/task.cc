@@ -61,7 +61,7 @@ void tasksystem() {
 
 bool taskcancel(uint64_t id) {
     proc *p = this_proc();
-    task *t = 0;
+    task *t = nullptr;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         if ((*i)->id == id) {
             t = *i;
@@ -103,7 +103,7 @@ string taskdump() {
     stringstream ss;
     proc *p = this_proc();
     CHECK(p) << "BUG: taskdump called in null proc";
-    task *t = 0;
+    task *t = nullptr;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         t = *i;
         ss << t << "\n";
@@ -151,7 +151,7 @@ task::~task() {
 }
 
 void task::clear(bool newid) {
-    fn = 0;
+    fn = nullptr;
     exiting = false;
     systask = false;
     canceled = false;
@@ -172,7 +172,7 @@ void task::clear(bool newid) {
         cproc->sched().remove_timeout_task(this);
     }
 
-    cproc = 0;
+    cproc = nullptr;
 }
 
 void task::remove_timeout(timeout_t *to) {
@@ -207,7 +207,7 @@ void task::swap() {
                 // remove from scheduler timeout list
                 cproc->sched().remove_timeout_task(this);
             }
-            if (tmp->exception != 0) {
+            if (tmp->exception != nullptr) {
                 rethrow_exception(tmp->exception);
             }
         } else {
@@ -225,7 +225,7 @@ void deadline::cancel() {
     if (timeout_id) {
         task *t = this_proc()->ctask;
         t->remove_timeout((task::timeout_t *)timeout_id);
-        timeout_id = 0;
+        timeout_id = nullptr;
     }
 }
 
@@ -236,7 +236,7 @@ deadline::~deadline() {
 milliseconds deadline::remaining() const {
     task::timeout_t *timeout = (task::timeout_t *)timeout_id;
     // TODO: need a way of distinguishing between canceled and over due
-    if (timeout) {
+    if (timeout != nullptr) {
         std::chrono::time_point<std::chrono::steady_clock> now = procnow();
         if (now > timeout->when) {
             return milliseconds(0);
