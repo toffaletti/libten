@@ -235,11 +235,15 @@ deadline::~deadline() {
 
 milliseconds deadline::remaining() const {
     task::timeout_t *timeout = (task::timeout_t *)timeout_id;
-    std::chrono::time_point<std::chrono::steady_clock> now = procnow();
-    if (now > timeout->when) {
-        return milliseconds(0);
+    // TODO: need a way of distinguishing between canceled and over due
+    if (timeout) {
+        std::chrono::time_point<std::chrono::steady_clock> now = procnow();
+        if (now > timeout->when) {
+            return milliseconds(0);
+        }
+        return duration_cast<milliseconds>(timeout->when - now);
     }
-    return duration_cast<milliseconds>(timeout->when - now);
+    return milliseconds(0);
 }
 
 } // end namespace ten
