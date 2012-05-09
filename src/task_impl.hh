@@ -79,7 +79,7 @@ struct task {
     void swap();
 
     void exit() {
-        fn = 0;
+        fn = nullptr;
         exiting = true;
         swap();
     }

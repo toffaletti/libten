@@ -1,6 +1,5 @@
 #include <cassert>
 #include <algorithm>
-#include "private.hh"
 #include "proc.hh"
 #include "io.hh"
 
