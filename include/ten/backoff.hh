@@ -28,7 +28,7 @@ public:
 
     DurationT next_delay()
     {
-        double rnd = rand();
+        double rnd = _rand();
         typename DurationT::rep tmp = _min_delay.count() + (_min_delay.count() * rnd * (_retry + 1));
         typename DurationT::rep rep = std::min(_max_delay.count(), tmp);
         ++_retry;
