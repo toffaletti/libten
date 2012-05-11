@@ -226,6 +226,7 @@ private:
                 try {
                     i->callback(r);
                 } catch (std::exception &e) {
+                    DVLOG(2) << "unhandled exception in route [" << i->pattern << "]: " << e.what();
                     r.resp = http_response(500,
                             Headers("Connection", "close"));
                     std::string msg = e.what();

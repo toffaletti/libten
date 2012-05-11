@@ -10,9 +10,9 @@
                    | "*" | "+" | "," | ";" | "=";
   gen_delims = ":" | "/" | "?" | "#" | "[" | "]" | "@";
   reserved = gen_delims | sub_delims;
-# people use |, [, ], {, }, :, ^ and @ in path/query even though they're not in RFC
+# people use |, [, ], {, }, :, `, ^ and @ in path/query even though they're not in RFC
 # which is why they are appended to pchar
-  pchar = unreserved | pct_encoded | sub_delims | ":" | "@" | '[' | ']' | '{' | '}' | '|' | '^';
+  pchar = unreserved | pct_encoded | sub_delims | ":" | "@" | '[' | ']' | '{' | '}' | '|' | '^' | '`';
   query = (pchar | "/" | "?")* %query;
   fragment = (pchar | "/" | "?")* %fragment;
 

@@ -25,6 +25,7 @@ private:
     size_t _limit; // max number of entries
 
 public:
+    // TODO: limit maybe as a template param?
     lru(size_t limit) : _map(limit*2), _entries(0), _limit(limit) { }
 
     // will update lru if key is found
