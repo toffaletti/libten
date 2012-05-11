@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
         {"server3.example.com", server()},
     };
 
-    hash_ring ring(1);
+    hash_ring<std::string, std::string, 1> ring;
     for (auto it : servers) {
         ring.add(it.first);
     }
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
     }
 
     // remove a server
-    BOOST_REQUIRE_EQUAL(1, ring.erase("server3.example.com"));
+    BOOST_REQUIRE_EQUAL(1, ring.remove("server3.example.com"));
 
     unsigned found = 0;
     for (auto it : data) {
@@ -76,4 +76,13 @@ BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
     BOOST_REQUIRE(found / (float)data.size() > 0.30);
 }
 
+BOOST_AUTO_TEST_CASE(hash_ring_remove_test) {
+    hash_ring<std::string, std::string, 100> ring;
+    ring.add("test1");
+    ring.add("test2");
+    ring.add("test3");
+    BOOST_REQUIRE_EQUAL(100, ring.remove("test1"));
+    BOOST_REQUIRE_EQUAL(100, ring.remove("test3"));
+    BOOST_REQUIRE_EQUAL(100, ring.remove("test2"));
+}
 
