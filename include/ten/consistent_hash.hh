@@ -3,6 +3,7 @@
 #include <map>
 #include <functional>
 #include <stdexcept>
+#include <set>
 #include <boost/lexical_cast.hpp>
 
 namespace ten {
@@ -50,6 +51,15 @@ public:
             it = _ring.begin();
         }
         return it->second;
+    }
+
+    //! unique set of nodes
+    std::set<std::string> nodes() const {
+        std::set<std::string> nodes;
+        for (auto it : _ring) {
+            nodes.insert(it.second);
+        }
+        return nodes;
     }
 };
 
