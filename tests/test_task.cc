@@ -7,6 +7,7 @@
 #include "ten/task.hh"
 
 using namespace ten;
+using namespace std::chrono;
 const size_t default_stacksize=256*1024;
 
 static void bar(std::thread::id p) {
@@ -128,9 +129,9 @@ BOOST_AUTO_TEST_CASE(socket_io_mt) {
 
 static void sleeper(semaphore &s) {
     using namespace std::chrono;
-    auto start = monotonic_clock::now();
+    auto start = steady_clock::now();
     tasksleep(10);
-    auto end = monotonic_clock::now();
+    auto end = steady_clock::now();
 
     // check that at least 10 milliseconds passed
     // annoyingly have to compare count here because duration doesn't have an
@@ -328,9 +329,9 @@ static void deadline_cleared() {
         BOOST_CHECK(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
-        auto start = monotonic_clock::now();
+        auto start = steady_clock::now();
         taskyield();
-        auto end = monotonic_clock::now();
+        auto end = steady_clock::now();
         BOOST_CHECK(true);
         BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), seconds(1).count());
     }
@@ -374,9 +375,9 @@ static void deadline_yield() {
         BOOST_CHECK(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
-        auto start = monotonic_clock::now();
+        auto start = steady_clock::now();
         taskyield();
-        auto end = monotonic_clock::now();
+        auto end = steady_clock::now();
         BOOST_CHECK(true);
         BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
     }

@@ -13,10 +13,28 @@ namespace hack {
 #include <asm-generic/ucontext.h>
 }
 
-__thread proc *_this_proc = 0;
+__thread proc *_this_proc = nullptr;
 static std::mutex procsmutex;
 static proclist procs;
 static std::once_flag init_flag;
+
+static void set_this_proc(proc *p) {
+    _this_proc = p;
+}
+
+inline proc *this_proc() {
+    return _this_proc;
+}
+
+void proc::startproc(proc *p_, task *t) {
+    set_this_proc(p_);
+    std::unique_ptr<proc> p(p_);
+    p->addtaskinproc(t);
+    t->ready();
+    DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
+    p->schedule();
+    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
+}
 
 void proc::add(proc *p) {
     std::unique_lock<std::mutex> lk(procsmutex);
@@ -53,7 +71,7 @@ void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
 }
 
 io_scheduler &proc::sched() {
-    if (_sched == 0) {
+    if (_sched == nullptr) {
         _sched = new io_scheduler();
     }
     return *_sched;
@@ -94,7 +112,7 @@ void proc::schedule() {
             lk.unlock();
             co.swap(&t->co);
             lk.lock();
-            ctask = 0;
+            ctask = nullptr;
             
             if (t->exiting) {
                 deltaskinproc(t);
@@ -110,10 +128,10 @@ void proc::schedule() {
 }
 
 proc::proc(task *t)
-  : _sched(0), nswitch(0), ctask(0),
+  : _sched(nullptr), nswitch(0), ctask(nullptr),
     asleep(false), polling(false), canceled(false), taskcount(0)
 {
-    now = monotonic_clock::now();
+    now = steady_clock::now();
     add(this);
     std::unique_lock<std::mutex> lk(mutex);
     if (t) {
@@ -121,14 +139,14 @@ proc::proc(task *t)
         thread->detach();
     } else {
         // main thread proc
-        _this_proc = this;
-        thread = 0;
+        set_this_proc(this);
+        thread = nullptr;
     }
 }
 
 proc::~proc() {
     std::unique_lock<std::mutex> lk(mutex);
-    if (thread == 0) {
+    if (thread == nullptr) {
         {
             std::unique_lock<std::mutex> plk(procsmutex);
             for (auto i=procs.begin(); i!= procs.end(); ++i) {
@@ -168,7 +186,7 @@ proc::~proc() {
     lk.unlock();
     del(this);
     DVLOG(5) << "proc freed: " << this;
-    _this_proc = 0;
+    set_this_proc(nullptr);
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
@@ -180,7 +198,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 void procshutdown() {
-    proc *p = _this_proc;
+    proc *p = this_proc();
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         task *t = *i;
         if (t == p->ctask) continue; // don't add ourself to the runqueue
@@ -233,20 +251,20 @@ static void procmain_init() {
 
 procmain::procmain() {
     std::call_once(init_flag, procmain_init);
-    if (_this_proc == 0) {
+    if (this_proc() == nullptr) {
         // needed for tests which call procmain a lot
         new proc();
     }
 }
 
 int procmain::main(int argc, char *argv[]) {
-    std::unique_ptr<proc> p(_this_proc);
+    std::unique_ptr<proc> p(this_proc());
     p->schedule();
     return EXIT_SUCCESS;
 }
 
-const time_point<monotonic_clock> &procnow() {
-    return _this_proc->now;
+const time_point<steady_clock> &procnow() {
+    return this_proc()->now;
 }
 
 } // end namespace ten

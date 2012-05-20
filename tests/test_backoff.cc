@@ -14,3 +14,10 @@ BOOST_AUTO_TEST_CASE(backoff_test) {
     }
 }
 
+BOOST_AUTO_TEST_CASE(backoff_test_min) {
+    backoff<seconds> b(seconds(1), seconds(60));
+    seconds delay = b.next_delay();
+    BOOST_MESSAGE("delay=" << delay.count());
+    BOOST_REQUIRE(delay.count() >= 1 && delay.count() < 60);
+}
+

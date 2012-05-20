@@ -78,7 +78,7 @@ protected:
                 try {
                     c = _new_resource();
                     CHECK(c) << "new_resource failed for pool: " << _name;
-                    DVLOG(5) << "inserting to shared_pool(" << _name << "): " << c;
+                    DVLOG(4) << "inserting to shared_pool(" << _name << "): " << c;
                     _set.insert(c);
                 } catch (std::exception &e) {
                     LOG(ERROR) << "exception creating new resource for pool: " <<_name << " " << e.what();
@@ -138,7 +138,7 @@ protected:
     void destroy(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
-        DVLOG(5) << "shared_pool(" << _name
+        DVLOG(4) << "shared_pool(" << _name
             << ") destroy in set? " << _set.count(c)
             << " : " << c << " rc: " << c.use_count();
         _set.erase(c);
@@ -172,11 +172,12 @@ public:
             _c = _pool.acquire();
         }
 
+    //! must call done() to return the resource to the pool
+    //! otherwise we destroy it because a timeout or other exception
+    //! could have occured causing the resource state to be in transition
     ~scoped_resource() {
         if (!_c) return;
-        _pool.release(_c);
-        // XXX: use destroy once done() has been added everywhere
-        //_pool.destroy(_c);
+        _pool.destroy(_c);
     }
 
     void exchange() {
@@ -193,6 +194,7 @@ public:
     }
 
     void done() {
+        if (!_c) return;
         _pool.release(_c);
         _c.reset();
     }

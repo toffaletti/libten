@@ -83,11 +83,7 @@ template <> double json_traits_conv<double>::cast(const json &j) {
 template <> float json_traits_conv<float>::cast(const json &j) {
     if (!j.is_real()) throw errorx("not real: %s", j.dump().c_str());
     auto n = j.real();
-#ifdef TEN_JSON_CXX11
     constexpr float lowest = numeric_limits<float>::lowest();
-#else
-    const float lowest = -numeric_limits<float>::max();
-#endif
     if (n < lowest || n > numeric_limits<float>::max())
         throw errorx("out of range for float: %g", n);
     return j.real();
@@ -105,7 +101,6 @@ template <> bool json_traits_conv<bool>::cast(const json &j) {
 // simple visit of all objects
 //
 
-#ifdef TEN_JSON_CXX11
 void json::visit(const json::visitor_func_t &visitor) {
     if (is_object()) {
         for (auto kv : obj()) {
@@ -120,22 +115,6 @@ void json::visit(const json::visitor_func_t &visitor) {
         }
     }
 }
-#else
-void json::visit(const json::visitor_func_t &visitor) {
-    if (is_object()) {
-        for (auto kv = obj().begin(); kv != obj().end(); ++kv) {
-            if (!visitor(get(), (*kv).first, (*kv).second.get()))
-                return;
-            json((*kv).second).visit(visitor);
-        }
-    }
-    else if (is_array()) {
-        for (auto j = arr().begin(); j != arr().end(); ++j) {
-            (*j).visit(visitor);
-        }
-    }
-}
-#endif
 
 //
 // path
@@ -188,7 +167,6 @@ done:
     return !tok.empty();
 }
 
-#ifdef TEN_JSON_CXX11
 static void recursive_elements(json root, json &result, const string &match) {
     if (root.is_object()) {
         for (auto kv : root.obj()) {
@@ -218,39 +196,6 @@ static void match_node(json root, json &result, const string &match) {
             match_node(r, result, match);
     }
 }
-#else
-static void recursive_elements(json root, json &result, const string &match) {
-    if (root.is_object()) {
-        for (auto kv = root.obegin(); kv != root.oend(); ++kv) {
-            if ((*kv).first == match)
-                add_result(result, (*kv).second);
-            recursive_elements(json((*kv).second), result, match);
-        }
-    }
-    else if (root.is_array()) {
-        for (auto el = root.abegin(); el != root.aend(); ++el)
-            recursive_elements(*el, result, match);
-    }
-}
-
-static void match_node(json root, json &result, const string &match) {
-    if (root.is_object()) {
-        if (match == "*") {
-            for (auto kv = root.obegin(); kv != root.oend(); ++kv) {
-                add_result(result, (*kv).second);
-            }
-        }
-        else {
-            add_result(result, root[match]);
-        }
-    }
-    else if (root.is_array()) {
-        for (auto el = root.abegin(); el != root.aend(); ++el) {
-            match_node(*el, result, match);
-        }
-    }
-}
-#endif
 
 static void select_node(json &result, deque<string> &tokens) {
     tokens.pop_front(); // remove '/'
@@ -274,7 +219,6 @@ static void select_node(json &result, deque<string> &tokens) {
     }
 }
 
-#ifdef TEN_JSON_CXX11
 static void slice_op(json &result, deque<string> &tokens) {
     tokens.pop_front();
     vector<string> args;
@@ -349,81 +293,5 @@ json json::path(const string &path) {
     }
     return result;
 }
-#else
-static void slice_op(json &result, deque<string> &tokens) {
-    tokens.pop_front();
-    vector<string> args;
-    while (!tokens.empty() && tokens.front() != "]") {
-        args.push_back(tokens.front());
-        tokens.pop_front();
-    }
-    if (tokens.empty())
-        throw errorx("path query missing ]");
-    tokens.pop_front(); // pop ']'
-
-    DVLOG(5) << "args: " << args;
-    if (args.size() == 1) {
-        try {
-            size_t index = boost::lexical_cast<size_t>(args.front());
-            result = result[index];
-        } catch (boost::bad_lexical_cast &e) {
-            string key = args.front();
-            auto tmp(json::array());
-            for (auto r = result.abegin(); r != result.aend(); ++r) {
-                if ((*r)[key])
-                    add_result(tmp, *r);
-            }
-            result = tmp;
-        }
-    } else if (args.size() == 3) {
-        string op = args[1];
-        if (op == ":") {
-            // TODO: make slice ranges work
-            //ssize_t start = boost::lexical_cast<ssize_t>(args[0]);
-            //ssize_t end = boost::lexical_cast<ssize_t>(args[2]);
-        }
-        else if (op == "=") {
-            string key = args[0];
-            json filter(json::load(args[2]));
-            DVLOG(5) << "filter: " << filter;
-            json tmp(json::array());
-            for (auto r = result.abegin(); r != result.aend(); ++r) {
-                if ((*r)[key] == filter)
-                    add_result(tmp, *r);
-            }
-            result = tmp;
-        }
-    }
-}
-
-json json::path(const string &path_) {
-    size_t i = 0;
-    string tok;
-    deque<string> tokens;
-    while (next_path_token(path_, i, tok))
-        tokens.push_back(tok);
-
-    json result = *this;
-    while (!tokens.empty()) {
-        if (tokens.front() == "/") {
-            // select current node
-            select_node(result, tokens);
-        }
-        else if (tokens.front() == "*") {
-            tokens.pop_front();
-            if (result.is_object()) {
-                auto tmp(json::array());
-                for (auto kv = result.obegin(); kv != result.oend(); ++kv)
-                    tmp.push((*kv).second);
-                result = tmp;
-            }
-        }
-        else if (tokens.front() == "[") {
-            slice_op(result, tokens);
-        }
-    }
-    return result;
-}
-#endif
 
 } // TS

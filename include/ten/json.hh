@@ -12,19 +12,11 @@
 # error Y2038
 #endif
 
-#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4)
-# define TEN_JSON_CXX11
-#endif
-
 namespace ten {
 using std::move;
 using std::string;
 using std::pair;
 using std::initializer_list;
-
-#ifndef TEN_JSON_CXX11
-const intptr_t nullptr = 0;
-#endif
 
 
 //----------------------------------------------------------------
@@ -114,6 +106,18 @@ class json {
     typedef void (json::*unspecified_bool_type)() const;
     void true_value() const {}
 
+    // autovivify array or object
+    json_t *_o_get() {
+        if (!_p)
+            _p.take(json_object());
+        return get();
+    }
+    json_t *_a_get() {
+        if (!_p)
+            _p.take(json_array());
+        return get();
+    }
+
   public:
     // construction and assignment,
     //   including a selection of conversions from basic types
@@ -161,25 +165,13 @@ class json {
     json(initializer_list<pair<const char *, json>> init)
         : _p(json_object(), json_take)
     {
-#ifdef TEN_JSON_CXX11
         for (const auto &kv : init)
             set(kv.first, kv.second);
-#else
-        for (auto i = init.begin(); i != init.end(); ++i) {
-            set(i->first, i->second);
-        }
-#endif
     }
     static json array(initializer_list<const json> init) {
         json a(json_array(), json_take);
-#ifdef TEN_JSON_CXX11
         for (const auto &j : init)
             a.push(j);
-#else
-        for (auto i = init.begin(); i != init.end(); ++i) {
-            a.push(*i);
-        }
-#endif
         return a;
     }
 
@@ -196,7 +188,10 @@ class json {
     // equivalence
 
     friend bool operator == (const json &lhs, const json &rhs) {
-        return json_equal(lhs._p.get(), rhs._p.get());
+        // jansson doesn't think null pointers are equal
+        auto jl = lhs._p.get();
+        auto jr = rhs._p.get();
+        return (!jl && !jr) || json_equal(jl, jr);
     }
     friend bool operator != (const json &lhs, const json &rhs) {
         return !(lhs == rhs);
@@ -252,8 +247,8 @@ class json {
     size_t osize() const                                { return      json_object_size(   get());                    }
     json get(           const char *key)                { return json(json_object_get(    get(), key));              }
     json get(         const string &key)                { return json(json_object_get(    get(), key.c_str()));      }
-    bool set(           const char *key, const json &j) { return     !json_object_set(    get(), key,         j.get()); }
-    bool set(         const string &key, const json &j) { return     !json_object_set(    get(), key.c_str(), j.get()); }
+    bool set(           const char *key, const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
+    bool set(         const string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
     bool erase(         const char *key)                { return     !json_object_del(    get(), key);               }
     bool erase(       const string &key)                { return     !json_object_del(    get(), key.c_str());       }
     bool oclear()                                       { return     !json_object_clear(  get());                    }
@@ -264,7 +259,7 @@ class json {
     size_t asize() const                           { return      json_array_size(   get());              }
     json get(            int i)                    { return json(json_array_get(    get(), i));          }
     json get(         size_t i)                    { return json(json_array_get(    get(), i));          }
-    bool set(         size_t i,  const json &j)    { return     !json_array_set(    get(), i, j.get());  }
+    bool set(         size_t i,  const json &j)    { return     !json_array_set( _a_get(), i, j.get());  }
     bool insert(      size_t i,  const json &j)    { return     !json_array_insert( get(), i, j.get());  }
     bool erase(       size_t i)                    { return     !json_array_remove( get(), i);           }
     bool arr_clear()                               { return     !json_array_clear(  get());              }
@@ -399,8 +394,8 @@ inline json to_json(bool b)           { return json(b); }
 // conversions do not work for unspecified types
 template <class T> struct json_traits {
     typedef T type;
-    static const bool can_make = false;    // to_json(T) works
-    static const bool can_cast = false;    // trait<T>::cast() works
+    static const bool can_make = false;    // trait<T>::make() -> json works
+    static const bool can_cast = false;    // trait<T>::cast() -> T    works
 };
 
 // convenience base class for conversions that work
@@ -408,18 +403,29 @@ template <class T> struct json_traits_conv {
     typedef T type;
     static const bool can_make = true;
     static const bool can_cast = true;
+
+    static json make(T t) { return json(t); }
     static T cast(const json &j);              // default decl for most cases
 };
 
 // json_cast<> function, a la lexical_cast<>
-template <class T, class TT = typename std::enable_if<json_traits<T>::can_cast>::type>
-inline T json_cast(const json &j) {
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_cast, T>::type
+json_cast(const json &j) {
     return json_traits<T>::cast(j);
+}
+
+// make_json<> function, rather like to_json() but with a precise type
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_cast, T>::type
+make_json(T t) {
+    return json_traits<T>::make(t);
 }
 
 // identity
 template <> struct json_traits<json> : public json_traits_conv<json> {
     static json cast(const json &j) { return j; }
+    static json make(const json &j) { return j; }
 };
 
 // string
@@ -428,6 +434,8 @@ template <> struct json_traits<const char *> {
     typedef const char *type;
     static const bool can_make = true;   // makes copy
     static const bool can_cast = false;  // sorry, private pointer
+
+    static json make(const char *s) { return json(s); }
 };
 
 // integer

@@ -1,11 +1,14 @@
 #define BOOST_TEST_MODULE json test
 #include <boost/test/unit_test.hpp>
 #include <ten/json.hh>
+#ifdef TEN_JSON_CXX11
 #include <ten/jserial.hh>
 #include <ten/jserial_maybe.hh>
 #include <ten/jserial_seq.hh>
 #include <ten/jserial_assoc.hh>
 #include <ten/jserial_enum.hh>
+#endif
+#include <array>
 
 using namespace std;
 using namespace ten;
@@ -119,7 +122,7 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
 }
 
 BOOST_AUTO_TEST_CASE(json_test_truth) {
-    json o(json::object());
+    json o({}); // empty init list
     BOOST_CHECK(o.get("nothing").is_true() == false);
     BOOST_CHECK(o.get("nothing").is_false() == false);
     BOOST_CHECK(o.get("nothing").is_null() == false);
@@ -198,6 +201,24 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
     test_conv<bool>(false, json::jfalse(), JSON_FALSE);
 }
 
+BOOST_AUTO_TEST_CASE(json_create) {
+    json obj1({});
+    BOOST_CHECK(obj1);
+    obj1.set("test", "set");
+    BOOST_CHECK(obj1.get("test"));
+    json root{
+        {"obj1", obj1}
+    };
+    BOOST_CHECK_EQUAL(root.get("obj1"), obj1);
+    obj1.set("this", "that");
+    BOOST_CHECK_EQUAL(root.get("obj1").get("this").str(), "that");
+    json obj2{ {"answer", 42} };
+    obj1.set("obj2", obj2);
+    BOOST_CHECK_EQUAL(root.get("obj1").get("obj2"), obj2);
+}
+
+#ifdef TEN_JSON_CXX11
+
 struct corge {
     int foo, bar;
 
@@ -205,8 +226,8 @@ struct corge {
     corge(int foo_, int bar_) : foo(foo_), bar(bar_) {}
 };
 template <class AR>
-inline AR & operator & (AR &ar, corge &c) {
-    return ar & kv("foo", c.foo) & kv("bar", c.bar);
+inline void serialize(AR &ar, corge &c) {
+    ar & kv("foo", c.foo) & kv("bar", c.bar);
 }
 inline bool operator == (const corge &a, const corge &b) {
     return a.foo == b.foo && a.bar == b.bar;
@@ -214,10 +235,10 @@ inline bool operator == (const corge &a, const corge &b) {
 
 
 enum captain { kirk, picard, janeway, sisko };
-constexpr array<const char *, 4> captain_names = {{ "kirk", "picard", "janeway", "sisko" }};
+const array<string, 4> captain_names = {{ "kirk", "picard", "janeway", "sisko" }};
 template <class AR>
-inline AR & operator & (AR &ar, captain &c) {
-    return serialize_enum(ar, c, captain_names);
+inline void serialize(AR &ar, captain &c) {
+    serialize_enum(ar, c, captain_names);
 }
 
 
@@ -225,11 +246,11 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     corge c1(42, 17);
     auto j = jsave_all(c1);
     corge c2;
-    JLoad(j) >> c2;
+    json_loader(j) >> c2;
     BOOST_CHECK(c1 == c2);
 
     map<string, int> m;
-    JLoad(j) >> m;
+    json_loader(j) >> m;
     BOOST_CHECK_EQUAL(m.size(), 2);
     BOOST_CHECK(m.find("foo") != m.end());
     BOOST_CHECK(m.find("bar") != m.end());
@@ -238,7 +259,7 @@ BOOST_AUTO_TEST_CASE(json_serial) {
 
 #if BOOST_VERSION >= 104800
     flat_map<string, int> f;
-    JLoad(j) >> f;
+    json_loader(j) >> f;
     BOOST_CHECK_EQUAL(f.size(), 2);
     BOOST_CHECK(f.find("foo") != f.end());
     BOOST_CHECK(f.find("bar") != f.end());
@@ -256,15 +277,16 @@ BOOST_AUTO_TEST_CASE(json_serial) {
     a.reset();
     BOOST_CHECK(!a.ok());
     j = 17;
-    JLoad(j) >> a;
+    json_loader(j) >> a;
     BOOST_CHECK(a.ok());
     BOOST_CHECK_EQUAL(a.get(), 17);
-
 
     captain c = janeway;
     j = jsave_all(c);
     BOOST_CHECK_EQUAL(j, "janeway");
     j = "kirk";
-    JLoad(j) >> c;
+    json_loader(j) >> c;
     BOOST_CHECK_EQUAL(c, kirk);
 }
+
+#endif // TEN_JSON_CXX11

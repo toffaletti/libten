@@ -15,12 +15,6 @@ namespace ten {
 
 extern void netinit();
 
-using namespace std::chrono;
-
-#if (__GNUC__ >= 4 && (__GNUC_MINOR__ >= 7))
-typedef steady_clock monotonic_clock;
-#endif
-
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
@@ -42,9 +36,9 @@ bool taskcancel(uint64_t id);
 //! mark the current task as a system task
 void tasksystem();
 //! set/get current task state
-const char *taskstate(const char *fmt=0, ...);
+const char *taskstate(const char *fmt=nullptr, ...);
 //! set/get current task name
-const char * taskname(const char *fmt=0, ...);
+const char * taskname(const char *fmt=nullptr, ...);
 //! get a dump of all task names and state for the current proc
 std::string taskdump();
 //! write task dump to FILE stream
@@ -56,13 +50,13 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 void procshutdown();
 
 //! return cached time from event loop, not precise
-const time_point<monotonic_clock> &procnow();
+const std::chrono::time_point<std::chrono::steady_clock> &procnow();
 
 //! main entry point for tasks
 struct procmain {
     procmain();
 
-    int main(int argc=0, char *argv[]=0);
+    int main(int argc=0, char *argv[]=nullptr);
 };
 
 //! sleep current task for milliseconds
@@ -78,12 +72,20 @@ struct deadline_reached : task_interrupted {};
 
 //! schedule a deadline to interrupt task with
 //! deadline_reached after milliseconds
-struct deadline {
+class deadline {
+private:
     void *timeout_id;
-    deadline(milliseconds ms);
+public:
+    deadline(std::chrono::milliseconds ms);
 
     deadline(const deadline &) = delete;
     deadline &operator =(const deadline &) = delete;
+
+    //! milliseconds remaining on the deadline
+    std::chrono::milliseconds remaining() const;
+    
+    //! cancel the deadline
+    void cancel();
 
     ~deadline();
 };

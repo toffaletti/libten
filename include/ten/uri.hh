@@ -12,7 +12,7 @@
 
 namespace ten {
 
-class uri_error : std::exception {
+class uri_error : public std::exception {
 public:
     uri_error(const std::string &uri_str, const char *where) {
         std::stringstream ss;

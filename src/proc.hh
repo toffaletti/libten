@@ -4,13 +4,13 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/task.hh"
-#include "private.hh"
+#include "task_impl.hh"
 
 namespace ten {
 
 struct io_scheduler;
 
-extern __thread proc *_this_proc;
+proc *this_proc();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc
@@ -38,9 +38,9 @@ struct proc {
     event_fd event;
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
-    time_point<monotonic_clock> now;
+    time_point<steady_clock> now;
 
-    explicit proc(task *t = 0);
+    explicit proc(task *t = nullptr);
 
     proc(const proc &) = delete;
     proc &operator =(const proc &) = delete;
@@ -65,7 +65,7 @@ struct proc {
 
     task *newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
         auto i = std::find_if(taskpool.begin(), taskpool.end(), task_has_size(stacksize));
-        task *t = 0;
+        task *t = nullptr;
         if (i != taskpool.end()) {
             t = *i;
             taskpool.erase(i);
@@ -88,15 +88,7 @@ struct proc {
     static void add(proc *p);
     static void del(proc *p);
 
-    static void startproc(proc *p_, task *t) {
-        _this_proc = p_;
-        std::unique_ptr<proc> p(p_);
-        p->addtaskinproc(t);
-        t->ready();
-        DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
-        p->schedule();
-        DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
-    }
+    static void startproc(proc *p_, task *t);
 
 };
 

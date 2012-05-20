@@ -24,12 +24,12 @@ public:
     coroutine &operator =(const coroutine &) = delete;
 
     //! this represents the main coroutine
-    coroutine() : stack_start(0), stack_end(0) { ctxt.init(); }
+    coroutine() : stack_start(nullptr), stack_end(nullptr) { ctxt.init(); }
 
     //! create a new coroutine
     //
     //! allocates a stack and guard page
-    coroutine(proc f, void *arg=0, size_t stack_size_=4096)
+    coroutine(proc f, void *arg=nullptr, size_t stack_size_=4096)
     {
         // add on size for a guard page
         size_t pgs = getpagesize();
@@ -54,7 +54,7 @@ public:
         ctxt.init(f, arg, stack_start, stack_size_);
     }
 
-    void restart(proc f, void *arg=0) {
+    void restart(proc f, void *arg=nullptr) {
         if (stack_start) {
             ctxt.init(f, arg, stack_start, stack_size());
         } else {
@@ -88,7 +88,7 @@ public:
     }
 
     //! is this the main stack?
-    bool main() { return stack_start == 0; }
+    bool main() { return stack_start == nullptr; }
 
 private:
     //! saved state of this coroutine
