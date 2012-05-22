@@ -608,6 +608,13 @@ public:
         }
 };
 
+
+// TODO:
+// must read header first, so make a method like: bool read_header(http_message &, stream &)
+// after it returns, http_message will contain a stream that has a reference to
+// the message. this allows it to use the same parser. the stream is used to
+// read the body content.
+
 template <typename MessageT>
 class http_input_filter : public http_input_filter_base {
 private:
