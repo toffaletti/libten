@@ -137,6 +137,7 @@ static void sleeper(semaphore &s) {
     // annoyingly have to compare count here because duration doesn't have an
     // ostream << operator
     BOOST_CHECK_GE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
+    BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(12).count());
     s.post();
 }
 

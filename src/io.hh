@@ -28,6 +28,9 @@ struct io_scheduler {
     poll_task_array pollfds;
     //! epoll events
     event_vector events;
+    //! timerfd used for breaking epoll_wait for timeouts
+    // required because the timeout value for epoll_wait is not accurate
+    timer_fd tfd;
     //! the epoll fd used for io in this runner
     epoll_fd efd;
     //! number of fds we've been asked to wait on
@@ -36,15 +39,27 @@ struct io_scheduler {
     io_scheduler() : npollfds(0) {
         events.reserve(1000);
         // add the eventfd used to wake up
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;
-        int e_fd = this_proc()->event.fd;
-        ev.data.fd = e_fd;
-        if (pollfds.size() <= (size_t)e_fd) {
-            pollfds.resize(e_fd+1);
+        {
+            epoll_event ev{};
+            ev.events = EPOLLIN | EPOLLET;
+            int e_fd = this_proc()->event.fd;
+            ev.data.fd = e_fd;
+            if (pollfds.size() <= (size_t)e_fd) {
+                pollfds.resize(e_fd+1);
+            }
+            efd.add(e_fd, ev);
         }
-        efd.add(e_fd, ev);
+
+        {
+            epoll_event ev{};
+            ev.events = EPOLLIN | EPOLLET;
+            int e_fd = tfd.fd;
+            ev.data.fd = e_fd;
+            if (pollfds.size() <= (size_t)e_fd) {
+                pollfds.resize(e_fd+1);
+            }
+            efd.add(e_fd, ev);
+        }
         taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
@@ -221,7 +236,11 @@ struct io_scheduler {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = duration_cast<milliseconds>(t->timeouts.front()->when - p->now).count();
+                    uint64_t usec = duration_cast<microseconds>(t->timeouts.front()->when - p->now).count();
+                    // TODO: round millisecond timeout up for now
+                    // in the future we can provide higher resolution thanks to
+                    // timerfd supporting nanosecond resolution
+                    ms = (usec + (1000/2)) / 1000;
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
@@ -239,6 +258,14 @@ struct io_scheduler {
                 // only process 1000 events each iteration to keep it fair
                 if (ms > 1 || ms < 0) {
                     p->polling = true;
+                }
+                if (ms > 0) {
+                    struct itimerspec tspec{};
+                    struct itimerspec oldspec{};
+                    tspec.it_value.tv_sec = ms / 1000;
+                    tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
+                    tfd.settime(0, tspec, oldspec);
+                    ms = -1;
                 }
                 lk.unlock();
                 events.resize(1000);
@@ -272,6 +299,8 @@ struct io_scheduler {
                         // our wake up eventfd was written to
                         // clear events by reading value
                         p->event.read();
+                    } else if (i->data,fd == tfd.fd) {
+                        // timerfd fired, sleeping tasks woken below
                     } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
                         // TODO: otherwise we might want to remove fd from epoll
                         LOG(ERROR) << "event " << i->events << " for fd: "
