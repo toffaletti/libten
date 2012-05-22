@@ -34,8 +34,8 @@ uint64_t taskspawn(const function<void ()> &f, size_t stacksize) {
 }
 
 uint64_t taskid() {
-    CHECK(this_proc());
-    CHECK(this_proc()->ctask);
+    DCHECK(this_proc());
+    DCHECK(this_proc()->ctask);
     return this_proc()->ctask->id;
 }
 
@@ -101,7 +101,7 @@ const char *taskstate(const char *fmt, ...)
 string taskdump() {
     stringstream ss;
     proc *p = this_proc();
-    CHECK(p) << "BUG: taskdump called in null proc";
+    DCHECK(p) << "BUG: taskdump called in null proc";
     task *t = nullptr;
     for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
         t = *i;

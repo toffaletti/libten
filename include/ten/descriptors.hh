@@ -3,6 +3,7 @@
 
 #include "error.hh"
 #include "address.hh"
+#include "logging.hh"
 
 #include <errno.h>
 #include <unistd.h>
@@ -237,12 +238,15 @@ struct epoll_fd : fd_base {
 
     //! \param events an array of epoll_events structs to contain events available to the caller
     //! \param timeout milliseconds to wait for events, -1 waits indefinitely
-    void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
+    void wait(std::vector<epoll_event> &events, int timeout=-1) {
         int s = ::epoll_wait(fd, &events[0], events.size(), timeout);
         // if EINTR, the caller might need to do something else
         // and then call wait again. so don't throw exception
         if (s == -1 && errno == EINTR) s=0;
-        THROW_ON_ERROR(s);
+        // XXX: the failures for epoll_wait are all fatal. 
+        // this is perhaps flawed because it is not a clean shutdown
+        // however, clean shutdown might be difficult without epoll...
+        PCHECK(s >= 0) << "epoll_wait failed";
         events.resize(s);
     }
 };

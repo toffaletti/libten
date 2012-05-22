@@ -33,8 +33,8 @@ struct task {
         }
     };
 
-    char name[256];
-    char state[256];
+    char name[32];
+    char state[128];
     std::function<void ()> fn;
     coroutine co;
     uint64_t id;

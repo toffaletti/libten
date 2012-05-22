@@ -22,7 +22,7 @@ static void set_this_proc(proc *p) {
     _this_proc = p;
 }
 
-inline proc *this_proc() {
+proc *this_proc() {
     return _this_proc;
 }
 
@@ -52,7 +52,7 @@ void proc::deltaskinproc(task *t) {
         --taskcount;
     }
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
-    CHECK(i != alltasks.end());
+    DCHECK(i != alltasks.end());
     alltasks.erase(i);
     DVLOG(5) << "POOLING task: " << t;
     taskpool.push_back(t);
@@ -60,7 +60,7 @@ void proc::deltaskinproc(task *t) {
 }
 
 void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
-    CHECK(lk.mutex() == &mutex);
+    DCHECK(lk.mutex() == &mutex);
     if (asleep) {
         cond.notify_one();
     } else if (polling) {
@@ -96,7 +96,7 @@ void proc::schedule() {
                 lk.unlock();
                 procshutdown();
                 lk.lock();
-                CHECK(!runqueue.empty()) << "BUG: runqueue empty?";
+                DCHECK(!runqueue.empty()) << "BUG: runqueue empty?";
             }
             task *t = runqueue.front();
             runqueue.pop_front();

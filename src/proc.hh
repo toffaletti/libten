@@ -10,7 +10,7 @@ namespace ten {
 
 struct io_scheduler;
 
-proc *this_proc();
+extern proc *this_proc();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc

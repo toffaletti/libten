@@ -12,7 +12,7 @@ void rendez::sleep(unique_lock<qutex> &lk) {
 
     {
         unique_lock<timed_mutex> ll(_m);
-        CHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
+        DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
             << "BUG: " << t << " already waiting on rendez " << this;
         DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
         _waiting.push_back(t);
@@ -75,7 +75,7 @@ bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
 rendez::~rendez() {
     using ::operator<<;
     unique_lock<timed_mutex> lk(_m);
-    CHECK(_waiting.empty()) << "BUG: still waiting: " << _waiting;
+    DCHECK(_waiting.empty()) << "BUG: still waiting: " << _waiting;
 }
 
 } // namespace

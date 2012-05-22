@@ -2,6 +2,23 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
+option(USE_GPROF
+    "Profile the project using gprof"
+    OFF)
+if(USE_GPROF)
+    message("Adding profiling info for gprof...")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -pg")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+endif(USE_GPROF)
+
+option(USE_PPROF
+    "Profile the project using gprof"
+    OFF)
+if(USE_PPROF)
+    message("Linking with -lprofiler")
+    set(EXTRA_LIBS profiler)
+endif(USE_PPROF)
+
 if (NOT GCC_FLAGS)
     # general flags for any compilation with gcc/g++
     set(GCC_FLAGS "-pthread -march=core2")

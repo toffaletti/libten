@@ -77,14 +77,14 @@ struct io_scheduler {
             uint32_t saved_events = pollfds[fd].events;
 
             if (fds[i].events & EPOLLIN) {
-                CHECK(pollfds[fd].t_in == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
+                DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
                 pollfds[fd].t_in = t;
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
-                CHECK(pollfds[fd].t_out == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
+                DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
                 pollfds[fd].t_out = t;
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
@@ -157,7 +157,7 @@ struct io_scheduler {
     }
 
     void remove_timeout_task(task *t) {
-        CHECK(t->timeouts.empty());
+        DCHECK(t->timeouts.empty());
         auto i = std::remove(timeout_tasks.begin(), timeout_tasks.end(), t);
         timeout_tasks.erase(i, timeout_tasks.end());
     }
@@ -231,7 +231,7 @@ struct io_scheduler {
             std::unique_lock<std::mutex> lk(p->mutex);
             if (!timeout_tasks.empty()) {
                 t = timeout_tasks.front();
-                CHECK(!t->timeouts.empty()) << t << " in timeout list with no timeouts set";
+                DCHECK(!t->timeouts.empty()) << "BUG: " << t << " in timeout list with no timeouts set";
                 if (t->timeouts.front()->when <= p->now) {
                     // epoll_wait must return asap
                     ms = 0;
@@ -265,6 +265,9 @@ struct io_scheduler {
                     tspec.it_value.tv_sec = ms / 1000;
                     tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
                     tfd.settime(0, tspec, oldspec);
+                    // epoll_wait timeout is not accurate so we use timerfd
+                    // to break from epoll_wait instead of the timeout value
+                    // -1 means no timeout.
                     ms = -1;
                 }
                 lk.unlock();
