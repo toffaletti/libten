@@ -4,6 +4,7 @@
 #include <exception>
 #include <functional>
 #include <utility>
+#include <ostream>
 
 namespace ten {
 
@@ -49,6 +50,15 @@ template <class T> class maybe {
     void reset(const T  &v)  { if (_ok) { _val = v; } else { new (_buf) T(v); _ok = true; } }
     void reset(      T &&v)  { if (_ok) { _val = v; } else { new (_buf) T(v); _ok = true; } }
     void reset()             { if (_ok) { _ok = false; _val.T::~T(); } }
+
+    friend std::ostream &operator << (std::ostream &o, const maybe<T> &m) {
+        if (m.ok()) {
+            o << m._val;
+        } else {
+            o << "null";
+        }
+        return o;
+    }
 };
 
 template <class T>
