@@ -167,6 +167,8 @@ public:
     //! listen and accept connections
     void serve(address &baddr, unsigned threads=1) {
         netsock s = netsock(baddr.family(), SOCK_STREAM);
+        // listening sockets we do want to share across exec
+        THROW_ON_NONZERO_ERRNO(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC));
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);
