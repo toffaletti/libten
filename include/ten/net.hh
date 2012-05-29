@@ -166,9 +166,15 @@ public:
 
     //! listen and accept connections
     void serve(address &baddr, unsigned threads=1) {
-        sock = netsock(baddr.family(), SOCK_STREAM);
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-        sock.bind(baddr);
+        netsock s = netsock(baddr.family(), SOCK_STREAM);
+        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+        s.bind(baddr);
+        serve(std::move(s), baddr, threads);
+    }
+
+    //! listen and accept connections
+    void serve(netsock s, address &baddr, unsigned threads=1) {
+        std::swap(sock, s);
         sock.getsockname(baddr);
         LOG(INFO) << "listening for " << protocol_name
             << " on " << baddr << " with " << threads << " threads";;
