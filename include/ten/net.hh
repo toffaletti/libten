@@ -188,6 +188,10 @@ public:
         do_accept_loop(shutdown_guard);
     }
 
+    int listen_fd() const {
+        return sock.s.fd;
+    }
+
 protected:
     netsock sock;
     std::string protocol_name;
