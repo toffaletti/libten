@@ -6,6 +6,7 @@
 #include <fstream>
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "task.hh"
 #include "logging.hh"
