@@ -53,7 +53,7 @@ public:
     //! make a remote procedure call with no result
     template <typename ...Args>
         void notify(const std::string &method, Args ...args) {
-            rpcall(method, args...);
+            rnotify(method, args...);
         }
 
 protected:
@@ -73,7 +73,7 @@ protected:
         }
     }
 
-    void rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
+    void rnotify(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
         ensure_connection();
         ssize_t nw = s.send(sbuf.data(), sbuf.size());
         if (nw != (ssize_t)sbuf.size()) {
@@ -83,22 +83,21 @@ protected:
     }
 
     template <typename Arg, typename ...Args>
-        void rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf, Arg arg, Args ...args) {
+        void rnotify(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf, Arg arg, Args ...args) {
             pk.pack(arg);
-            rpcall(pk, sbuf, args...);
+            rnotify(pk, sbuf, args...);
         }
 
     template <typename ...Args>
-        void rpcall(const std::string &method, Args ...args) {
+        void rnotify(const std::string &method, Args ...args) {
             msgpack::sbuffer sbuf;
             msgpack::packer<msgpack::sbuffer> pk(&sbuf);
             pk.pack_array(3);
             pk.pack_uint8(2); // request message type
             pk.pack(method);
             pk.pack_array(sizeof...(args));
-            rpcall(pk, sbuf, args...);
+            rnotify(pk, sbuf, args...);
         }
-
 
     template <typename Result>
         Result rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
