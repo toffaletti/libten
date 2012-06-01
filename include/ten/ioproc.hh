@@ -86,43 +86,54 @@ ReturnT iowait(iochannel &reply_chan) {
 }
 
 //! make an iocall, but dont wait for it to complete
-template <typename ReturnT>
+template <typename Func>
 void iocallasync(
         ioproc &io,
-        const std::function<boost::any ()> &op,
+        Func &&f,
         iochannel reply_chan = iochannel())
 {
-    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
-    io.ch.send(std::move(call));
-}
-
-inline void iocallasync(
-        ioproc &io,
-        const std::function<void ()> &vop,
-        iochannel reply_chan = iochannel())
-{
-    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
+    std::unique_ptr<pcall> call;
+    if (std::is_void<decltype(f())>::value) {
+        // void op
+        std::function<void ()> vop(f);
+        call.reset(new pcall(vop, reply_chan));
+    } else {
+        // has return type
+        std::function<boost::any ()> op(f);
+        call.reset(new pcall(op, reply_chan));
+    }
     io.ch.send(std::move(call));
 }
 
 //! make an iocall and wait for the result
-template <typename ReturnT>
-ReturnT iocall(
+template <typename Func>
+auto iocall(
         ioproc &io,
-        const std::function<boost::any ()> &op,
+        Func &&f,
         iochannel reply_chan = iochannel())
+    -> typename std::enable_if<
+         !std::is_void<decltype(f())>::value,
+         decltype(f())
+       >::type
 {
+    std::function<boost::any ()> op(f);
     std::unique_ptr<pcall> call(new pcall(op, reply_chan));
     io.ch.send(std::move(call));
-    return iowait<ReturnT>(reply_chan);
+    return iowait<decltype(f())>(reply_chan);
 }
 
-//! make an iocall and wait for it to complete
-inline void iocall(
+//! make an iocall and wait it to complete
+template <typename Func>
+auto iocall(
         ioproc &io,
-        const std::function<void ()> &vop,
+        Func &&f,
         iochannel reply_chan = iochannel())
+    -> typename std::enable_if<
+         std::is_void<decltype(f())>::value,
+         void
+       >::type
 {
+    std::function<void ()> vop(f);
     std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
     io.ch.send(std::move(call));
     iowait(reply_chan);
@@ -131,19 +142,19 @@ inline void iocall(
 ////// iorw /////
 
 template <typename ProcT> int ioopen(ProcT &io, char *path, int mode) {
-    return iocall<int>(io, std::bind((int (*)(char *, int))::open, path, mode));
+    return iocall(io, std::bind((int (*)(char *, int))::open, path, mode));
 }
 
 template <typename ProcT>  int ioclose(ProcT &io, int fd) {
-    return iocall<int>(io, std::bind(::close, fd));
+    return iocall(io, std::bind(::close, fd));
 }
 
 template <typename ProcT> ssize_t ioread(ProcT &io, int fd, void *buf, size_t n) {
-    return iocall<ssize_t>(io, std::bind(::read, fd, buf, n));
+    return iocall(io, std::bind(::read, fd, buf, n));
 }
 
 template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n) {
-    return iocall<ssize_t>(io, std::bind(::write, fd, buf, n));
+    return iocall(io, std::bind(::write, fd, buf, n));
 }
 
 } // end namespace ten 
