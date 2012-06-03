@@ -43,3 +43,28 @@ BOOST_AUTO_TEST_CASE(qutex_test) {
     p.main();
 }
 
+template <typename T, typename Mutex = std::mutex> class synchronized {
+protected:
+    Mutex _m;
+    T _v;
+public:
+    typedef Mutex mutex_type;
+    synchronized() {}
+
+    template <typename Func, typename Sync> friend void synchronize(Sync &sync, Func &&f) {
+        std::lock_guard<typename Sync::mutex_type> lock(sync._m);
+        f(sync._v);
+    }
+};
+
+BOOST_AUTO_TEST_CASE(sync_test) {
+    synchronized<std::string> s;
+
+    synchronize(s, [](std::string &str) {
+            str = "test";
+    });
+
+    synchronize(s, [](std::string &str) {
+            BOOST_CHECK_EQUAL("test", str);
+    });
+}
