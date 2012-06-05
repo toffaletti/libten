@@ -51,23 +51,25 @@ void proc::deltaskinproc(task *t) {
     if (!t->systask) {
         --taskcount;
     }
+    DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
+        << " found in runqueue while being deleted";
     auto i = std::find(alltasks.begin(), alltasks.end(), t);
     DCHECK(i != alltasks.end());
     alltasks.erase(i);
     DVLOG(5) << "POOLING task: " << t;
-    taskpool.push_back(t);
     t->clear();
+    taskpool.push_back(t);
 }
 
-void proc::wakeupandunlock(std::unique_lock<std::mutex> &lk) {
-    DCHECK(lk.mutex() == &mutex);
+void proc::wakeup() {
     if (asleep) {
+        DVLOG(5) << "notifying " << this;
+        std::unique_lock<std::mutex> lk(mutex);
         cond.notify_one();
-    } else if (polling) {
-        polling = false;
+    } else if (polling.exchange(false)) {
+        DVLOG(5) << "eventing " << this;
         event.write(1);
     }
-    lk.unlock();
 }
 
 io_scheduler &proc::sched() {
@@ -82,21 +84,32 @@ void proc::schedule() {
         DVLOG(5) << "p: " << this << " entering proc::schedule";
         for (;;) {
             if (taskcount == 0) break;
-            std::unique_lock<std::mutex> lk(mutex);
-            while (runqueue.empty() && !canceled) {
-                asleep = true;
-                cond.wait(lk);
+            // check dirty queue
+            {
+                task *t = nullptr;
+                while (dirtyq.pop(t)) {
+                    DVLOG(5) << "dirty readying " << t;
+                    runqueue.push_front(t);
+                }
             }
-            asleep = false;
+            if (runqueue.empty()) {
+                std::unique_lock<std::mutex> lk(mutex);
+                while (runqueue.empty() && !canceled && dirtyq.empty()) {
+                    asleep = true;
+                    cond.wait(lk);
+                }
+                asleep = false;
+                // need to go through dirty loop again because
+                // runqueue could still be empty
+                if (!dirtyq.empty()) continue;
+            }
             if (canceled) {
                 // set canceled to false so we don't
                 // execute this every time through the loop
                 // while the tasks are cleaning up
                 canceled = false;
-                lk.unlock();
                 procshutdown();
-                lk.lock();
-                DCHECK(!runqueue.empty()) << "BUG: runqueue empty?";
+                if (runqueue.empty()) continue;
             }
             task *t = runqueue.front();
             runqueue.pop_front();
@@ -109,9 +122,8 @@ void proc::schedule() {
                 ++nswitch;
             }
             DVLOG(5) << "p: " << this << " swapping to: " << t;
-            lk.unlock();
+            t->_ready = false;
             co.swap(&t->co);
-            lk.lock();
             ctask = nullptr;
             
             if (t->exiting) {
@@ -172,6 +184,7 @@ proc::~proc() {
         usleep(1000);
     }
     delete thread;
+    runqueue.clear();
     // clean up system tasks
     while (!alltasks.empty()) {
         deltaskinproc(alltasks.front());

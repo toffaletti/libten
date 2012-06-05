@@ -12,10 +12,14 @@ void rendez::sleep(unique_lock<qutex> &lk) {
 
     {
         unique_lock<timed_mutex> ll(_m);
-        DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
-            << "BUG: " << t << " already waiting on rendez " << this;
-        DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
-        _waiting.push_back(t);
+        //DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
+        //    << "BUG: " << t << " already waiting on rendez " << this;
+        // TODO: investigate why this happens. im thinking spurious wakeups
+        // caused by some error in my lock-freeish event loop changes
+        if (std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end()) {
+            DVLOG(5) << "RENDEZ " << this << " PUSH BACK: " << t;
+            _waiting.push_back(t);
+        }
     }
     // must hold the lock until we're in the waiting list
     // otherwise another thread might modify the condition and

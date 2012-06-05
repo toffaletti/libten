@@ -5,15 +5,7 @@
 
 namespace ten {
 
-using std::function;
-using std::atomic;
-using std::stringstream;
-using std::mutex;
-using std::unique_lock;
-using std::unique_ptr;
-using std::rethrow_exception;
-
-static atomic<uint64_t> taskidgen(0);
+static std::atomic<uint64_t> taskidgen(0);
 
 void tasksleep(uint64_t ms) {
     this_proc()->sched().sleep(milliseconds(ms));
@@ -27,7 +19,7 @@ int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
     return this_proc()->sched().poll(fds, nfds, ms);
 }
 
-uint64_t taskspawn(const function<void ()> &f, size_t stacksize) {
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = this_proc()->newtaskinproc(f, stacksize);
     t->ready();
     return t->id;
@@ -99,7 +91,7 @@ const char *taskstate(const char *fmt, ...)
 }
 
 string taskdump() {
-    stringstream ss;
+    std::stringstream ss;
     proc *p = this_proc();
     DCHECK(p) << "BUG: taskdump called in null proc";
     task *t = nullptr;
@@ -116,14 +108,14 @@ void taskdumpf(FILE *of) {
     fflush(of);
 }
 
-task::task(const function<void ()> &f, size_t stacksize)
+task::task(const std::function<void ()> &f, size_t stacksize)
     : co(task::start, this, stacksize)
 {
     clear();
     fn = f;
 }
 
-void task::init(const function<void ()> &f) {
+void task::init(const std::function<void ()> &f) {
     fn = f;
     co.restart(task::start, this);
 }
@@ -131,16 +123,14 @@ void task::init(const function<void ()> &f) {
 void task::ready() {
     if (exiting) return;
     proc *p = cproc;
-    unique_lock<mutex> lk(p->mutex);
-    if (find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
-        DVLOG(5) << this_proc()->ctask << " adding task: " << this << " to runqueue for proc: " << p;
-        p->runqueue.push_back(this);
-    } else {
-        DVLOG(5) << "found task: " << this << " already in runqueue for proc: " << p;
-    }
-    // XXX: does this need to be outside of the if(!found) ?
-    if (p != this_proc()) {
-        p->wakeupandunlock(lk);
+    if (!_ready.exchange(true)) {
+        DVLOG(5) << "task readying: " << this;
+        if (p != this_proc()) {
+            p->dirtyq.push(this);
+            p->wakeup();
+        } else {
+            p->runqueue.push_back(this);
+        }
     }
 }
 
@@ -151,6 +141,7 @@ task::~task() {
 
 void task::clear(bool newid) {
     fn = nullptr;
+    _ready = false;
     exiting = false;
     systask = false;
     canceled = false;
@@ -199,7 +190,7 @@ void task::swap() {
     while (!timeouts.empty()) {
         timeout_t *to = timeouts.front();
         if (to->when <= procnow()) {
-            unique_ptr<timeout_t> tmp(to); // ensure to is freed
+            std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
             DVLOG(5) << to << " reached for " << this << " removing.";
             timeouts.pop_front();
             if (timeouts.empty()) {
@@ -207,7 +198,7 @@ void task::swap() {
                 cproc->sched().remove_timeout_task(this);
             }
             if (tmp->exception != nullptr) {
-                rethrow_exception(tmp->exception);
+                std::rethrow_exception(tmp->exception);
             }
         } else {
             break;

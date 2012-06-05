@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/task.hh"
+#include "ten/llqueue.hh"
 #include "task_impl.hh"
 
 namespace ten {
@@ -26,12 +27,14 @@ struct proc {
     tasklist runqueue;
     tasklist alltasks;
     coroutine co;
+    //! other threads use this to add tasks to runqueue
+    llqueue<task *> dirtyq;
     //! true when asleep and runqueue is empty and no epoll
-    bool asleep;
+    std::atomic<bool> asleep;
     //! true when asleep in epoll_wait
-    bool polling;
+    std::atomic<bool> polling;
     //! true when canceled
-    bool canceled;
+    std::atomic<bool> canceled;
     //! cond used to wake up when runqueue is empty and no epoll
     std::condition_variable cond;
     //! used to wake up from epoll
@@ -56,12 +59,11 @@ struct proc {
     }
 
     void cancel() {
-        std::unique_lock<std::mutex> lk(mutex);
         canceled = true;
-        wakeupandunlock(lk);
+        wakeup();
     }
 
-    void wakeupandunlock(std::unique_lock<std::mutex> &lk);
+    void wakeup();
 
     task *newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
         auto i = std::find_if(taskpool.begin(), taskpool.end(), task_has_size(stacksize));
@@ -69,6 +71,7 @@ struct proc {
         if (i != taskpool.end()) {
             t = *i;
             taskpool.erase(i);
+            DVLOG(5) << "initing from pool: " << t;
             t->init(f);
         } else {
             t = new task(f, stacksize);

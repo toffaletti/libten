@@ -228,7 +228,6 @@ struct io_scheduler {
             // lock must be held while determining whether or not we'll be
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
-            std::unique_lock<std::mutex> lk(p->mutex);
             if (!timeout_tasks.empty()) {
                 t = timeout_tasks.front();
                 DCHECK(!t->timeouts.empty()) << "BUG: " << t << " in timeout list with no timeouts set";
@@ -256,9 +255,6 @@ struct io_scheduler {
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll %d ms", ms);
                 // only process 1000 events each iteration to keep it fair
-                if (ms > 1 || ms < 0) {
-                    p->polling = true;
-                }
                 if (ms > 0) {
                     struct itimerspec tspec{};
                     struct itimerspec oldspec{};
@@ -270,13 +266,17 @@ struct io_scheduler {
                     // -1 means no timeout.
                     ms = -1;
                 }
-                lk.unlock();
                 events.resize(1000);
-                efd.wait(events, ms);
-                lk.lock();
+                p->polling = true;
+                if (p->dirtyq.empty()) {
+                    // another thread(s) changed the dirtyq before we started
+                    // polling. so we should skip epoll and run that task
+                    efd.wait(events, ms);
+                } else {
+                    events.resize(0);
+                }
                 p->polling = false;
                 int e_fd = p->event.fd;
-                lk.unlock();
                 // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
                     // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
@@ -312,8 +312,6 @@ struct io_scheduler {
                 }
             }
 
-            // must unlock before calling task::ready
-            if (lk.owns_lock()) lk.unlock();
             p->now = steady_clock::now();
             // wake up sleeping tasks
             auto i = timeout_tasks.begin();

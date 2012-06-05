@@ -42,6 +42,7 @@ struct task {
 
     std::deque<timeout_t *> timeouts;
 
+    std::atomic<bool> _ready;
     bool exiting;
     bool systask;
     bool canceled;
