@@ -87,21 +87,35 @@ ReturnT iowait(iochannel &reply_chan) {
 
 //! make an iocall, but dont wait for it to complete
 template <typename Func>
-void iocallasync(
+auto iocallasync(
         ioproc &io,
         Func &&f,
         iochannel reply_chan = iochannel())
+    -> typename std::enable_if<
+         !std::is_void<decltype(f())>::value,
+         void
+       >::type
 {
-    std::unique_ptr<pcall> call;
-    if (std::is_void<decltype(f())>::value) {
-        // void op
-        std::function<void ()> vop(f);
-        call.reset(new pcall(vop, reply_chan));
-    } else {
-        // has return type
-        std::function<boost::any ()> op(f);
-        call.reset(new pcall(op, reply_chan));
-    }
+    // has return type
+    std::function<boost::any ()> op(f);
+    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
+    io.ch.send(std::move(call));
+}
+
+//! make an iocall, but dont wait for it to complete
+template <typename Func>
+auto iocallasync(
+        ioproc &io,
+        Func &&f,
+        iochannel reply_chan = iochannel())
+    -> typename std::enable_if<
+         std::is_void<decltype(f())>::value,
+         void
+       >::type
+{
+    // void op
+    std::function<void ()> vop(f);
+    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
     io.ch.send(std::move(call));
 }
 
