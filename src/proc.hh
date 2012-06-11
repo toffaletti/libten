@@ -30,7 +30,7 @@ struct proc {
     //! other threads use this to add tasks to runqueue
     llqueue<task *> dirtyq;
     //! true when asleep and runqueue is empty and no epoll
-    std::atomic<bool> asleep;
+    bool asleep;
     //! true when asleep in epoll_wait
     std::atomic<bool> polling;
     //! true when canceled

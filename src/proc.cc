@@ -62,13 +62,15 @@ void proc::deltaskinproc(task *t) {
 }
 
 void proc::wakeup() {
-    if (asleep) {
-        DVLOG(5) << "notifying " << this;
-        std::unique_lock<std::mutex> lk(mutex);
-        cond.notify_one();
-    } else if (polling.exchange(false)) {
+    if (polling.exchange(false)) {
         DVLOG(5) << "eventing " << this;
         event.write(1);
+    } else {
+        std::unique_lock<std::mutex> lk(mutex);
+        if (asleep) {
+            DVLOG(5) << "notifying " << this;
+            cond.notify_one();
+        }
     }
 }
 
