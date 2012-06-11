@@ -4,14 +4,11 @@
 
 namespace ten {
 
-using std::timed_mutex;
-using std::unique_lock;
-
-void rendez::sleep(unique_lock<qutex> &lk) {
+void rendez::sleep(std::unique_lock<qutex> &lk) {
     task *t = this_proc()->ctask;
 
     {
-        unique_lock<timed_mutex> ll(_m);
+        std::unique_lock<std::timed_mutex> ll(_m);
         //DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
         //    << "BUG: " << t << " already waiting on rendez " << this;
         // TODO: investigate why this happens. im thinking spurious wakeups
@@ -29,7 +26,7 @@ void rendez::sleep(unique_lock<qutex> &lk) {
         t->swap(); 
         lk.lock();
     } catch (...) {
-        unique_lock<timed_mutex> ll(_m);
+        std::unique_lock<std::timed_mutex> ll(_m);
         auto i = std::find(_waiting.begin(), _waiting.end(), t);
         if (i != _waiting.end()) {
             _waiting.erase(i);
@@ -40,7 +37,7 @@ void rendez::sleep(unique_lock<qutex> &lk) {
 }
 
 void rendez::wakeup() {
-    unique_lock<timed_mutex> lk(_m);
+    std::unique_lock<std::timed_mutex> lk(_m);
     if (!_waiting.empty()) {
         task *t = _waiting.front();
         _waiting.pop_front();
@@ -50,7 +47,7 @@ void rendez::wakeup() {
 }
 
 void rendez::wakeupall() {
-    unique_lock<timed_mutex> lk(_m);
+    std::unique_lock<std::timed_mutex> lk(_m);
     while (!_waiting.empty()) {
         task *t = _waiting.front();
         _waiting.pop_front();
@@ -78,7 +75,7 @@ bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
 
 rendez::~rendez() {
     using ::operator<<;
-    unique_lock<timed_mutex> lk(_m);
+    std::unique_lock<std::timed_mutex> lk(_m);
     DCHECK(_waiting.empty()) << "BUG: still waiting: " << _waiting;
 }
 

@@ -3,15 +3,11 @@
 
 namespace ten {
 
-using std::timed_mutex;
-using std::unique_lock;
-using std::try_to_lock;
-
 void qutex::lock() {
     task *t = this_proc()->ctask;
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
-        unique_lock<timed_mutex> lk(_m);
+        std::unique_lock<std::timed_mutex> lk(_m);
         if (_owner == nullptr || _owner == t) {
             _owner = t;
             DVLOG(5) << "LOCK qutex: " << this << " owner: " << _owner;
@@ -25,13 +21,13 @@ void qutex::lock() {
         // loop to handle spurious wakeups from other threads
         for (;;) {
             t->swap();
-            unique_lock<timed_mutex> lk(_m);
+            std::unique_lock<std::timed_mutex> lk(_m);
             if (_owner == this_proc()->ctask) {
                 break;
             }
         }
     } catch (...) {
-        unique_lock<timed_mutex> lk(_m);
+        std::unique_lock<std::timed_mutex> lk(_m);
         internal_unlock(lk);
         throw;
     }
@@ -40,7 +36,7 @@ void qutex::lock() {
 bool qutex::try_lock() {
     task *t = this_proc()->ctask;
     DCHECK(t) << "BUG: qutex::try_lock called outside of task";
-    unique_lock<timed_mutex> lk(_m, try_to_lock);
+    std::unique_lock<std::timed_mutex> lk(_m, std::try_to_lock);
     if (lk.owns_lock()) {
         if (_owner == nullptr) {
             _owner = t;
@@ -51,11 +47,11 @@ bool qutex::try_lock() {
 }
 
 void qutex::unlock() {
-    unique_lock<timed_mutex> lk(_m);
+    std::unique_lock<std::timed_mutex> lk(_m);
     internal_unlock(lk);
 }
 
-inline void qutex::internal_unlock(unique_lock<timed_mutex> &lk) {
+inline void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
     task *t = this_proc()->ctask;
     DCHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
