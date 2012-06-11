@@ -8,7 +8,8 @@ void qutex::lock() {
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::unique_lock<std::timed_mutex> lk(_m);
-        if (_owner == nullptr || _owner == t) {
+        DCHECK(_owner != t) << "no recursive locking";
+        if (_owner == nullptr) {
             _owner = t;
             DVLOG(5) << "LOCK qutex: " << this << " owner: " << _owner;
             return;
