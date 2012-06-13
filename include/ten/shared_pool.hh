@@ -75,21 +75,13 @@ protected:
         if (_q.empty()) {
             // need to create a new resource
             if (_max < 0 || _set.size() < (size_t)_max) {
-                try {
-                    c = _new_resource();
-                    CHECK(c) << "new_resource failed for pool: " << _name;
-                    DVLOG(4) << "inserting to shared_pool(" << _name << "): " << c;
-                    _set.insert(c);
-                } catch (std::exception &e) {
-                    LOG(ERROR) << "exception creating new resource for pool: " <<_name << " " << e.what();
-                    throw;
-                }
+                c = add_new_resource(lk);
             } else {
                 // can't create anymore we're at max, try waiting
-                while (_q.empty()) {
-                    _not_empty.sleep(lk);
-                }
-                CHECK(!_q.empty());
+                _not_empty.sleep(lk, [&] {
+                    return _q.empty();
+                });
+                DCHECK(!_q.empty());
                 c = _q.front();
                 _q.pop_front();
             }
@@ -102,17 +94,6 @@ protected:
         return c;
     }
 
-    bool insert(std::shared_ptr<ResourceT> &c) {
-        // add a resource to the pool. use with care
-        std::unique_lock<qutex> lk(_mut);
-        auto p = _set.insert(c);
-        if (p.second) {
-            _q.push_front(c);
-            _not_empty.wakeup();
-        }
-        return p.second;
-    }
-
     void release(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // don't add resource to queue if it was removed from _set
@@ -122,37 +103,42 @@ protected:
         }
     }
 
-    // return a defective resource to the pool
-    // get a new one back.
-    std::shared_ptr<ResourceT> exchange(std::shared_ptr<ResourceT> &c) {
-        std::unique_lock<qutex> lk(_mut);
-        // remove bad resource
-        if (c) {
-            _set.erase(c);
-            c.reset();
-        }
-
-        return create_or_acquire_nolock(lk);
-    }
-
     void destroy(std::shared_ptr<ResourceT> &c) {
         std::unique_lock<qutex> lk(_mut);
         // remove bad resource
         DVLOG(4) << "shared_pool(" << _name
             << ") destroy in set? " << _set.count(c)
             << " : " << c << " rc: " << c.use_count();
-        _set.erase(c);
-        typename queue_type::iterator i = find(_q.begin(), _q.end(), c);
+        size_t count = _set.erase(c);
+        if (count) {
+            LOG(WARNING) << "destroying shared resource from pool " << _name;
+        }
+        typename queue_type::iterator i = std::find(_q.begin(), _q.end(), c);
         if (i!=_q.end()) { _q.erase(i); }
 
         c.reset();
 
         // replace the destroyed resource
-        std::shared_ptr<ResourceT> cc = _new_resource();
-        _set.insert(cc);
+        std::shared_ptr<ResourceT> cc = add_new_resource(lk);
         _q.push_front(cc);
         cc.reset();
         _not_empty.wakeup();
+    }
+
+    std::shared_ptr<ResourceT> add_new_resource(std::unique_lock<qutex> &lk) {
+        std::shared_ptr<ResourceT> c;
+        lk.unlock(); // unlock while newing resource
+        try {
+            c = _new_resource();
+            CHECK(c) << "new_resource failed for pool: " << _name;
+            DVLOG(4) << "inserting to shared_pool(" << _name << "): " << c;
+        } catch (std::exception &e) {
+            LOG(ERROR) << "exception creating new resource for pool: " <<_name << " " << e.what();
+            throw;
+        }
+        lk.lock(); // re-lock before inserting to set
+        _set.insert(c);
+        return c;
     }
 
 };
@@ -162,13 +148,15 @@ namespace detail {
 // do not use this class directly, instead use your shared_pool<>::scoped_resource
 template <typename T> class scoped_resource {
 public:
-    typedef typename boost::call_traits<shared_pool<T> >::reference poolref;
+    //typedef typename std::add_reference<shared_pool<T>>::type poolref;
+    typedef typename boost::call_traits<shared_pool<T>>::reference poolref;
 protected:
     poolref _pool;
     std::shared_ptr<T> _c;
+    bool _success;
 public:
     explicit scoped_resource(poolref p)
-        : _pool(p) {
+        : _pool(p), _success(false) {
             _c = _pool.acquire();
         }
 
@@ -176,27 +164,16 @@ public:
     //! otherwise we destroy it because a timeout or other exception
     //! could have occured causing the resource state to be in transition
     ~scoped_resource() {
-        if (!_c) return;
-        _pool.destroy(_c);
-    }
-
-    void exchange() {
-        _c = _pool.exchange(_c);
-    }
-
-    void destroy() {
-        _pool.destroy(_c);
-    }
-
-    void acquire() {
-        if (_c) return;
-        _c = _pool.acquire();
+        if (_success) {
+            _pool.release(_c);
+        } else {
+            _pool.destroy(_c);
+        }
     }
 
     void done() {
-        if (!_c) return;
-        _pool.release(_c);
-        _c.reset();
+        DCHECK(!_success);
+        _success = true;
     }
 
     T *operator->() {
