@@ -4,6 +4,8 @@
 #include "ten/semaphore.hh"
 #include "ten/channel.hh"
 
+#include "ten/channel2.hh"
+
 using namespace ten;
 const size_t default_stacksize=245*1024;
 
@@ -171,3 +173,7 @@ BOOST_AUTO_TEST_CASE(channel_close_test) {
     BOOST_CHECK_EQUAL(closed, 3);
 }
 
+
+BOOST_AUTO_TEST_CASE(channel2) {
+    transfer_queue<int> q;
+}

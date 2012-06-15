@@ -44,6 +44,13 @@ std::string taskdump();
 //! write task dump to FILE stream
 void taskdumpf(FILE *of = stderr);
 
+// TODO: fix this, shouldn't be exposing task pointers
+//! current task pointer
+task *taskself();
+//! don't run task again until unparked
+void taskpark(task *);
+void taskunpark(task *);
+
 //! spawn a new thread with a task scheduler
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 //! cancel all non-system tasks and exit procmain

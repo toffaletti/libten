@@ -1,5 +1,5 @@
 #include "ten/task.hh"
-#include "ten/channel.hh"
+#include "ten/channel2.hh"
 #include <iostream>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
@@ -9,14 +9,14 @@ using namespace std;
 using namespace std::chrono;
 const size_t default_stacksize=256*1024;
 
-void one_ring(channel<int> chin, channel<int> chout, int m, int n) {
+void one_ring(exp::channel<int> chin, exp::channel<int> chout, int m, int n) {
     auto start = high_resolution_clock::now();
     cout << "sending " << m << " messages in ring of " << n << " tasks\n";
     chout.send(0);
     for (;;) {
         int i = chin.recv();
+        ++i;
         if (i < m) {
-            ++i;
             chout.send(move(i));
         } else {
             chout.close();
@@ -25,9 +25,10 @@ void one_ring(channel<int> chin, channel<int> chout, int m, int n) {
     }
     auto stop = high_resolution_clock::now();
     cout << (n*m) << " messages in " << duration_cast<milliseconds>(stop - start).count() << "ms\n";
+    procshutdown();
 }
 
-void ring(channel<int> chin, channel<int> chout) {
+void ring(exp::channel<int> chin, exp::channel<int> chout) {
     try {
         for (;;) {
             int n = chin.recv();
@@ -40,8 +41,8 @@ void ring(channel<int> chin, channel<int> chout) {
 
 int main(int argc, char *argv[]) {
     procmain p;
-    channel<int> chin;
-    channel<int> chfirst = chin;
+    exp::channel<int> chin;
+    exp::channel<int> chfirst = chin;
     int n = 10;
     int m = 1000;
     if (argc >= 2) {
@@ -51,7 +52,7 @@ int main(int argc, char *argv[]) {
         m = boost::lexical_cast<int>(argv[2]);
     }
     for (int i=0; i<n; ++i) {
-        channel<int> chout;
+        exp::channel<int> chout;
         taskspawn(bind(ring, chin, chout));
         chin = chout;
     }

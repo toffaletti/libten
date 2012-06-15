@@ -25,6 +25,24 @@ uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     return t->id;
 }
 
+// TODO: these need to be replaced
+// expose a std::shared_ptr perhaps?
+task *taskself () {
+    DCHECK(this_proc());
+    DCHECK(this_proc()->ctask);
+    return this_proc()->ctask;
+}
+
+void taskpark(task *t) {
+    DCHECK(t);
+    t->swap();
+}
+
+void taskunpark(task *t) {
+    DCHECK(t);
+    t->ready();
+}
+
 uint64_t taskid() {
     DCHECK(this_proc());
     DCHECK(this_proc()->ctask);
