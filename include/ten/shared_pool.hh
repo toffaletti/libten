@@ -66,30 +66,28 @@ protected:
 
     std::shared_ptr<ResourceT> acquire() {
         std::unique_lock<qutex> lk(_mut);
-        return create_or_acquire_nolock(lk);
+        return create_or_acquire_with_lock(lk);
     }
 
     // internal, does not lock mutex
-    std::shared_ptr<ResourceT> create_or_acquire_nolock(std::unique_lock<qutex> &lk) {
-        std::shared_ptr<ResourceT> c;
-        if (_q.empty()) {
-            // need to create a new resource
+    std::shared_ptr<ResourceT> create_or_acquire_with_lock(std::unique_lock<qutex> &lk) {
+        while (_q.empty()) {
             if (_max < 0 || _set.size() < (size_t)_max) {
-                c = add_new_resource(lk);
+                // need to create a new resource
+                return add_new_resource(lk);
+                break;
             } else {
                 // can't create anymore we're at max, try waiting
                 _not_empty.sleep(lk, [&] {
-                    return _q.empty();
+                    return !_q.empty();
                 });
-                DCHECK(!_q.empty());
-                c = _q.front();
-                _q.pop_front();
             }
-        } else {
-            // pop resource from front of queue
-            c = _q.front();
-            _q.pop_front();
         }
+
+        CHECK(!_q.empty());
+        // pop resource from front of queue
+        std::shared_ptr<ResourceT> c = _q.front();
+        _q.pop_front();
         CHECK(c) << "acquire shared resource failed in pool: " << _name;
         return c;
     }
@@ -134,6 +132,7 @@ protected:
             DVLOG(4) << "inserting to shared_pool(" << _name << "): " << c;
         } catch (std::exception &e) {
             LOG(ERROR) << "exception creating new resource for pool: " <<_name << " " << e.what();
+            lk.lock();
             throw;
         }
         lk.lock(); // re-lock before inserting to set
