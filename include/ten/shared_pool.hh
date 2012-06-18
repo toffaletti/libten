@@ -78,9 +78,10 @@ protected:
                 break;
             } else {
                 // can't create anymore we're at max, try waiting
-                _not_empty.sleep(lk, [&] {
-                    return !_q.empty();
-                });
+                // we don't use a predicate here because
+                // we might be woken up from destroy()
+                // in which case we might not be at max anymore
+                _not_empty.sleep(lk);
             }
         }
 
@@ -116,10 +117,7 @@ protected:
 
         c.reset();
 
-        // replace the destroyed resource
-        std::shared_ptr<ResourceT> cc = add_new_resource(lk);
-        _q.push_front(cc);
-        cc.reset();
+        // give waiting threads a chance to allocate a new resource
         _not_empty.wakeup();
     }
 
