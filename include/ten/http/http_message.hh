@@ -12,16 +12,10 @@
 
 namespace ten {
 
-using std::pair;
-using std::vector;
-using std::string;
-using std::move;
-using boost::lexical_cast;
-
 // TODO: define exceptions
 
-typedef pair<string, string> header_pair;
-typedef vector<header_pair> header_list;
+typedef std::pair<std::string, std::string> header_pair;
+typedef std::vector<header_pair> header_list;
 
 const size_t HEADER_RESERVE = 5;
 
@@ -32,60 +26,60 @@ struct Headers {
     Headers() {}
 
     template <typename ValueT, typename ...Args>
-    Headers(string header_name, ValueT header_value, Args ...args) {
+    Headers(std::string header_name, ValueT header_value, Args ...args) {
         headers.reserve(std::max(HEADER_RESERVE, sizeof...(args)));
-        init(move(header_name), move(header_value), move(args)...);
+        init(std::move(header_name), std::move(header_value), std::move(args)...);
     }
 
     // init can go away with delegating constructor support
     void init() {}
     template <typename ValueT, typename ...Args>
-    void init(string header_name, ValueT header_value, Args ...args) {
-        append<ValueT>(move(header_name), move(header_value));
-        init(move(args)...);
+    void init(std::string header_name, ValueT header_value, Args ...args) {
+        append<ValueT>(std::move(header_name), std::move(header_value));
+        init(std::move(args)...);
     }
 
-    void set(const string &field, const string &value);
+    void set(const std::string &field, const std::string &value);
 
     template <typename ValueT>
-        void set(const string &field, const ValueT &value) {
-            set(field, lexical_cast<string>(value));
+        void set(const std::string &field, const ValueT &value) {
+            set(field, boost::lexical_cast<std::string>(value));
         }
 
-    void append(const string &field, const string &value);
+    void append(const std::string &field, const std::string &value);
 
     template <typename ValueT>
-        void append(const string &field, const ValueT &value) {
-            append(field, lexical_cast<string>(value));
+        void append(const std::string &field, const ValueT &value) {
+            append(field, boost::lexical_cast<std::string>(value));
         }
 
-    header_list::iterator find(const string &field);
+    header_list::iterator find(const std::string &field);
 
-    bool remove(const string &field);
+    bool remove(const std::string &field);
 
-    string get(const string &field) const;
+    std::string get(const std::string &field) const;
 
     template <typename ValueT>
-        ValueT get(const string &field) const {
-            string val = get(field);
+        ValueT get(const std::string &field) const {
+            std::string val = get(field);
             if (val.empty()) {
                 return ValueT();
             }
-            return lexical_cast<ValueT>(val);
+            return boost::lexical_cast<ValueT>(val);
         }
 };
 
 //! base class for http request and response
 struct http_base : Headers {
     bool complete;
-    string body;
+    std::string body;
     size_t body_length;
 
     explicit http_base(Headers headers_ = Headers()) :
-        Headers(move(headers_)), complete(false), body_length(0) {}
+        Headers(std::move(headers_)), complete(false), body_length(0) {}
 
-    void set_body(const string &body_,
-            const string &content_type="")
+    void set_body(const std::string &body_,
+            const std::string &content_type="")
     {
         body = body_;
         body_length = body.size();
@@ -99,17 +93,17 @@ struct http_base : Headers {
 
 //! http request
 struct http_request : http_base {
-    string method;
-    string uri;
-    string http_version;
+    std::string method;
+    std::string uri;
+    std::string http_version;
 
     http_request() : http_base() {}
-    http_request(string method_,
-        string uri_,
+    http_request(std::string method_,
+        std::string uri_,
         Headers headers_ = Headers(),
-        string http_version_ = "HTTP/1.1")
-        : http_base(move(headers_)),
-        method(move(method_)), uri(move(uri_)), http_version(move(http_version_)) {}
+        std::string http_version_ = "HTTP/1.1")
+        : http_base(std::move(headers_)),
+        method(std::move(method_)), uri(std::move(uri_)), http_version(std::move(http_version_)) {}
 
     void clear() {
         headers.clear();
@@ -124,12 +118,12 @@ struct http_request : http_base {
     void parser_init(struct http_parser *p);
     void parse(struct http_parser *p, const char *data, size_t &len);
 
-    string data() const;
+    std::string data() const;
 
-    string path() const {
-        string p = uri;
+    std::string path() const {
+        std::string p = uri;
         size_t pos = p.find_first_of("?#");
-        if (pos != string::npos) {
+        if (pos != std::string::npos) {
             p = p.substr(0, pos);
         }
         return p;
@@ -138,7 +132,7 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
-    string http_version;
+    std::string http_version;
     unsigned long status_code;
     http_request *req;
 
@@ -146,10 +140,10 @@ struct http_response : http_base {
 
     http_response(unsigned long status_code_ = 200,
         Headers headers_ = Headers(),
-        string http_version_ = "HTTP/1.1")
-        : http_base(move(headers_)),
-        http_version(move(http_version_)),
-        status_code(move(status_code_)),
+        std::string http_version_ = "HTTP/1.1")
+        : http_base(std::move(headers_)),
+        http_version(std::move(http_version_)),
+        status_code(std::move(status_code_)),
         req(NULL)
     {
     }
@@ -162,12 +156,12 @@ struct http_response : http_base {
         body_length = 0;
     }
 
-    const string &reason() const;
+    const std::string &reason() const;
 
     void parser_init(struct http_parser *p);
     void parse(struct http_parser *p, const char *data, size_t &len);
 
-    string data() const;
+    std::string data() const;
 };
 
 } // end namespace ten
