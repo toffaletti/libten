@@ -72,7 +72,7 @@ private:
             if (local_tid == 0) {
                 local_tid = syscall(SYS_gettid);
             }
-            // try to detect if we're dealing with
+            // detect if we're dealing with
             // more than one thread
             if (_tid == 0) {
                 _tid = local_tid;
@@ -171,7 +171,18 @@ public:
         // TODO: clear()
     }
 
-    T *transfer(T *e_) {
+    bool empty() {
+        return _head == _tail || qnode_ptr(_head)->_next == _tail;
+    }
+
+    void clear() {
+        while (!empty()) {
+            std::unique_ptr<T> e(transfer(nullptr, true));
+            DVLOG(4) << "bleh e: " << e.get();
+        }
+    }
+
+    T *transfer(T *e_, bool nowait=false) {
         item_ptr e(e_);
         qnode_ptr s(nullptr);
         bool is_data = (e != nullptr);
@@ -191,6 +202,9 @@ public:
                     advance_tail(t, tn);
                     continue;
                 }
+
+                if (nowait)
+                    return e.ptr();
 
                 if (s == nullptr)
                     s = qnode_ptr(new qnode(e, is_data));
@@ -243,17 +257,9 @@ template <typename T> class channel {
 private:
     struct impl {
         transfer_queue<T> queue;
-        std::atomic<bool> closed;
     };
 private:
     std::shared_ptr<impl> _m;
-    bool _autoclose;
-
-    void check_closed() {
-        // i dont like throwing an exception for this
-        // but i don't want to complicate the interface for send/recv
-        if (_m->closed) throw channel_closed_error();
-    }
 
 public:
     explicit channel(bool autoclose = false)
@@ -261,22 +267,13 @@ public:
     {
     }
 
-    channel(const channel &other) : _m(other._m), _autoclose(false) {}
+    channel(const channel &other) : _m(other._m) {}
     channel &operator = (const channel &other) {
         _m = other._m;
-        _autoclose = false;
         return *this;
     }
 
     ~channel() {
-        if (_autoclose) {
-            close();
-        }
-    }
-
-    void close() {
-        _m->closed = true;
-        // TODO: wakeup all waiters
     }
 
     //! send data

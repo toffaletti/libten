@@ -25,7 +25,7 @@ void one_ring(exp::channel<int> chin, exp::channel<int> chout, int m, int n) {
     }
     auto stop = high_resolution_clock::now();
     cout << (n*m) << " messages in " << duration_cast<milliseconds>(stop - start).count() << "ms\n";
-    procshutdown();
+    //procshutdown();
 }
 
 void ring(exp::channel<int> chin, exp::channel<int> chout) {
