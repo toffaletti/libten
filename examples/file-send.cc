@@ -24,7 +24,7 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
     // circular buffer for reading/writing blocks
     // buffer is reference counted so it will be freed once
     // the channel is freed and all references to slices are removed
-    buffer buf(buffer_cap*4096);
+    buffer buf{buffer_cap*4096};
     int bufp = 0;
     for (;;) {
         // create a 4096 byte slice of the buffer
@@ -44,8 +44,8 @@ void file_reader(channel<buffer::slice> c, file_fd &f) {
 }
 
 void file_sender(channel<buffer::slice> c) {
-    address addr("127.0.0.1", 5500);
-    netsock s(AF_INET, SOCK_STREAM);
+    address addr{"127.0.0.1", 5500};
+    netsock s{AF_INET, SOCK_STREAM};
     s.connect(addr, 100);
     size_t bytes_sent = 0;
     for (;;) {
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
     if (argc < 2) return 1;
     procmain p;
     file_fd f(argv[1], 0, 0);
-    channel<buffer::slice> c(channel_cap);
+    channel<buffer::slice> c{channel_cap};
     taskspawn(std::bind(file_sender, c));
     // start a new OS-thread for file_reader
     procspawn(std::bind(file_reader, c, std::ref(f)));

@@ -18,7 +18,7 @@ typedef std::shared_ptr<client> shared_client;
 typedef std::list<shared_client> client_list;
 
 static client_list clients;
-static channel<std::string> bchan(10);
+static channel<std::string> bchan{10};
 
 void broadcast(const shared_client &from, const std::string &msg) {
     std::stringstream ss;
@@ -28,7 +28,7 @@ void broadcast(const shared_client &from, const std::string &msg) {
 }
 
 void chat_task(int sock) {
-    shared_client c(new client(sock));
+    shared_client c{new client(sock)};
     clients.push_back(c);
     char buf[4096];
     c->s.send("enter nickname: ", 16);
@@ -55,9 +55,9 @@ void broadcast_task() {
 }
 
 void listen_task() {
-    netsock s(AF_INET, SOCK_STREAM);
+    netsock s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     std::cout << "listening on: " << addr << "\n";

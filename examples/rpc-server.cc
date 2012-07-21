@@ -6,7 +6,7 @@ using namespace msgpack::rpc;
 const size_t default_stacksize=256*1024;
 
 static void client_task() {
-    rpc_client c("localhost", 5500);
+    rpc_client c{"localhost", 5500};
     c.notify("notify_me");
     c.notify("notify_world", std::string("hi"));
     LOG(INFO) << "40+2=" << c.call<int>("add2", 40, 2);
@@ -20,7 +20,7 @@ static void client_task() {
 }
 
 static int fail() {
-    throw std::runtime_error("fail");
+    throw std::runtime_error{"fail"};
 }
 
 static int add2(int a, int b) {

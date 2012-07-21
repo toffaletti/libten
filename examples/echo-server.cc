@@ -7,7 +7,7 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 void echo_task(int sock) {
-    netsock s(sock);
+    netsock s{sock};
     char buf[4096];
     for (;;) {
         ssize_t nr = s.recv(buf, sizeof(buf));
@@ -17,9 +17,9 @@ void echo_task(int sock) {
 }
 
 void listen_task() {
-    netsock s(AF_INET, SOCK_STREAM);
+    netsock s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     std::cout << "listening on: " << addr << "\n";

@@ -10,14 +10,14 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
-    sslsock s(AF_INET, SOCK_STREAM);
+    sslsock s{AF_INET, SOCK_STREAM};
     s.initssl(SSLv23_client_method(), true);
     u.normalize();
     if (u.scheme != "https") return;
     if (u.port == 0) u.port = 443;
     s.dial(u.host.c_str(), u.port);
 
-    http_request r("GET", u.compose(true));
+    http_request r{"GET", u.compose(true)};
     // HTTP/1.1 requires host header
     r.append("Host", u.host); 
 
@@ -26,7 +26,7 @@ static void do_get(uri u) {
     std::cout << data;
     ssize_t nw = s.send(data.c_str(), data.size());
 
-    buffer buf(4*1024);
+    buffer buf{4*1024};
 
     http_parser parser;
     http_response resp;
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     SSL_load_error_strings();
     SSL_library_init();
 
-    uri u(argv[1]);
+    uri u{argv[1]};
     taskspawn(std::bind(do_get, u));
     return p.main(argc, argv);
 }

@@ -27,7 +27,7 @@ private:
     std::unordered_map<std::string, std::string> cache;
 
     void on_connection(netsock &s) {
-        buffer buf(4*1024);
+        buffer buf{4*1024};
         std::stringstream ss;
         std::string line;
         ssize_t nw;
@@ -41,7 +41,7 @@ private:
             char *p = std::find(buf.front(), buf.back(), '\r');
             if (p == buf.back()) continue;
             std::stringstream os;
-            std::string line(buf.front(), p - buf.front());
+            std::string line{buf.front(), p - buf.front()};
             buf.remove(line.size()+2);
             std::vector<std::string> parts;
             boost::split(parts, line, boost::is_any_of(" "));
@@ -63,7 +63,7 @@ private:
                     if (nr <= 0) goto done;
                     buf.commit(nr);
                 }
-                std::string value(buf.front(), buf.front()+value_length);
+                std::string value{buf.front(), buf.front()+value_length};
                 buf.remove(value_length+2);
                 cache[key] = value;
                 nw = s.send("STORED\r\n", 8);
@@ -89,12 +89,12 @@ static void startup(application &app) {
     std::string addr = conf.listen_addr;
     uint16_t port = 11211;
     parse_host_port(addr, port);
-    std::shared_ptr<state> st(std::make_shared<state>(app));
+    std::shared_ptr<state> st{std::make_shared<state>(app)};
     st->server.serve(addr, port);
 }
 
 int main(int argc, char *argv[]) {
-    application app("0.0.1", conf);
+    application app{"0.0.1", conf};
     namespace po = boost::program_options;
     app.opts.configuration.add_options()
         ("listen,L", po::value<std::string>(&conf.listen_addr)->default_value("127.0.0.1:11211"),

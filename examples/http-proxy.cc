@@ -28,15 +28,15 @@ void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
 }
 
 void send_503_reply(netsock &s) {
-    http_response resp(503);
+    http_response resp{503};
     std::string data = resp.data();
     ssize_t nw = s.send(data.data(), data.size());
     (void)nw; // ignore
 }
 
 void proxy_task(int sock) {
-    netsock s(sock);
-    buffer buf(4*1024);
+    netsock s{sock};
+    buffer buf{4*1024};
     http_parser parser;
     http_request req;
     req.parser_init(&parser);
@@ -64,11 +64,11 @@ void proxy_task(int sock) {
     }
 
     try {
-        uri u(req.uri);
+        uri u{req.uri};
         u.normalize();
         LOG(INFO) << req.method << " " << u.compose();
 
-        netsock cs(AF_INET, SOCK_STREAM);
+        netsock cs{AF_INET, SOCK_STREAM};
 
         if (req.method == "CONNECT") {
             ssize_t pos = u.path.find(':');
@@ -78,7 +78,7 @@ void proxy_task(int sock) {
                 goto request_connect_error;
             }
 
-            http_response resp(200);
+            http_response resp{200};
             std::string data = resp.data();
             ssize_t nw = s.send(data.data(), data.size(), SEC2MS(5));
 
@@ -94,7 +94,7 @@ void proxy_task(int sock) {
                 goto request_connect_error;
             }
 
-            http_request r(req.method, u.compose_path());
+            http_request r{req.method, u.compose_path()};
             // HTTP/1.1 requires host header
             r.append("Host", u.host);
             r.headers = req.headers;
@@ -106,7 +106,7 @@ void proxy_task(int sock) {
                 if (nw <= 0) { goto request_send_error; }
             }
 
-            http_response resp(&r);
+            http_response resp{&r};
             resp.parser_init(&parser);
             bool headers_sent = false;
             for (;;) {
@@ -171,9 +171,9 @@ response_send_error:
 }
 
 void listen_task() {
-    netsock s(AF_INET, SOCK_STREAM);
+    netsock s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("0.0.0.0", 3080);
+    address addr{"0.0.0.0", 3080};
     s.bind(addr);
     s.getsockname(addr);
     LOG(INFO) << "listening on: " << addr;

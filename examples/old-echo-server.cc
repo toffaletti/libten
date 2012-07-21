@@ -9,7 +9,7 @@ const size_t default_stacksize=256*1024;
 
 void echo_task(socket_fd &_s) {
     address client_addr;
-    socket_fd s(_s.accept(client_addr, SOCK_NONBLOCK));
+    socket_fd s{_s.accept(client_addr, SOCK_NONBLOCK)};
     char buf[4096];
     for (;;) {
         fdwait(s.fd, 'r');
@@ -20,9 +20,9 @@ void echo_task(socket_fd &_s) {
 }
 
 void listen_task() {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     std::cout << "listening on: " << addr << "\n";

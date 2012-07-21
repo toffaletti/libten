@@ -39,17 +39,17 @@ static void log_request(http_server::request &h) {
 static void http_quit(std::shared_ptr<state> st, http_server::request &h) {
     LOG(INFO) << "quit requested over http";
     st->app.quit();
-    h.resp = http_response(200,
-        Headers(
+    h.resp = http_response{200,
+        Headers{
         "Connection", "close",
         "Content-Length", 0
-        )
-    );
+        }
+    };
     h.send_response();
 }
 
 static void http_root(std::shared_ptr<state> st, http_server::request &h) {
-    h.resp = http_response(200);
+    h.resp = http_response{200};
     h.resp.set_body("Hello World!\n");
     h.send_response();
 }
@@ -69,12 +69,12 @@ static void start_http_server(std::shared_ptr<state> &st) {
 static void startup(application &app) {
     taskname("startup");
 
-    std::shared_ptr<state> st(std::make_shared<state>(app));
+    std::shared_ptr<state> st{std::make_shared<state>(app)};
     taskspawn(std::bind(start_http_server, st));
 }
 
 int main(int argc, char *argv[]) {
-    application app("0.0.1", conf);
+    application app{"0.0.1", conf};
     namespace po = boost::program_options;
     app.opts.configuration.add_options()
         ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
