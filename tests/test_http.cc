@@ -6,12 +6,13 @@
 using namespace ten;
 
 BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
-    http_request req("GET", "/foo",
-            Headers("This", 4, "That", "that"));
+    http_request req{"GET", "/foo",
+            Headers{"This", 4, "That", "that"}
+    };
     BOOST_CHECK_EQUAL(4, req.get<int>("this"));
     BOOST_CHECK_EQUAL("that", req.get("that"));
 
-    http_response resp(200, Headers("Thing", "stuff"));
+    http_response resp{200, Headers{"Thing", "stuff"}};
     BOOST_CHECK_EQUAL("stuff", resp.get("thing"));
 }
 
@@ -29,7 +30,7 @@ BOOST_AUTO_TEST_CASE(http_request_parser_init_test) {
 }
 
 BOOST_AUTO_TEST_CASE(http_request_make1) {
-    http_request req("GET", "/test/this?thing=1&stuff=2&fun&good");
+    http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
     req.append("User-Agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
     req.append("Host", "localhost:8080");
@@ -46,7 +47,7 @@ BOOST_AUTO_TEST_CASE(http_request_make1) {
 }
 
 BOOST_AUTO_TEST_CASE(http_request_make_parse) {
-    http_request req("GET", "/test/this?thing=1&stuff=2&fun&good");
+    http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
     req.append("user-agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
     req.append("host", "localhost:8080");
@@ -358,7 +359,7 @@ BOOST_AUTO_TEST_CASE(http_request_header_manipulation) {
 }
 
 BOOST_AUTO_TEST_CASE(http_request_host_with_underscores) {
-    http_request req("HEAD", "http://my_host_name/");
+    http_request req{"HEAD", "http://my_host_name/"};
     std::string data = req.data();
 
     http_parser parser;
@@ -379,7 +380,7 @@ BOOST_AUTO_TEST_CASE(http_response_constructor) {
 }
 
 BOOST_AUTO_TEST_CASE(http_response_data) {
-    http_response resp(200);
+    http_response resp{200};
     resp.append("Host", "localhost");
     resp.append("Content-Length", "0");
 
@@ -398,7 +399,7 @@ BOOST_AUTO_TEST_CASE(http_response_data) {
 }
 
 BOOST_AUTO_TEST_CASE(http_response_body) {
-    http_response resp(200);
+    http_response resp{200};
 
     resp.append("Host", "localhost");
 

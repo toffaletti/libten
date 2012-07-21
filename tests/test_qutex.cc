@@ -2,6 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <thread>
 #include "ten/semaphore.hh"
+#include "ten/synchronized.hh"
 #include "ten/task/rendez.hh"
 
 using namespace ten;
@@ -17,7 +18,7 @@ struct state {
 
 void qlocker(std::shared_ptr<state> st) {
     for (int i=0; i<1000; ++i) {
-        std::unique_lock<qutex> lk(st->q);
+        std::unique_lock<qutex> lk{st->q};
         ++(st->x);
     }
     st->r.wakeup();
@@ -32,7 +33,7 @@ void qutex_task_spawn() {
         procspawn(std::bind(qlocker, st));
         taskyield();
     }
-    std::unique_lock<qutex> lk(st->q);
+    std::unique_lock<qutex> lk{st->q};
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
     BOOST_CHECK_EQUAL(st->x, 20*1000);
 }
@@ -43,24 +44,11 @@ BOOST_AUTO_TEST_CASE(qutex_test) {
     p.main();
 }
 
-template <typename T, typename Mutex = std::mutex> class synchronized {
-protected:
-    Mutex _m;
-    T _v;
-public:
-    typedef Mutex mutex_type;
-    synchronized() {}
-
-    template <typename Func, typename Sync> friend void synchronize(Sync &sync, Func &&f) {
-        std::lock_guard<typename Sync::mutex_type> lock(sync._m);
-        f(sync._v);
-    }
-};
-
 BOOST_AUTO_TEST_CASE(sync_test) {
-    synchronized<std::string> s;
+    synchronized<std::string> s("empty");
 
     synchronize(s, [](std::string &str) {
+            BOOST_CHECK_EQUAL("empty", str);
             str = "test";
     });
 
