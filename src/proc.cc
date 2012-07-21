@@ -28,7 +28,7 @@ proc *this_proc() {
 
 void proc::startproc(proc *p_, task *t) {
     set_this_proc(p_);
-    std::unique_ptr<proc> p(p_);
+    std::unique_ptr<proc> p{p_};
     p->addtaskinproc(t);
     t->ready();
     DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
@@ -37,12 +37,12 @@ void proc::startproc(proc *p_, task *t) {
 }
 
 void proc::add(proc *p) {
-    std::unique_lock<std::mutex> lk(procsmutex);
+    std::unique_lock<std::mutex> lk{procsmutex};
     procs.push_back(p);
 }
 
 void proc::del(proc *p) {
-    std::unique_lock<std::mutex> lk(procsmutex);
+    std::unique_lock<std::mutex> lk{procsmutex};
     auto i = std::find(procs.begin(), procs.end(), p);
     procs.erase(i);
 }
@@ -66,7 +66,7 @@ void proc::wakeup() {
         DVLOG(5) << "eventing " << this;
         event.write(1);
     } else {
-        std::unique_lock<std::mutex> lk(mutex);
+        std::unique_lock<std::mutex> lk{mutex};
         if (asleep) {
             DVLOG(5) << "notifying " << this;
             cond.notify_one();
@@ -95,7 +95,7 @@ void proc::schedule() {
                 }
             }
             if (runqueue.empty()) {
-                std::unique_lock<std::mutex> lk(mutex);
+                std::unique_lock<std::mutex> lk{mutex};
                 while (runqueue.empty() && !canceled && dirtyq.empty()) {
                     asleep = true;
                     cond.wait(lk);
@@ -147,7 +147,7 @@ proc::proc(task *t)
 {
     now = steady_clock::now();
     add(this);
-    std::unique_lock<std::mutex> lk(mutex);
+    std::unique_lock<std::mutex> lk{mutex};
     if (t) {
         thread = new std::thread(proc::startproc, this, t);
         thread->detach();
@@ -159,10 +159,10 @@ proc::proc(task *t)
 }
 
 proc::~proc() {
-    std::unique_lock<std::mutex> lk(mutex);
+    std::unique_lock<std::mutex> lk{mutex};
     if (thread == nullptr) {
         {
-            std::unique_lock<std::mutex> plk(procsmutex);
+            std::unique_lock<std::mutex> plk{procsmutex};
             for (auto i=procs.begin(); i!= procs.end(); ++i) {
                 if (*i == this) continue;
                 (*i)->cancel();
@@ -171,7 +171,7 @@ proc::~proc() {
         for (;;) {
             // TODO: remove this busy loop in favor of sleeping the proc
             {
-                std::unique_lock<std::mutex> plk(procsmutex);
+                std::unique_lock<std::mutex> plk{procsmutex};
                 size_t np = procs.size();
                 if (np == 1)
                     break;
@@ -273,7 +273,7 @@ procmain::procmain() {
 }
 
 int procmain::main(int argc, char *argv[]) {
-    std::unique_ptr<proc> p(this_proc());
+    std::unique_ptr<proc> p{this_proc()};
     p->schedule();
     return EXIT_SUCCESS;
 }

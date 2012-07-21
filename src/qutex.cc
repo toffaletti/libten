@@ -7,7 +7,7 @@ void qutex::lock() {
     task *t = this_proc()->ctask;
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
-        std::unique_lock<std::timed_mutex> lk(_m);
+        std::unique_lock<std::timed_mutex> lk{_m};
         DCHECK(_owner != t) << "no recursive locking";
         if (_owner == nullptr) {
             _owner = t;
@@ -22,13 +22,13 @@ void qutex::lock() {
         // loop to handle spurious wakeups from other threads
         for (;;) {
             t->swap();
-            std::unique_lock<std::timed_mutex> lk(_m);
+            std::unique_lock<std::timed_mutex> lk{_m};
             if (_owner == this_proc()->ctask) {
                 break;
             }
         }
     } catch (...) {
-        std::unique_lock<std::timed_mutex> lk(_m);
+        std::unique_lock<std::timed_mutex> lk{_m};
         internal_unlock(lk);
         throw;
     }
@@ -37,7 +37,7 @@ void qutex::lock() {
 bool qutex::try_lock() {
     task *t = this_proc()->ctask;
     DCHECK(t) << "BUG: qutex::try_lock called outside of task";
-    std::unique_lock<std::timed_mutex> lk(_m, std::try_to_lock);
+    std::unique_lock<std::timed_mutex> lk{_m, std::try_to_lock};
     if (lk.owns_lock()) {
         if (_owner == nullptr) {
             _owner = t;
@@ -48,7 +48,7 @@ bool qutex::try_lock() {
 }
 
 void qutex::unlock() {
-    std::unique_lock<std::timed_mutex> lk(_m);
+    std::unique_lock<std::timed_mutex> lk{_m};
     internal_unlock(lk);
 }
 

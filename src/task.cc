@@ -166,7 +166,7 @@ void task::clear(bool newid) {
 }
 
 void task::remove_timeout(timeout_t *to) {
-    auto i = find(timeouts.begin(), timeouts.end(), to);
+    auto i = std::find(timeouts.begin(), timeouts.end(), to);
     if (i != timeouts.end()) {
         delete *i;
         timeouts.erase(i);
@@ -190,7 +190,7 @@ void task::swap() {
     while (!timeouts.empty()) {
         timeout_t *to = timeouts.front();
         if (to->when <= procnow()) {
-            std::unique_ptr<timeout_t> tmp(to); // ensure to is freed
+            std::unique_ptr<timeout_t> tmp{to}; // ensure to is freed
             DVLOG(5) << to << " reached for " << this << " removing.";
             timeouts.pop_front();
             if (timeouts.empty()) {
