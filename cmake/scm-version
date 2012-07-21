@@ -1,0 +1,16 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+if ($_ = `git branch --no-color 2>/dev/null`) {
+    my ($branch) = m{ ^ \* \s* (\w\S+) }xm;
+    my ($hash, $date, $time, $tz) =
+        split /\s+/, `git log -n1 --pretty=format:'%H %ci'`;
+
+    my $rev = substr($hash, 0, 8);
+    $rev .= ".$date";
+    $branch //= 'unknown';
+    print "$branch.$rev\n";
+} else {
+    die "No source control\n";
+}
