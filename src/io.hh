@@ -302,7 +302,7 @@ struct io_scheduler {
                         // our wake up eventfd was written to
                         // clear events by reading value
                         p->event.read();
-                    } else if (i->data,fd == tfd.fd) {
+                    } else if (i->data.fd == tfd.fd) {
                         // timerfd fired, sleeping tasks woken below
                     } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
                         // TODO: otherwise we might want to remove fd from epoll

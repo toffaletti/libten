@@ -24,8 +24,8 @@ if (NOT GCC_FLAGS)
     set(GCC_FLAGS "-pthread -march=core2")
     set(GCC_FLAGS "${GCC_FLAGS} -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter")
     set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings")
-    set(GXX_FLAGS "-std=gnu++0x ${GCC_FLAGS}")
-    set(GCC_FLAGS "${GCC_FLAGS} -std=gnu99 -Wstrict-prototypes -Wmissing-prototypes")
+    set(GXX_FLAGS "-std=c++11 ${GCC_FLAGS}")
+    set(GCC_FLAGS "${GCC_FLAGS} -std=c11 -Wstrict-prototypes -Wmissing-prototypes")
 
     # profile guided optimization
     if (WITH_PGO STREQUAL "generate")
