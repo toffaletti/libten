@@ -23,7 +23,8 @@ if (NOT GCC_FLAGS)
     # general flags for any compilation with gcc/g++
     set(GCC_FLAGS "-pthread -march=core2")
     set(GCC_FLAGS "${GCC_FLAGS} -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter")
-    set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings -Wshadow")
+    set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings")
+    #set(GCC_FLAGS "${GCC_FLAGS} -Wshadow")
     set(GXX_FLAGS "-std=c++11 ${GCC_FLAGS}")
     set(GCC_FLAGS "${GCC_FLAGS} -std=c11 -Wstrict-prototypes -Wmissing-prototypes")
 
