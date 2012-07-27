@@ -48,7 +48,7 @@ public:
     errno_error & operator = (const errno_error &ee) { copy(ee); return *this; }
 
     //! \return string result from strerror_r
-    const char *what() const throw() { return _what; }
+    const char *what() const noexcept override { return _what; }
 
 private:
     void copy(const errno_error &ee) {
@@ -79,7 +79,7 @@ public:
     }
 
     //! \return a string describing the error
-    const char *what() const throw() { return _buf; }
+    const char *what() const noexcept override { return _buf; }
 };
 
 //! macro to throw errno_error if exp returns -1
