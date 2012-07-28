@@ -41,7 +41,7 @@ private:
             char *p = std::find(buf.front(), buf.back(), '\r');
             if (p == buf.back()) continue;
             std::stringstream os;
-            std::string line{buf.front(), p - buf.front()};
+            std::string line(buf.front(), p - buf.front());
             buf.remove(line.size()+2);
             std::vector<std::string> parts;
             boost::split(parts, line, boost::is_any_of(" "));
