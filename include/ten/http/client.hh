@@ -92,6 +92,11 @@ public:
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
+            if ((resp.http_version == "HTTP/1.0" && resp.get("Connection") != "Keep-Alive") ||
+                    resp.get("Connection") == "close")
+            {
+                _s.reset();
+            }
             return resp;
         } catch (errorx &e) {
             _s.reset();
