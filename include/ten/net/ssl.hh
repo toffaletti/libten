@@ -13,7 +13,7 @@ struct sslerror : public backtrace_exception {
     long err;
 
     sslerror();
-    const char *what() const throw() { return errstr; }
+    const char *what() const noexcept override { return errstr; }
 };
 
 BIO_METHOD *BIO_s_netfd(void);

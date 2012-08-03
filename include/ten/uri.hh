@@ -26,9 +26,9 @@ public:
         _msg = ss.str();
     }
 
-    virtual ~uri_error() throw () {}
+    virtual ~uri_error() noexcept override {}
 
-    const char *what() const throw() {
+    const char *what() const noexcept override {
         return _msg.c_str();
     }
 private:
