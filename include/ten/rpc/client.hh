@@ -1,6 +1,7 @@
 #ifndef LIBTEN_RPC_CLIENT_HH
 #define LIBTEN_RPC_CLIENT_HH
 
+#include "ten/net.hh"
 #include "ten/shared_pool.hh"
 #include "ten/rpc/protocol.hh"
 #include <boost/lexical_cast.hpp>
