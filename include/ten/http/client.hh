@@ -4,6 +4,8 @@
 #include "ten/http/http_message.hh"
 #include "ten/shared_pool.hh"
 #include "ten/buffer.hh"
+#include "ten/net.hh"
+#include "ten/uri.hh"
 
 namespace ten {
 
