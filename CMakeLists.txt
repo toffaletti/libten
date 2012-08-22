@@ -53,20 +53,24 @@ if (BOOST_HOME AND IS_DIRECTORY ${BOOST_HOME}/boost)
         ${BOOST_HOME}/libs/program_options/src/winmain.cpp
         ${BOOST_HOME}/libs/program_options/src/split.cpp
         )
+
+    if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
+        set(BOOST_CONTEXT_ASM ${BOOST_HOME}/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
+    else()
+        set(BOOST_CONTEXT_ASM ${BOOST_HOME}/libs/context/src/asm/fcontext_i386_sysv_elf_gas.S)
+    endif()
+    SET_SOURCE_FILES_PROPERTIES(${BOOST_CONTEXT_ASM} PROPERTIES LANGUAGE C)
+    add_library(boost_context
+        ${BOOST_HOME}/libs/context/src/fcontext.cpp
+        ${BOOST_HOME}/libs/context/src/stack_utils_posix.cpp
+        ${BOOST_HOME}/libs/context/src/stack_allocator_posix.cpp
+        ${BOOST_CONTEXT_ASM}
+        )
 else ()
     #message(FATAL_ERROR "Must set BOOST_HOME to a valid boost source dir")
 endif()
 
 add_subdirectory(glog)
-#include_directories(glog)
-
-include_directories(boost.context)
-if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
-    set(ASM boost.context/libs/context/src/asm/fcontext_x86_64_sysv_elf_gas.S)
-else()
-    set(ASM boost.context/libs/context/src/asm/fcontext_i386_sysv_elf_gas.S)
-endif()
-SET_SOURCE_FILES_PROPERTIES(${ASM} PROPERTIES LANGUAGE C)
 
 if (CARES_LIB AND CARES_INCLUDE)
     set(RESOLVER_SRC src/cares.cc)
@@ -94,10 +98,10 @@ add_library(ten
     ${SSL_SRC}
     src/http_message.cc src/http_parser.c
     ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
-    boost.context/libs/context/src/fcontext.cpp)
-add_dependencies(ten libglog ragel_uri_parser)
+    )
+add_dependencies(ten libglog ragel_uri_parser boost_context)
 
-target_link_libraries(ten glog ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
+target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
 add_subdirectory(examples)
 add_subdirectory(tests)

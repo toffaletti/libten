@@ -41,25 +41,28 @@ struct context : ucontext_t {
 
 #elif USE_BOOST_FCONTEXT
 #include <string.h>
-#include "boost/context/fcontext.hpp"
+#include <boost/context/fcontext.hpp>
 
 namespace ten {
 
-struct context : boost_fcontext_t {
+struct context : boost::ctx::fcontext_t {
     typedef void (*proc)(void *);
+    typedef void (*proc_ctx)(intptr_t);
+    intptr_t arg;
 
-    void init(proc f=nullptr, void *arg=nullptr, char *stack=nullptr, size_t stack_size=0) {
+    void init(proc f=nullptr, void *arg_=nullptr, char *stack=nullptr, size_t stack_size=0) {
         memset(this, 0, sizeof(context));
+        arg = (intptr_t)arg_;
         if (f && stack && stack_size) {
-            fc_stack.ss_base = stack;
+            fc_stack.base = stack;
             // stack grows down
-            fc_stack.ss_limit = stack-stack_size;
-            boost_fcontext_make(this, f, arg);
+            fc_stack.limit = stack-stack_size;
+            boost::ctx::make_fcontext(this, (proc_ctx)f);
         }
     }
 
     void swap(context *other) {
-        boost_fcontext_jump(this, other, nullptr);
+        boost::ctx::jump_fcontext(this, other, other->arg);
     }
 };
 
