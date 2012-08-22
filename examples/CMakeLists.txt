@@ -43,6 +43,9 @@ target_link_libraries(json-path ten jansson msgpack boost_program_options-mt)
 add_executable(memg EXCLUDE_FROM_ALL memg.cc)
 target_link_libraries(memg ten boost_program_options-mt)
 
+add_executable(synch EXCLUDE_FROM_ALL synch.cc)
+target_link_libraries(synch ten)
+
 if (OPENSSL_FOUND)
     add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)
     target_link_libraries(https-get ten)
@@ -63,5 +66,6 @@ add_custom_target(examples DEPENDS
     rpc-server
     json-path
     memg
+    synch
     ${HTTPS_GET}
     )
