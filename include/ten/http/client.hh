@@ -73,7 +73,7 @@ public:
             }
 
             http_parser parser;
-            http_response resp;
+            http_response resp(&r);
             resp.parser_init(&parser);
 
             _buf.clear();
