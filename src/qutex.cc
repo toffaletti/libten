@@ -5,6 +5,7 @@ namespace ten {
 
 void qutex::lock() {
     task *t = this_proc()->ctask;
+    DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::unique_lock<std::timed_mutex> lk{_m};
