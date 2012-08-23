@@ -18,19 +18,14 @@ void qutex::lock() {
         _waiting.push_back(t);
     }
 
-    try {
-        // loop to handle spurious wakeups from other threads
-        for (;;) {
-            t->swap();
-            std::unique_lock<std::timed_mutex> lk{_m};
-            if (_owner == this_proc()->ctask) {
-                break;
-            }
-        }
-    } catch (...) {
+    // loop to handle spurious wakeups from other threads
+    for (;;) {
+        DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
+        t->swap();
         std::unique_lock<std::timed_mutex> lk{_m};
-        internal_unlock(lk);
-        throw;
+        if (_owner == this_proc()->ctask) {
+            break;
+        }
     }
 }
 
@@ -49,35 +44,23 @@ bool qutex::try_lock() {
 
 void qutex::unlock() {
     std::unique_lock<std::timed_mutex> lk{_m};
-    internal_unlock(lk);
-}
-
-inline void qutex::internal_unlock(std::unique_lock<std::timed_mutex> &lk) {
     task *t = this_proc()->ctask;
     DCHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
-    if (t == _owner) {
-        if (!_waiting.empty()) {
-            t = _owner = _waiting.front();
-            _waiting.pop_front();
-        } else {
-            t = _owner = nullptr;
-        }
-        DVLOG(5) << "UNLOCK qutex: " << this
-            << " new owner: " << _owner
-            << " waiting: " << _waiting.size();
-        lk.unlock();
-        // must use t here, not owner because
-        // lock has been released
-        if (t) t->ready();
+    DCHECK(t == _owner) << "BUG: lock not owned by this task";
+    if (!_waiting.empty()) {
+        t = _owner = _waiting.front();
+        _waiting.pop_front();
     } else {
-        // this branch is taken when exception is thrown inside
-        // a task that is currently waiting inside qutex::lock
-        auto i = std::find(_waiting.begin(), _waiting.end(), t);
-        if (i != _waiting.end()) {
-            _waiting.erase(i);
-        }
+        t = _owner = nullptr;
     }
+    DVLOG(5) << "UNLOCK qutex: " << this
+        << " new owner: " << _owner
+        << " waiting: " << _waiting.size();
+    lk.unlock();
+    // must use t here, not owner because
+    // lock has been released
+    if (t) t->ready();
 }
 
 } // namespace

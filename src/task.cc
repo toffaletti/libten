@@ -8,14 +8,17 @@ namespace ten {
 static std::atomic<uint64_t> taskidgen(0);
 
 void tasksleep(uint64_t ms) {
+    task::cancellation_point cancellable;
     this_proc()->sched().sleep(milliseconds(ms));
 }
 
 bool fdwait(int fd, int rw, uint64_t ms) {
+    task::cancellation_point cancellable;
     return this_proc()->sched().fdwait(fd, rw, ms);
 }
 
 int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+    task::cancellation_point cancellable;
     return this_proc()->sched().poll(fds, nfds, ms);
 }
 
@@ -32,6 +35,7 @@ uint64_t taskid() {
 }
 
 int64_t taskyield() {
+    task::cancellation_point cancellable;
     proc *p = this_proc();
     uint64_t n = p->nswitch;
     task *t = p->ctask;
@@ -141,11 +145,11 @@ task::~task() {
 
 void task::clear(bool newid) {
     fn = nullptr;
+    cancel_points = 0;
     _ready = false;
     exiting = false;
     systask = false;
     canceled = false;
-    unwinding = false;
     if (newid) {
         id = ++taskidgen;
         setname("task[%ju]", id);
@@ -181,8 +185,7 @@ void task::swap() {
     // swap to scheduler coroutine
     co.swap(&this_proc()->co);
 
-    if (canceled && !unwinding) {
-        unwinding = true;
+    if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
@@ -235,5 +238,16 @@ milliseconds deadline::remaining() const {
     }
     return milliseconds(0);
 }
+
+task::cancellation_point::cancellation_point() {
+    task *t = this_proc()->ctask;
+    ++t->cancel_points;
+}
+
+task::cancellation_point::~cancellation_point() {
+    task *t = this_proc()->ctask;
+    --t->cancel_points;
+}
+
 
 } // end namespace ten
