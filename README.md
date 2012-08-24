@@ -16,8 +16,27 @@ Features
   * rpc (built on msgpack)
   * epoll event loop
 
+Why
+---
+Or rather why not libevent, libev, or boost.asio? libten is designed
+around the concept of task-based concurrency, while the other
+libraries are designed for event driven callback based concurrency.
+They are not entirely at odds, libten's event loop could be built on
+any of these libraries. However, another major difference is that
+these libraries strive to provide a cross platform solution to event
+driven network programming. They are great if you need portable
+code that works across many versions and platforms. However,
+that feature doesn't come for free. There is added complexity in
+the code base, more code, and compromises that effect performance.
+libten's approach is to focus only on modern Linux, modern compilers,
+and high-performance APIs. For example, the libten event loop uses 
+epoll, timerfd, and signalfd. It also trades memory for speed
+by using the socket fd numbers as indexes into an array. Lastly,
+libten does not stop at the event loop, it tries to be more of a complete
+package by providing logging, JSON, URI, http, rpc, zookeeper and more.
+
 Dependencies
-____________
+------------
 
   * cmake >= 2.8
   * g++ >= 4.7.0
