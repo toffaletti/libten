@@ -41,16 +41,16 @@ Dependencies
   * cmake >= 2.8
   * g++ >= 4.7.0
   * libssl-dev >= 0.9.8
-  * libboost-dev >= 1.40
-  * libboost-date-time-dev >= 1.40
-  * libboost-program-options-dev >= 1.40
-  * libboost-test-dev >= 1.40
+  * libboost-dev >= 1.51
+  * libboost-date-time-dev >= 1.51
+  * libboost-program-options-dev >= 1.51
+  * libboost-test-dev >= 1.51
+  * libboost-context-dev >= 1.51
   * ragel >= 6.5
 
 Bundled 3rd-party components
 ____________________________
 
-  * boost.context-0.7.6 parts from https://github.com/olk/boost.context
   * http_parser forked from https://github.com/joyent/http-parser
   * glog-0.3.2 from http://code.google.com/p/google-glog/
   * stringencoders from http://code.google.com/p/stringencoders/
