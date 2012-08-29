@@ -33,12 +33,18 @@ struct task {
         }
     };
 
+    struct cancellation_point {
+        cancellation_point();
+        ~cancellation_point();
+    };
+
     char name[32];
     char state[128];
     std::function<void ()> fn;
     coroutine co;
     uint64_t id;
     proc *cproc;
+    uint64_t cancel_points;
 
     std::deque<timeout_t *> timeouts;
 
@@ -46,7 +52,6 @@ struct task {
     bool exiting;
     bool systask;
     bool canceled;
-    bool unwinding;
     
     task(const std::function<void ()> &f, size_t stacksize);
     void clear(bool newid=true);
