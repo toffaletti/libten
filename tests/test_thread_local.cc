@@ -32,6 +32,7 @@ void my_thread() {
     // same tag, we'll get the x3 pointer again
     X *x4 = thread_local_ptr<X, 1234>();
     BOOST_CHECK_EQUAL(x3, x4);
+    // test constructor arg passing
     int *plain = thread_local_ptr<int>(42);
     BOOST_CHECK_EQUAL(*plain, 42);
 }

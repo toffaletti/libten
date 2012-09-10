@@ -42,6 +42,10 @@ target_link_libraries(test_hash_ring ten boost_unit_test_framework-mt)
 add_executable(test_llqueue test_llqueue.cc)
 target_link_libraries(test_llqueue ten boost_unit_test_framework-mt)
 
+add_executable(test_thread_local test_thread_local.cc)
+target_link_libraries(test_thread_local ten boost_unit_test_framework-mt)
+
+
 add_test(test_descriptors test_descriptors --random)
 add_test(test_task test_task --random)
 add_test(test_channel test_channel --random)
@@ -56,3 +60,4 @@ add_test(test_http test_http --random)
 add_test(test_uri test_uri --random)
 add_test(test_hash_ring test_hash_ring --random)
 add_test(test_llqueue test_llqueue --random)
+add_test(test_thread_local test_thread_local --random)
