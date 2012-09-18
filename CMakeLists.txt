@@ -93,7 +93,12 @@ add_library(ten
     src/qutex.cc
     src/task.cc
     src/proc.cc
-    src/error.cc src/ioproc.cc src/net.cc src/zip.cc src/json.cc ${ASM}
+    src/error.cc
+    src/ioproc.cc
+    src/net.cc
+    src/zip.cc
+    src/json.cc
+    ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}
     src/http_message.cc src/http_parser.c
