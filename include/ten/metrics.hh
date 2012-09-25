@@ -10,10 +10,35 @@
 #include <chrono>
 #include <unordered_map>
 #include <memory>
+#include <sstream>
 
 namespace ten {
 
 namespace metrics {
+
+template <typename Arg>
+void metric_path(std::stringstream &ss, Arg arg) {
+    ss << arg;
+}
+
+template <typename Arg, typename ...Args>
+void metric_path(std::stringstream &ss, Arg arg, Args... args) {
+    ss << arg << ".";
+    metric_path(ss, args...);
+}
+
+std::string metric_path(const std::string &arg) {
+    return arg;
+}
+
+template <typename ...Args>
+std::string metric_path(Args... args) {
+    std::stringstream ss;
+    metric_path(ss, args...);
+    return ss.str();
+}
+
+
 
 class metric {
     virtual json to_json() const = 0;
@@ -34,7 +59,7 @@ public:
         return _count;
     }
 
-    void add(const counter &other) {
+    void merge(const counter &other) {
         _count += other._count;
     }
 };
@@ -46,7 +71,7 @@ private:
     uint64_t _incr = 0;
     uint64_t _decr = 0;
 public:
-    void add(const gauge &other) {
+    void merge(const gauge &other) {
         _incr += other._incr;
         _decr += other._decr;
     }
@@ -71,16 +96,40 @@ public:
     }
 };
 
-// variant of all possible metrics
-typedef boost::variant<counter, gauge> metric_type;
+class timer : public metric {
+public:
+    typedef std::chrono::high_resolution_clock clock_type;
+private:
+    clock_type::duration _elapsed;
+public:
+    std::chrono::milliseconds value() const {
+        using namespace std::chrono;
+        return duration_cast<milliseconds>(_elapsed);
+    }
 
-struct add_visitor : boost::static_visitor<> {
+    json to_json() const {
+        return ten::to_json(value().count());
+    }
+
+    void update(const clock_type::duration &elapsed) {
+        _elapsed += elapsed;
+    }
+
+    void merge(const timer &other) {
+        _elapsed += other._elapsed;
+    }
+};
+
+// variant of all possible metrics
+typedef boost::variant<counter, gauge, timer> metric_type;
+
+struct merge_visitor : boost::static_visitor<> {
     metric_type &_lhs;
 
-    add_visitor(metric_type &lhs) : _lhs(lhs){}
+    merge_visitor(metric_type &lhs) : _lhs(lhs){}
 
     template <typename T> void operator()(const T &rhs) const {
-        boost::get<T>(_lhs).add(rhs);
+        boost::get<T>(_lhs).merge(rhs);
     }
 };
 
@@ -93,7 +142,7 @@ public: // TODO: protected
     metric_group();
     ~metric_group();
 public:
-    template <typename T> T &update(const std::string &name) {
+    template <typename T> T &get(const std::string &name) {
         auto i = _metrics.find(name);
         if (i == _metrics.end()) {
             auto ii = _metrics.insert(std::make_pair(name, T()));
@@ -109,7 +158,7 @@ public:
             auto i = ag.insert(*iter);
             if (!i.second) {
                 // merge with existing
-                boost::apply_visitor(add_visitor(i.first->second), iter->second);
+                boost::apply_visitor(merge_visitor(i.first->second), iter->second);
             }
         }
     }
@@ -151,6 +200,32 @@ public:
 };
 
 static metric_global global;
+
+struct chain {
+    metric_group *_mg;
+    std::unique_lock<std::mutex> _lock;
+
+    chain(metric_group *mg)
+        : _mg(mg), _lock(mg->_mtx) {}
+
+    chain(const chain &) = delete;
+    chain(chain &&other)
+        : _mg(other._mg), _lock(std::move(other._lock)) {}
+
+    template <typename ...Args>
+        metrics::counter &counter(Args ...args) {
+            return _mg->get<metrics::counter>(metric_path(args...));
+        }
+
+    template <typename ...Args>
+        metrics::gauge &gauge(Args ...args) {
+            return _mg->get<metrics::gauge>(metric_path(args...));
+        }
+};
+
+chain record() {
+    return chain(thread_local_ptr<metric_group>());
+}
 
 template <typename Func> void record(Func &&f) {
     metric_group *mg = thread_local_ptr<metric_group>();
@@ -194,6 +269,36 @@ metric_group::metric_group() {
 metric_group::~metric_group() {
     global.remove(this);
 }
+
+struct time_op {
+private:
+    typedef timer::clock_type clock_type;
+    bool _stopped = false;
+    std::string _name;
+    clock_type::time_point _start;
+public:
+    template <typename ...Args>
+        time_op(Args ...args)
+        : _name(metric_path(args...)), _start(clock_type::now()) {}
+
+    time_op(const std::string &name)
+        : _name(name), _start(clock_type::now()) {}
+
+    void stop() {
+        // can't stop more than once
+        if (_stopped) return;
+        _stopped = true;
+        auto stop = clock_type::now();
+        record([&](metric_group &g) {
+            g.get<timer>(_name).update(stop - _start);
+        });
+    }
+
+    ~time_op() {
+        stop();
+    }
+};
+
 
 } // end namespace metrics
 } // end namespace ten
