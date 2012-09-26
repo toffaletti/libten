@@ -21,7 +21,8 @@ endif(USE_PPROF)
 
 if (NOT GCC_FLAGS)
     # general flags for any compilation with gcc/g++
-    set(GCC_FLAGS "-pthread -march=core2")
+    # someday use "-march=core2 -msse4.1" after retiring old Athlons still in use
+    set(GCC_FLAGS "-pthread -mtune=core2")
     set(GCC_FLAGS "${GCC_FLAGS} -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter")
     set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings")
     #set(GCC_FLAGS "${GCC_FLAGS} -Wshadow")
