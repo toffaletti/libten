@@ -19,28 +19,23 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     // otherwise another thread might modify the condition and
     // call wakeup() and waiting would be empty so we'd sleep forever
     lk.unlock();
-    try {
-        try 
+    try 
+    {
         {
-            {
-                task::cancellation_point cancellable;
-                t->swap(); 
-            }
-            lk.lock();
-        } catch (...) {
-            {
-                std::lock_guard<std::timed_mutex> ll(_m);
-                auto i = std::find(_waiting.begin(), _waiting.end(), t);
-                if (i != _waiting.end()) {
-                    _waiting.erase(i);
-                }
-            }
-            lk.lock();
-            throw;
+            task::cancellation_point cancellable;
+            t->swap(); 
         }
-        DCHECK(lk.owns_lock()) << "BUG: rendez::sleep exiting without holding lock";
+        lk.lock();
     } catch (...) {
-        DCHECK(lk.owns_lock()) << "BUG: rendez::sleep exiting without holding lock";
+        {
+            std::lock_guard<std::timed_mutex> ll(_m);
+            auto i = std::find(_waiting.begin(), _waiting.end(), t);
+            if (i != _waiting.end()) {
+                _waiting.erase(i);
+            }
+        }
+        lk.lock();
+        throw;
     }
 }
 
