@@ -162,12 +162,12 @@ public:
 
     //! \return number of unread items
     size_t unread() {
-        std::unique_lock<qutex> lock(_m->qtx);
+        std::lock_guard<qutex> lock(_m->qtx);
         return _m->unread;
     }
 
     void close() {
-        std::unique_lock<qutex> l(_m->qtx);
+        std::lock_guard<qutex> l(_m->qtx);
         _m->closed = true;
         // wake up all users of channel
         _m->not_empty.wakeupall();
@@ -175,7 +175,7 @@ public:
     }
 
     void clear() {
-        std::unique_lock<qutex> l(_m->qtx);
+        std::lock_guard<qutex> l(_m->qtx);
         while (!_m->queue.empty()) {
             _m->queue.pop();
         }

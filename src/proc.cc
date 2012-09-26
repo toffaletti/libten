@@ -37,12 +37,12 @@ void proc::startproc(proc *p_, task *t) {
 }
 
 void proc::add(proc *p) {
-    std::unique_lock<std::mutex> lk{procsmutex};
+    std::lock_guard<std::mutex> lk{procsmutex};
     procs.push_back(p);
 }
 
 void proc::del(proc *p) {
-    std::unique_lock<std::mutex> lk{procsmutex};
+    std::lock_guard<std::mutex> lk{procsmutex};
     auto i = std::find(procs.begin(), procs.end(), p);
     procs.erase(i);
 }
@@ -66,7 +66,7 @@ void proc::wakeup() {
         DVLOG(5) << "eventing " << this;
         event.write(1);
     } else {
-        std::unique_lock<std::mutex> lk{mutex};
+        std::lock_guard<std::mutex> lk{mutex};
         if (asleep) {
             DVLOG(5) << "notifying " << this;
             cond.notify_one();
@@ -147,7 +147,7 @@ proc::proc(task *t)
 {
     now = steady_clock::now();
     add(this);
-    std::unique_lock<std::mutex> lk{mutex};
+    std::lock_guard<std::mutex> lk{mutex};
     if (t) {
         thread = new std::thread(proc::startproc, this, t);
         thread->detach();
@@ -159,46 +159,48 @@ proc::proc(task *t)
 }
 
 proc::~proc() {
-    std::unique_lock<std::mutex> lk{mutex};
-    if (thread == nullptr) {
-        {
-            std::unique_lock<std::mutex> plk{procsmutex};
-            for (auto i=procs.begin(); i!= procs.end(); ++i) {
-                if (*i == this) continue;
-                (*i)->cancel();
-            }
-        }
-        for (;;) {
-            // TODO: remove this busy loop in favor of sleeping the proc
+    {
+        std::lock_guard<std::mutex> lk{mutex};
+        if (thread == nullptr) {
             {
-                std::unique_lock<std::mutex> plk{procsmutex};
-                size_t np = procs.size();
-                if (np == 1)
-                    break;
+                std::lock_guard<std::mutex> plk{procsmutex};
+                for (auto i=procs.begin(); i!= procs.end(); ++i) {
+                    if (*i == this) continue;
+                    (*i)->cancel();
+                }
+            }
+            for (;;) {
+                // TODO: remove this busy loop in favor of sleeping the proc
+                {
+                    std::lock_guard<std::mutex> plk{procsmutex};
+                    size_t np = procs.size();
+                    if (np == 1)
+                        break;
+                }
+                std::this_thread::yield();
             }
             std::this_thread::yield();
+            // nasty hack for mysql thread cleanup
+            // because it happens *after* all of my code, i have no way of waiting
+            // for it to finish with an event (unless i joined all threads)
+            DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
+            usleep(1000);
         }
-        std::this_thread::yield();
-        // nasty hack for mysql thread cleanup
-        // because it happens *after* all of my code, i have no way of waiting
-        // for it to finish with an event (unless i joined all threads)
-        DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
-        usleep(1000);
+        delete thread;
+        runqueue.clear();
+        // clean up system tasks
+        while (!alltasks.empty()) {
+            deltaskinproc(alltasks.front());
+        }
+        // free tasks in taskpool
+        for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
+            delete (*i);
+        }
+        // must delete _sched *after* tasks because
+        // they might try to remove themselves from timeouts set
+        delete _sched;
     }
-    delete thread;
-    runqueue.clear();
-    // clean up system tasks
-    while (!alltasks.empty()) {
-        deltaskinproc(alltasks.front());
-    }
-    // free tasks in taskpool
-    for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
-        delete (*i);
-    }
-    // must delete _sched *after* tasks because
-    // they might try to remove themselves from timeouts set
-    delete _sched;
-    lk.unlock();
+    // unlock before del()
     del(this);
     DVLOG(5) << "proc freed: " << this;
     set_this_proc(nullptr);

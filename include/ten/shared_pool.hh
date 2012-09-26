@@ -49,12 +49,12 @@ public:
     shared_pool &operator =(const shared_pool &) = delete;
 
     size_t size() {
-        std::unique_lock<qutex> lk(_mut);
+        std::lock_guard<qutex> lk(_mut);
         return _set.size();
     }
 
     void clear() {
-        std::unique_lock<qutex> lk(_mut);
+        std::lock_guard<qutex> lk(_mut);
         _q.clear();
         _set.clear();
     }
@@ -94,7 +94,7 @@ protected:
     }
 
     void release(std::shared_ptr<ResourceT> &c) {
-        std::unique_lock<qutex> lk(_mut);
+        safe_lock<qutex> lk(_mut);
         // don't add resource to queue if it was removed from _set
         if (_set.count(c)) {
             _q.push_front(c);
@@ -103,7 +103,7 @@ protected:
     }
 
     void destroy(std::shared_ptr<ResourceT> &c) {
-        std::unique_lock<qutex> lk(_mut);
+        safe_lock<qutex> lk(_mut);
         // remove bad resource
         DVLOG(4) << "shared_pool(" << _name
             << ") destroy in set? " << _set.count(c)

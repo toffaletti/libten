@@ -181,6 +181,11 @@ void task::remove_timeout(timeout_t *to) {
     }
 }
 
+void task::safe_swap() noexcept {
+    // swap to scheduler coroutine
+    co.swap(&this_proc()->co);
+}
+
 void task::swap() {
     // swap to scheduler coroutine
     co.swap(&this_proc()->co);
@@ -201,6 +206,7 @@ void task::swap() {
                 cproc->sched().remove_timeout_task(this);
             }
             if (tmp->exception != nullptr) {
+                DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
                 std::rethrow_exception(tmp->exception);
             }
         } else {

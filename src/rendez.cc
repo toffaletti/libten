@@ -5,10 +5,11 @@
 namespace ten {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
+    DCHECK(lk.owns_lock()) << "must own lock before calling rendez::sleep";
     task *t = this_proc()->ctask;
 
     {
-        std::unique_lock<std::timed_mutex> ll(_m);
+        std::lock_guard<std::timed_mutex> ll(_m);
         DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
             << "BUG: " << t << " already waiting on rendez " << this;
         DVLOG(5) << "RENDEZ[" << this << "] PUSH BACK: " << t;
@@ -18,30 +19,35 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     // otherwise another thread might modify the condition and
     // call wakeup() and waiting would be empty so we'd sleep forever
     lk.unlock();
-    try 
-    {
+    try {
+        try 
         {
-            task::cancellation_point cancellable;
-            t->swap(); 
-        }
-        lk.lock();
-    } catch (...) {
-        {
-            std::unique_lock<std::timed_mutex> ll(_m);
-            auto i = std::find(_waiting.begin(), _waiting.end(), t);
-            if (i != _waiting.end()) {
-                _waiting.erase(i);
+            {
+                task::cancellation_point cancellable;
+                t->swap(); 
             }
+            lk.lock();
+        } catch (...) {
+            {
+                std::lock_guard<std::timed_mutex> ll(_m);
+                auto i = std::find(_waiting.begin(), _waiting.end(), t);
+                if (i != _waiting.end()) {
+                    _waiting.erase(i);
+                }
+            }
+            lk.lock();
+            throw;
         }
-        lk.lock();
-        throw;
+        DCHECK(lk.owns_lock()) << "BUG: rendez::sleep exiting without holding lock";
+    } catch (...) {
+        DCHECK(lk.owns_lock()) << "BUG: rendez::sleep exiting without holding lock";
     }
 }
 
 void rendez::wakeup() {
     task *t = nullptr;
     {
-        std::unique_lock<std::timed_mutex> lk(_m);
+        std::lock_guard<std::timed_mutex> lk(_m);
         if (!_waiting.empty()) {
             t = _waiting.front();
             _waiting.pop_front();
@@ -55,7 +61,7 @@ void rendez::wakeup() {
 void rendez::wakeupall() {
     tasklist waiting;
     {
-        std::unique_lock<std::timed_mutex> lk(_m);
+        std::lock_guard<std::timed_mutex> lk(_m);
         std::swap(waiting, _waiting);
     }
 
@@ -84,7 +90,7 @@ bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
 
 rendez::~rendez() {
     using ::operator<<;
-    std::unique_lock<std::timed_mutex> lk(_m);
+    std::lock_guard<std::timed_mutex> lk(_m);
     DCHECK(_waiting.empty()) << "BUG: still waiting: " << _waiting;
 }
 

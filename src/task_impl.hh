@@ -82,6 +82,7 @@ struct task {
     void remove_timeout(timeout_t *to);
 
     void ready();
+    void safe_swap() noexcept;
     void swap();
 
     void exit() {
