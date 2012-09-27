@@ -46,13 +46,14 @@ class metric {
 
 class counter : public metric {
 private:
-    uint64_t _count = 0;
+    int64_t _count = 0;
 public:
     json to_json() const {
         return ten::to_json(value());
     }
-    void incr() {
-        ++_count;
+
+    void incr(int64_t n=1) {
+        _count+=n;
     }
 
     int64_t value() const {
@@ -68,8 +69,8 @@ public:
 // with incr/decr. provide names for numerator/denominator
 class gauge : public metric {
 private:
-    uint64_t _incr = 0;
-    uint64_t _decr = 0;
+    int64_t _incr = 0;
+    int64_t _decr = 0;
 public:
     void merge(const gauge &other) {
         _incr += other._incr;
@@ -77,20 +78,25 @@ public:
     }
 
     json to_json() const {
-        return ten::to_json(value());
+        return ten::json::array({value(), _incr, _decr});
     }
-    void incr() {
-        ++_incr;
+
+    void incr(int64_t n=1) {
+        _incr+=n;
     }
-    void decr() {
-        ++_decr;
+
+    void decr(int64_t n=1) {
+        _decr+=n;
     }
+
     int64_t value() const {
         return _incr - _decr;
     }
-    std::pair<uint64_t, uint64_t> value_pair() const {
+
+    std::pair<int64_t, int64_t> value_pair() const {
         return std::make_pair(_incr, _decr);
     }
+
     double ratio() const {
         return _decr/_incr;
     }
