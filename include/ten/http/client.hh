@@ -18,15 +18,15 @@ public:
 //! basic http client
 class http_client {
 private:
-    std::shared_ptr<netsock> _s;
+    netsock _sock;
     buffer _buf;
     std::string _host;
     uint16_t _port;
 
     void ensure_connection() {
-        if (_s && _s->valid()) return;
-        _s.reset(new netsock(AF_INET, SOCK_STREAM));
-        if (_s->dial(_host.c_str(), _port) != 0) {
+        if (_sock.valid()) return;
+        _sock = std::move(netsock(AF_INET, SOCK_STREAM));
+        if (_sock.dial(_host.c_str(), _port) != 0) {
             throw http_error("dial");
         }
     }
@@ -67,9 +67,9 @@ public:
             ensure_connection();
 
             std::string hdata = r.data();
-            ssize_t nw = _s->send(hdata.c_str(), hdata.size());
+            ssize_t nw = _sock.send(hdata.c_str(), hdata.size());
             if (r.body.size()) {
-                nw = _s->send(r.body.c_str(), r.body.size());
+                nw = _sock.send(r.body.c_str(), r.body.size());
             }
 
             http_parser parser;
@@ -80,14 +80,14 @@ public:
 
             while (!resp.complete) {
                 _buf.reserve(4*1024);
-                ssize_t nr = _s->recv(_buf.back(), _buf.available());
+                ssize_t nr = _sock.recv(_buf.back(), _buf.available());
                 if (nr <= 0) { throw http_error("recv"); }
                 _buf.commit(nr);
                 size_t len = _buf.size();
                 resp.parse(&parser, _buf.front(), len);
                 _buf.remove(len);
                 if (resp.body.size() >= max_content_length) {
-                    _s.reset(); // close this socket, we won't read anymore
+                    _sock.close(); // close this socket, we won't read anymore
                     return resp;
                 }
             }
@@ -97,11 +97,11 @@ public:
             if ((resp.http_version == "HTTP/1.0" && resp.get("Connection") != "Keep-Alive") ||
                     resp.get("Connection") == "close")
             {
-                _s.reset();
+                _sock.close();
             }
             return resp;
         } catch (errorx &e) {
-            _s.reset();
+            _sock.close();
             throw;
         }
     }

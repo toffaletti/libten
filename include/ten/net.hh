@@ -30,6 +30,18 @@ public:
     sockbase(const sockbase &) = delete;
     sockbase &operator =(const sockbase &) = delete;
 
+    sockbase(sockbase &&other) : s(-1) {
+        std::swap(s, other.s);
+    }
+    sockbase &operator =(sockbase &&other) {
+        if (this != &other) {
+            std::swap(s, other.s);
+        }
+        return *this;
+    }
+
+
+
     virtual ~sockbase() {}
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
@@ -98,8 +110,6 @@ public:
     netsock(int domain, int type, int protocol=0) throw (errno_error)
         : sockbase(domain, type, protocol) {}
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
     netsock(netsock &&other) : sockbase() {
         std::swap(s, other.s);
     }
@@ -109,7 +119,6 @@ public:
         }
         return *this;
     }
-#endif
 
     //! dial requires a large 8MB stack size for getaddrinfo
     int dial(const char *addr,

@@ -182,7 +182,6 @@ struct file_fd : fd_base {
         fd = ::open(pathname, flags | O_CLOEXEC, mode);
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
     file_fd(file_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     file_fd &operator = (file_fd &&other) {
         if (this != &other) {
@@ -190,7 +189,6 @@ struct file_fd : fd_base {
         }
         return *this;
     }
-#endif
 
     //! read from a given offset
     ssize_t pread(void *buf, size_t count, off_t offset) __attribute__((warn_unused_result)) {
@@ -343,8 +341,6 @@ struct socket_fd : fd_base {
         setsockopt(level, optname, optval, optlen);
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
     socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     socket_fd &operator = (socket_fd &&other) {
         if (this != &other) {
@@ -359,7 +355,7 @@ struct socket_fd : fd_base {
         THROW_ON_ERROR(::socketpair(domain, type | SOCK_CLOEXEC, protocol, sv));
         return std::make_pair(sv[0], sv[1]);
     }
-#endif
+
     //! \param addr returns the address of the peer socket
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
     //! \return the file descriptor for the peer socket or -1 on error
