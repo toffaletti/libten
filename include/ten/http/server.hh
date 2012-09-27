@@ -160,6 +160,8 @@ public:
         _log_func = f;
     }
 
+    std::function<void ()> connect_watch;
+    std::function<void ()> disconnect_watch;
 private:
     std::shared_ptr<std::vector<route> > _routes;
     callback_type _log_func;
@@ -176,6 +178,9 @@ private:
         buffer buf(4*1024);
         http_parser parser;
 
+        if (connect_watch) {
+            connect_watch();
+        }
         // TODO: might want to enable this later after
         // we know this will be a long-lived connection
         // otherwise the overhead of the syscall hurts concurrency
@@ -190,7 +195,7 @@ private:
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
                     nr = s.recv(buf.back(), buf.available(), timeout_ms);
-                    if (nr < 0) return;
+                    if (nr < 0) goto done;
                     buf.commit(nr);
                 }
                 size_t nparse = buf.size();
@@ -201,7 +206,7 @@ private:
                     handle_request(req, s);
                     break;
                 }
-                if (nr == 0) return;
+                if (nr == 0) goto done;
                 if (!got_headers && !req.method.empty()) {
                     got_headers = true;
                     if (req.get("Expect") == "100-continue") {
@@ -212,6 +217,10 @@ private:
                     }
                 }
             }
+        }
+done:
+        if (disconnect_watch) {
+            disconnect_watch();
         }
     }
 
