@@ -19,6 +19,7 @@ namespace ten {
 //! basic http server
 class http_server : public netsock_server {
 public:
+
     //! wrapper around an http request/response
     struct request {
         request(http_request &req_, netsock &sock_)
@@ -129,6 +130,10 @@ public:
     };
 
     typedef std::function<void (request &)> callback_type;
+public:
+    std::function<void ()> connect_watch;
+    std::function<void ()> disconnect_watch;
+protected:
     struct route {
         std::string pattern;
         callback_type callback;
@@ -140,10 +145,11 @@ public:
             : pattern(pattern_), callback(callback_), fnmatch_flags(fnmatch_flags_) {}
     };
 
+    std::vector<route> _routes;
+    callback_type _log_func;
 public:
     http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
-        : netsock_server("http", stacksize_, timeout_ms_),
-        _routes(std::make_shared<std::vector<route> >())
+        : netsock_server("http", stacksize_, timeout_ms_)
     {
     }
 
@@ -152,25 +158,12 @@ public:
             const callback_type &callback,
             int fnmatch_flags = 0)
     {
-      _routes->push_back(route(pattern, callback, fnmatch_flags));
+        _routes.push_back(route(pattern, callback, fnmatch_flags));
     }
 
     //! set logging function, called after every request
     void set_log_callback(const callback_type &f) {
         _log_func = f;
-    }
-
-    std::function<void ()> connect_watch;
-    std::function<void ()> disconnect_watch;
-private:
-    std::shared_ptr<std::vector<route> > _routes;
-    callback_type _log_func;
-
-    void on_shutdown() {
-        // release any memory held by bound callbacks
-        // this shared ptr madness is for threaded shutdown
-        auto rr = _routes;
-        rr->clear();
     }
 
     void on_connection(netsock &s) {
@@ -194,7 +187,7 @@ private:
                 buf.reserve(4*1024);
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
-                    nr = s.recv(buf.back(), buf.available(), timeout_ms);
+                    nr = s.recv(buf.back(), buf.available(), _timeout_ms);
                     if (nr < 0) goto done;
                     buf.commit(nr);
                 }
@@ -229,7 +222,8 @@ done:
         std::string path = req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
-        for (auto i= _routes->cbegin(); i!= _routes->cend(); i++) {
+        // XXX: use cbegin/cend when they're added to std
+        for (auto i= std::begin(_routes); i!= std::end(_routes); i++) {
             DVLOG(5) << "matching pattern: " << i->pattern;
             if (fnmatch(i->pattern.c_str(), path.c_str(), i->fnmatch_flags) == 0) {
                 try {

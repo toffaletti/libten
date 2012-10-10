@@ -20,9 +20,11 @@ static my_config conf;
 
 struct state : boost::noncopyable {
     application &app;
-    http_server http;
+    std::shared_ptr<http_server> http;
 
-    state(application &app_) : app(app_) {}
+    state(application &app_) : app(app_) {
+        http = std::make_shared<http_server>();
+    }
 };
 
 static void log_request(http_server::request &h) {
@@ -36,9 +38,11 @@ static void log_request(http_server::request &h) {
         duration_cast<milliseconds>(stop-h.start).count();
 }
 
-static void http_quit(std::shared_ptr<state> st, http_server::request &h) {
-    LOG(INFO) << "quit requested over http";
-    st->app.quit();
+static void http_quit(std::weak_ptr<state> wst, http_server::request &h) {
+    if (auto st = wst.lock()) {
+        LOG(INFO) << "quit requested over http";
+        st->app.quit();
+    }
     h.resp = http_response{200,
         Headers{
         "Connection", "close",
@@ -48,7 +52,7 @@ static void http_quit(std::shared_ptr<state> st, http_server::request &h) {
     h.send_response();
 }
 
-static void http_root(std::shared_ptr<state> st, http_server::request &h) {
+static void http_root(std::weak_ptr<state> wst, http_server::request &h) {
     h.resp = http_response{200};
     h.resp.set_body("Hello World!\n");
     h.send_response();
@@ -60,16 +64,17 @@ static void start_http_server(std::shared_ptr<state> &st) {
     uint16_t port = 0;
     parse_host_port(addr, port);
     if (port == 0) return;
-    st->http.set_log_callback(log_request);
-    st->http.add_route("/quit", std::bind(http_quit, st, _1));
-    st->http.add_route("/*", std::bind(http_root, st, _1));
-    st->http.serve(addr, port, conf.http_threads);
+    std::weak_ptr<state> wst{st};
+    st->http->set_log_callback(log_request);
+    st->http->add_route("/quit", std::bind(http_quit, wst, _1));
+    st->http->add_route("/*", std::bind(http_root, wst, _1));
+    st->http->serve(addr, port, conf.http_threads);
 }
 
 static void startup(application &app) {
     taskname("startup");
 
-    std::shared_ptr<state> st{std::make_shared<state>(app)};
+    std::shared_ptr<state> st = std::make_shared<state>(app);
     taskspawn(std::bind(start_http_server, st));
 }
 

@@ -41,15 +41,15 @@ static void notify_world(std::string s) {
 }
 
 static void startup() {
-    rpc_server rpc;
-    rpc.add_command("add2", add2);
-    rpc.add_command("add2", add2);
-    rpc.add_command("subtract2", subtract2);
-    rpc.add_command("fail", fail);
-    rpc.add_notify("notify_me", notify_me);
-    rpc.add_notify("notify_world", notify_world);
+    auto rpc = std::make_shared<rpc_server>();
+    rpc->add_command("add2", add2);
+    rpc->add_command("add2", add2);
+    rpc->add_command("subtract2", subtract2);
+    rpc->add_command("fail", fail);
+    rpc->add_notify("notify_me", notify_me);
+    rpc->add_notify("notify_world", notify_world);
     taskspawn(client_task);
-    rpc.serve("0.0.0.0", 5500);
+    rpc->serve("0.0.0.0", 5500);
 }
 
 int main(int argc, char *argv[]) {

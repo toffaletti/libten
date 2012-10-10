@@ -152,15 +152,19 @@ public:
 };
 
 //! task/proc aware socket server
-class netsock_server {
+class netsock_server : public std::enable_shared_from_this<netsock_server> {
+protected:
+    netsock _sock;
+    std::string _protocol_name;
+    size_t _stacksize;
+    int _timeout_ms;
 public:
     netsock_server(const std::string &protocol_name_,
             size_t stacksize_=default_stacksize,
             int timeout_ms_=-1)
-        :
-        protocol_name(protocol_name_),
-        stacksize(stacksize_),
-        timeout_ms(timeout_ms_)
+        : _protocol_name(protocol_name_),
+        _stacksize(stacksize_),
+        _timeout_ms(timeout_ms_)
     {
     }
 
@@ -185,28 +189,24 @@ public:
 
     //! listen and accept connections
     void serve(netsock s, address &baddr, unsigned threads=1) {
-        std::swap(sock, s);
-        sock.getsockname(baddr);
-        LOG(INFO) << "listening for " << protocol_name
+        std::swap(_sock, s);
+        _sock.getsockname(baddr);
+        LOG(INFO) << "listening for " << _protocol_name
             << " on " << baddr << " with " << threads << " threads";;
-        sock.listen();
-        std::shared_ptr<int> shutdown_guard((int *)0x8008135, std::bind(&netsock_server::do_shutdown, this));
+        _sock.listen();
+        //std::shared_ptr<int> shutdown_guard((int *)0x8008135, std::bind(&netsock_server::do_shutdown, this));
+        auto self = shared_from_this();
         for (unsigned n=1; n<threads; ++n) {
-            procspawn(std::bind(&netsock_server::do_accept_loop, this, shutdown_guard));
+            procspawn(std::bind(&netsock_server::do_accept_loop, self));
         }
-        do_accept_loop(shutdown_guard);
+        do_accept_loop();
     }
 
     int listen_fd() const {
-        return sock.s.fd;
+        return _sock.s.fd;
     }
 
 protected:
-    netsock sock;
-    std::string protocol_name;
-    size_t stacksize;
-    int timeout_ms;
-
     virtual void on_shutdown() {}
     virtual void on_connection(netsock &s) = 0;
 
@@ -214,11 +214,15 @@ protected:
         // do any cleanup to free memory etc...
         // for example if your callbacks hold a reference to this server
         // this would be the place to release that circular reference
+        //
+        // XXX TODO: use weak_ptr to solve this problem instead.
+        // callbacks will use weak_ptr and lock() before they
+        // do anything
 
         on_shutdown();
     }
 
-    void do_accept_loop(std::shared_ptr<int> shutdown_guard) {
+    void do_accept_loop() {
         accept_loop();
     }
 
@@ -226,8 +230,9 @@ protected:
         for (;;) {
             address client_addr;
             int fd;
-            while ((fd = sock.accept(client_addr, 0)) > 0) {
-                taskspawn(std::bind(&netsock_server::client_task, this, fd), stacksize);
+            while ((fd = _sock.accept(client_addr, 0)) > 0) {
+                auto self = shared_from_this();
+                taskspawn(std::bind(&netsock_server::client_task, self, fd), _stacksize);
             }
         }
     }

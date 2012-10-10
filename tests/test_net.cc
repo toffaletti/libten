@@ -28,9 +28,9 @@ static void http_callback(http_server::request &env) {
 }
 
 static void start_http_server(address &addr) {
-    http_server s;
-    s.add_route("*", http_callback);
-    s.serve(addr);
+    std::shared_ptr<http_server> s = std::make_shared<http_server>();
+    s->add_route("*", http_callback);
+    s->serve(addr);
 }
 
 static void start_http_test() {

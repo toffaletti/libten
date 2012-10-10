@@ -42,11 +42,6 @@ private:
     std::unordered_map<std::string, callback_type> _cmds;
     std::unordered_map<std::string, notify_func> _notifs;
 
-    void on_shutdown() {
-        // release any memory held by bound callbacks
-        _cmds.clear();
-    }
-
     void on_connection(netsock &s) {
         size_t bsize = 4096;
         msgpack::unpacker pac;

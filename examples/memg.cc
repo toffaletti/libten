@@ -78,9 +78,11 @@ done:
 
 struct state : boost::noncopyable {
     application &app;
-    memg_server server;
+    std::shared_ptr<memg_server> server;
 
-    state(application &app_) : app(app_) {}
+    state(application &app_) : app(app_) {
+        server = std::make_shared<memg_server>();
+    }
 };
 
 static void startup(application &app) {
@@ -89,8 +91,8 @@ static void startup(application &app) {
     std::string addr = conf.listen_addr;
     uint16_t port = 11211;
     parse_host_port(addr, port);
-    std::shared_ptr<state> st{std::make_shared<state>(app)};
-    st->server.serve(addr, port);
+    std::shared_ptr<state> st = std::make_shared<state>(app);
+    st->server->serve(addr, port);
 }
 
 int main(int argc, char *argv[]) {
