@@ -39,11 +39,6 @@ public:
 private:
     std::unordered_map<std::string, callback_type> _cmds;
 
-    void on_shutdown() {
-        // release any memory held by bound callbacks
-        _cmds.clear();
-    }
-
     void on_connection(netsock &s) {
         buffer buf(4*1024);
 

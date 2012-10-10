@@ -207,20 +207,7 @@ public:
     }
 
 protected:
-    virtual void on_shutdown() {}
     virtual void on_connection(netsock &s) = 0;
-
-    void do_shutdown() {
-        // do any cleanup to free memory etc...
-        // for example if your callbacks hold a reference to this server
-        // this would be the place to release that circular reference
-        //
-        // XXX TODO: use weak_ptr to solve this problem instead.
-        // callbacks will use weak_ptr and lock() before they
-        // do anything
-
-        on_shutdown();
-    }
 
     void do_accept_loop() {
         accept_loop();
