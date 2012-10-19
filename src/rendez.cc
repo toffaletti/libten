@@ -6,7 +6,7 @@ namespace ten {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     DCHECK(lk.owns_lock()) << "must own lock before calling rendez::sleep";
-    task *t = this_proc()->ctask;
+    task *t = this_task();
 
     {
         std::lock_guard<std::timed_mutex> ll(_m);
@@ -49,7 +49,7 @@ void rendez::wakeup() {
         }
     }
 
-    DVLOG(5) << "RENDEZ[" << this << "] " << this_proc()->ctask << " wakeup: " << t;
+    DVLOG(5) << "RENDEZ[" << this << "] " << this_task() << " wakeup: " << t;
     if (t) t->ready();
 }
 
@@ -61,7 +61,7 @@ void rendez::wakeupall() {
     }
 
     for (auto t : waiting) {
-        DVLOG(5) << "RENDEZ[" << this << "] " << this_proc()->ctask << " wakeupall: " << t;
+        DVLOG(5) << "RENDEZ[" << this << "] " << this_task() << " wakeupall: " << t;
         t->ready();
     }
 }

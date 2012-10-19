@@ -26,6 +26,10 @@ proc *this_proc() {
     return _this_proc;
 }
 
+task *this_task() {
+    return _this_proc->ctask;
+}
+
 void proc::startproc(proc *p_, task *t) {
     set_this_proc(p_);
     std::unique_ptr<proc> p{p_};
@@ -216,13 +220,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
 
 void procshutdown() {
     proc *p = this_proc();
-    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        task *t = *i;
-        if (t == p->ctask) continue; // don't add ourself to the runqueue
-        if (!t->systask) {
-            t->cancel();
-        }
-    }
+    p->shutdown();
 }
 
 static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {

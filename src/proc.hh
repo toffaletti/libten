@@ -12,12 +12,22 @@ namespace ten {
 struct io_scheduler;
 
 extern proc *this_proc();
+extern task *this_task();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc
 // resources like dns resolving threads, etc.
 
 struct proc {
+protected:
+    friend struct io_scheduler;
+    friend task *this_task();
+    friend int64_t taskyield();
+    friend void tasksystem();
+    friend bool taskcancel(uint64_t);
+    friend string taskdump();
+    friend const time_point<steady_clock> &procnow();
+
     io_scheduler *_sched;
     std::thread *thread;
     std::mutex mutex;
@@ -43,6 +53,7 @@ struct proc {
     //! current time cached in a few places through the event loop
     time_point<steady_clock> now;
 
+public:
     explicit proc(task *t = nullptr);
 
     proc(const proc &) = delete;
@@ -51,6 +62,8 @@ struct proc {
     ~proc();
 
     void schedule();
+
+    coroutine &sched_coro() { return co; }
 
     io_scheduler &sched();
 
@@ -61,6 +74,26 @@ struct proc {
     void cancel() {
         canceled = true;
         wakeup();
+    }
+
+    void shutdown() {
+        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
+            task *t = *i;
+            if (t == ctask) continue; // don't add ourself to the runqueue
+            if (!t->systask) {
+                t->cancel();
+            }
+        }
+    }
+
+    void ready(task *t) {
+        DVLOG(5) << "readying: " << t;
+        if (this != this_proc()) {
+            dirtyq.push(t);
+            wakeup();
+        } else {
+            runqueue.push_back(t);
+        }
     }
 
     void wakeup();

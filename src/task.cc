@@ -30,8 +30,8 @@ uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
 
 uint64_t taskid() {
     DCHECK(this_proc());
-    DCHECK(this_proc()->ctask);
-    return this_proc()->ctask->id;
+    DCHECK(this_task());
+    return this_task()->id;
 }
 
 int64_t taskyield() {
@@ -72,7 +72,7 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    task *t = this_proc()->ctask;
+    task *t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -84,7 +84,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	task *t = this_proc()->ctask;
+	task *t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -128,13 +128,7 @@ void task::ready() {
     if (exiting) return;
     proc *p = cproc;
     if (!_ready.exchange(true)) {
-        DVLOG(5) << "task readying: " << this;
-        if (p != this_proc()) {
-            p->dirtyq.push(this);
-            p->wakeup();
-        } else {
-            p->runqueue.push_back(this);
-        }
+        p->ready(this);
     }
 }
 
@@ -183,12 +177,12 @@ void task::remove_timeout(timeout_t *to) {
 
 void task::safe_swap() noexcept {
     // swap to scheduler coroutine
-    co.swap(&this_proc()->co);
+    co.swap(&this_proc()->sched_coro());
 }
 
 void task::swap() {
     // swap to scheduler coroutine
-    co.swap(&this_proc()->co);
+    co.swap(&this_proc()->sched_coro());
 
     if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
@@ -216,13 +210,13 @@ void task::swap() {
 }
 
 deadline::deadline(milliseconds ms) {
-    task *t = this_proc()->ctask;
+    task *t = this_task();
     timeout_id = this_proc()->sched().add_timeout(t, ms, deadline_reached());
 }
 
 void deadline::cancel() {
     if (timeout_id) {
-        task *t = this_proc()->ctask;
+        task *t = this_task();
         t->remove_timeout((task::timeout_t *)timeout_id);
         timeout_id = nullptr;
     }
@@ -246,12 +240,12 @@ milliseconds deadline::remaining() const {
 }
 
 task::cancellation_point::cancellation_point() {
-    task *t = this_proc()->ctask;
+    task *t = this_task();
     ++t->cancel_points;
 }
 
 task::cancellation_point::~cancellation_point() {
-    task *t = this_proc()->ctask;
+    task *t = this_task();
     --t->cancel_points;
 }
 
