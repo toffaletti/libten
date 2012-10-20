@@ -48,26 +48,13 @@ int64_t taskyield() {
 
 void tasksystem() {
     proc *p = this_proc();
-    if (!p->ctask->systask) {
-        p->ctask->systask = true;
-        --p->taskcount;
-    }
+    p->mark_system_task();
 }
 
 bool taskcancel(uint64_t id) {
     proc *p = this_proc();
-    task *t = nullptr;
-    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        if ((*i)->id == id) {
-            t = *i;
-            break;
-        }
-    }
-
-    if (t) {
-        t->cancel();
-    }
-    return (bool)t;
+    DCHECK(p) << "BUG: taskcancel called in null proc";
+    return p->cancel_task_by_id(id);
 }
 
 const char *taskname(const char *fmt, ...)
@@ -98,11 +85,7 @@ string taskdump() {
     std::stringstream ss;
     proc *p = this_proc();
     DCHECK(p) << "BUG: taskdump called in null proc";
-    task *t = nullptr;
-    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        t = *i;
-        ss << t << "\n";
-    }
+    p->dump_tasks(ss);
     return ss.str();
 }
 

@@ -57,9 +57,6 @@ struct proc {
 protected:
     friend task *this_task();
     friend int64_t taskyield();
-    friend void tasksystem();
-    friend bool taskcancel(uint64_t);
-    friend string taskdump();
 
     // TODO: might be able to use std::atomic_ specializations for shared_ptr
     // to allow waker to change from normal scheduler to io scheduler waker
@@ -82,7 +79,6 @@ protected:
     //! current time cached in a few places through the event loop
     time_point<steady_clock> now;
 
-
 public:
     explicit proc(task *t = nullptr);
 
@@ -97,7 +93,7 @@ public:
 
     io_scheduler &sched();
 
-    bool is_canceled() {
+    bool is_canceled() const {
         return canceled;
     }
 
@@ -105,8 +101,14 @@ public:
         return !dirtyq.empty();
     }
 
-    bool is_ready() {
+    bool is_ready() const {
         return !runqueue.empty();
+    }
+
+    void dump_tasks(std::ostream &out) const {
+        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
+            out << *i << "\n";
+        }
     }
 
     //void set_waker(const std::shared_ptr<proc_waker> &new_waker) {
@@ -148,6 +150,29 @@ public:
             wakeup();
         } else {
             runqueue.push_back(t);
+        }
+    }
+
+    bool cancel_task_by_id(uint64_t id) {
+        task *t = nullptr;
+        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
+            if ((*i)->id == id) {
+                t = *i;
+                break;
+            }
+        }
+
+        if (t) {
+            t->cancel();
+        }
+        return (bool)t;
+    }
+
+    //! mark current task as system task
+    void mark_system_task() {
+        if (!ctask->systask) {
+            ctask->systask = true;
+            --taskcount;
         }
     }
 
