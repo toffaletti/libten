@@ -18,19 +18,55 @@ extern task *this_task();
 // this can be used to free io_scheduler, or other per-proc
 // resources like dns resolving threads, etc.
 
+//! proc waker is the api for waking a proc from sleep
+// io_scheduler uses this
+class proc_waker {
+public:
+    //! used to wake up from epoll
+    event_fd event;
+    //! true when asleep in epoll_wait
+    std::atomic<bool> polling;
+
+public: // non-epoll data
+    std::mutex mutex;
+    //! cond used to wake up when runqueue is empty and no epoll
+    std::condition_variable cond;
+    //! true when asleep and runqueue is empty and no epoll
+    bool asleep;
+public:
+    proc_waker() : polling(false), asleep(false) {}
+
+    void wake() {
+        if (polling.exchange(false)) {
+            DVLOG(5) << "eventing " << this;
+            event.write(1);
+        } else {
+            std::lock_guard<std::mutex> lk{mutex};
+            if (asleep) {
+                DVLOG(5) << "notifying " << this;
+                cond.notify_one();
+            }
+        }
+    }
+
+    void wait();
+
+};
+
 struct proc {
 protected:
-    friend struct io_scheduler;
     friend task *this_task();
     friend int64_t taskyield();
     friend void tasksystem();
     friend bool taskcancel(uint64_t);
     friend string taskdump();
-    friend const time_point<steady_clock> &procnow();
 
+    // TODO: might be able to use std::atomic_ specializations for shared_ptr
+    // to allow waker to change from normal scheduler to io scheduler waker
+    // perhaps there is a better pattern...
+    std::shared_ptr<proc_waker> _waker;
     io_scheduler *_sched;
     std::thread *thread;
-    std::mutex mutex;
     uint64_t nswitch;
     task *ctask;
     tasklist taskpool;
@@ -39,19 +75,13 @@ protected:
     coroutine co;
     //! other threads use this to add tasks to runqueue
     llqueue<task *> dirtyq;
-    //! true when asleep and runqueue is empty and no epoll
-    bool asleep;
-    //! true when asleep in epoll_wait
-    std::atomic<bool> polling;
     //! true when canceled
     std::atomic<bool> canceled;
-    //! cond used to wake up when runqueue is empty and no epoll
-    std::condition_variable cond;
-    //! used to wake up from epoll
-    event_fd event;
+    //! tasks in this proc
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
     time_point<steady_clock> now;
+
 
 public:
     explicit proc(task *t = nullptr);
@@ -67,13 +97,38 @@ public:
 
     io_scheduler &sched();
 
+    bool is_canceled() {
+        return canceled;
+    }
+
+    bool is_dirty() {
+        return !dirtyq.empty();
+    }
+
     bool is_ready() {
         return !runqueue.empty();
+    }
+
+    //void set_waker(const std::shared_ptr<proc_waker> &new_waker) {
+    //    _waker = new_waker;
+    //}
+
+    std::shared_ptr<proc_waker> get_waker() {
+        return _waker;
     }
 
     void cancel() {
         canceled = true;
         wakeup();
+    }
+
+    const time_point<steady_clock> & update_cached_time() {
+        now = steady_clock::now();
+        return now;
+    }
+
+    const time_point<steady_clock> &cached_time() {
+        return now;
     }
 
     void shutdown() {

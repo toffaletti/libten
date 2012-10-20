@@ -35,14 +35,16 @@ struct io_scheduler {
     epoll_fd efd;
     //! number of fds we've been asked to wait on
     size_t npollfds;
+    std::shared_ptr<proc_waker> _waker;
 
     io_scheduler() : npollfds(0) {
+        _waker = this_proc()->get_waker();
         events.reserve(1000);
         // add the eventfd used to wake up
         {
             epoll_event ev{};
             ev.events = EPOLLIN | EPOLLET;
-            int e_fd = this_proc()->event.fd;
+            int e_fd = _waker->event.fd;
             ev.data.fd = e_fd;
             if (pollfds.size() <= (size_t)e_fd) {
                 pollfds.resize(e_fd+1);
@@ -151,7 +153,7 @@ struct io_scheduler {
 
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
-        task *t = this_proc()->ctask;
+        task *t = this_task();
         add_timeout(t, dura);
         t->swap();
     }
@@ -183,7 +185,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-        task *t = this_proc()->ctask;
+        task *t = this_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
@@ -218,10 +220,10 @@ struct io_scheduler {
         tasksystem();
         proc *p = this_proc();
         for (;;) {
-            p->now = steady_clock::now();
+            p->update_cached_time();
             // let everyone else run
             taskyield();
-            p->now = steady_clock::now();
+            p->update_cached_time();
             task *t = nullptr;
 
             int ms = -1;
@@ -231,11 +233,12 @@ struct io_scheduler {
             if (!timeout_tasks.empty()) {
                 t = timeout_tasks.front();
                 DCHECK(!t->timeouts.empty()) << "BUG: " << t << " in timeout list with no timeouts set";
-                if (t->timeouts.front()->when <= p->now) {
+                auto now = p->cached_time();
+                if (t->timeouts.front()->when <= now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    uint64_t usec = duration_cast<microseconds>(t->timeouts.front()->when - p->now).count();
+                    uint64_t usec = duration_cast<microseconds>(t->timeouts.front()->when - now).count();
                     // TODO: round millisecond timeout up for now
                     // in the future we can provide higher resolution thanks to
                     // timerfd supporting nanosecond resolution
@@ -246,7 +249,7 @@ struct io_scheduler {
             }
 
             if (ms != 0) {
-                if (!p->runqueue.empty()) {
+                if (p->is_ready()) {
                     // don't block on epoll if tasks are ready to run
                     ms = 0;
                 }
@@ -267,16 +270,16 @@ struct io_scheduler {
                     ms = -1;
                 }
                 events.resize(1000);
-                p->polling = true;
-                if (p->dirtyq.empty()) {
+                _waker->polling = true;
+                if (p->is_dirty()) {
                     // another thread(s) changed the dirtyq before we started
                     // polling. so we should skip epoll and run that task
-                    efd.wait(events, ms);
-                } else {
                     events.resize(0);
+                } else {
+                    efd.wait(events, ms);
                 }
-                p->polling = false;
-                int e_fd = p->event.fd;
+                _waker->polling = false;
+                int e_fd = _waker->event.fd;
                 // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
                     // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
@@ -301,7 +304,7 @@ struct io_scheduler {
                     if (i->data.fd == e_fd) {
                         // our wake up eventfd was written to
                         // clear events by reading value
-                        p->event.read();
+                        _waker->event.read();
                     } else if (i->data.fd == tfd.fd) {
                         // timerfd fired, sleeping tasks woken below
                     } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
@@ -312,12 +315,12 @@ struct io_scheduler {
                 }
             }
 
-            p->now = steady_clock::now();
+            auto now = p->update_cached_time();
             // wake up sleeping tasks
             auto i = timeout_tasks.begin();
             for (; i != timeout_tasks.end(); ++i) {
                 t = *i;
-                if (t->timeouts.front()->when <= p->now) {
+                if (t->timeouts.front()->when <= now) {
                     DVLOG(5) << "TIMEOUT on task: " << t;
                     t->ready();
                 } else {
@@ -325,7 +328,7 @@ struct io_scheduler {
                 }
             }
         }
-        DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";
+        DVLOG(5) << "BUG: " << this_task() << " is exiting";
     }
 };
 

@@ -30,6 +30,16 @@ task *this_task() {
     return _this_proc->ctask;
 }
 
+void proc_waker::wait() {
+    proc *p = this_proc();
+    std::unique_lock<std::mutex> lk{mutex};
+    while (!p->is_ready() && !p->is_canceled() && !p->is_dirty()) {
+        asleep = true;
+        cond.wait(lk);
+    }
+    asleep = false;
+}
+
 void proc::startproc(proc *p_, task *t) {
     set_this_proc(p_);
     std::unique_ptr<proc> p{p_};
@@ -66,16 +76,7 @@ void proc::deltaskinproc(task *t) {
 }
 
 void proc::wakeup() {
-    if (polling.exchange(false)) {
-        DVLOG(5) << "eventing " << this;
-        event.write(1);
-    } else {
-        std::lock_guard<std::mutex> lk{mutex};
-        if (asleep) {
-            DVLOG(5) << "notifying " << this;
-            cond.notify_one();
-        }
-    }
+    _waker->wake();
 }
 
 io_scheduler &proc::sched() {
@@ -99,12 +100,7 @@ void proc::schedule() {
                 }
             }
             if (runqueue.empty()) {
-                std::unique_lock<std::mutex> lk{mutex};
-                while (runqueue.empty() && !canceled && dirtyq.empty()) {
-                    asleep = true;
-                    cond.wait(lk);
-                }
-                asleep = false;
+                _waker->wait(); 
                 // need to go through dirty loop again because
                 // runqueue could still be empty
                 if (!dirtyq.empty()) continue;
@@ -147,11 +143,12 @@ void proc::schedule() {
 
 proc::proc(task *t)
   : _sched(nullptr), nswitch(0), ctask(nullptr),
-    asleep(false), polling(false), canceled(false), taskcount(0)
+    canceled(false), taskcount(0)
 {
-    now = steady_clock::now();
+    _waker = std::make_shared<proc_waker>();
+    update_cached_time();
     add(this);
-    std::lock_guard<std::mutex> lk{mutex};
+    std::lock_guard<std::mutex> lk{_waker->mutex};
     if (t) {
         thread = new std::thread(proc::startproc, this, t);
         thread->detach();
@@ -164,7 +161,7 @@ proc::proc(task *t)
 
 proc::~proc() {
     {
-        std::lock_guard<std::mutex> lk{mutex};
+        std::lock_guard<std::mutex> lk{_waker->mutex};
         if (thread == nullptr) {
             {
                 std::lock_guard<std::mutex> plk{procsmutex};
@@ -279,7 +276,7 @@ int procmain::main(int argc, char *argv[]) {
 }
 
 const time_point<steady_clock> &procnow() {
-    return this_proc()->now;
+    return this_proc()->cached_time();
 }
 
 } // end namespace ten
