@@ -53,6 +53,18 @@ public:
 
 };
 
+struct proc_context {
+    std::thread thread;
+    task *t;
+};
+
+struct proc_scope {
+    std::unique_ptr<proc> p;
+
+    explicit proc_scope(bool main_);
+    ~proc_scope();
+};
+
 struct proc {
 protected:
     friend task *this_task();
@@ -63,7 +75,6 @@ protected:
     // perhaps there is a better pattern...
     std::shared_ptr<proc_waker> _waker;
     io_scheduler *_sched;
-    std::thread thread;
     uint64_t nswitch;
     task *ctask;
     tasklist taskpool;
@@ -78,9 +89,10 @@ protected:
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
     time_point<steady_clock> now;
+    bool _main;
 
 public:
-    explicit proc(task *t = nullptr);
+    explicit proc(bool main_);
 
     proc(const proc &) = delete;
     proc &operator =(const proc &) = delete;
@@ -133,6 +145,7 @@ public:
         return now;
     }
 
+    //! cancel all tasks in this proc
     void shutdown() {
         for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
             task *t = *i;
@@ -204,7 +217,7 @@ public:
     static void add(proc *p);
     static void del(proc *p);
 
-    static void startproc(proc *p_, task *t);
+    static void thread_entry(task *t);
 
 };
 

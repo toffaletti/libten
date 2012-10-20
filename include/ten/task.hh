@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <deque>
+#include <memory>
 #include <poll.h>
 #include "logging.hh"
 
@@ -52,9 +53,14 @@ void procshutdown();
 //! return cached time from event loop, not precise
 const std::chrono::time_point<std::chrono::steady_clock> &procnow();
 
+struct proc_scope;
 //! main entry point for tasks
 struct procmain {
+private:
+    proc_scope *ps;
+public:
     procmain();
+    ~procmain();
 
     int main(int argc=0, char *argv[]=nullptr);
 };

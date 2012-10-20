@@ -4,6 +4,7 @@
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <iostream>
+#include <sys/syscall.h>
 
 namespace ten {
 
@@ -40,14 +41,24 @@ void proc_waker::wait() {
     asleep = false;
 }
 
-void proc::startproc(proc *p_, task *t) {
-    set_this_proc(p_);
-    std::unique_ptr<proc> p{p_};
-    p->addtaskinproc(t);
+proc_scope::proc_scope(bool main_) {
+    p.reset(new proc(main_));
+    set_this_proc(p.get());
+    proc::add(p.get());
+}
+
+proc_scope::~proc_scope() {
+    proc::del(p.get());
+    set_this_proc(nullptr);
+}
+
+void proc::thread_entry(task *t) {
+    proc_scope scope{false};
+    scope.p->addtaskinproc(t);
     t->ready();
-    DVLOG(5) << "proc: " << p_ << " thread id: " << std::this_thread::get_id();
-    p->schedule();
-    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p_;
+    DVLOG(5) << "proc: " << scope.p.get() << " thread id: " << std::this_thread::get_id();
+    scope.p->schedule();
+    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << scope.p.get();
 }
 
 void proc::add(proc *p) {
@@ -141,29 +152,20 @@ void proc::schedule() {
     }
 }
 
-proc::proc(task *t)
+proc::proc(bool main_)
   : _sched(nullptr), nswitch(0), ctask(nullptr),
-    canceled(false), taskcount(0)
+    canceled(false), taskcount(0), _main(main_)
 {
     _waker = std::make_shared<proc_waker>();
     update_cached_time();
-    add(this);
-    std::lock_guard<std::mutex> lk{_waker->mutex};
-    if (t) {
-        thread = std::move(std::thread(proc::startproc, this, t));
-    } else {
-        // main thread proc
-        set_this_proc(this);
-    }
 }
 
 proc::~proc() {
     {
         std::lock_guard<std::mutex> lk{_waker->mutex};
-        // TODO: this is not a great check, need to figure out a better way
-        // to check for the main thread. right now this would be true for a
-        // detached thread
-        if (thread.get_id() == std::thread::id()) {
+        if (_main) {
+            // if the main proc is exiting we need to cancel
+            // all other procs (threads) and wait for them
             {
                 std::lock_guard<std::mutex> plk{procsmutex};
                 for (auto i=procs.begin(); i!= procs.end(); ++i) {
@@ -176,7 +178,7 @@ proc::~proc() {
                 {
                     std::lock_guard<std::mutex> plk{procsmutex};
                     size_t np = procs.size();
-                    if (np == 1)
+                    if (np == 0)
                         break;
                 }
                 std::this_thread::yield();
@@ -189,10 +191,14 @@ proc::~proc() {
             usleep(1000);
         }
         // TODO: now that threads are remaining joinable
-        // maybe shutdown can be cleaner...look info this
-        if (thread.joinable()) {
-            thread.detach();
-        }
+        // maybe shutdown can be cleaner...look into this
+        // example: maybe if canceled we don't detatch
+        // and we can join in the above loop instead of sleep loop
+        //if (thread.joinable()) {
+        //    thread.detach();
+        //}
+        // XXX: there is also a thing that will trigger a cond var
+        // after thread has fully exited. that is another possiblity
         runqueue.clear();
         // clean up system tasks
         while (!alltasks.empty()) {
@@ -207,16 +213,17 @@ proc::~proc() {
         delete _sched;
     }
     // unlock before del()
-    del(this);
     DVLOG(5) << "proc freed: " << this;
-    set_this_proc(nullptr);
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = new task(f, stacksize);
     uint64_t tid = t->id;
-    new proc(t);
-    // task could be freed at this point
+    auto ctx = std::make_shared<proc_context>();
+    ctx->t = t;
+    ctx->thread = std::move(std::thread(proc::thread_entry, t));
+    ctx->thread.detach();
+    // XXX: task could be freed at this point
     return tid;
 }
 
@@ -262,21 +269,21 @@ static void procmain_init() {
     }
 
     netinit();
-
-    new proc();
 }
 
 procmain::procmain() {
+    // only way i know of detecting the main thread
+    CHECK(getpid() == syscall(SYS_gettid)) << "not main thread";
     std::call_once(init_flag, procmain_init);
-    if (this_proc() == nullptr) {
-        // needed for tests which call procmain a lot
-        new proc();
-    }
+    ps = new proc_scope{true};
+}
+
+procmain::~procmain() {
+    delete ps;
 }
 
 int procmain::main(int argc, char *argv[]) {
-    std::unique_ptr<proc> p{this_proc()};
-    p->schedule();
+    ps->p->schedule();
     return EXIT_SUCCESS;
 }
 
