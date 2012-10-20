@@ -63,7 +63,7 @@ protected:
     // perhaps there is a better pattern...
     std::shared_ptr<proc_waker> _waker;
     io_scheduler *_sched;
-    std::thread *thread;
+    std::thread thread;
     uint64_t nswitch;
     task *ctask;
     tasklist taskpool;

@@ -100,7 +100,7 @@ void proc::schedule() {
                 }
             }
             if (runqueue.empty()) {
-                _waker->wait(); 
+                _waker->wait();
                 // need to go through dirty loop again because
                 // runqueue could still be empty
                 if (!dirtyq.empty()) continue;
@@ -150,19 +150,20 @@ proc::proc(task *t)
     add(this);
     std::lock_guard<std::mutex> lk{_waker->mutex};
     if (t) {
-        thread = new std::thread(proc::startproc, this, t);
-        thread->detach();
+        thread = std::move(std::thread(proc::startproc, this, t));
     } else {
         // main thread proc
         set_this_proc(this);
-        thread = nullptr;
     }
 }
 
 proc::~proc() {
     {
         std::lock_guard<std::mutex> lk{_waker->mutex};
-        if (thread == nullptr) {
+        // TODO: this is not a great check, need to figure out a better way
+        // to check for the main thread. right now this would be true for a
+        // detached thread
+        if (thread.get_id() == std::thread::id()) {
             {
                 std::lock_guard<std::mutex> plk{procsmutex};
                 for (auto i=procs.begin(); i!= procs.end(); ++i) {
@@ -187,7 +188,11 @@ proc::~proc() {
             DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
             usleep(1000);
         }
-        delete thread;
+        // TODO: now that threads are remaining joinable
+        // maybe shutdown can be cleaner...look info this
+        if (thread.joinable()) {
+            thread.detach();
+        }
         runqueue.clear();
         // clean up system tasks
         while (!alltasks.empty()) {
