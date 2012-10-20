@@ -53,13 +53,12 @@ void procshutdown();
 //! return cached time from event loop, not precise
 const std::chrono::time_point<std::chrono::steady_clock> &procnow();
 
-struct proc_scope;
 //! main entry point for tasks
 struct procmain {
 private:
-    proc_scope *ps;
+    proc *p;
 public:
-    procmain();
+    explicit procmain(task *t = nullptr);
     ~procmain();
 
     int main(int argc=0, char *argv[]=nullptr);

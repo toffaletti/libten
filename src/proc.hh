@@ -58,13 +58,6 @@ struct proc_context {
     task *t;
 };
 
-struct proc_scope {
-    std::unique_ptr<proc> p;
-
-    explicit proc_scope(bool main_);
-    ~proc_scope();
-};
-
 struct proc {
 protected:
     friend task *this_task();

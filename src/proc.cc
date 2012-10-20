@@ -41,24 +41,10 @@ void proc_waker::wait() {
     asleep = false;
 }
 
-proc_scope::proc_scope(bool main_) {
-    p.reset(new proc(main_));
-    set_this_proc(p.get());
-    proc::add(p.get());
-}
-
-proc_scope::~proc_scope() {
-    proc::del(p.get());
-    set_this_proc(nullptr);
-}
-
 void proc::thread_entry(task *t) {
-    proc_scope scope{false};
-    scope.p->addtaskinproc(t);
+    procmain scope{t};
     t->ready();
-    DVLOG(5) << "proc: " << scope.p.get() << " thread id: " << std::this_thread::get_id();
-    scope.p->schedule();
-    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << scope.p.get();
+    scope.main();
 }
 
 void proc::add(proc *p) {
@@ -237,6 +223,7 @@ static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
 }
 
 static void procmain_init() {
+    CHECK(getpid() == syscall(SYS_gettid)) << "must call procmain in main thread before anything else";
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
@@ -271,19 +258,28 @@ static void procmain_init() {
     netinit();
 }
 
-procmain::procmain() {
+procmain::procmain(task *t) {
     // only way i know of detecting the main thread
-    CHECK(getpid() == syscall(SYS_gettid)) << "not main thread";
+    bool is_main_thread = getpid() == syscall(SYS_gettid);
     std::call_once(init_flag, procmain_init);
-    ps = new proc_scope{true};
+    p = new proc(is_main_thread);
+    set_this_proc(p);
+    proc::add(p);
+    if (t) {
+        p->addtaskinproc(t);
+    }
 }
 
 procmain::~procmain() {
-    delete ps;
+    proc::del(p);
+    set_this_proc(nullptr);
+    delete p;
 }
 
 int procmain::main(int argc, char *argv[]) {
-    ps->p->schedule();
+    DVLOG(5) << "proc: " << p << " thread id: " << std::this_thread::get_id();
+    p->schedule();
+    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p;
     return EXIT_SUCCESS;
 }
 
