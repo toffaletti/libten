@@ -4,6 +4,7 @@
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <iostream>
+#include <condition_variable>
 #include <sys/syscall.h>
 
 namespace ten {
@@ -148,10 +149,10 @@ proc::proc(bool main_)
 
 proc::~proc() {
     {
-        std::lock_guard<std::mutex> lk{_waker->mutex};
         if (_main) {
             // if the main proc is exiting we need to cancel
             // all other procs (threads) and wait for them
+            size_t nprocs = procs.size();
             {
                 std::lock_guard<std::mutex> plk{procsmutex};
                 for (auto i=procs.begin(); i!= procs.end(); ++i) {
@@ -169,12 +170,15 @@ proc::~proc() {
                 }
                 std::this_thread::yield();
             }
-            std::this_thread::yield();
-            // nasty hack for mysql thread cleanup
-            // because it happens *after* all of my code, i have no way of waiting
-            // for it to finish with an event (unless i joined all threads)
-            DVLOG(5) << "sleeping last proc for 1ms to allow other threads to really exit";
-            usleep(1000);
+
+            DVLOG(5) << "sleeping last proc to allow " << nprocs << " threads to exit and cleanup";
+            for (size_t i=0; i<nprocs*2; ++i) {
+                // nasty hack for mysql thread cleanup
+                // because it happens *after* all of my code, i have no way of waiting
+                // for it to finish with an event (unless i joined all threads)
+                usleep(100);
+                std::this_thread::yield();
+            }
         }
         // TODO: now that threads are remaining joinable
         // maybe shutdown can be cleaner...look into this
