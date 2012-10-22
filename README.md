@@ -47,6 +47,7 @@ Dependencies
   * libboost-test-dev >= 1.51
   * libboost-context-dev >= 1.51
   * ragel >= 6.5
+  * libjansson >= 2.3
 
 Bundled 3rd-party components
 ____________________________
@@ -55,7 +56,6 @@ ____________________________
   * glog-0.3.2 from http://code.google.com/p/google-glog/
   * stringencoders from http://code.google.com/p/stringencoders/
   * msgpack-0.5.7 from http://msgpack.org/
-  * jansson-2.3 from http://www.digip.org/jansson/
   * miniz from http://code.google.com/p/miniz/
 
 TODO
