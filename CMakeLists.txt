@@ -85,6 +85,7 @@ endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
 
+add_subdirectory(msgpack)
 add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
@@ -108,13 +109,14 @@ add_dependencies(ten libglog ragel_uri_parser boost_context)
 
 target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
-add_subdirectory(examples)
-add_subdirectory(tests)
-add_subdirectory(benchmarks)
+if (PROJECT_NAME STREQUAL "ten")
+    add_subdirectory(examples)
+    add_subdirectory(tests)
+    add_subdirectory(benchmarks)
 
-add_subdirectory(msgpack)
+    add_custom_target(world DEPENDS
+        examples
+        benchmarks
+        )
+endif ()
 
-add_custom_target(world DEPENDS
-    examples
-    benchmarks
-    )
