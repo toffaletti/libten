@@ -25,18 +25,18 @@ struct Headers {
 
     Headers() {}
 
-    template <typename ValueT, typename ...Args>
-    Headers(std::string header_name, ValueT header_value, Args ...args) {
-        headers.reserve(std::max(HEADER_RESERVE, sizeof...(args)));
-        init(std::move(header_name), std::move(header_value), std::move(args)...);
+    template <typename ...Args>
+    Headers(Args&& ...args) {
+        static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
+        headers.reserve(sizeof...(args) / 2);
+        init(std::forward<Args>(args)...);
     }
 
-    // init can go away with delegating constructor support
     void init() {}
     template <typename ValueT, typename ...Args>
-    void init(std::string header_name, ValueT header_value, Args ...args) {
+    void init(std::string &&header_name, ValueT &&header_value, Args&& ...args) {
         append<ValueT>(std::move(header_name), std::move(header_value));
-        init(std::move(args)...);
+        init(std::forward<Args>(args)...);
     }
 
     void set(const std::string &field, const std::string &value);
