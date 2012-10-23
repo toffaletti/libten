@@ -109,7 +109,7 @@ add_dependencies(ten libglog ragel_uri_parser boost_context)
 
 target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
-if (PROJECT_NAME STREQUAL "ten")
+if (CMAKE_PROJECT_NAME STREQUAL "ten")
     add_subdirectory(examples)
     add_subdirectory(tests)
     add_subdirectory(benchmarks)
