@@ -33,9 +33,10 @@ struct Headers {
     }
 
     void init() {}
+
     template <typename ValueT, typename ...Args>
     void init(std::string &&header_name, ValueT &&header_value, Args&& ...args) {
-        append<ValueT>(std::move(header_name), std::move(header_value));
+        append(std::forward<std::string>(header_name), std::forward<ValueT>(header_value));
         init(std::forward<Args>(args)...);
     }
 
