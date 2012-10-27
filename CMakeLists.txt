@@ -18,7 +18,7 @@ if (BOOST_HOME AND IS_DIRECTORY ${BOOST_HOME}/boost)
     message(STATUS "Using boost ${BOOST_HOME}")
     include_directories(${BOOST_HOME})
 
-    add_library(boost_unit_test_framework-mt
+    add_library(boost_unit_test_framework
         ${BOOST_HOME}/libs/test/src/compiler_log_formatter.cpp
         ${BOOST_HOME}/libs/test/src/debug.cpp
         ${BOOST_HOME}/libs/test/src/exception_safety.cpp
@@ -40,7 +40,7 @@ if (BOOST_HOME AND IS_DIRECTORY ${BOOST_HOME}/boost)
         ${BOOST_HOME}/libs/test/src/xml_report_formatter.cpp
         )
 
-    add_library(boost_program_options-mt
+    add_library(boost_program_options
         ${BOOST_HOME}/libs/program_options/src/cmdline.cpp
         ${BOOST_HOME}/libs/program_options/src/config_file.cpp
         ${BOOST_HOME}/libs/program_options/src/options_description.cpp

@@ -29,7 +29,7 @@ add_executable(http-proxy EXCLUDE_FROM_ALL http-proxy.cc)
 target_link_libraries(http-proxy ten)
 
 add_executable(http-server EXCLUDE_FROM_ALL http-server.cc)
-target_link_libraries(http-server ten boost_program_options-mt)
+target_link_libraries(http-server ten boost_program_options)
 
 add_executable(msg-pack EXCLUDE_FROM_ALL msgpack.cc)
 target_link_libraries(msg-pack ten jansson msgpack)
@@ -38,10 +38,10 @@ add_executable(rpc-server EXCLUDE_FROM_ALL rpc-server.cc)
 target_link_libraries(rpc-server ten msgpack)
 
 add_executable(json-path EXCLUDE_FROM_ALL json-path.cc)
-target_link_libraries(json-path ten jansson msgpack boost_program_options-mt)
+target_link_libraries(json-path ten jansson msgpack boost_program_options)
 
 add_executable(memg EXCLUDE_FROM_ALL memg.cc)
-target_link_libraries(memg ten boost_program_options-mt)
+target_link_libraries(memg ten boost_program_options)
 
 add_executable(synch EXCLUDE_FROM_ALL synch.cc)
 target_link_libraries(synch ten)
