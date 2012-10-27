@@ -81,7 +81,7 @@ const char *taskstate(const char *fmt, ...)
     return t->state;
 }
 
-string taskdump() {
+std::string taskdump() {
     std::stringstream ss;
     proc *p = this_proc();
     DCHECK(p) << "BUG: taskdump called in null proc";
@@ -90,7 +90,7 @@ string taskdump() {
 }
 
 void taskdumpf(FILE *of) {
-    string dump = taskdump();
+    std::string dump = taskdump();
     fwrite(dump.c_str(), sizeof(char), dump.size(), of);
     fflush(of);
 }

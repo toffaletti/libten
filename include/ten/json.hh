@@ -13,11 +13,6 @@
 #endif
 
 namespace ten {
-using std::move;
-using std::string;
-using std::pair;
-using std::initializer_list;
-
 
 //----------------------------------------------------------------
 // streams meet json_t (just barely)
@@ -124,16 +119,16 @@ class json {
 
     json()                                     : _p()             {}
     json(const json  &js)                      : _p(js._p)        {}
-    json(      json &&js)                      : _p(move(js._p))  {}
+    json(      json &&js)                      : _p(std::move(js._p))  {}
     json(const json_ptr  &p)                   : _p(p)            {}
     json(      json_ptr &&p)                   : _p(p)            {}
     explicit json(json_t *j)                   : _p(j)            {}
              json(json_t *j, json_take_t t)    : _p(j, t)         {}
     json & operator = (const json  &js)        { _p = js._p;       return *this; }
-    json & operator = (      json &&js)        { _p = move(js._p); return *this; }
+    json & operator = (      json &&js)        { _p = std::move(js._p); return *this; }
 
     json(const char *s)                        : _p(json_string(s),                 json_take) {}
-    json(const string &s)                      : _p(json_string(s.c_str()),         json_take) {}
+    json(const std::string &s)                      : _p(json_string(s.c_str()),         json_take) {}
     json(int i)                                : _p(json_integer(i),                json_take) {}
     json(long i)                               : _p(json_integer(i),                json_take) {}
     json(long long i)                          : _p(json_integer(i),                json_take) {}
@@ -147,7 +142,7 @@ class json {
     static json object()                 { return json(json_object(),   json_take); }
     static json array()                  { return json(json_array(),    json_take); }
     static json str(const char *s)       { return json(s); }
-    static json str(const string &s)     { return json(s); }
+    static json str(const std::string &s)     { return json(s); }
     static json integer(int i)           { return json(i); }
     static json integer(long i)          { return json(i); }
     static json integer(long long i)     { return json(i); }
@@ -162,13 +157,13 @@ class json {
     static json null()                   { return json(json_null(),     json_take); }
 
     // default to building objects, they're more common
-    json(initializer_list<pair<const char *, json>> init)
+    json(std::initializer_list<std::pair<const char *, json>> init)
         : _p(json_object(), json_take)
     {
         for (const auto &kv : init)
             set(kv.first, kv.second);
     }
-    static json array(initializer_list<const json> init) {
+    static json array(std::initializer_list<const json> init) {
         json a(json_array(), json_take);
         for (const auto &j : init)
             a.push(j);
@@ -199,11 +194,11 @@ class json {
 
     // parse and output
 
-    static json load(const string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
+    static json load(const std::string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
     static json load(const char *s, unsigned flags = JSON_DECODE_ANY)    { return load(s, strlen(s), flags); }
     static json load(const char *s, size_t len, unsigned flags);
 
-    string dump(unsigned flags = JSON_ENCODE_ANY) const;
+    std::string dump(unsigned flags = JSON_ENCODE_ANY) const;
 
     friend std::ostream & operator << (std::ostream &o, const json &j) {
         ten::dump(o, j.get());
@@ -227,7 +222,7 @@ class json {
 
     // scalar access
 
-    string str()         const  { return json_string_value(get()); }
+    std::string str()         const  { return json_string_value(get()); }
     const char *c_str()  const  { return json_string_value(get()); }
     json_int_t integer() const  { return json_integer_value(get()); }
     double real()        const  { return json_real_value(get()); }
@@ -246,11 +241,11 @@ class json {
 
     size_t osize() const                                { return      json_object_size(   get());                    }
     json get(           const char *key)                { return json(json_object_get(    get(), key));              }
-    json get(         const string &key)                { return json(json_object_get(    get(), key.c_str()));      }
+    json get(         const std::string &key)                { return json(json_object_get(    get(), key.c_str()));      }
     bool set(           const char *key, const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
-    bool set(         const string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
+    bool set(         const std::string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
     bool erase(         const char *key)                { return     !json_object_del(    get(), key);               }
-    bool erase(       const string &key)                { return     !json_object_del(    get(), key.c_str());       }
+    bool erase(       const std::string &key)                { return     !json_object_del(    get(), key.c_str());       }
     bool oclear()                                       { return     !json_object_clear(  get());                    }
     bool omerge(         const json &oj)                { return     !json_object_update(          get(), oj.get()); }
     bool omerge_existing(const json &oj)                { return     !json_object_update_existing( get(), oj.get()); }
@@ -268,7 +263,7 @@ class json {
 
     // deep walk
 
-    json path(const string &path);
+    json path(const std::string &path);
 
     typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
     void visit(const visitor_func_t &visitor);
@@ -286,8 +281,8 @@ class json {
       public:
         typedef const char *key_type;
         typedef json mapped_type;
-        typedef pair<const key_type, mapped_type> value_type;
-        typedef initializer_list<value_type> init_type;
+        typedef std::pair<const key_type, mapped_type> value_type;
+        typedef std::initializer_list<value_type> init_type;
 
         value_type operator * () const {
             return value_type(json_object_iter_key(_it), json(json_object_iter_value(_it)));
@@ -310,7 +305,7 @@ class json {
 
       public:
         typedef json value_type;
-        typedef initializer_list<value_type> init_type;
+        typedef std::initializer_list<value_type> init_type;
 
         json operator * () const {
             return json(json_array_get(_arr, _i));
@@ -375,7 +370,7 @@ class json {
 inline json to_json(const json & j)   { return j; }
 inline json to_json(      json &&j)   { return j; }
 inline json to_json(const char *s)    { return json(s); }
-inline json to_json(const string &s)  { return json(s); }
+inline json to_json(const std::string &s)  { return json(s); }
 inline json to_json(int i)            { return json(i); }
 inline json to_json(long i)           { return json(i); }
 inline json to_json(long long i)      { return json(i); }
@@ -429,7 +424,7 @@ template <> struct json_traits<json> : public json_traits_conv<json> {
 };
 
 // string
-template <> struct json_traits<string> : public json_traits_conv<string> {};
+template <> struct json_traits<std::string> : public json_traits_conv<std::string> {};
 template <> struct json_traits<const char *> {
     typedef const char *type;
     static const bool can_make = true;   // makes copy
