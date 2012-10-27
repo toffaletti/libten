@@ -74,10 +74,10 @@ add_subdirectory(glog)
 
 if (CARES_LIB AND CARES_INCLUDE)
     set(RESOLVER_SRC src/cares.cc)
-else(CARES_LIB AND CARES_INCLUDE)
+else()
     set(CARES_LIB "")
     set(RESOLVER_SRC src/resolve.cc)
-endif (CARES_LIB AND CARES_INCLUDE)
+endif ()
 
 if (OPENSSL_FOUND)
     set(SSL_SRC src/ssl.cc)
