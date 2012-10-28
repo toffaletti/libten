@@ -60,7 +60,10 @@ public:
             resp_sent = true;
             // TODO: Content-Length might be good to add to normal responses,
             //    but only if Transfer-Encoding isn't chunked?
-            if (resp.status_code == 404 && resp.get("Content-Length").empty() && req.method != "HEAD") {
+            if (resp.status_code >= 400 && resp.status_code <= 599
+                 && resp.get("Content-Length").empty()
+                 && req.method != "HEAD")
+            {
                 resp.set("Content-Length", resp.body.size());
             }
             // HTTP/1.1 requires Date, so lets add it
