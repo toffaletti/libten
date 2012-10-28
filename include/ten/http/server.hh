@@ -58,9 +58,11 @@ public:
         ssize_t send_response() {
             if (resp_sent) return 0;
             resp_sent = true;
-            std::string data;
-            // TODO: Content-Length might be another good one to add here
-            // but only if Transfer-Encoding isn't chunked?
+            // TODO: Content-Length might be good to add to normal responses,
+            //    but only if Transfer-Encoding isn't chunked?
+            if (resp.status_code == 404 && resp.get("Content-Length").empty() && req.method != "HEAD") {
+                resp.set("Content-Length", resp.body.size());
+            }
             // HTTP/1.1 requires Date, so lets add it
             if (resp.get("Date").empty()) {
                 char buf[128];
@@ -69,16 +71,16 @@ public:
                 strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
                 resp.set("Date", buf);
             }
-            std::string conn = req.get("Connection");
-            if (!conn.empty() && resp.get("Connection").empty()) {
+            if (resp.get("Connection").empty()) {
                 // obey clients wishes if we have none of our own
-                resp.set("Connection", conn);
-            }
-            if (req.http_version == "HTTP/1.0" && req.get("Connection").empty()) {
-                resp.set("Connection", "close");
+                std::string conn = req.get("Connection");
+                if (!conn.empty())
+                    resp.set("Connection", conn);
+                else if (req.http_version == http_1_0)
+                    resp.set("Connection", "close");
             }
 
-            data = resp.data();
+            auto data = resp.data();
             if (!resp.body.empty() && req.method != "HEAD") {
                 data += resp.body;
             }
@@ -119,7 +121,7 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, http_headers{"Content-Length", 0});
+                resp = http_response{404};
                 send_response();
             }
 
