@@ -113,7 +113,7 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, Headers("Content-Length", 0));
+                resp = http_response(404, http_headers("Content-Length", 0));
                 send_response();
             }
 
@@ -230,8 +230,7 @@ done:
                     i->callback(r);
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in route [" << i->pattern << "]: " << e.what();
-                    r.resp = http_response(500,
-                            Headers("Connection", "close"));
+                    r.resp = http_response(500, http_headers("Connection", "close"));
                     std::string msg = e.what();
                     msg += "\n";
                     r.resp.set_body(msg);

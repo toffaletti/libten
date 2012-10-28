@@ -6,6 +6,9 @@
 
 namespace ten {
 
+extern const std::string http_1_0{"HTTP/1.0"};
+extern const std::string http_1_1{"HTTP/1.1"};
+
 static std::unordered_map<uint16_t, std::string> http_status_codes = {
     { 100, "Continue" },
     { 101, "Switching Protocols" },
@@ -49,18 +52,17 @@ static std::unordered_map<uint16_t, std::string> http_status_codes = {
     { 505, "HTTP Version Not Supported" },
 };
 
+namespace {
 struct is_header {
     const std::string &field;
-    is_header(const std::string &field_) : field(field_) {}
-
     bool operator()(const std::pair<std::string, std::string> &header) {
         return boost::iequals(header.first, field);
     }
 };
+} // ns
 
-void Headers::set(const std::string &field, const std::string &value) {
-    header_list::iterator i = std::find_if(headers.begin(),
-        headers.end(), is_header(field));
+void http_headers::set(const std::string &field, const std::string &value) {
+    auto i = std::find_if(headers.begin(), headers.end(), is_header{field});
     if (i != headers.end()) {
         i->second = value;
     } else {
@@ -68,23 +70,21 @@ void Headers::set(const std::string &field, const std::string &value) {
     }
 }
 
-void Headers::append(const std::string &field, const std::string &value) {
+void http_headers::append(const std::string &field, const std::string &value) {
     headers.push_back(std::make_pair(field, value));
 }
 
-bool Headers::remove(const std::string &field) {
-    header_list::iterator i = std::remove_if(headers.begin(),
-        headers.end(), is_header(field));
+bool http_headers::remove(const std::string &field) {
+    auto i = std::remove_if(headers.begin(), headers.end(), is_header{field});
     if (i != headers.end()) {
-        headers.erase(i, headers.end()); // remove *all*
+        headers.erase(i, headers.end()); // remove now-invalid tail
         return true;
     }
     return false;
 }
 
-std::string Headers::get(const std::string &field) const {
-    header_list::const_iterator i = std::find_if(headers.begin(),
-        headers.end(), is_header(field));
+std::string http_headers::get(const std::string &field) const {
+    auto i = std::find_if(headers.begin(), headers.end(), is_header{field});
     if (i != headers.end()) {
         return i->second;
     }

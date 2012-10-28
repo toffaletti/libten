@@ -17,26 +17,27 @@ namespace ten {
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
-const size_t HEADER_RESERVE = 5;
+extern const std::string http_1_0; //"HTTP/1.0"
+extern const std::string http_1_1; //"HTTP/1.1"
 
 //! http headers
-struct Headers {
+struct http_headers {
     header_list headers;
 
-    Headers() {}
+    http_headers() {}
 
     template <typename ...Args>
-    Headers(Args&& ...args) {
-        static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-        headers.reserve(sizeof...(args) / 2);
-        init(std::forward<Args>(args)...);
-    }
+        http_headers(Args&& ...args) {
+            static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
+            headers.reserve(sizeof...(args) / 2);
+            init(std::forward<Args>(args)...);
+        }
 
     void init() {}
 
     template <typename ValueT, typename ...Args>
-    void init(std::string &&header_name, ValueT &&header_value, Args&& ...args) {
-        append(std::forward<std::string>(header_name), std::forward<ValueT>(header_value));
+    void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
+        append(field, std::forward<ValueT>(header_value));
         init(std::forward<Args>(args)...);
     }
 
@@ -71,13 +72,20 @@ struct Headers {
 };
 
 //! base class for http request and response
-struct http_base : Headers {
-    bool complete;
-    std::string body;
-    size_t body_length;
+struct http_base : http_headers {
+    bool complete {};
+    std::string body {};
+    size_t body_length {};
 
-    explicit http_base(Headers headers_ = Headers()) :
-        Headers(std::move(headers_)), complete(false), body_length(0) {}
+    explicit http_base(http_headers headers_ = http_headers())
+        : http_headers(std::move(headers_)) {}
+
+    void base_clear() {
+        headers.clear();
+        complete = false;
+        body.clear();
+        body_length = 0;
+    }
 
     void set_body(const std::string &body_,
             const std::string &content_type="")
@@ -94,26 +102,26 @@ struct http_base : Headers {
 
 //! http request
 struct http_request : http_base {
-    std::string method;
-    std::string uri;
-    std::string http_version;
+    std::string method {};
+    std::string uri {};
+    std::string http_version {};
 
     http_request() : http_base() {}
     http_request(std::string method_,
-        std::string uri_,
-        Headers headers_ = Headers(),
-        std::string http_version_ = "HTTP/1.1")
+                 std::string uri_,
+                 http_headers headers_ = http_headers(),
+                 std::string http_version_ = http_1_1)
         : http_base(std::move(headers_)),
-        method(std::move(method_)), uri(std::move(uri_)), http_version(std::move(http_version_)) {}
+          method(std::move(method_)),
+          uri(std::move(uri_)),
+          http_version(std::move(http_version_))
+        {}
 
     void clear() {
-        headers.clear();
-        complete = false;
+        base_clear();
         method.clear();
         uri.clear();
         http_version.clear();
-        body.clear();
-        body_length = 0;
     }
 
     void parser_init(struct http_parser *p);
@@ -133,28 +141,25 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
-    std::string http_version;
-    unsigned long status_code;
-    http_request *req;
+    std::string http_version {};
+    unsigned long status_code {};
+    http_request *req {};
 
     http_response(http_request *req_) : http_base(), req(req_) {}
 
     http_response(unsigned long status_code_ = 200,
-        Headers headers_ = Headers(),
-        std::string http_version_ = "HTTP/1.1")
+                  http_headers headers_ = http_headers(),
+                  std::string http_version_ = http_1_1)
         : http_base(std::move(headers_)),
-        http_version(std::move(http_version_)),
-        status_code(std::move(status_code_)),
-        req(NULL)
-    {
-    }
+          http_version(std::move(http_version_)),
+          status_code(std::move(status_code_))
+        {}
 
     void clear() {
-        headers.clear();
+        base_clear();
         http_version.clear();
         status_code = 0;
-        body.clear();
-        body_length = 0;
+        // req? - Chip
     }
 
     const std::string &reason() const;
