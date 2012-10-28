@@ -6,6 +6,7 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
+#include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
@@ -68,8 +69,10 @@ public:
 
             std::string hdata = r.data();
             ssize_t nw = _sock.send(hdata.c_str(), hdata.size());
+            assert((size_t)nw == hdata.size());
             if (r.body.size()) {
                 nw = _sock.send(r.body.c_str(), r.body.size());
+                assert((size_t)nw == r.body.size());
             }
 
             http_parser parser;
@@ -94,8 +97,9 @@ public:
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
-            if ((resp.http_version == "HTTP/1.0" && resp.get("Connection") != "Keep-Alive") ||
-                    resp.get("Connection") == "close")
+            const auto conn = resp.get("Connection");
+            if (boost::iequals(conn, "close")
+                || (resp.http_version == http_1_0 && !boost::iequals(conn, "Keep-Alive")))
             {
                 _sock.close();
             }

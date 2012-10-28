@@ -61,8 +61,16 @@ struct is_header {
 };
 } // ns
 
+header_list::iterator http_headers::find(const std::string &field) {
+    return std::find_if(headers.begin(), headers.end(), is_header{field});
+}
+
+header_list::const_iterator http_headers::find(const std::string &field) const {
+    return std::find_if(headers.begin(), headers.end(), is_header{field});
+}
+
 void http_headers::set(const std::string &field, const std::string &value) {
-    auto i = std::find_if(headers.begin(), headers.end(), is_header{field});
+    auto i = find(field);
     if (i != headers.end()) {
         i->second = value;
     } else {
@@ -71,7 +79,7 @@ void http_headers::set(const std::string &field, const std::string &value) {
 }
 
 void http_headers::append(const std::string &field, const std::string &value) {
-    headers.push_back(std::make_pair(field, value));
+    headers.emplace_back(field, value);
 }
 
 bool http_headers::remove(const std::string &field) {
@@ -84,19 +92,41 @@ bool http_headers::remove(const std::string &field) {
 }
 
 std::string http_headers::get(const std::string &field) const {
-    auto i = std::find_if(headers.begin(), headers.end(), is_header{field});
+    auto i = find(field);
     if (i != headers.end()) {
         return i->second;
     }
     return std::string();
 }
 
+maybe<std::string> http_headers::mget(const std::string &field) const {
+    auto i = find(field);
+    if (i != headers.end()) {
+        return i->second;
+    }
+    return nothing;
+}
+
+#ifdef CHIP_UNSURE
+
+bool http_headers::is(const std::string &field, const std::string &value) const {
+    auto i = find(field);
+    return (i != headers.end()) && (i->second == value);
+}
+
+bool http_headers::is_nocase(const std::string &field, const std::string &value) const {
+    auto i = find(field);
+    return (i != headers.end()) && boost::iequals(i->second, value);
+}
+
+#endif
+
+extern "C" {
+
 static int _on_header_field(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
-    if (m->headers.empty()) {
-        m->headers.push_back(std::make_pair(std::string(), std::string()));
-    } else if (!m->headers.back().second.empty()) {
-        m->headers.push_back(std::make_pair(std::string(), std::string()));
+    if (m->headers.empty() || !m->headers.back().second.empty()) {
+        m->headers.emplace_back();
     }
     m->headers.back().first.append(at, length);
     return 0;
@@ -122,7 +152,7 @@ static int _on_message_complete(http_parser *p) {
 }
 
 static int _request_on_url(http_parser *p, const char *at, size_t length) {
-    http_request *m = (http_request *)p->data;
+    http_request *m = reinterpret_cast<http_request *>(p->data);
     m->uri.append(at, length);
     return 0;
 }
@@ -140,6 +170,9 @@ static int _request_on_headers_complete(http_parser *p) {
 
     return 0;
 }
+
+} // extern "C"
+
 
 void http_request::parser_init(struct http_parser *p) {
     http_parser_init(p, HTTP_REQUEST);

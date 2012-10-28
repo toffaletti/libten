@@ -9,6 +9,7 @@
 
 #include "http_parser.h"
 #include "ten/error.hh"
+#include "ten/maybe.hh"
 
 namespace ten {
 
@@ -55,36 +56,53 @@ struct http_headers {
             append(field, boost::lexical_cast<std::string>(value));
         }
 
-    header_list::iterator find(const std::string &field);
+    header_list::iterator       find(const std::string &field);
+    header_list::const_iterator find(const std::string &field) const;
 
     bool remove(const std::string &field);
 
     std::string get(const std::string &field) const;
+    maybe<std::string> mget(const std::string &field) const;
 
     template <typename ValueT>
         ValueT get(const std::string &field) const {
-            std::string val = get(field);
-            if (val.empty()) {
-                return ValueT();
-            }
-            return boost::lexical_cast<ValueT>(val);
+            auto i = find(field);
+            return (i == headers.end()) ? ValueT() : boost::lexical_cast<ValueT>(i->second);
         }
+    template <typename ValueT>
+        maybe<ValueT> mget(const std::string &field) const {
+            auto i = find(field);
+            return (i == headers.end()) ? nothing : boost::lexical_cast<ValueT>(i->second);
+        }
+
+#ifdef CHIP_UNSURE
+
+    bool is(const std::string &field, const std::string &value) const;
+    bool is_nocase(const std::string &field, const std::string &value) const;
+
+    template <typename ValueT>
+        bool is(const std::string &field, const ValueT &value) const {
+            auto i = headers.find(field);
+            return (i != headers.end()) && (boost::lexical_cast<ValueT>(i->second) == value);
+        }
+
+#endif
 };
 
 //! base class for http request and response
 struct http_base : http_headers {
-    bool complete {};
-    std::string body {};
+    std::string body;
     size_t body_length {};
+    bool complete {};
 
     explicit http_base(http_headers headers_ = http_headers())
         : http_headers(std::move(headers_)) {}
 
     void base_clear() {
         headers.clear();
-        complete = false;
         body.clear();
         body_length = 0;
+        complete = false;
     }
 
     void set_body(const std::string &body_,
@@ -102,9 +120,9 @@ struct http_base : http_headers {
 
 //! http request
 struct http_request : http_base {
-    std::string method {};
-    std::string uri {};
-    std::string http_version {};
+    std::string method;
+    std::string uri;
+    std::string http_version;
 
     http_request() : http_base() {}
     http_request(std::string method_,
@@ -141,7 +159,7 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
-    std::string http_version {};
+    std::string http_version;
     unsigned long status_code {};
     http_request *req {};
 

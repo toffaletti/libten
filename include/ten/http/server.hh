@@ -3,6 +3,7 @@
 
 #include <fnmatch.h>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/compare.hpp>
 #include <chrono>
 #include <functional>
 #include <netinet/tcp.h>
@@ -22,10 +23,15 @@ public:
 
     //! wrapper around an http request/response
     struct request {
+        http_request &req;
+        netsock &sock;
+        http_response resp {404};
+        bool resp_sent {false};
+        std::chrono::high_resolution_clock::time_point start;
+
         request(http_request &req_, netsock &sock_)
-            : req(req_), resp(404), sock(sock_),
-            start(std::chrono::steady_clock::now()),
-            resp_sent(false) {}
+            : req(req_), sock(sock_),
+              start(std::chrono::steady_clock::now()) {}
 
         //! compose a uri from the request uri
         uri get_uri(std::string host="") {
@@ -44,7 +50,7 @@ public:
             uri tmp;
             tmp.host = host;
             tmp.scheme = "http";
-            tmp.path = req.uri.c_str();
+            tmp.path = req.uri;
             return tmp.compose();
         }
 
@@ -113,20 +119,14 @@ public:
         ~request() {
             if (!resp_sent) {
                 // ensure a response is sent
-                resp = http_response(404, http_headers("Content-Length", 0));
+                resp = http_response(404, http_headers{"Content-Length", 0});
                 send_response();
             }
 
-            if (resp.get("Connection") == "close") {
+            if (boost::iequals(resp.get("Connection"), "close")) {
                 sock.close();
             }
         }
-
-        http_request &req;
-        http_response resp;
-        netsock &sock;
-        std::chrono::high_resolution_clock::time_point start;
-        bool resp_sent;
     };
 
     typedef std::function<void (request &)> callback_type;
@@ -158,7 +158,7 @@ public:
             const callback_type &callback,
             int fnmatch_flags = 0)
     {
-        _routes.push_back(route(pattern, callback, fnmatch_flags));
+        _routes.emplace_back(pattern, callback, fnmatch_flags);
     }
 
     //! set logging function, called after every request
@@ -219,20 +219,20 @@ done:
 
     void handle_request(http_request &req, netsock &s) {
         request r(req, s);
-        std::string path = req.path();
+        const auto path = req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
-        // XXX: use cbegin/cend when they're added to std
-        for (auto i= std::begin(_routes); i!= std::end(_routes); i++) {
-            DVLOG(5) << "matching pattern: " << i->pattern;
-            if (fnmatch(i->pattern.c_str(), path.c_str(), i->fnmatch_flags) == 0) {
+        for (const auto &i : _routes) {
+            DVLOG(5) << "matching pattern: " << i.pattern;
+            if (fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
                 try {
-                    i->callback(r);
+                    i.callback(r);
                 } catch (std::exception &e) {
-                    DVLOG(2) << "unhandled exception in route [" << i->pattern << "]: " << e.what();
-                    r.resp = http_response(500, http_headers("Connection", "close"));
+                    DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
+                    r.resp = http_response(500, http_headers{"Connection", "close"});
                     std::string msg = e.what();
-                    msg += "\n";
+                    if (!msg.empty() && *msg.rbegin() != '\n')
+                        msg += '\n';
                     r.resp.set_body(msg);
                     r.send_response();
                 }
