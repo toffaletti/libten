@@ -222,9 +222,10 @@ done:
         const auto path = req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
+        // note: empty string pattern matches everything
         for (const auto &i : _routes) {
             DVLOG(5) << "matching pattern: " << i.pattern;
-            if (fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
+            if (i.pattern.empty() || fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
                 try {
                     i.callback(r);
                 } catch (std::exception &e) {
