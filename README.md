@@ -54,9 +54,9 @@ ____________________________
 
   * http_parser v2 from https://github.com/joyent/http-parser
   * glog-0.3.2 from http://code.google.com/p/google-glog/
-  * stringencoders from http://code.google.com/p/stringencoders/
+  * stlencoders 1.1.1 from http://code.google.com/p/stlencoders/
   * msgpack-0.5.7 from http://msgpack.org/
-  * miniz from http://code.google.com/p/miniz/
+  * miniz v1.14 from http://code.google.com/p/miniz/
 
 TODO
 ----
