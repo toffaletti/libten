@@ -67,16 +67,23 @@ public:
         try {
             ensure_connection();
 
+            http_response resp(&r);
+
             std::string hdata = r.data();
             ssize_t nw = _sock.send(hdata.c_str(), hdata.size());
-            assert((size_t)nw == hdata.size());
-            if (r.body.size()) {
+            bool badw = (size_t)nw != hdata.size();
+            if (!badw && r.body.size()) {
                 nw = _sock.send(r.body.c_str(), r.body.size());
-                assert((size_t)nw == r.body.size());
+                badw = (size_t)nw != r.body.size();
+            }
+            if (badw) {
+                _sock.close(); // socket is unusable after write failure
+                resp.status_code = 499;
+                resp.set_body("Short write");
+                return resp;
             }
 
             http_parser parser;
-            http_response resp(&r);
             resp.parser_init(&parser);
 
             _buf.clear();
