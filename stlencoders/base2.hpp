@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Thomas Kemmer <tkemmer@computer.org>
+ * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#ifndef STLENCODERS_BASE16_HPP
-#define STLENCODERS_BASE16_HPP
+#ifndef STLENCODERS_BASE2_HPP
+#define STLENCODERS_BASE2_HPP
 
 #include "error.hpp"
 #include "lookup.hpp"
@@ -32,53 +32,32 @@
 /**
  * @file
  *
- * Implementation of the Base16 encoding scheme.
+ * Implementation of the Base2 encoding scheme.
  */
 namespace stlencoders {
     namespace detail {
-        template<char C> struct base16_table { enum { value = 0x10 }; };
+        template<char C> struct base2_table { enum { value = 2 }; };
 
-        template<> struct base16_table<'0'> { enum { value = 0x00 }; };
-        template<> struct base16_table<'1'> { enum { value = 0x01 }; };
-        template<> struct base16_table<'2'> { enum { value = 0x02 }; };
-        template<> struct base16_table<'3'> { enum { value = 0x03 }; };
-        template<> struct base16_table<'4'> { enum { value = 0x04 }; };
-        template<> struct base16_table<'5'> { enum { value = 0x05 }; };
-        template<> struct base16_table<'6'> { enum { value = 0x06 }; };
-        template<> struct base16_table<'7'> { enum { value = 0x07 }; };
-        template<> struct base16_table<'8'> { enum { value = 0x08 }; };
-        template<> struct base16_table<'9'> { enum { value = 0x09 }; };
-        template<> struct base16_table<'A'> { enum { value = 0x0a }; };
-        template<> struct base16_table<'B'> { enum { value = 0x0b }; };
-        template<> struct base16_table<'C'> { enum { value = 0x0c }; };
-        template<> struct base16_table<'D'> { enum { value = 0x0d }; };
-        template<> struct base16_table<'E'> { enum { value = 0x0e }; };
-        template<> struct base16_table<'F'> { enum { value = 0x0f }; };
-
-        template<> struct base16_table<'a'> { enum { value = base16_table<'A'>::value }; };
-        template<> struct base16_table<'b'> { enum { value = base16_table<'B'>::value }; };
-        template<> struct base16_table<'c'> { enum { value = base16_table<'C'>::value }; };
-        template<> struct base16_table<'d'> { enum { value = base16_table<'D'>::value }; };
-        template<> struct base16_table<'e'> { enum { value = base16_table<'E'>::value }; };
-        template<> struct base16_table<'f'> { enum { value = base16_table<'F'>::value }; };
+        template<> struct base2_table<'0'> { enum { value = 0 }; };
+        template<> struct base2_table<'1'> { enum { value = 1 }; };
     }
 
     /**
-     * @em %base16 character encoding traits class template.
+     * @em %base2 character encoding traits class template.
      *
      * @tparam charT the encoding character type
      */
-    template<class charT> struct base16_traits;
+    template<class charT> struct base2_traits;
 
     /**
      * Character encoding traits specialization for @c char.
      *
      * This character encoding traits class defines the encoding
-     * alphabet for the @em %base16 encoding scheme as defined in RFC
-     * 4648 for the encoding character type @c char.
+     * alphabet for the @em %base2 encoding scheme for the encoding
+     * character type @c char.
      */
     template<>
-    struct base16_traits<char> {
+    struct base2_traits<char> {
         /**
          * The encoding character type.
          */
@@ -106,34 +85,19 @@ namespace stlencoders {
         }
 
         /**
-         * Returns the character representation of a 4-bit value.
+         * Returns the lowercase character representation of a single
+         * bit value.
          */
     	static char_type to_char_type(const int_type& c) {
-            return to_char_type_upper(c);
+            return "01"[c];
         }
 
         /**
-         * Returns the uppercase character representation of a 4-bit
-         * value.
-         */
-    	static char_type to_char_type_upper(const int_type& c) {
-            return "0123456789ABCDEF"[c];
-    	}
-
-        /**
-         * Returns the lowercase character representation of a 4-bit
-         * value.
-         */
-    	static char_type to_char_type_lower(const int_type& c) {
-            return "0123456789abcdef"[c];
-        }
-
-        /**
-         * Returns the 4-bit value represented by a character, or
+         * Returns the single bit value represented by a character, or
          * inv() for characters not in the encoding alphabet.
          */
     	static int_type to_int_type(const char_type& c) {
-            return lookup<detail::base16_table, int_type>(c);
+            return lookup<detail::base2_table, int_type>(c);
     	}
 
         /**
@@ -141,7 +105,7 @@ namespace stlencoders {
          * the encoding alphabet.
          */
         static int_type inv() {
-            return detail::base16_table<'\0'>::value;
+            return detail::base2_table<'\0'>::value;
         }
     };
 
@@ -149,34 +113,30 @@ namespace stlencoders {
      * Character encoding traits specialization for @c wchar_t.
      *
      * This character encoding traits class defines the encoding
-     * alphabet for the @em %base16 encoding scheme as defined in RFC
-     * 4648 for the encoding character type @c wchar_t.
+     * alphabet for the @em %base2 encoding scheme for the encoding
+     * character type @c wchar_t.
      */
     template<>
-    struct base16_traits<wchar_t>
-    : public portable_wchar_encoding_traits<base16_traits<char> > {
+    struct base2_traits<wchar_t>
+    : public portable_wchar_encoding_traits<base2_traits<char> > {
     };
 
     /**
-     * This class template implements the Base16 encoding as defined
-     * in RFC 4648 for a given character type and encoding alphabet.
-     *
-     * Base16 encoding is the standard case insensitive hexadecimal
+     * This class template implements the standard Base2, or binary,
      * encoding.
      *
      * The encoding process represents 8-bit groups (octets) of input
-     * data as output strings of 2 encoded characters.  Proceeding
+     * data as output strings of 8 encoded characters.  Proceeding
      * from left to right, an 8-bit input is taken from the input
-     * data.  These 8 bits are then treated as 2 concatenated 4-bit
-     * groups, each of which is translated into a single character in
-     * the Base16 alphabet.
+     * data.  These 8 bits are then translated individually into a
+     * single character in the Base2 alphabet.
      *
      * @tparam charT the encoding character type
      *
      * @tparam traits the character encoding traits type
      */
-    template<class charT, class traits = base16_traits<charT> >
-    class base16 {
+    template<class charT, class traits = base2_traits<charT> >
+    class base2 {
     private:
         struct noskip { };
 
@@ -225,77 +185,25 @@ namespace stlencoders {
         {
             for (; first != last; ++first) {
                 int_type c = *first;
-            	*result = traits::to_char_type((c & 0xff) >> 4);
+                *result = traits::to_char_type(c >> 7 & 1);
                 ++result;
-            	*result = traits::to_char_type((c & 0x0f));
+                *result = traits::to_char_type(c >> 6 & 1);
+                ++result;
+                *result = traits::to_char_type(c >> 5 & 1);
+                ++result;
+                *result = traits::to_char_type(c >> 4 & 1);
+                ++result;
+                *result = traits::to_char_type(c >> 3 & 1);
+                ++result;
+                *result = traits::to_char_type(c >> 2 & 1);
+                ++result;
+                *result = traits::to_char_type(c >> 1 & 1);
+                ++result;
+                *result = traits::to_char_type(c & 1);
                 ++result;
             }
 
             return result;
-        }
-
-        /**
-         * Encodes a range of octets using the lowercase encoding
-         * alphabet.
-         *
-         * @tparam InputIterator an iterator type satisfying input
-         * iterator requirements and referring to elements implicitly
-         * convertible to int_type
-         *
-         * @tparam OutputIterator an iterator type satisfying output
-         * iterator requirements
-         *
-         * @param first an input iterator to the first position in the
-         * octet range to be encoded
-         *
-         * @param last an input iterator to the final position in the
-         * octet range to be encoded
-         *
-         * @param result an output iterator to the encoded character
-         * range
-         *
-         * @return an output iterator referring to one past the last
-         * value assigned to the output range
-         */
-        template<class InputIterator, class OutputIterator>
-        static OutputIterator encode_lower(
-            InputIterator first, InputIterator last, OutputIterator result
-            )
-        {
-            typedef lower_char_encoding_traits<traits> lower_traits;
-            return base16<charT, lower_traits>::encode(first, last, result);
-        }
-
-        /**
-         * Encodes a range of octets using the uppercase encoding
-         * alphabet.
-         *
-         * @tparam InputIterator an iterator type satisfying input
-         * iterator requirements and referring to elements implicitly
-         * convertible to int_type
-         *
-         * @tparam OutputIterator an iterator type satisfying output
-         * iterator requirements
-         *
-         * @param first an input iterator to the first position in the
-         * octet range to be encoded
-         *
-         * @param last an input iterator to the final position in the
-         * octet range to be encoded
-         *
-         * @param result an output iterator to the encoded character
-         * range
-         *
-         * @return an output iterator referring to one past the last
-         * value assigned to the output range
-         */
-        template<class InputIterator, class OutputIterator>
-        static OutputIterator encode_upper(
-            InputIterator first, InputIterator last, OutputIterator result
-            )
-        {
-            typedef upper_char_encoding_traits<traits> upper_traits;
-            return base16<charT, upper_traits>::encode(first, last, result);
         }
 
         /**
@@ -385,10 +293,41 @@ namespace stlencoders {
 
                 int_type c1 = seek(first, last, skip);
                 if (traits::eq_int_type(c1, traits::inv())) {
-                    throw invalid_length("base16 decode error");
+                    throw invalid_length("base2 decode error");
                 }
 
-                *result = c0 << 4 | c1;
+                int_type c2 = seek(first, last, skip);
+                if (traits::eq_int_type(c2, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                int_type c3 = seek(first, last, skip);
+                if (traits::eq_int_type(c3, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                int_type c4 = seek(first, last, skip);
+                if (traits::eq_int_type(c4, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                int_type c5 = seek(first, last, skip);
+                if (traits::eq_int_type(c5, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                int_type c6 = seek(first, last, skip);
+                if (traits::eq_int_type(c6, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                int_type c7 = seek(first, last, skip);
+                if (traits::eq_int_type(c7, traits::inv())) {
+                    throw invalid_length("base2 decode error");
+                }
+
+                *result = (c0 << 7 | c1 << 6 | c2 << 5 | c3 << 4 |
+                           c4 << 3 | c5 << 2 | c6 << 1 | c7);
                 ++result;
             }
         }
@@ -406,7 +345,7 @@ namespace stlencoders {
          */
         template<class sizeT>
         static sizeT max_encode_size(sizeT n) {
-            return n * 2;
+            return n * 8;
         }
 
         /**
@@ -420,7 +359,7 @@ namespace stlencoders {
          */
         template<class sizeT>
         static sizeT max_decode_size(sizeT n) {
-            return n / 2;
+            return n / 8;
         }
 
     private:
@@ -437,7 +376,7 @@ namespace stlencoders {
                 if (!traits::eq_int_type(v, traits::inv())) {
                     return v;
                 } else if (!skip(c)) {
-                    throw invalid_character("base16 decode error");
+                    throw invalid_character("base2 decode error");
                 }
             }
 
@@ -457,7 +396,7 @@ namespace stlencoders {
                 if (!traits::eq_int_type(v, traits::inv())) {
                     return v;
                 } else {
-                    throw invalid_character("base16 decode error");
+                    throw invalid_character("base2 decode error");
                 }
             }
 

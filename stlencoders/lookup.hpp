@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
  *
- * http://code.google.com/p/stlencoders/
- *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -27,11 +25,60 @@
 #ifndef STLENCODERS_LOOKUP_HPP
 #define STLENCODERS_LOOKUP_HPP
 
+#include <climits>
+
+/**
+ * @file
+ *
+ * Character lookup table implementation.
+ */
 namespace stlencoders {
+    /**
+     * Maps a character to its corresponding value in a lookup table.
+     * The lookup table is statically initialized from the class
+     * template @a LUT, which is parameterized by a non-type argument
+     * of type @c char, and shall provide a constant expression @c
+     * LUT<c>::value implicitly convertible to type @a T for each
+     * character @c c.
+     *
+     * To create a lookup table that maps the characters @c '0' and @c
+     * '1' to their corresponding integral values, and any other
+     * character to -1, a class template may be defined as:
+     *
+     * @code
+     * template<char C> struct base2_table {
+     *     enum { value = -1 };
+     * };
+     * template<> struct base2_table<'0'> {
+     *     enum { value = 0 };
+     * };
+     * template<> struct base2_table<'1'> {
+     *     enum { value = 1 };
+     * };
+     *
+     * lookup<base2_table, int>('0'); // returns 0
+     * lookup<base2_table, int>('1'); // returns 1
+     * lookup<base2_table, int>('2'); // returns -1
+     * @endcode
+     *
+     * @tparam LUT the class template defining the lookup table
+     *
+     * @tparam T the lookup table's value type
+     *
+     * @param c the character to map
+     *
+     * @return @c LUT<c>::value
+     *
+     * @note This implementation limits the size of the lookup table
+     * to 256 entries, even on platforms where @c char is more than
+     * eight bits wide.  For characters whose unsigned representation
+     * is outside this range, @c LUT<'\\0'>\::value is returned.
+     *
+     */
     template<template<char> class LUT, class T>
-    inline const T& lookup(char c, const T& def)
+    inline const T& lookup(char c)
     {
-        static const T table[256] = {
+        static const T table[] = {
             LUT<'\000'>::value, LUT<'\001'>::value, LUT<'\002'>::value, LUT<'\003'>::value,
             LUT<'\004'>::value, LUT<'\005'>::value, LUT<'\006'>::value, LUT<'\007'>::value,
             LUT<'\010'>::value, LUT<'\011'>::value, LUT<'\012'>::value, LUT<'\013'>::value,
@@ -98,10 +145,12 @@ namespace stlencoders {
             LUT<'\374'>::value, LUT<'\375'>::value, LUT<'\376'>::value, LUT<'\377'>::value
         };
 
-        if (static_cast<unsigned>(c) < sizeof(table))
-            return table[static_cast<unsigned>(c)];
-        else
-            return def;
+#if UCHAR_MAX > 255
+        unsigned char n = static_cast<unsigned char>(c);
+        return n < (sizeof table / sizeof *table) ? table[n] : *table;
+#else
+        return table[static_cast<unsigned char>(c)];
+#endif
     }
 }
 

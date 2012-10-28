@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
  *
- * http://code.google.com/p/stlencoders/
- *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -29,29 +27,48 @@
 
 #include <stdexcept>
 
+/**
+ * @file
+ *
+ * Exception classes used to report decoding errors.
+ */
 namespace stlencoders {
+    /**
+     * Exception class thrown to report an unspecified error in a
+     * decode operation.
+     */
     class decode_error : public std::runtime_error {
     public:
-        explicit decode_error(const std::string& arg)
-        : runtime_error(arg) { }
+        /**
+         * Constructs an object of class @c decode_error.
+         */
+        explicit decode_error(const std::string& s)
+        : runtime_error(s) { }
     };
 
+    /**
+     * Exception class thrown to report an invalid character.
+     */
     class invalid_character : public decode_error {
     public:
-        explicit invalid_character(const std::string& arg)
-        : decode_error(arg) { }
+        /**
+         * Constructs an object of class @c invalid_character.
+         */
+        explicit invalid_character(const std::string& s)
+        : decode_error(s) { }
     };
 
-    class invalid_padding : public decode_error {
-    public:
-        explicit invalid_padding(const std::string& arg)
-        : decode_error(arg) { }
-    };
-
+    /**
+     * Exception class thrown to report an invalid length of a
+     * character sequence.
+     */
     class invalid_length : public decode_error {
     public:
-        explicit invalid_length(const std::string& arg)
-        : decode_error(arg) { }
+        /**
+         * Constructs an object of class @c invalid_length.
+         */
+        explicit invalid_length(const std::string& s)
+        : decode_error(s) { }
     };
 }
 
