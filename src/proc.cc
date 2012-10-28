@@ -126,7 +126,7 @@ void proc::schedule() {
             co.swap(&t->co);
             ctask = nullptr;
             
-            if (t->exiting) {
+            if (!t->fn) {
                 deltaskinproc(t);
             }
         }

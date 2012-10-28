@@ -108,7 +108,6 @@ void task::init(const std::function<void ()> &f) {
 }
 
 void task::ready() {
-    if (exiting) return;
     proc *p = cproc;
     if (!_ready.exchange(true)) {
         p->ready(this);
@@ -124,7 +123,6 @@ void task::clear(bool newid) {
     fn = nullptr;
     cancel_points = 0;
     _ready = false;
-    exiting = false;
     systask = false;
     canceled = false;
     if (newid) {

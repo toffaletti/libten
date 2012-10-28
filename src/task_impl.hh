@@ -49,7 +49,6 @@ struct task {
     std::deque<timeout_t *> timeouts;
 
     std::atomic<bool> _ready;
-    bool exiting;
     bool systask;
     bool canceled;
     
@@ -87,7 +86,6 @@ struct task {
 
     void exit() {
         fn = nullptr;
-        exiting = true;
         swap();
     }
 
@@ -143,7 +141,6 @@ struct task {
             o << "[" << (void*)t << " " << t->id << " "
                 << t->name << " |" << t->state
                 << "| sys: " << t->systask
-                << " exiting: " << t->exiting
                 << " canceled: " << t->canceled << "]";
         } else {
             o << "nulltask";
