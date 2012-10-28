@@ -52,7 +52,7 @@ Dependencies
 Bundled 3rd-party components
 ____________________________
 
-  * http_parser forked from https://github.com/joyent/http-parser
+  * http_parser v2 from https://github.com/joyent/http-parser
   * glog-0.3.2 from http://code.google.com/p/google-glog/
   * stringencoders from http://code.google.com/p/stringencoders/
   * msgpack-0.5.7 from http://msgpack.org/
