@@ -164,7 +164,7 @@ static int _request_on_headers_complete(http_parser *p) {
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
     m->http_version = ss.str();
 
-    if (p->content_length > 0 && p->content_length != ULLONG_MAX) {
+    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
         m->body.reserve(p->content_length);
     }
 
@@ -219,7 +219,7 @@ static int _response_on_headers_complete(http_parser *p) {
     ss << "HTTP/" << p->http_major << "." << p->http_minor;
     m->http_version = ss.str();
 
-    if (p->content_length > 0 && p->content_length != ULLONG_MAX) {
+    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
         m->body.reserve(p->content_length);
     }
 
