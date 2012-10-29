@@ -44,7 +44,7 @@ public:
     std::string host() const { return _host; }
     uint16_t port() const { return _port; }
 
-    http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
+    http_response perform(const std::string &method, const std::string &path, const std::string &data="", std::chrono::milliseconds timeout = {}) {
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -56,13 +56,16 @@ public:
         // HTTP/1.1 requires host header
         r.set("Host", u.host); 
         r.body = data;
-        return perform(r);
+        return perform(r, timeout);
     }
 
-    http_response perform(http_request &r) {
+    http_response perform(http_request &r, std::chrono::milliseconds timeout = {}) {
         if (r.body.size()) {
             r.set("Content-Length", r.body.size());
         }
+
+        // should really set a time in the future and calculate this each time
+        unsigned ms = boost::numeric_cast<unsigned>(timeout.count());
 
         try {
             ensure_connection();
@@ -70,10 +73,10 @@ public:
             http_response resp(&r);
 
             std::string hdata = r.data();
-            ssize_t nw = _sock.send(hdata.c_str(), hdata.size());
+            ssize_t nw = _sock.send(hdata.c_str(), hdata.size(), 0, ms);
             bool badw = (size_t)nw != hdata.size();
             if (!badw && r.body.size()) {
-                nw = _sock.send(r.body.c_str(), r.body.size());
+                nw = _sock.send(r.body.c_str(), r.body.size(), 0, ms);
                 badw = (size_t)nw != r.body.size();
             }
             if (badw) {
@@ -90,7 +93,7 @@ public:
 
             while (!resp.complete) {
                 _buf.reserve(4*1024);
-                ssize_t nr = _sock.recv(_buf.back(), _buf.available());
+                ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, ms);
                 if (nr <= 0) { throw http_error("recv"); }
                 _buf.commit(nr);
                 size_t len = _buf.size();
@@ -117,12 +120,12 @@ public:
         }
     }
 
-    http_response get(const std::string &path) {
-        return perform("GET", path);
+    http_response get(const std::string &path, std::chrono::milliseconds timeout = {}) {
+        return perform("GET", path, {}, timeout);
     }
 
-    http_response post(const std::string &path, const std::string &data) {
-        return perform("POST", path, data);
+    http_response post(const std::string &path, const std::string &data, std::chrono::milliseconds timeout = {}) {
+        return perform("POST", path, data, timeout);
     }
 
 };
