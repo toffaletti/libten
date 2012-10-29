@@ -34,7 +34,7 @@ public:
               start(std::chrono::steady_clock::now()) {}
 
         //! compose a uri from the request uri
-        uri get_uri(std::string host="") {
+        uri get_uri(std::string host="") const {
             if (host.empty()) {
                 host = req.get("Host");
                 // TODO: transform to preserve passed in host
