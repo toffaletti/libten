@@ -29,8 +29,8 @@
 #include <string.h>
 #include <limits.h>
 
-#ifndef ULLONG_MAX
-# define ULLONG_MAX ((uint64_t) -1) /* 2^64-1 */
+#ifndef UINT64_MAX
+# define UINT64_MAX (~(uint64_t)0) /* 2^64-1 */
 #endif
 
 #ifndef MIN
@@ -667,7 +667,7 @@ size_t http_parser_execute (http_parser *parser,
         if (ch == CR || ch == LF)
           break;
         parser->flags = 0;
-        parser->content_length = ULLONG_MAX;
+        parser->content_length = UINT64_MAX;
 
         if (ch == 'H') {
           parser->state = s_res_or_resp_H;
@@ -702,7 +702,7 @@ size_t http_parser_execute (http_parser *parser,
       case s_start_res:
       {
         parser->flags = 0;
-        parser->content_length = ULLONG_MAX;
+        parser->content_length = UINT64_MAX;
 
         switch (ch) {
           case 'H':
@@ -881,7 +881,7 @@ size_t http_parser_execute (http_parser *parser,
         if (ch == CR || ch == LF)
           break;
         parser->flags = 0;
-        parser->content_length = ULLONG_MAX;
+        parser->content_length = UINT64_MAX;
 
         if (!IS_ALPHA(ch)) {
           SET_ERRNO(HPE_INVALID_METHOD);
@@ -1467,7 +1467,7 @@ size_t http_parser_execute (http_parser *parser,
             t += ch - '0';
 
             /* Overflow? */
-            if (t < parser->content_length || t == ULLONG_MAX) {
+            if (t < parser->content_length || t == UINT64_MAX) {
               SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
               goto error;
             }
@@ -1629,7 +1629,7 @@ size_t http_parser_execute (http_parser *parser,
             /* Content-Length header given but zero: Content-Length: 0\r\n */
             parser->state = NEW_MESSAGE();
             CALLBACK_NOTIFY(message_complete);
-          } else if (parser->content_length != ULLONG_MAX) {
+          } else if (parser->content_length != UINT64_MAX) {
             /* Content-Length header given and non-zero */
             parser->state = s_body_identity;
           } else {
@@ -1654,7 +1654,7 @@ size_t http_parser_execute (http_parser *parser,
                                (uint64_t) ((data + len) - p));
 
         assert(parser->content_length != 0
-            && parser->content_length != ULLONG_MAX);
+            && parser->content_length != UINT64_MAX);
 
         /* The difference between advancing content_length and p is because
          * the latter will automaticaly advance on the next loop iteration.
@@ -1740,7 +1740,7 @@ size_t http_parser_execute (http_parser *parser,
         t += unhex_val;
 
         /* Overflow? */
-        if (t < parser->content_length || t == ULLONG_MAX) {
+        if (t < parser->content_length || t == UINT64_MAX) {
           SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
           goto error;
         }
@@ -1783,7 +1783,7 @@ size_t http_parser_execute (http_parser *parser,
 
         assert(parser->flags & F_CHUNKED);
         assert(parser->content_length != 0
-            && parser->content_length != ULLONG_MAX);
+            && parser->content_length != UINT64_MAX);
 
         /* See the explanation in s_body_identity for why the content
          * length and data pointers are managed this way.
@@ -1868,7 +1868,7 @@ http_message_needs_eof (const http_parser *parser)
     return 0;
   }
 
-  if ((parser->flags & F_CHUNKED) || parser->content_length != ULLONG_MAX) {
+  if ((parser->flags & F_CHUNKED) || parser->content_length != UINT64_MAX) {
     return 0;
   }
 

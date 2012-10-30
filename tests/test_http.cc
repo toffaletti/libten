@@ -7,12 +7,12 @@ using namespace ten;
 
 BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
     http_request req{"GET", "/foo",
-            Headers{"This", 4, "That", "that"}
+        http_headers{"This", 4, "That", "that"}
     };
     BOOST_CHECK_EQUAL(4, req.get<int>("this"));
     BOOST_CHECK_EQUAL("that", req.get("that"));
 
-    http_response resp{200, Headers{"Thing", "stuff"}};
+    http_response resp{200, http_headers{"Thing", "stuff"}};
     BOOST_CHECK_EQUAL("stuff", resp.get("thing"));
 }
 

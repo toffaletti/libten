@@ -43,10 +43,11 @@ static void http_quit(std::weak_ptr<state> wst, http_server::request &h) {
         LOG(INFO) << "quit requested over http";
         st->app.quit();
     }
-    h.resp = http_response{200,
-        Headers{
-        "Connection", "close",
-        "Content-Length", 0
+    h.resp = http_response{
+        200,
+        http_headers{
+            "Connection", "close",
+            "Content-Length", 0
         }
     };
     h.send_response();

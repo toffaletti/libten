@@ -6,6 +6,7 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
+#include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
@@ -43,7 +44,10 @@ public:
     std::string host() const { return _host; }
     uint16_t port() const { return _port; }
 
-    http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
+    http_response perform(const std::string &method, const std::string &path,
+                          const http_headers &hdrs = {}, const std::string &data = {},
+                          std::chrono::milliseconds timeout = {})
+    {
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -51,36 +55,50 @@ public:
         u.path = path;
         u.normalize();
 
-        http_request r(method, u.compose_path());
+        http_request r(method, u.compose_path(), hdrs);
         // HTTP/1.1 requires host header
-        r.set("Host", u.host); 
+        if (r.find("Host") == r.headers.end())
+            r.set("Host", u.host); 
         r.body = data;
-        return perform(r);
+
+        return perform(r, timeout);
     }
 
-    http_response perform(http_request &r) {
+    http_response perform(http_request &r, std::chrono::milliseconds timeout = {}) {
         if (r.body.size()) {
             r.set("Content-Length", r.body.size());
         }
 
+        // should really set a time in the future and calculate this each time
+        unsigned ms = boost::numeric_cast<unsigned>(timeout.count());
+
         try {
             ensure_connection();
 
+            http_response resp(&r);
+
             std::string hdata = r.data();
-            ssize_t nw = _sock.send(hdata.c_str(), hdata.size());
-            if (r.body.size()) {
-                nw = _sock.send(r.body.c_str(), r.body.size());
+            ssize_t nw = _sock.send(hdata.c_str(), hdata.size(), 0, ms);
+            bool badw = (size_t)nw != hdata.size();
+            if (!badw && r.body.size()) {
+                nw = _sock.send(r.body.c_str(), r.body.size(), 0, ms);
+                badw = (size_t)nw != r.body.size();
+            }
+            if (badw) {
+                _sock.close(); // socket is unusable after write failure
+                resp.status_code = 499;
+                resp.set_body("Short write");
+                return resp;
             }
 
             http_parser parser;
-            http_response resp(&r);
             resp.parser_init(&parser);
 
             _buf.clear();
 
             while (!resp.complete) {
                 _buf.reserve(4*1024);
-                ssize_t nr = _sock.recv(_buf.back(), _buf.available());
+                ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, ms);
                 if (nr <= 0) { throw http_error("recv"); }
                 _buf.commit(nr);
                 size_t len = _buf.size();
@@ -94,8 +112,9 @@ public:
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
-            if ((resp.http_version == "HTTP/1.0" && resp.get("Connection") != "Keep-Alive") ||
-                    resp.get("Connection") == "close")
+            const auto conn = resp.get("Connection");
+            if (boost::iequals(conn, "close")
+                || (resp.http_version == http_1_0 && !boost::iequals(conn, "Keep-Alive")))
             {
                 _sock.close();
             }
@@ -106,12 +125,12 @@ public:
         }
     }
 
-    http_response get(const std::string &path) {
-        return perform("GET", path);
+    http_response get(const std::string &path, std::chrono::milliseconds timeout = {}) {
+        return perform("GET", path, {}, {}, timeout);
     }
 
-    http_response post(const std::string &path, const std::string &data) {
-        return perform("POST", path, data);
+    http_response post(const std::string &path, const std::string &data, std::chrono::milliseconds timeout = {}) {
+        return perform("POST", path, {}, data, timeout);
     }
 
 };
@@ -119,7 +138,7 @@ public:
 class http_pool : public shared_pool<http_client> {
 public:
     http_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
-        : shared_pool<http_client>("http://" + host_,
+        : shared_pool<http_client>("http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
             max_conn
         ),

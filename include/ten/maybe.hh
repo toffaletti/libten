@@ -47,9 +47,19 @@ template <class T> class maybe {
     const T &get_ref() const  { if (!_ok) throw nothing_exception(); return _val; }
           T  get()     const  { if (!_ok) throw nothing_exception(); return _val; }
 
-    void reset(const T  &v)  { if (_ok) { _val = v; } else { new (_buf) T(v); _ok = true; } }
-    void reset(      T &&v)  { if (_ok) { _val = v; } else { new (_buf) T(v); _ok = true; } }
+    void reset(const T  &v)  { if (_ok) { _val = v;            } else { new (_buf) T(v);            _ok = true; } }
+    void reset(      T &&v)  { if (_ok) { _val = std::move(v); } else { new (_buf) T(std::move(v)); _ok = true; } }
     void reset()             { if (_ok) { _ok = false; _val.T::~T(); } }
+
+    template <typename ...Args>
+    void emplace(Args&& ...args) {
+        if (_ok)
+            _val = T(std::forward<Args>(args)...);
+        else {
+            new (_buf) T(std::forward<Args>(args)...);
+            _ok = true;
+        }
+    }
 
     friend std::ostream &operator << (std::ostream &o, const maybe<T> &m) {
         if (m.ok()) {
@@ -61,14 +71,14 @@ template <class T> class maybe {
     }
 };
 
-template <class T>
-struct hash : public std::unary_function<const maybe<T> &, size_t> {
-    size_t operator ()(const maybe<T> &m) {
-        using std::hash;
+} // ten
+
+namespace std {
+template <class T> struct hash<ten::maybe<T>> : public unary_function<const ten::maybe<T> &, size_t> {
+    size_t operator ()(const ten::maybe<T> &m) {
         return m.ok() ? hash<T>(m.get_ref()) : 0;
     }
 };
-
-} // ten
+} // std
 
 #endif // LIBTEN_MAYBE_HH
