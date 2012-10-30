@@ -226,10 +226,7 @@ static int _response_on_headers_complete(http_parser *p) {
     // if this is a response to a HEAD
     // we need to return 1 here so the
     // parser knowns not to expect a body
-    if (m->for_head) {
-        return 1;
-    }
-    return 0;
+    return m->guillotine ? 1 : 0;
 }
 
 void http_response::parser_init(struct http_parser *p) {
