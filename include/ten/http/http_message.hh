@@ -98,7 +98,7 @@ struct http_base : http_headers {
     explicit http_base(http_headers headers_ = http_headers())
         : http_headers(std::move(headers_)) {}
 
-    void base_clear() {
+    void clear() {
         headers.clear();
         body.clear();
         body_length = 0;
@@ -136,7 +136,7 @@ struct http_request : http_base {
         {}
 
     void clear() {
-        base_clear();
+        http_base::clear();
         method.clear();
         uri.clear();
         http_version.clear();
@@ -159,11 +159,11 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
+    bool guillotine {};  // return only the head
     std::string http_version;
     unsigned long status_code {};
-    http_request *req {};
 
-    http_response(http_request *req_) : http_base(), req(req_) {}
+    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
 
     http_response(unsigned long status_code_ = 200,
                   http_headers headers_ = http_headers(),
@@ -174,10 +174,9 @@ struct http_response : http_base {
         {}
 
     void clear() {
-        base_clear();
+        http_base::clear();
         http_version.clear();
         status_code = 0;
-        // req? - Chip
     }
 
     const std::string &reason() const;
