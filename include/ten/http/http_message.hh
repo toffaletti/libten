@@ -9,6 +9,7 @@
 
 #include "http_parser.h"
 #include "ten/error.hh"
+#include "ten/maybe.hh"
 
 namespace ten {
 
@@ -17,26 +18,27 @@ namespace ten {
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
-const size_t HEADER_RESERVE = 5;
+extern const std::string http_1_0; //"HTTP/1.0"
+extern const std::string http_1_1; //"HTTP/1.1"
 
 //! http headers
-struct Headers {
+struct http_headers {
     header_list headers;
 
-    Headers() {}
+    http_headers() {}
 
     template <typename ...Args>
-    Headers(Args&& ...args) {
-        static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-        headers.reserve(sizeof...(args) / 2);
-        init(std::forward<Args>(args)...);
-    }
+        http_headers(Args&& ...args) {
+            static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
+            headers.reserve(sizeof...(args) / 2);
+            init(std::forward<Args>(args)...);
+        }
 
     void init() {}
 
     template <typename ValueT, typename ...Args>
-    void init(std::string &&header_name, ValueT &&header_value, Args&& ...args) {
-        append(std::forward<std::string>(header_name), std::forward<ValueT>(header_value));
+    void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
+        append(field, std::forward<ValueT>(header_value));
         init(std::forward<Args>(args)...);
     }
 
@@ -54,30 +56,54 @@ struct Headers {
             append(field, boost::lexical_cast<std::string>(value));
         }
 
-    header_list::iterator find(const std::string &field);
+    header_list::iterator       find(const std::string &field);
+    header_list::const_iterator find(const std::string &field) const;
 
     bool remove(const std::string &field);
 
     std::string get(const std::string &field) const;
+    maybe<std::string> mget(const std::string &field) const;
 
     template <typename ValueT>
         ValueT get(const std::string &field) const {
-            std::string val = get(field);
-            if (val.empty()) {
-                return ValueT();
-            }
-            return boost::lexical_cast<ValueT>(val);
+            auto i = find(field);
+            return (i == headers.end()) ? ValueT() : boost::lexical_cast<ValueT>(i->second);
         }
+    template <typename ValueT>
+        maybe<ValueT> mget(const std::string &field) const {
+            auto i = find(field);
+            return (i == headers.end()) ? nothing : boost::lexical_cast<ValueT>(i->second);
+        }
+
+#ifdef CHIP_UNSURE
+
+    bool is(const std::string &field, const std::string &value) const;
+    bool is_nocase(const std::string &field, const std::string &value) const;
+
+    template <typename ValueT>
+        bool is(const std::string &field, const ValueT &value) const {
+            auto i = headers.find(field);
+            return (i != headers.end()) && (boost::lexical_cast<ValueT>(i->second) == value);
+        }
+
+#endif
 };
 
 //! base class for http request and response
-struct http_base : Headers {
-    bool complete;
+struct http_base : http_headers {
     std::string body;
-    size_t body_length;
+    size_t body_length {};
+    bool complete {};
 
-    explicit http_base(Headers headers_ = Headers()) :
-        Headers(std::move(headers_)), complete(false), body_length(0) {}
+    explicit http_base(http_headers headers_ = http_headers())
+        : http_headers(std::move(headers_)) {}
+
+    void clear() {
+        headers.clear();
+        body.clear();
+        body_length = 0;
+        complete = false;
+    }
 
     void set_body(const std::string &body_,
             const std::string &content_type="")
@@ -100,20 +126,20 @@ struct http_request : http_base {
 
     http_request() : http_base() {}
     http_request(std::string method_,
-        std::string uri_,
-        Headers headers_ = Headers(),
-        std::string http_version_ = "HTTP/1.1")
+                 std::string uri_,
+                 http_headers headers_ = http_headers(),
+                 std::string http_version_ = http_1_1)
         : http_base(std::move(headers_)),
-        method(std::move(method_)), uri(std::move(uri_)), http_version(std::move(http_version_)) {}
+          method(std::move(method_)),
+          uri(std::move(uri_)),
+          http_version(std::move(http_version_))
+        {}
 
     void clear() {
-        headers.clear();
-        complete = false;
+        http_base::clear();
         method.clear();
         uri.clear();
         http_version.clear();
-        body.clear();
-        body_length = 0;
     }
 
     void parser_init(struct http_parser *p);
@@ -133,28 +159,24 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
+    bool guillotine {};  // return only the head
     std::string http_version;
-    unsigned long status_code;
-    http_request *req;
+    unsigned long status_code {};
 
-    http_response(http_request *req_) : http_base(), req(req_) {}
+    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
 
     http_response(unsigned long status_code_ = 200,
-        Headers headers_ = Headers(),
-        std::string http_version_ = "HTTP/1.1")
+                  http_headers headers_ = http_headers(),
+                  std::string http_version_ = http_1_1)
         : http_base(std::move(headers_)),
-        http_version(std::move(http_version_)),
-        status_code(std::move(status_code_)),
-        req(NULL)
-    {
-    }
+          http_version(std::move(http_version_)),
+          status_code(std::move(status_code_))
+        {}
 
     void clear() {
-        headers.clear();
+        http_base::clear();
         http_version.clear();
         status_code = 0;
-        body.clear();
-        body_length = 0;
     }
 
     const std::string &reason() const;
