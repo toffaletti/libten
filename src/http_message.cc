@@ -215,9 +215,9 @@ std::string http_request::data() const {
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
     m->status_code = p->status_code;
-    std::stringstream ss;
-    ss << "HTTP/" << p->http_major << "." << p->http_minor;
-    m->http_version = ss.str();
+    m->http_version = (p->http_major == 1 && p->http_minor == 0) ? http_1_0
+                    : (p->http_major == 1 && p->http_minor == 1) ? http_1_1
+                    : "HTTP/" + std::to_string(p->http_major) + "." + std::to_string(p->http_minor);
 
     if (p->content_length > 0 && p->content_length != UINT64_MAX) {
         m->body.reserve(p->content_length);
@@ -226,7 +226,7 @@ static int _response_on_headers_complete(http_parser *p) {
     // if this is a response to a HEAD
     // we need to return 1 here so the
     // parser knowns not to expect a body
-    if (m->req && m->req->method == "HEAD") {
+    if (m->for_head) {
         return 1;
     }
     return 0;
