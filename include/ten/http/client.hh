@@ -133,7 +133,7 @@ public:
 class http_pool : public shared_pool<http_client> {
 public:
     http_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
-        : shared_pool<http_client>("http://" + host_,
+        : shared_pool<http_client>("http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
             max_conn
         ),
