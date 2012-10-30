@@ -44,7 +44,10 @@ public:
     std::string host() const { return _host; }
     uint16_t port() const { return _port; }
 
-    http_response perform(const std::string &method, const std::string &path, const std::string &data="", std::chrono::milliseconds timeout = {}) {
+    http_response perform(const std::string &method, const std::string &path,
+                          const http_headers &hdrs = {}, const std::string &data = {},
+                          std::chrono::milliseconds timeout = {})
+    {
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -52,10 +55,12 @@ public:
         u.path = path;
         u.normalize();
 
-        http_request r(method, u.compose_path());
+        http_request r(method, u.compose_path(), hdrs);
         // HTTP/1.1 requires host header
-        r.set("Host", u.host); 
+        if (r.find("Host") == r.headers.end())
+            r.set("Host", u.host); 
         r.body = data;
+
         return perform(r, timeout);
     }
 
@@ -121,11 +126,11 @@ public:
     }
 
     http_response get(const std::string &path, std::chrono::milliseconds timeout = {}) {
-        return perform("GET", path, {}, timeout);
+        return perform("GET", path, {}, {}, timeout);
     }
 
     http_response post(const std::string &path, const std::string &data, std::chrono::milliseconds timeout = {}) {
-        return perform("POST", path, data, timeout);
+        return perform("POST", path, {}, data, timeout);
     }
 
 };
