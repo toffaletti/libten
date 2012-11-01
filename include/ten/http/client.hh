@@ -25,10 +25,11 @@ private:
     uint16_t _port;
 
     void ensure_connection() {
-        if (_sock.valid()) return;
-        _sock = std::move(netsock(AF_INET, SOCK_STREAM));
-        if (_sock.dial(_host.c_str(), _port) != 0) {
-            throw http_error("dial");
+        if (!_sock.alive()) {
+            _sock = std::move(netsock(AF_INET, SOCK_STREAM));
+            if (_sock.dial(_host.c_str(), _port) != 0) {
+                throw http_error("dial");
+            }
         }
     }
 
