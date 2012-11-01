@@ -77,7 +77,7 @@ struct fd_base {
     }
 
     //! true if fd != -1
-    bool valid() { return fd != -1; }
+    bool valid() const { return fd != -1; }
 
     //! read from fd
     ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
@@ -362,6 +362,16 @@ struct socket_fd : fd_base {
     int accept(address &addr, int flags=0) __attribute__((warn_unused_result)) {
         socklen_t addrlen = addr.maxlen();
         return ::accept4(fd, addr.sockaddr(), &addrlen, flags | SOCK_CLOEXEC);
+    }
+
+    //! try to determine if this is still connected, rather than closed by the peer
+    bool alive() __attribute__((warn_unused_result)) {
+        if (!valid())
+            return false;
+        errno = 0;
+        char c;
+        int rd = recv(&c, 1, MSG_PEEK | MSG_DONTWAIT);
+        return (rd > 0 || (rd < 0 && IO_NOT_READY_ERROR));
     }
 
     //! print socket file descriptor number

@@ -65,7 +65,7 @@ protected:
     msgpack::unpacker pac;
 
     void ensure_connection() {
-        if (!s.valid()) {
+        if (!s.alive()) {
             netsock tmp(AF_INET, SOCK_STREAM);
             std::swap(s, tmp);
             if (s.dial(hostname.c_str(), port) != 0) {
