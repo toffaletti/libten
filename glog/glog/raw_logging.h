@@ -88,6 +88,11 @@ namespace ten {
 
 // The following STRIP_LOG testing is performed in the header file so that it's
 // possible to completely compile out the logging code and the log messages.
+
+#ifndef STRIP_LOG
+#define STRIP_LOG 0
+#endif
+
 #if STRIP_LOG == 0
 #define RAW_VLOG(verboselevel, ...) \
   do { \
