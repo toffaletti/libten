@@ -25,7 +25,7 @@ int netaccept(int fd, address &addr, int flags, unsigned timeout_ms) {
     while ((nfd = ::accept4(fd, addr.sockaddr(), &addrlen, flags | SOCK_NONBLOCK)) < 0) {
         if (errno == EINTR)
             continue;
-        if (!IO_NOT_READY_ERROR)
+        if (!io_not_ready())
             return -1;
         if (!fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
@@ -40,7 +40,7 @@ ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned timeout_ms) {
     while ((nr = ::recv(fd, buf, len, flags)) < 0) {
         if (errno == EINTR)
             continue;
-        if (!IO_NOT_READY_ERROR)
+        if (!io_not_ready())
             break;
         if (!fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
@@ -57,7 +57,7 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned timeout
         if (nw == -1) {
             if (errno == EINTR)
                 continue;
-            if (!IO_NOT_READY_ERROR)
+            if (!io_not_ready())
                 return -1;
             if (!fdwait(fd, 'w', timeout_ms)) {
                 errno = ETIMEDOUT;

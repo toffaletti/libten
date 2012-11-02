@@ -70,7 +70,7 @@ public:
     }
 
     void close() { s.close(); }
-    bool valid() { return s.valid(); }
+    bool valid() const { return s.valid(); }
 
     virtual int dial(const char *addr,
             uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result)) = 0;
