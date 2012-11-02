@@ -21,11 +21,13 @@
 
 namespace ten {
 
-#if EAGAIN != EWOULDBLOCK
-#define IO_NOT_READY_ERROR  ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+inline bool io_not_ready(int e = errno) {
+#if defined(EWOULDBLOCK) && (EWOULDBLOCK != EAGAIN)
+    return (e == EAGAIN) || (e == EWOULDBLOCK);
 #else
-#define IO_NOT_READY_ERROR  (errno == EAGAIN)
+    return (e == EAGAIN);
 #endif
+}
 
 //! \file
 //! contains wrappers around most fd based apis
@@ -56,7 +58,8 @@ struct fd_base {
         return *this;
     }
 
-    bool operator == (int fd_) const { return fd == fd_; }
+    friend bool operator == (const fd_base &fb, int fd_) { return fb.fd == fd_; }
+    friend bool operator == (int fd_, const fd_base &fb) { return fb.fd == fd_; }
 
     int fcntl(int cmd) { return ::fcntl(fd, cmd); }
     int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
@@ -77,7 +80,7 @@ struct fd_base {
     }
 
     //! true if fd != -1
-    bool valid() { return fd != -1; }
+    bool valid() const { return fd != -1; }
 
     //! read from fd
     ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
