@@ -80,7 +80,7 @@ struct fd_base {
     }
 
     //! true if fd != -1
-    bool valid() { return fd != -1; }
+    bool valid() const { return fd != -1; }
 
     //! read from fd
     ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
