@@ -2,6 +2,7 @@
 #define LIBTEN_ERROR_HH
 
 #include <exception>
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <string>
@@ -63,9 +64,12 @@ struct errorx : backtrace_exception {
 private:
     char _buf[256];
 
-public:
-    //! \param fmt printf-style format string
-    errorx(const char *fmt, ...) __attribute__((format (printf, 2, 3))) {
+    void init(const char *msg, size_t len) {
+        len = std::min(len, sizeof(_buf)-1);
+        memcpy(_buf, msg, len);
+        _buf[len] = 0;
+    }
+    void initf(const char *fmt, ...) __attribute__((format (printf, 2, 3))) {
         _buf[0] = 0;
         va_list ap;
         va_start(ap, fmt);
@@ -73,10 +77,13 @@ public:
         va_end(ap);
     }
 
-    errorx(const std::string &msg) {
-        strncpy(_buf, msg.data(), sizeof(_buf)-1);
-        _buf[sizeof(_buf)-1] = 0;
-    }
+public:
+    errorx(const std::string &msg) { init(msg.data(), msg.size()); }
+    errorx(const char *msg)        { init(msg, strlen(msg)); }
+
+    //! \param fmt printf-style format string
+    template <typename A, typename... Args>
+    errorx(const char *fmt, A &&a, Args&&... args) { initf(fmt, std::forward<A>(a), std::forward<Args>(args)...); }
 
     //! \return a string describing the error
     const char *what() const noexcept override { return _buf; }
