@@ -27,36 +27,31 @@ struct state : boost::noncopyable {
     }
 };
 
-static void log_request(http_server::request &h) {
+static void log_request(http_exchange &ex) {
     using namespace std::chrono;
-    auto stop = steady_clock::now();
-    VLOG(1) << h.agent_ip() << " " <<
-        h.req.method << " " <<
-        h.req.uri << " " <<
-        h.resp.status_code << " " <<
-        h.resp.get("Content-Length") << " " <<
-        duration_cast<milliseconds>(stop-h.start).count();
+    const auto stop = steady_clock::now();
+    VLOG(1) << ex.agent_ip() << " " <<
+        ex.req.method << " " <<
+        ex.req.uri << " " <<
+        ex.resp.status_code << " " <<
+        ex.resp.get("Content-Length") << " " <<
+        duration_cast<milliseconds>(stop - ex.start).count();
 }
 
-static void http_quit(std::weak_ptr<state> wst, http_server::request &h) {
+static void http_quit(std::weak_ptr<state> wst, http_exchange &ex) {
     if (auto st = wst.lock()) {
         LOG(INFO) << "quit requested over http";
         st->app.quit();
     }
-    h.resp = http_response{
-        200,
-        http_headers{
-            "Connection", "close",
-            "Content-Length", 0
-        }
-    };
-    h.send_response();
+    ex.resp = { 200, { "Connection", "close" } };
+    ex.resp.set_body("");
+    ex.send_response();
 }
 
-static void http_root(std::weak_ptr<state> wst, http_server::request &h) {
-    h.resp = http_response{200};
-    h.resp.set_body("Hello World!\n");
-    h.send_response();
+static void http_root(std::weak_ptr<state> wst, http_exchange &ex) {
+    ex.resp = { 200 };
+    ex.resp.set_body("Hello World!\n");
+    ex.send_response();
 }
 
 static void start_http_server(std::shared_ptr<state> &st) {
