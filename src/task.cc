@@ -191,8 +191,12 @@ void task::swap() {
 }
 
 deadline::deadline(milliseconds ms) {
-    task *t = this_task();
-    timeout_id = this_proc()->sched().add_timeout(t, ms, deadline_reached());
+    if (ms.count() < 0)
+        throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
+    if (ms.count() > 0) {
+        task *t = this_task();
+        timeout_id = this_proc()->sched().add_timeout(t, ms, deadline_reached());
+    }
 }
 
 void deadline::cancel() {
