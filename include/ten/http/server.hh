@@ -17,127 +17,129 @@
 
 namespace ten {
 
-//! basic http server
-class http_server : public netsock_server {
-public:
+//! http request/response pair; keeps reference to request and socket
+// (the term "exchange" appears in the standard)
 
-    //! wrapper around an http request/response
-    struct request {
-        http_request &req;
-        netsock &sock;
-        http_response resp {404};
-        bool resp_sent {false};
-        std::chrono::high_resolution_clock::time_point start;
+struct http_exchange {
+    http_request &req;
+    netsock &sock;
+    http_response resp {404};
+    bool resp_sent {false};
+    std::chrono::high_resolution_clock::time_point start;
 
-        request(http_request &req_, netsock &sock_)
-            : req(req_), sock(sock_),
-              start(std::chrono::steady_clock::now()) {}
+    http_exchange(http_request &req_, netsock &sock_)
+        : req(req_), sock(sock_),
+          start(std::chrono::steady_clock::now()) {}
 
-        //! compose a uri from the request uri
-        uri get_uri(std::string host="") const {
-            if (host.empty()) {
-                host = req.get("Host");
-                // TODO: transform to preserve passed in host
-                if (boost::starts_with(req.uri, "http://")) {
-                    return req.uri;
-                }
+    ~http_exchange() {
+        if (!resp_sent) {
+            // ensure a response is sent
+            resp = {404};
+            send_response();
+        }
+        if (boost::iequals(resp.get("Connection"), "close")) {
+            sock.close();
+        }
+    }
+
+    //! compose a uri from the request uri
+    uri get_uri(std::string host="") const {
+        if (host.empty()) {
+            host = req.get("Host");
+            // TODO: transform to preserve passed in host
+            if (boost::starts_with(req.uri, "http://")) {
+                return req.uri;
             }
-
-            if (host.empty()) {
-                // just make up a host
-                host = "localhost";
-            }
-            uri tmp;
-            tmp.host = host;
-            tmp.scheme = "http";
-            tmp.path = req.uri;
-            return tmp.compose();
         }
 
-        //! send response to this request
-        ssize_t send_response() {
-            if (resp_sent) return 0;
-            resp_sent = true;
-            // TODO: Content-Length might be good to add to normal responses,
-            //    but only if Transfer-Encoding isn't chunked?
-            if (resp.status_code >= 400 && resp.status_code <= 599
-                 && resp.get("Content-Length").empty()
-                 && req.method != "HEAD")
-            {
-                resp.set("Content-Length", resp.body.size());
-            }
-            // HTTP/1.1 requires Date, so lets add it
-            if (resp.get("Date").empty()) {
-                char buf[128];
-                struct tm tm;
-                time_t now = std::chrono::system_clock::to_time_t(procnow());
-                strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
-                resp.set("Date", buf);
-            }
-            if (resp.get("Connection").empty()) {
-                // obey clients wishes if we have none of our own
-                std::string conn = req.get("Connection");
-                if (!conn.empty())
-                    resp.set("Connection", conn);
-                else if (req.http_version == http_1_0)
-                    resp.set("Connection", "close");
-            }
+        if (host.empty()) {
+            // just make up a host
+            host = "localhost";
+        }
+        uri tmp;
+        tmp.host = host;
+        tmp.scheme = "http";
+        tmp.path = req.uri;
+        return tmp.compose();
+    }
 
-            auto data = resp.data();
-            if (!resp.body.empty() && req.method != "HEAD") {
-                data += resp.body;
-            }
-            ssize_t nw = sock.send(data.data(), data.size());
-            return nw;
+    //! send response to this request
+    ssize_t send_response() {
+        if (resp_sent) return 0;
+        resp_sent = true;
+        // TODO: Content-Length might be good to add to normal responses,
+        //    but only if Transfer-Encoding isn't chunked?
+        if (resp.status_code >= 400 && resp.status_code <= 599
+             && resp.get("Content-Length").empty()
+             && req.method != "HEAD")
+        {
+            resp.set("Content-Length", resp.body.size());
+        }
+        // HTTP/1.1 requires Date, so lets add it
+        if (resp.get("Date").empty()) {
+            char buf[128];
+            struct tm tm;
+            time_t now = std::chrono::system_clock::to_time_t(procnow());
+            strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
+            resp.set("Date", buf);
+        }
+        if (resp.get("Connection").empty()) {
+            // obey clients wishes if we have none of our own
+            std::string conn = req.get("Connection");
+            if (!conn.empty())
+                resp.set("Connection", conn);
+            else if (req.http_version == http_1_0)
+                resp.set("Connection", "close");
         }
 
-        //! the ip of the host making the request
-        //! might use the X-Forwarded-For header
-        std::string agent_ip(bool use_xff=false) const {
-            if (use_xff) {
-                std::string xffs = req.get("X-Forwarded-For");
-                const char *xff = xffs.c_str();
-                if (xff) {
-                    // pick the first addr    
-                    int i;
-                    for (i=0; *xff && i<256 && !isdigit((unsigned char)*xff); i++, xff++) {}
-                    if (*xff && i < 256) {
-                        // now, find the end 
-                        const char *e = xff;
-                        for (i = 0; *e && i<256 && (isdigit((unsigned char)*e) || *e == '.'); i++, e++) {}
-                        if (i < 256 && e >= xff + 7 ) {
-                            return std::string(xff, e - xff);
-                        }
+        auto data = resp.data();
+        if (!resp.body.empty() && req.method != "HEAD") {
+            data += resp.body;
+        }
+        ssize_t nw = sock.send(data.data(), data.size());
+        return nw;
+    }
+
+    //! the ip of the host making the request
+    //! might use the X-Forwarded-For header
+    std::string agent_ip(bool use_xff=false) const {
+        if (use_xff) {
+            std::string xffs = req.get("X-Forwarded-For");
+            const char *xff = xffs.c_str();
+            if (xff) {
+                // pick the first addr    
+                int i;
+                for (i=0; *xff && i<256 && !isdigit((unsigned char)*xff); i++, xff++) {}
+                if (*xff && i < 256) {
+                    // now, find the end 
+                    const char *e = xff;
+                    for (i = 0; *e && i<256 && (isdigit((unsigned char)*e) || *e == '.'); i++, e++) {}
+                    if (i < 256 && e >= xff + 7 ) {
+                        return std::string(xff, e - xff);
                     }
                 }
             }
-            address addr;
-            if (sock.getpeername(addr)) {
-                char buf[INET6_ADDRSTRLEN];
-                if (addr.ntop(buf, sizeof(buf))) {
-                    return buf;
-                }
-            }
-            return "";
         }
-
-        ~request() {
-            if (!resp_sent) {
-                // ensure a response is sent
-                resp = http_response{404};
-                send_response();
-            }
-
-            if (boost::iequals(resp.get("Connection"), "close")) {
-                sock.close();
+        address addr;
+        if (sock.getpeername(addr)) {
+            char buf[INET6_ADDRSTRLEN];
+            if (addr.ntop(buf, sizeof(buf))) {
+                return buf;
             }
         }
-    };
+        return "";
+    }
+};
 
-    typedef std::function<void (request &)> callback_type;
+
+//! basic http server
+class http_server : public netsock_server {
 public:
+    typedef std::function<void (http_exchange &)> callback_type;
+
     std::function<void ()> connect_watch;
     std::function<void ()> disconnect_watch;
+
 protected:
     struct route {
         std::string pattern;
@@ -152,6 +154,7 @@ protected:
 
     std::vector<route> _routes;
     callback_type _log_func;
+
 public:
     http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
         : netsock_server("http", stacksize_, timeout_ms_)
@@ -166,7 +169,7 @@ public:
         _routes.emplace_back(pattern, callback, fnmatch_flags);
     }
 
-    //! set logging function, called after every request
+    //! set logging function, called after every exchange
     void set_log_callback(const callback_type &f) {
         _log_func = f;
     }
@@ -223,7 +226,7 @@ done:
     }
 
     void handle_request(http_request &req, netsock &s) {
-        request r(req, s);
+        http_exchange ex(req, s);
         const auto path = req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
@@ -232,21 +235,21 @@ done:
             DVLOG(5) << "matching pattern: " << i.pattern;
             if (i.pattern.empty() || fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
                 try {
-                    i.callback(r);
+                    i.callback(ex);
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
-                    r.resp = http_response(500, http_headers{"Connection", "close"});
+                    ex.resp = http_response(500, http_headers{"Connection", "close"});
                     std::string msg = e.what();
                     if (!msg.empty() && *msg.rbegin() != '\n')
                         msg += '\n';
-                    r.resp.set_body(msg);
-                    r.send_response();
+                    ex.resp.set_body(msg);
+                    ex.send_response();
                 }
                 break;
             }
         }
         if (_log_func) {
-            _log_func(r);
+            _log_func(ex);
         }
     }
 };
