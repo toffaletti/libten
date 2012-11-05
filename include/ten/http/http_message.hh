@@ -18,8 +18,8 @@ namespace ten {
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
-extern const std::string http_1_0; //"HTTP/1.0"
-extern const std::string http_1_1; //"HTTP/1.1"
+static const std::string http_1_0{"HTTP/1.0"};
+static const std::string http_1_1{"HTTP/1.1"};
 
 //! http headers
 struct http_headers {

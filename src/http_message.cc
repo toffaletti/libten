@@ -6,9 +6,6 @@
 
 namespace ten {
 
-extern const std::string http_1_0{"HTTP/1.0"};
-extern const std::string http_1_1{"HTTP/1.1"};
-
 static std::unordered_map<uint16_t, std::string> http_status_codes = {
     { 100, "Continue" },
     { 101, "Switching Protocols" },

@@ -5,6 +5,11 @@
 
 using namespace ten;
 
+// make sure static init works, this will crash if we break it
+static const http_response test_static_init(200,
+        http_headers("Access-Control-Allow-Origin", "*")
+        );
+
 BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
     http_request req{"GET", "/foo",
         http_headers{"This", 4, "That", "that"}
