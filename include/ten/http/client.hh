@@ -66,6 +66,8 @@ public:
     }
 
     http_response perform(http_request &r, std::chrono::milliseconds timeout = {}) {
+        VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
+
         if (r.body.size()) {
             r.set("Content-Length", r.body.size());
         }
@@ -119,6 +121,8 @@ public:
             {
                 _sock.close();
             }
+
+            VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
         } catch (errorx &e) {
             _sock.close();
