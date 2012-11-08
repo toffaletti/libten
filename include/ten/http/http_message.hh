@@ -18,8 +18,14 @@ namespace ten {
 typedef std::pair<std::string, std::string> header_pair;
 typedef std::vector<header_pair> header_list;
 
-static const std::string http_1_0{"HTTP/1.0"};
-static const std::string http_1_1{"HTTP/1.1"};
+// only a limited set of versions are supported
+enum http_version {
+    http_0_9,
+    http_1_0,
+    http_1_1,
+    default_http_version = http_1_1
+};
+const std::string &version_string(http_version ver);
 
 //! http headers
 struct http_headers {
@@ -37,10 +43,10 @@ struct http_headers {
     void init() {}
 
     template <typename ValueT, typename ...Args>
-    void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
-        append(field, std::forward<ValueT>(header_value));
-        init(std::forward<Args>(args)...);
-    }
+        void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
+            append(field, std::forward<ValueT>(header_value));
+            init(std::forward<Args>(args)...);
+        }
 
     void set(const std::string &field, const std::string &value);
 
@@ -91,29 +97,31 @@ struct http_headers {
 
 //! base class for http request and response
 struct http_base : http_headers {
+    http_version version {default_http_version};
     std::string body;
     size_t body_length {};
     bool complete {};
 
-    explicit http_base(http_headers headers_ = http_headers())
-        : http_headers(std::move(headers_)) {}
+    explicit http_base(http_headers headers_ = {}, http_version version_ = default_http_version)
+        : http_headers(std::move(headers_)), version{version_} {}
 
     void clear() {
         headers.clear();
+        version = default_http_version;
         body.clear();
-        body_length = 0;
-        complete = false;
+        body_length = {};
+        complete = {};
     }
 
     void set_body(const std::string &body_,
-            const std::string &content_type="")
+                  const std::string &content_type_ = std::string())
     {
         body = body_;
         body_length = body.size();
         set("Content-Length", body_length);
         remove("Content-Type");
-        if (!content_type.empty()) {
-            append("Content-Type", content_type);
+        if (!content_type_.empty()) {
+            append("Content-Type", content_type_);
         }
     }
 };
@@ -122,24 +130,30 @@ struct http_base : http_headers {
 struct http_request : http_base {
     std::string method;
     std::string uri;
-    std::string http_version;
 
     http_request() : http_base() {}
     http_request(std::string method_,
                  std::string uri_,
-                 http_headers headers_ = http_headers(),
-                 std::string http_version_ = http_1_1)
+                 http_headers headers_ = {},
+                 http_version version_ = default_http_version)
+        : http_base(std::move(headers_), version_),
+          method{std::move(method_)},
+          uri{std::move(uri_)}
+    {}
+    http_request(std::string method_,
+                 std::string uri_,
+                 http_headers headers_,
+                 std::string body_,
+                 std::string content_type_ = std::string())
         : http_base(std::move(headers_)),
-          method(std::move(method_)),
-          uri(std::move(uri_)),
-          http_version(std::move(http_version_))
-        {}
+          method{std::move(method_)},
+          uri{std::move(uri_)}
+    { set_body(std::move(body_), std::move(content_type_)); }
 
     void clear() {
         http_base::clear();
         method.clear();
         uri.clear();
-        http_version.clear();
     }
 
     void parser_init(struct http_parser *p);
@@ -159,24 +173,31 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
+    using status_t = uint16_t;
+    status_t status_code {};
     bool guillotine {};  // return only the head
-    std::string http_version;
-    unsigned long status_code {};
 
-    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
-
-    http_response(unsigned long status_code_ = 200,
-                  http_headers headers_ = http_headers(),
-                  std::string http_version_ = http_1_1)
-        : http_base(std::move(headers_)),
-          http_version(std::move(http_version_)),
-          status_code(std::move(status_code_))
+    http_response(status_t status_code_ = 200,
+                  http_headers headers_ = {},
+                  http_version version_ = default_http_version)
+        : http_base(std::move(headers_), version_),
+          status_code{status_code_}
         {}
+    http_response(status_t status_code_,
+                  http_headers headers_,
+                  std::string body_,
+                  std::string content_type_ = std::string())
+        : http_base(std::move(headers_)),
+          status_code{status_code_}
+        { set_body(std::move(body_), std::move(content_type_)); }
+
+    // TODO: remove this special case
+    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
 
     void clear() {
         http_base::clear();
-        http_version.clear();
-        status_code = 0;
+        status_code = {};
+        guillotine = {};
     }
 
     const std::string &reason() const;

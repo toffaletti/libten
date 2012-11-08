@@ -6,7 +6,7 @@
 
 namespace ten {
 
-static std::unordered_map<uint16_t, std::string> http_status_codes = {
+static const std::unordered_map<http_response::status_t, std::string> http_status_codes = {
     { 100, "Continue" },
     { 101, "Switching Protocols" },
     { 200, "OK" },
@@ -49,6 +49,16 @@ static std::unordered_map<uint16_t, std::string> http_status_codes = {
     { 505, "HTTP Version Not Supported" },
 };
 
+const std::string &version_string(http_version ver) {
+    static const std::string v09{"HTTP/0.9"}, v10{"HTTP/1.0"}, v11{"HTTP/1.1"};
+    switch (ver) {
+      case http_0_9: return v09;
+      case http_1_0: return v10;
+      case http_1_1: return v11;
+      default:       throw errorx("BUG: http_version %u", static_cast<unsigned>(ver));
+    }
+}
+
 namespace {
 struct is_header {
     const std::string &field;
@@ -59,19 +69,19 @@ struct is_header {
 } // ns
 
 header_list::iterator http_headers::find(const std::string &field) {
-    return std::find_if(headers.begin(), headers.end(), is_header{field});
+    return std::find_if(begin(headers), end(headers), is_header{field});
 }
 
 header_list::const_iterator http_headers::find(const std::string &field) const {
-    return std::find_if(headers.begin(), headers.end(), is_header{field});
+    return std::find_if(begin(headers), end(headers), is_header{field});
 }
 
 void http_headers::set(const std::string &field, const std::string &value) {
     auto i = find(field);
-    if (i != headers.end()) {
+    if (i != end(headers)) {
         i->second = value;
     } else {
-        headers.push_back(std::make_pair(field, value));
+        headers.emplace_back(field, value);
     }
 }
 
@@ -80,9 +90,9 @@ void http_headers::append(const std::string &field, const std::string &value) {
 }
 
 bool http_headers::remove(const std::string &field) {
-    auto i = std::remove_if(headers.begin(), headers.end(), is_header{field});
-    if (i != headers.end()) {
-        headers.erase(i, headers.end()); // remove now-invalid tail
+    auto i = std::remove_if(begin(headers), end(headers), is_header{field});
+    if (i != end(headers)) {
+        headers.erase(i, end(headers)); // remove now-invalid tail
         return true;
     }
     return false;
@@ -90,7 +100,7 @@ bool http_headers::remove(const std::string &field) {
 
 std::string http_headers::get(const std::string &field) const {
     auto i = find(field);
-    if (i != headers.end()) {
+    if (i != end(headers)) {
         return i->second;
     }
     return std::string();
@@ -98,7 +108,7 @@ std::string http_headers::get(const std::string &field) const {
 
 maybe<std::string> http_headers::mget(const std::string &field) const {
     auto i = find(field);
-    if (i != headers.end()) {
+    if (i != end(headers)) {
         return i->second;
     }
     return nothing;
@@ -108,15 +118,23 @@ maybe<std::string> http_headers::mget(const std::string &field) const {
 
 bool http_headers::is(const std::string &field, const std::string &value) const {
     auto i = find(field);
-    return (i != headers.end()) && (i->second == value);
+    return (i != end(headers)) && (i->second == value);
 }
 
 bool http_headers::is_nocase(const std::string &field, const std::string &value) const {
     auto i = find(field);
-    return (i != headers.end()) && boost::iequals(i->second, value);
+    return (i != end(headers)) && boost::iequals(i->second, value);
 }
 
 #endif
+
+static bool set_version(http_version &ver, http_parser *p) {
+    if      (p->http_major == 0 && p->http_minor == 9) ver = http_0_9;
+    else if (p->http_major == 1 && p->http_minor == 0) ver = http_1_0;
+    else if (p->http_major == 1 && p->http_minor == 1) ver = http_1_1;
+    else return false;
+    return true;
+}
 
 extern "C" {
 
@@ -157,14 +175,12 @@ static int _request_on_url(http_parser *p, const char *at, size_t length) {
 static int _request_on_headers_complete(http_parser *p) {
     http_request *m = reinterpret_cast<http_request*>(p->data);
     m->method = http_method_str((http_method)p->method);
-    std::stringstream ss;
-    ss << "HTTP/" << p->http_major << "." << p->http_minor;
-    m->http_version = ss.str();
-
+    if (!set_version(m->version, p)) {
+        return -1;
+    }
     if (p->content_length > 0 && p->content_length != UINT64_MAX) {
         m->body.reserve(p->content_length);
     }
-
     return 0;
 }
 
@@ -198,10 +214,10 @@ void http_request::parse(struct http_parser *p, const char *data_, size_t &len) 
 }
 
 std::string http_request::data() const {
-    std::stringstream ss;
-    ss << method << " " << uri << " " << http_version << "\r\n";
-    for (header_list::const_iterator i = headers.begin(); i!=headers.end(); ++i) {
-        ss << i->first << ": " << i->second << "\r\n";
+    std::ostringstream ss;
+    ss << method << " " << uri << " " << version_string(version) << "\r\n";
+    for (auto const &h : headers) {
+        ss << h.first << ": " << h.second << "\r\n";
     }
     ss << "\r\n";
     return ss.str();
@@ -212,10 +228,9 @@ std::string http_request::data() const {
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
     m->status_code = p->status_code;
-    m->http_version = (p->http_major == 1 && p->http_minor == 0) ? http_1_0
-                    : (p->http_major == 1 && p->http_minor == 1) ? http_1_1
-                    : "HTTP/" + std::to_string(p->http_major) + "." + std::to_string(p->http_minor);
-
+    if (!set_version(m->version, p)) {
+        return -1;
+    }
     if (p->content_length > 0 && p->content_length != UINT64_MAX) {
         m->body.reserve(p->content_length);
     }
@@ -252,21 +267,20 @@ void http_response::parse(struct http_parser *p, const char *data_, size_t &len)
     len = nparsed;
 }
 
-
 const std::string &http_response::reason() const {
     auto i = http_status_codes.find(status_code);
     if (i != http_status_codes.end()) {
         return i->second;
     }
-    static std::string unknown = "Unknown";
+    static const std::string unknown{"Unknown"};
     return unknown;
 }
 
 std::string http_response::data() const {
-    std::stringstream ss;
-    ss << http_version << " " << status_code << " " << reason() << "\r\n";
-    for (header_list::const_iterator i = headers.begin(); i!=headers.end(); ++i) {
-        ss << i->first << ": " << i->second << "\r\n";
+    std::ostringstream ss;
+    ss << version_string(version) << " " << status_code << " " << reason() << "\r\n";
+    for (const auto &h : headers) {
+        ss << h.first << ": " << h.second << "\r\n";
     }
     ss << "\r\n";
     return ss.str();
