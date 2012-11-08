@@ -88,7 +88,7 @@ struct http_exchange {
             std::string conn = req.get("Connection");
             if (!conn.empty())
                 resp.set("Connection", conn);
-            else if (req.http_version == http_1_0)
+            else if (req.version == http_1_0)
                 resp.set("Connection", "close");
         }
 
