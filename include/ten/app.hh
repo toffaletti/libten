@@ -1,5 +1,5 @@
-#ifndef APP_HH
-#define APP_HH
+#ifndef LIBTEN_APP_HH
+#define LIBTEN_APP_HH
 
 #include <sys/resource.h>
 #include <iostream>
@@ -10,6 +10,7 @@
 
 #include "task.hh"
 #include "logging.hh"
+#include "term.hh"
 #include "descriptors.hh"
 
 namespace ten {
@@ -59,20 +60,25 @@ namespace po = boost::program_options;
 
 //! setup basic options for all applications
 struct options {
+    const unsigned line_length;
+
     po::options_description generic;
     po::options_description configuration;
     po::options_description hidden;
-    po::positional_options_description pdesc;
-
+    po::options_description visible;
     po::options_description cmdline_options;
     po::options_description config_file_options;
-    po::options_description visible;
+    po::positional_options_description pdesc;
 
     options(const char *appname, app_config &c) :
-        generic("Generic options"),
-        configuration("Configuration"),
-        hidden("Hidden options"),
-        visible("Allowed options")
+        line_length(terminal_width()),
+        generic("Generic options",     line_length, line_length / 2),
+        configuration("Configuration", line_length, line_length / 2),
+        hidden("Hidden options",       line_length, line_length / 2),
+        visible("Allowed options",     line_length, line_length / 2),
+        cmdline_options(    line_length, line_length / 2),
+        config_file_options(line_length, line_length / 2),
+        pdesc()
     {
         generic.add_options()
             ("version,v", "Show version")
