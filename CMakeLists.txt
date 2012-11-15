@@ -99,6 +99,7 @@ add_library(ten
     src/net.cc
     src/zip.cc
     src/json.cc
+    src/term.cc
     ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}
