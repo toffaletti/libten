@@ -190,7 +190,9 @@ void task::swap() {
     }
 }
 
-deadline::deadline(milliseconds ms) {
+deadline::deadline(milliseconds ms)
+  : timeout_id()
+{
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
