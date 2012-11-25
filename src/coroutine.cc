@@ -5,7 +5,7 @@ boost::ctx::stack_allocator coroutine::allocator;
 namespace this_coro {
 namespace {
     __thread coroutine *current_coro = nullptr;
-}
+} // end anon namespace
 
 void yield() noexcept {
     current_coro->yield();
@@ -15,7 +15,7 @@ bool yield_to(coroutine &other) noexcept {
     return current_coro->yield_to(other);
 }
 
-}
+} // end namespace this_coro
 
 coroutine::coroutine() noexcept {
     this_coro::current_coro = this;

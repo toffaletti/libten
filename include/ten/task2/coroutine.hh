@@ -1,3 +1,6 @@
+#ifndef LIBTEN_TASK2_COROUTINE_HH
+#define LIBTEN_TASK2_COROUTINE_HH
+
 #include <boost/context/fcontext.hpp>
 #include <boost/context/stack_allocator.hpp>
 #include <boost/context/stack_utils.hpp>
@@ -75,8 +78,11 @@ private:
         yield();
     }
 
-protected:
+public:
     bool yield_to(coroutine &other) noexcept;
+protected:
     void yield() noexcept;
 };
+
+#endif // LIBTEN_TASK2_COROUTINE_HH
 

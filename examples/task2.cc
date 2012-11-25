@@ -1,13 +1,9 @@
 #include "ten/task2/coroutine.hh"
+#include "ten/task2/task.hh"
 
 #include <memory>
 #include <thread>
-#include <sys/syscall.h>
 #include <iostream>
-
-bool is_main_thread() noexcept {
-    return getpid() == syscall(SYS_gettid);
-}
 
 void foo(int a, int b) {
     std::cout << "foo: " << a+b << "\n";
@@ -29,6 +25,7 @@ void bar() {
     this_coro::yield();
 }
 
+#if 0
 int main() {
     using namespace this_coro;
     coroutine _;
@@ -49,4 +46,14 @@ int main() {
 
     std::cout << "end main\n";
 }
+#endif
 
+int main() {
+    using namespace ten::task2;
+    runtime run;
+
+    runtime::spawn(bar);
+    runtime::spawn(foo, 1, 2);
+    runtime::spawn(foo, 4, 4);
+    run();
+}

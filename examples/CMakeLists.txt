@@ -46,7 +46,9 @@ target_link_libraries(memg ten boost_program_options)
 add_executable(synch EXCLUDE_FROM_ALL synch.cc)
 target_link_libraries(synch ten)
 
-add_executable(task2 EXCLUDE_FROM_ALL task2.cc ../src/coroutine.cc)
+add_executable(task2 EXCLUDE_FROM_ALL task2.cc
+    ../src/coroutine.cc
+    ../src/task2.cc)
 target_link_libraries(task2 boost_context glog)
 
 if (OPENSSL_FOUND)
