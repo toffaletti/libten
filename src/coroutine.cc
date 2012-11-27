@@ -7,6 +7,10 @@ namespace {
     __thread coroutine *current_coro = nullptr;
 } // end anon namespace
 
+coroutine *get() noexcept {
+    return current_coro;
+}
+
 void yield() noexcept {
     current_coro->yield();
 }

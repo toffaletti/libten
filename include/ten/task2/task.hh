@@ -16,13 +16,55 @@ namespace ten {
 
 namespace task2 {
 
-class task;
+//! exception to unwind stack on taskcancel
+struct task_interrupted {};
+
+// forward decl
+namespace this_task {
+uint64_t get_id();
+void yield();
+} // this_task
+
+class task : private coroutine {
+    friend class runtime;
+private:
+    // when a task exits, its linked tasks are canceled
+    //std::vector<std::shared_ptr<task>> _links;
+    uint64_t _id;
+
+    static uint64_t next_id();
+
+    task() : coroutine(), _id(next_id()) {}
+public:
+    //! create a new coroutine
+    template<class Function, class... Args> 
+    explicit task(Function &&f, Args&&... args)
+    : coroutine(std::forward<Function>(f), std::forward<Args>(args)...),
+    _id(next_id())
+    {
+    }
+
+public:
+    //! id of this task
+    uint64_t get_id() const { return _id; }
+    //! cancel this task
+    bool cancel();
+    //! make the task a system task
+    //void detach();
+    //! join task
+    void join();
+private:
+    friend uint64_t this_task::get_id();
+    friend void this_task::yield();
+
+    void yield();
+};
 
 class runtime {
 private:
     static __thread runtime *_runtime;
     typedef std::shared_ptr<task> shared_task;
-    coroutine _coro;
+    task _task;
     std::vector<shared_task> _alltasks;
     std::deque<task *> _readyq;
 public:
@@ -45,48 +87,6 @@ public:
     }
 
     void operator() ();
-};
-
-//! exception to unwind stack on taskcancel
-struct task_interrupted {};
-
-// forward decl
-namespace this_task {
-uint64_t get_id();
-void yield();
-} // this_task
-
-class task {
-private:
-    friend class runtime;
-    coroutine _coro;
-    // when a task exits, its linked tasks are canceled
-    //std::vector<std::shared_ptr<task>> _links;
-    uint64_t _id;
-
-    static uint64_t next_id();
-public:
-    //! create a new coroutine
-    template<class Function, class... Args> 
-    explicit task(Function &&f, Args&&... args)
-    : _coro(std::forward<Function>(f), std::forward<Args>(args)...),
-    _id(next_id())
-    {
-    }
-
-public:
-    //! id of this task
-    uint64_t get_id() const { return _id; }
-    //! cancel this task
-    bool cancel();
-    //! make the task a system task
-    //void detach();
-    //! join task
-    void join();
-protected:
-    friend void this_task::yield();
-
-    void yield();
 };
 
 namespace this_task {

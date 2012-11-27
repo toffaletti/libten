@@ -6,18 +6,13 @@ namespace ten {
 namespace task2 {
 
 namespace this_task {
-namespace {
-    __thread task *current_task = nullptr;
-} // end anon namespace
-
 uint64_t get_id() {
-    return current_task->get_id();
+    return static_cast<task *>(this_coro::get())->get_id();
 }
 
 void yield() {
-    current_task->yield();
+    return static_cast<task *>(this_coro::get())->yield();
 }
-
 } // end namespace this_task
 
 /////// task ///////
@@ -31,7 +26,7 @@ uint64_t task::next_id() {
 }
 
 void task::join() {
-    _coro.join();
+    coroutine::join();
 }
 
 void task::yield() {
@@ -45,7 +40,7 @@ void runtime::operator()() {
         while (!_readyq.empty()) {
             auto t = _readyq.front();
             _readyq.pop_front();
-            if (_coro.yield_to(t->_coro)) {
+            if (_task.yield_to(*t)) {
                 _readyq.push_back(t);
             } else {
                 auto i = std::find_if(std::begin(_alltasks), std::end(_alltasks),

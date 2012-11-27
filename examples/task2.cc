@@ -5,6 +5,7 @@
 #include <thread>
 #include <iostream>
 
+#if 0
 void foo(int a, int b) {
     std::cout << "foo: " << a+b << "\n";
     this_coro::yield();
@@ -25,9 +26,7 @@ void bar() {
     this_coro::yield();
 }
 
-#if 0
 int main() {
-    using namespace this_coro;
     coroutine _;
 
     std::cout << "sizeof coro: " << sizeof(coroutine) << "\n";
@@ -46,14 +45,55 @@ int main() {
 
     std::cout << "end main\n";
 }
-#endif
+#else
+
+using namespace ten::task2;
+
+void foo(int a, int b) {
+    std::cout << "foo: " << a+b << "\n";
+    this_task::yield();
+    std::cout << "waaaaa\n";
+    for (int i=0; i<10; i++) {
+        this_task::yield();
+        std::cout << "lala: " << i << "\n";
+    }
+}
+
+void zaz(const char *msg) {
+    std::cout << msg << "\n";
+}
+
+void bar() {
+    auto baz = runtime::spawn(zaz, "zazzle me");
+    baz->join();
+    this_task::yield();
+}
+
+void counter() {
+    uint64_t count = 0;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (;;) {
+        ++count;
+        this_task::yield();
+        auto now = std::chrono::high_resolution_clock::now();
+        if (now - start >= std::chrono::seconds(1)) {
+            std::cout << count << "\n";
+            count = 0;
+            start = std::chrono::high_resolution_clock::now();
+        }
+    }
+}
 
 int main() {
-    using namespace ten::task2;
     runtime run;
 
     runtime::spawn(bar);
     runtime::spawn(foo, 1, 2);
     runtime::spawn(foo, 4, 4);
     run();
+
+    std::cout << "\nrun2\n";
+    runtime::spawn(counter);
+    run();
 }
+#endif

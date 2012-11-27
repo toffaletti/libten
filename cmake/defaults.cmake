@@ -44,16 +44,16 @@ if (NOT GCC_FLAGS)
 
     # release- and debug-specific flags for gcc
     set(DEBUG_FLAGS   "-O0 -ggdb -D_DEBUG -rdynamic")
-    set(RELEASE_FLAGS "-O2")
+    set(RELEASE_FLAGS "-O2 -DNDEBUG")
 
     # now that we know what the UB flags are, paste them into the cmake macros
 
     set(CMAKE_C_FLAGS           "${CMAKE_C_FLAGS} ${GCC_FLAGS}")
     set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} ${GXX_FLAGS}")
-    set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} ${RELEASE_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} ${DEBUG_FLAGS}")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${RELEASE_FLAGS}")
-    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} ${DEBUG_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE   "${RELEASE_FLAGS}")
+    set(CMAKE_C_FLAGS_DEBUG     "${DEBUG_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "${RELEASE_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG   "${DEBUG_FLAGS}")
 endif (NOT GCC_FLAGS)
 
 include(CheckIncludeFiles)

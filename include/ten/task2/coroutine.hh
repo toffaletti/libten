@@ -13,6 +13,7 @@
 class coroutine;
 
 namespace this_coro {
+    coroutine *get() noexcept;
     void yield() noexcept;
     bool yield_to(coroutine &other) noexcept;
 }
