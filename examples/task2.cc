@@ -71,16 +71,16 @@ void bar() {
 
 void counter() {
     uint64_t count = 0;
-    auto start = std::chrono::high_resolution_clock::now();
+    runtime::spawn([&]() {
+        for (;;) {
+            this_task::sleep_for(std::chrono::seconds{1});
+            std::cout << count << "\n";
+            count = 0;
+        }
+    });
     for (;;) {
         ++count;
         this_task::yield();
-        auto now = std::chrono::high_resolution_clock::now();
-        if (now - start >= std::chrono::seconds(1)) {
-            std::cout << count << "\n";
-            count = 0;
-            start = std::chrono::high_resolution_clock::now();
-        }
     }
 }
 
@@ -93,6 +93,14 @@ int main() {
     run();
 
     std::cout << "\nrun2\n";
+    for (int i=0; i<1000; ++i) {
+        runtime::spawn([]() {
+            for (;;) {
+                int ms = random() % 1000;
+                this_task::sleep_for(std::chrono::milliseconds{ms});
+            }
+        });
+    }
     runtime::spawn(counter);
     run();
 }
