@@ -3,6 +3,7 @@
 
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
+#include "ten/logging.hh"
 
 #include "ten/task2/coroutine.hh"
 
@@ -12,6 +13,7 @@
 #include <deque>
 #include <vector>
 #include <memory>
+#include <condition_variable>
 #include <sys/syscall.h>
 
 
@@ -45,7 +47,14 @@ public:
 
     enum class state {
         ready,
-        asleep
+        asleep,
+        canceled,
+        canceling
+    };
+private:
+    struct cancellation_point {
+        cancellation_point();
+        ~cancellation_point();
     };
 
 private:
@@ -113,6 +122,7 @@ private:
     //std::vector<std::shared_ptr<task>> _links;
     timeout_set _timeouts;
     uint64_t _id;
+    uint64_t _cancel_points = 0;
     runtime *_runtime; // TODO: scheduler
     std::atomic<state> _state;
 
@@ -137,7 +147,7 @@ public:
     //! id of this task
     uint64_t get_id() const { return _id; }
     //! cancel this task
-    bool cancel();
+    void cancel();
     //! make the task a system task
     //void detach();
     //! join task
@@ -164,6 +174,7 @@ public:
 private:
     static __thread runtime *_runtime;
 
+    friend class task::cancellation_point;
     friend void task::yield();
     friend void task::ready();
     friend uint64_t this_task::get_id();
@@ -190,6 +201,8 @@ private:
         iterator begin() { return std::begin(_set); }
         iterator end() { return std::end(_set); }
 
+        task *front() const { return _set.front(); }
+        bool empty() const { return _set.empty(); }
         size_t size() const { return _set.size(); }
 
         void insert(task *t) {
@@ -215,6 +228,8 @@ private:
     time_point _now;
     llqueue<task *> _dirtyq;
     timeout_task_set _timeout_tasks;
+    std::mutex _mutex;
+    std::condition_variable _cv;
 
     const time_point &update_cached_time() {
         _now = clock::now();
@@ -227,17 +242,19 @@ private:
             t->_state = task::state::asleep;
             t->set_timeout(sleep_time);
             _runtime->_timeout_tasks.insert(t);
+            task::cancellation_point cancelable;
             t->yield();
         }
 
     void ready(task *t);
 public:
     runtime() {
-        // TODO: reenable this when out libstdc++ is fixed
+        // TODO: reenable this when our libstdc++ is fixed
         //static_assert(clock::is_steady, "clock not steady");
         _runtime = this;
         update_cached_time();
     }
+
     //! is this the main thread?
     static bool is_main_thread() noexcept {
         return getpid() == syscall(SYS_gettid);

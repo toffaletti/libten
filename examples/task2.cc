@@ -1,5 +1,6 @@
 #include "ten/task2/coroutine.hh"
 #include "ten/task2/task.hh"
+#include "ten/logging.hh"
 
 #include <memory>
 #include <thread>
@@ -92,7 +93,21 @@ int main() {
     runtime::spawn(foo, 4, 4);
     run();
 
-    std::cout << "\nrun2\n";
+    auto sleep2 = runtime::spawn([]() {
+        LOG(INFO) << "sleep for 2 sec\n";;
+        this_task::sleep_for(std::chrono::seconds{2});
+        LOG(INFO) << "done\n";
+    });
+
+    std::thread t1([&sleep2]() {
+            std::this_thread::sleep_for(std::chrono::seconds{1});
+            sleep2->cancel();
+    });
+
+    run();
+    t1.join();
+
+    LOG(INFO) << "run2";
     for (int i=0; i<1000; ++i) {
         runtime::spawn([]() {
             for (;;) {

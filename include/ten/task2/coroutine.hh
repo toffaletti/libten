@@ -74,7 +74,11 @@ private:
     }
 
     void execute() {
-        _f();
+        try {
+            _f();
+        } catch (...) {
+            // TODO: handle this better
+        }
         _f = nullptr;
         yield();
     }

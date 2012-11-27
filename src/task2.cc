@@ -25,8 +25,27 @@ namespace {
     std::atomic<uint64_t> task_id_counter{0};
 }
 
+task::cancellation_point::cancellation_point() {
+    task *t = runtime::current_task();
+    ++t->_cancel_points;
+}
+
+task::cancellation_point::~cancellation_point() {
+    task *t = runtime::current_task();
+    --t->_cancel_points;
+}
+
 uint64_t task::next_id() {
     return ++task_id_counter;
+}
+
+void task::cancel() {
+    state st = _state;
+    if (st != state::canceling) {
+        DVLOG(5) << "canceling: " << this << "\n";
+        _state = state::canceled;
+        ready();
+    }
 }
 
 void task::join() {
@@ -35,6 +54,12 @@ void task::join() {
 
 void task::yield() {
     this_coro::yield();
+
+    state st = _state;
+    if (st == state::canceling && _cancel_points > 0) {
+        DVLOG(5) << "canceling task!\n";
+        throw task_interrupted();
+    }
 
     while (!_timeouts.empty()) {
         timeout *to = _timeouts.front();
@@ -58,9 +83,12 @@ void task::yield() {
 
 void task::ready() {
     state st = _state;
-    if (st != state::ready) {
+    if (st == state::canceled) {
+        if (_state.compare_exchange_weak(st, state::canceling)) {
+            _runtime->ready(this);
+        }
+    } else if (st != state::ready) {
         if (_state.compare_exchange_weak(st, state::ready)) {
-            _state = state::ready;
             _runtime->ready(this);
         }
     }
@@ -71,6 +99,9 @@ __thread runtime *runtime::_runtime = nullptr;
 void runtime::ready(task *t) {
     if (this != _runtime) {
         _dirtyq.push(t);
+        // TODO: speed this up?
+        std::unique_lock<std::mutex> lock{_mutex};
+        _cv.notify_one();
     } else {
         _readyq.push_back(t);
     }
@@ -111,6 +142,13 @@ void runtime::operator()() {
                             return other.get() == t;
                         });
                 _alltasks.erase(i);
+            }
+        } else {
+            std::unique_lock<std::mutex> lock{_mutex};
+            if (_timeout_tasks.empty()) {
+                _cv.wait(lock);
+            } else {
+                _cv.wait_until(lock, _timeout_tasks.front()->_timeouts.front()->when);
             }
         }
     }
