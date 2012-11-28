@@ -5,6 +5,8 @@ include(FindOpenSSL)
 #add_definitions(-DUSE_UCONTEXT)
 add_definitions(-DUSE_BOOST_FCONTEXT)
 
+add_definitions(-D_GLIBCXX_USE_CLOCK_MONOTONIC=1 -D_GLIBCXX_USE_CLOCK_REALTIME=1)
+
 include_directories(${CWD}/..) # for stlencoders and stringencoders
 include_directories(${CWD}/../include)
 include_directories(${CWD}/../msgpack)

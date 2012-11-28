@@ -48,8 +48,9 @@ target_link_libraries(synch ten)
 
 add_executable(task2 EXCLUDE_FROM_ALL task2.cc
     ../src/coroutine.cc
-    ../src/task2.cc)
-target_link_libraries(task2 boost_context glog)
+    ../src/task2.cc
+    ../src/chrono_fix.cc)
+target_link_libraries(task2 rt boost_context glog)
 
 if (OPENSSL_FOUND)
     add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)

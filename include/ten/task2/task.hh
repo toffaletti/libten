@@ -250,7 +250,7 @@ private:
 public:
     runtime() {
         // TODO: reenable this when our libstdc++ is fixed
-        //static_assert(clock::is_steady, "clock not steady");
+        static_assert(clock::is_steady, "clock not steady");
         _runtime = this;
         update_cached_time();
     }
