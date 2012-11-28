@@ -58,7 +58,7 @@ void task::yield() {
     state st = _state;
     if (st == state::canceling && _cancel_points > 0) {
         DVLOG(5) << "canceling task!\n";
-        throw task_interrupted();
+        throw coroutine_cancel();
     }
 
     while (!_timeouts.empty()) {

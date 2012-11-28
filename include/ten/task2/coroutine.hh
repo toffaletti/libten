@@ -18,6 +18,8 @@ namespace this_coro {
     bool yield_to(coroutine &other) noexcept;
 }
 
+struct coroutine_cancel {};
+
 class coroutine {
 private:
     static boost::ctx::stack_allocator allocator;
@@ -76,9 +78,7 @@ private:
     void execute() {
         try {
             _f();
-        } catch (...) {
-            // TODO: handle this better
-        }
+        } catch (coroutine_cancel &e) {}
         _f = nullptr;
         yield();
     }
