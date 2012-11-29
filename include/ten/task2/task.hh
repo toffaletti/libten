@@ -46,11 +46,14 @@ public:
     typedef std::chrono::time_point<clock> time_point;
 
     enum class state {
+        fresh,
         ready,
         asleep,
         canceled,
-        canceling
+        unwinding,
+        finished
     };
+
 private:
     struct cancellation_point {
         cancellation_point();
@@ -103,6 +106,7 @@ private:
                 delete *i;
                 _set.erase(i);
             }
+            // TODO: where to add this back in?
             //if (_set.empty()) {
             //    // remove from scheduler timeout list
             //    cproc->sched().remove_timeout_task(this);
@@ -158,7 +162,11 @@ private:
     friend void this_task::yield();
 
     void yield();
-    void ready();
+    bool transition(state to);
+    bool runnable() const {
+        state st = _state;
+        return (st == state::fresh || st == state::ready || st == state::canceled || st == state::unwinding);
+    }
 
     template <class Duration>
         timeout *set_timeout(const std::chrono::time_point<clock, Duration>& sleep_time) {
@@ -176,7 +184,7 @@ private:
 
     friend class task::cancellation_point;
     friend void task::yield();
-    friend void task::ready();
+    friend void task::cancel();
     friend uint64_t this_task::get_id();
     friend void this_task::yield();
     template<class Rep, class Period>
@@ -239,7 +247,7 @@ private:
     template <class Duration>
         static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
             task *t = current_task();
-            t->_state = task::state::asleep;
+            t->transition(task::state::asleep);
             t->set_timeout(sleep_time);
             _runtime->_timeout_tasks.insert(t);
             task::cancellation_point cancelable;

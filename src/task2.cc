@@ -1,9 +1,28 @@
 #include "ten/task2/task.hh"
 #include <atomic>
+#include <array>
 #include <algorithm>
 
 namespace ten {
 namespace task2 {
+
+std::ostream &operator << (std::ostream &o, const task *t) {
+    o << "task[" << (void *)t << "]";
+    return o;
+}
+
+std::ostream &operator << (std::ostream &o, task::state s) {
+    static std::array<const char *, 6> names = {{
+        "fresh",
+        "ready",
+        "asleep",
+        "canceled",
+        "unwinding",
+        "finished"
+    }};
+    o << names[static_cast<int>(s)];
+    return o;
+}
 
 task *runtime::current_task() {
     return static_cast<task *>(this_coro::get());
@@ -39,12 +58,65 @@ uint64_t task::next_id() {
     return ++task_id_counter;
 }
 
+template <class Arg>
+bool valid_states(Arg to) {
+    return false;
+}
+
+template <class Arg, class... Args>
+bool valid_states(Arg to, Arg valid, Args ...others) {
+    if (to == valid) return true;
+    return valid_states(to, others...);
+}
+
+bool task::transition(state to) {
+    bool valid = true;
+    while (valid) {
+        state from = _state;
+        // always ok to transition to the state we're already in
+        if (from == to) return true;
+        switch (from) {
+            case state::fresh:
+                // from fresh we can go directly to finished
+                // without needing to unwind
+                if (to == state::canceled) {
+                    to = state::finished;
+                }
+                valid = valid_states(to, state::ready, state::finished);
+                break;
+            case state::ready:
+                valid = valid_states(to, state::asleep, state::canceled, state::finished);
+                break;
+            case state::asleep:
+                valid = valid_states(to, state::ready, state::canceled);
+                break;
+            case state::canceled:
+                valid = valid_states(to, state::unwinding, state::finished);
+                break;
+            case state::unwinding:
+                valid = valid_states(to, state::finished);
+                break;
+            case state::finished:
+                valid = valid_states(to);
+                break;
+            default:
+                // bug
+                std::terminate();
+        }
+
+        if (valid) {
+            if (_state.compare_exchange_weak(from, to)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void task::cancel() {
-    state st = _state;
-    if (st != state::canceling) {
+    if (transition(state::canceled)) {
         DVLOG(5) << "canceling: " << this << "\n";
-        _state = state::canceled;
-        ready();
+        _runtime->ready(this);
     }
 }
 
@@ -56,9 +128,11 @@ void task::yield() {
     this_coro::yield();
 
     state st = _state;
-    if (st == state::canceling && _cancel_points > 0) {
-        DVLOG(5) << "canceling task!\n";
-        throw coroutine_cancel();
+    if (st == state::canceled && _cancel_points > 0) {
+        if (transition(state::unwinding)) {
+            DVLOG(5) << "unwinding task: " << this;
+            throw coroutine_cancel();
+        }
     }
 
     while (!_timeouts.empty()) {
@@ -81,18 +155,21 @@ void task::yield() {
     }
 }
 
+#if 0
 void task::ready() {
     state st = _state;
+    // TODO: clean this up to use transition
     if (st == state::canceled) {
-        if (_state.compare_exchange_weak(st, state::canceling)) {
+        if (transition(state::unwinding)) {
             _runtime->ready(this);
         }
     } else if (st != state::ready) {
-        if (_state.compare_exchange_weak(st, state::ready)) {
+        if (transition(state::ready)) {
             _runtime->ready(this);
         }
     }
 }
+#endif
 
 __thread runtime *runtime::_runtime = nullptr;
 
@@ -121,7 +198,11 @@ void runtime::operator()() {
         for (; i != std::end(_timeout_tasks); ++i) {
             task *t = *i;
             if (t->first_timeout() <= now) {
-                t->ready();
+                if (t->transition(task::state::ready)) {
+                    ready(t);
+                } else {
+                    DVLOG(5) << "wtf?";
+                }
             } else  {
                 break;
             }
@@ -131,12 +212,35 @@ void runtime::operator()() {
         if (!_readyq.empty()) {
             auto t = _readyq.front();
             _readyq.pop_front();
-            //assert(t->_state == task::state::ready);
-            if (_task.yield_to(*t)) {
-                if (t->_state == task::state::ready) {
-                    _readyq.push_back(t);
+            if (t->_state == task::state::fresh) {
+                t->transition(task::state::ready);
+            }
+            if (t->runnable()) {
+                DVLOG(5) << "task: " << t << " state: " << t->_state.load();
+                if (_task.yield_to(*t)) {
+                    DVLOG(5) << "post yield task: " << t << " state: " << t->_state.load();
+                    // TODO: this is ugly.
+                    // yield_to return value and done() should be unified
+                    // need to re-think task and coroutine.
+                    // perhaps should have a basic context and task
+                    // coroutine and task are already incompat
+                    // it also feels like state needs to be integrated into
+                    // coroutine. so maybe task+coroutine become one thing
+                    // and re-introduce context?
+                    if (t->done()) {
+                        DVLOG(5) << "task finished: " << t;
+                        t->transition(task::state::finished);
+                    } else if (t->runnable()) {
+                        _readyq.push_back(t);
+                    }
+                } else {
+                    DVLOG(5) << "task finished: " << t;
+                    t->transition(task::state::finished);
                 }
-            } else {
+            }
+            if (t->_state == task::state::finished) {
+                DVLOG(5) << "task finished: " << t;
+                _timeout_tasks.remove(t);
                 auto i = std::find_if(std::begin(_alltasks), std::end(_alltasks),
                         [t](shared_task &other) {
                             return other.get() == t;

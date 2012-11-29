@@ -96,6 +96,7 @@ int main() {
     auto sleep2 = runtime::spawn([]() {
         LOG(INFO) << "sleep for 2 sec\n";;
         this_task::sleep_for(std::chrono::seconds{2});
+        // never reached because canceled
         LOG(INFO) << "done\n";
     });
 

@@ -68,6 +68,14 @@ public:
     }
 
     void join() noexcept;
+    bool done() {
+        // main coro will have no parent
+        // coro that hasn't run yet will have no parent
+        if (_parent == nullptr) return false;
+        // we still have a function to run
+        if (_f) return false;
+        return true;
+    }
 
 private:
     static void entry(intptr_t arg) {
