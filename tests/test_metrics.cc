@@ -52,6 +52,8 @@ BOOST_AUTO_TEST_CASE(timer_test) {
     usleep(5*1000); 
     to.stop();
     auto mg = metrics::global.aggregate();
-    BOOST_CHECK(value<timer>(mg, "timer1").count() >= 5);
+    BOOST_CHECK_MESSAGE(value<timer>(mg, "timer1").count() >= 5,
+            "timer1 = " << value<timer>(mg, "timer1").count()
+            );
 }
 
