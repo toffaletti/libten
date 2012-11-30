@@ -111,8 +111,11 @@ int netdial(int fd, const char *addr, uint16_t port) {
         if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
             pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
             ares_process(cd.channel, &read_fds, &write_fds);
+        } else {
+            // TODO: figure out how to make ares set this itself
+            // if poll returns without any fds set it was a timeout
+            si.status = ARES_ETIMEOUT;
         }
-
     }
     return si.status;
 }
