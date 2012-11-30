@@ -101,8 +101,7 @@ protected:
         return !m->q.empty();
     }
 
-    std::shared_ptr<ResourceT> acquire() {
-        std::shared_ptr<pool_impl> m(get_safe());
+    static std::shared_ptr<ResourceT> acquire(std::shared_ptr<pool_impl> &m) {
         std::unique_lock<qutex> lk(m->mut);
         return create_or_acquire_with_lock(m, lk);
     }
