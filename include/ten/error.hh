@@ -16,7 +16,11 @@ struct saved_backtrace {
     void *array[50];
     int size;
 
-    saved_backtrace();
+    saved_backtrace() {
+        capture();
+    }
+
+    void capture();
     std::string str();
 };
 

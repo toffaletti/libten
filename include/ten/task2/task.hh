@@ -4,8 +4,10 @@
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
 #include "ten/logging.hh"
+#include "ten/thread_local.hh"
+#include "ten/error.hh"
 
-#include "ten/task2/coroutine.hh"
+#include "ten/task2/context.hh"
 
 #include <chrono>
 #include <functional>
@@ -39,7 +41,8 @@ template <class Clock, class Duration>
 
 class runtime;
 
-class task : private coroutine {
+class task {
+    friend std::ostream &operator << (std::ostream &o, const task *t);
     friend class runtime;
 public:
     typedef std::chrono::steady_clock clock;
@@ -124,12 +127,18 @@ private:
 private:
     // when a task exits, its linked tasks are canceled
     //std::vector<std::shared_ptr<task>> _links;
-    timeout_set _timeouts;
+    context _ctx;
     uint64_t _id;
     uint64_t _cancel_points = 0;
     runtime *_runtime; // TODO: scheduler
+    std::function<void ()> _f;
+    timeout_set _timeouts;
     std::atomic<state> _state;
+#ifdef TEN_TASK_TRACE
+    saved_backtrace _trace;
+#endif
 
+    static void trampoline(intptr_t arg);
 private:
     static uint64_t next_id();
     time_point first_timeout() const {
@@ -137,13 +146,15 @@ private:
         return _timeouts.front()->when;
     }
 
-    task() : coroutine(), _id{next_id()} {}
+    task() : _ctx(), _id{next_id()}, _state(state::ready) {}
 public:
-    //! create a new coroutine
+    //! create a new task
     template<class Function, class... Args> 
-    explicit task(Function &&f, Args&&... args)
-    : coroutine{std::forward<Function>(f), std::forward<Args>(args)...},
-    _id{next_id()}
+        explicit task(Function &&f, Args&&... args)
+        : _ctx{task::trampoline},
+        _id{next_id()},
+        _f{std::bind(f, args...)},
+        _state(state::fresh)
     {
     }
 
@@ -162,6 +173,7 @@ private:
     friend void this_task::yield();
 
     void yield();
+    void post_swap();
     bool transition(state to);
     bool runnable() const {
         state st = _state;
@@ -180,9 +192,9 @@ public:
     typedef std::chrono::time_point<clock> time_point;
     typedef std::shared_ptr<task> shared_task;
 private:
-    static __thread runtime *_runtime;
-
     friend class task::cancellation_point;
+    friend void task::post_swap();
+    friend void task::trampoline(intptr_t arg);
     friend void task::yield();
     friend void task::cancel();
     friend uint64_t this_task::get_id();
@@ -229,8 +241,10 @@ private:
         }
     };
 private:
-    task _task;
+    std::shared_ptr<task> _task;
+    task *_current_task = nullptr;
     std::vector<shared_task> _alltasks;
+    std::vector<shared_task> _gctasks;
     std::deque<task *> _readyq;
     //! current time cached in a few places through the event loop
     time_point _now;
@@ -246,21 +260,34 @@ private:
 
     template <class Duration>
         static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
+            runtime *r = thread_local_ptr<runtime>();
             task *t = current_task();
             t->transition(task::state::asleep);
             t->set_timeout(sleep_time);
-            _runtime->_timeout_tasks.insert(t);
+            r->_timeout_tasks.insert(t);
             task::cancellation_point cancelable;
-            t->yield();
+            r->schedule();
+            //t->yield();
         }
 
     void ready(task *t);
+    void schedule();
+    void check_dirty_queue();
+    void check_timeout_tasks();
+    void remove_task(task *t);
+    
 public:
-    runtime() {
+    runtime()
+        : _task(new task())
+    {
         // TODO: reenable this when our libstdc++ is fixed
         static_assert(clock::is_steady, "clock not steady");
-        _runtime = this;
         update_cached_time();
+        _task->_runtime = this;
+        _alltasks.push_back(_task);
+        _task->transition(task::state::ready);
+        //_readyq.push_back(_task.get());
+        _current_task = _task.get();
     }
 
     //! is this the main thread?
@@ -273,16 +300,26 @@ public:
     static std::shared_ptr<task> spawn(Function &&f, Args&&... args) {
         auto t = std::make_shared<task>(std::forward<Function>(f),
                 std::forward<Args>(args)...);
-        runtime *self = _runtime;
-        t->_runtime = self;
-        self->_alltasks.push_back(t);
-        self->_readyq.push_back(t.get());
+        runtime *r = thread_local_ptr<runtime>();
+        t->_runtime = r;
+        r->_alltasks.push_back(t);
+        DVLOG(5) << "spawn readyq " << t;
+        r->_readyq.push_back(t.get());
         return t;
     }
 
-    static time_point now() { return _runtime->_now; }
+    static time_point now() { return thread_local_ptr<runtime>()->_now; }
 
-    void operator() ();
+    static int dump();
+
+    static void wait_for_all() {
+        runtime *r = thread_local_ptr<runtime>();
+        // TODO: fix this hack
+        while (r->_alltasks.size() > 1) {
+            this_task::yield();
+        }
+    }
+
 };
 
 namespace this_task {

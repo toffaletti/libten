@@ -49,6 +49,7 @@ target_link_libraries(synch ten)
 add_executable(task2 EXCLUDE_FROM_ALL task2.cc
     ../src/coroutine.cc
     ../src/task2.cc
+    ../src/error.cc
     ../src/chrono_fix.cc)
 target_link_libraries(task2 rt boost_context glog)
 

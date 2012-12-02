@@ -6,11 +6,6 @@
 namespace ten {
 namespace task2 {
 
-std::ostream &operator << (std::ostream &o, const task *t) {
-    o << "task[" << (void *)t << "]";
-    return o;
-}
-
 std::ostream &operator << (std::ostream &o, task::state s) {
     static std::array<const char *, 6> names = {{
         "fresh",
@@ -24,8 +19,17 @@ std::ostream &operator << (std::ostream &o, task::state s) {
     return o;
 }
 
+std::ostream &operator << (std::ostream &o, const task *t) {
+    if (t) {
+        o << "task[" << t->_id << "," << (void *)t << "," << t->_state << "]";
+    } else {
+        o << "task[null]";
+    }
+    return o;
+}
+
 task *runtime::current_task() {
-    return static_cast<task *>(this_coro::get());
+    return thread_local_ptr<runtime>()->_current_task;
 }
 
 namespace this_task {
@@ -69,12 +73,28 @@ bool valid_states(Arg to, Arg valid, Args ...others) {
     return valid_states(to, others...);
 }
 
+void task::trampoline(intptr_t arg) {
+    task *self = reinterpret_cast<task *>(arg);
+    try {
+        if (self->transition(state::ready)) {
+            self->_f();
+        }
+    } catch (task_interrupted &e) {
+    }
+    self->transition(state::finished);
+    self->_f = nullptr;
+
+    runtime *r = self->_runtime;
+    r->remove_task(self);
+    r->schedule();
+    // never get here
+    LOG(FATAL) << "Oh no! You fell through the trampoline" << self;
+}
+
 bool task::transition(state to) {
     bool valid = true;
     while (valid) {
         state from = _state;
-        // always ok to transition to the state we're already in
-        if (from == to) return true;
         switch (from) {
             case state::fresh:
                 // from fresh we can go directly to finished
@@ -121,17 +141,22 @@ void task::cancel() {
 }
 
 void task::join() {
-    coroutine::join();
+    // TODO: implement
 }
 
 void task::yield() {
-    this_coro::yield();
+    runtime *r = thread_local_ptr<runtime>();
+    DVLOG(5) << "readyq yield " << this;
+    r->_readyq.push_back(this);
+    r->schedule();
+}
 
+void task::post_swap() {
     state st = _state;
     if (st == state::canceled && _cancel_points > 0) {
         if (transition(state::unwinding)) {
             DVLOG(5) << "unwinding task: " << this;
-            throw coroutine_cancel();
+            throw task_interrupted();
         }
     }
 
@@ -140,13 +165,13 @@ void task::yield() {
         if (to->when <= runtime::now()) {
             _timeouts.pop_front();
             std::unique_ptr<timeout> tmp{to};
-            //DVLOG(5) << to << " reached for " << this << " removing.";
+            DVLOG(5) << to << " reached for " << this << " removing.";
             if (_timeouts.empty()) {
                 // remove from scheduler timeout list
-                runtime::_runtime->_timeout_tasks.remove(this);
+                _runtime->_timeout_tasks.remove(this);
             }
             if (tmp->exception != nullptr) {
-                //DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
+                DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
                 std::rethrow_exception(tmp->exception);
             }
         } else {
@@ -155,99 +180,80 @@ void task::yield() {
     }
 }
 
-#if 0
-void task::ready() {
-    state st = _state;
-    // TODO: clean this up to use transition
-    if (st == state::canceled) {
-        if (transition(state::unwinding)) {
-            _runtime->ready(this);
-        }
-    } else if (st != state::ready) {
-        if (transition(state::ready)) {
-            _runtime->ready(this);
-        }
+int runtime::dump() {
+#ifdef TEN_TASK_TRACE
+    runtime *r = thread_local_ptr<runtime>();
+    for (shared_task &t : r->_alltasks) {
+        LOG(INFO) << t.get();
+        LOG(INFO) << t->_trace.str();
     }
-}
 #endif
-
-__thread runtime *runtime::_runtime = nullptr;
+    return 0;
+}
 
 void runtime::ready(task *t) {
-    if (this != _runtime) {
+    if (this != thread_local_ptr<runtime>()) {
         _dirtyq.push(t);
         // TODO: speed this up?
         std::unique_lock<std::mutex> lock{_mutex};
         _cv.notify_one();
     } else {
+        DVLOG(5) << "readyq runtime ready: " << t;
         _readyq.push_back(t);
     }
 }
 
-void runtime::operator()() {
-    while (!_alltasks.empty()) {
-        {
-            task *t = nullptr;
-            while (_dirtyq.pop(t)) {
-                _readyq.push_back(t);
-            }
-        }
+void runtime::remove_task(task *t) {
+    DVLOG(5) << "remove task " << t;
+    using namespace std;
+    //{
+    //    auto i = find(begin(_readyq), end(_readyq), t);
+    //    _readyq.erase(i);
+    //}
+    _timeout_tasks.remove(t);
+    auto i = find_if(begin(_alltasks), end(_alltasks),
+            [t](shared_task &other) {
+            return other.get() == t;
+            });
+    _gctasks.push_back(*i);
+    _alltasks.erase(i);
+}
 
-        auto now = update_cached_time();
-        auto i = std::begin(_timeout_tasks);
-        for (; i != std::end(_timeout_tasks); ++i) {
-            task *t = *i;
-            if (t->first_timeout() <= now) {
-                if (t->transition(task::state::ready)) {
-                    ready(t);
-                } else {
-                    DVLOG(5) << "wtf?";
-                }
-            } else  {
-                break;
-            }
-        }
-        _timeout_tasks.erase(std::begin(_timeout_tasks), i);
+void runtime::check_dirty_queue() {
+    task *t = nullptr;
+    while (_dirtyq.pop(t)) {
+        DVLOG(5) << "readyq adding " << t << " from dirtyq";
+        _readyq.push_back(t);
+    }
+}
 
-        if (!_readyq.empty()) {
-            auto t = _readyq.front();
-            _readyq.pop_front();
-            if (t->_state == task::state::fresh) {
-                t->transition(task::state::ready);
+void runtime::check_timeout_tasks() {
+    auto now = update_cached_time();
+    auto i = std::begin(_timeout_tasks);
+    for (; i != std::end(_timeout_tasks); ++i) {
+        task *t = *i;
+        if (t->first_timeout() <= now) {
+            if (t->transition(task::state::ready)) {
+                ready(t);
+            } else {
+                DVLOG(5) << "wtf?";
             }
-            if (t->runnable()) {
-                DVLOG(5) << "task: " << t << " state: " << t->_state.load();
-                if (_task.yield_to(*t)) {
-                    DVLOG(5) << "post yield task: " << t << " state: " << t->_state.load();
-                    // TODO: this is ugly.
-                    // yield_to return value and done() should be unified
-                    // need to re-think task and coroutine.
-                    // perhaps should have a basic context and task
-                    // coroutine and task are already incompat
-                    // it also feels like state needs to be integrated into
-                    // coroutine. so maybe task+coroutine become one thing
-                    // and re-introduce context?
-                    if (t->done()) {
-                        DVLOG(5) << "task finished: " << t;
-                        t->transition(task::state::finished);
-                    } else if (t->runnable()) {
-                        _readyq.push_back(t);
-                    }
-                } else {
-                    DVLOG(5) << "task finished: " << t;
-                    t->transition(task::state::finished);
-                }
-            }
-            if (t->_state == task::state::finished) {
-                DVLOG(5) << "task finished: " << t;
-                _timeout_tasks.remove(t);
-                auto i = std::find_if(std::begin(_alltasks), std::end(_alltasks),
-                        [t](shared_task &other) {
-                            return other.get() == t;
-                        });
-                _alltasks.erase(i);
-            }
-        } else {
+        } else  {
+            break;
+        }
+    }
+    _timeout_tasks.erase(std::begin(_timeout_tasks), i);
+}
+
+void runtime::schedule() {
+    CHECK(!_alltasks.empty());
+    task *self = _current_task;
+
+    do {
+        check_dirty_queue();
+        check_timeout_tasks();
+
+        if (_readyq.empty()) {
             std::unique_lock<std::mutex> lock{_mutex};
             if (_timeout_tasks.empty()) {
                 _cv.wait(lock);
@@ -255,7 +261,22 @@ void runtime::operator()() {
                 _cv.wait_until(lock, _timeout_tasks.front()->_timeouts.front()->when);
             }
         }
-    }
+    } while (_readyq.empty());
+
+    using ::operator <<;
+    //DVLOG(5) << "readyq: " << _readyq;
+
+    task *t = _readyq.front();
+    _readyq.pop_front();
+    _current_task = t;
+    DVLOG(5) << self << " swap to " << t;
+#ifdef TEN_TASK_TRACE
+    self->_trace.capture();
+#endif
+    self->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t));
+    _current_task = self;
+    _gctasks.clear();
+    self->post_swap();
 }
 
 } // task2

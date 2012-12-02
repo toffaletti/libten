@@ -8,7 +8,7 @@
 
 namespace ten {
 
-saved_backtrace::saved_backtrace() {
+void saved_backtrace::capture() {
     size = backtrace(array, 50);
 }
 
