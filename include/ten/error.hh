@@ -30,52 +30,16 @@ private:
     saved_backtrace bt;
 };
 
-//! exception that sets what() based on current errno value
-struct errno_error : backtrace_exception {
-private:
-    //! the value of errno when this exception was created
-    int _error;
-    char _buf[128];
-    const char *_what;
-
-public:
-    //! \param err the error as specified by errno
-    errno_error(int err = errno) : _error(err) {
-        // requires GNU specific strerror_r
-        // _what might be _buf or an internal static string
-        _what = strerror_r(_error, _buf, sizeof(_buf));
-    }
-    errno_error(const errno_error &ee) { copy(ee); }
-    errno_error & operator = (const errno_error &ee) { copy(ee); return *this; }
-
-    //! \return string result from strerror_r
-    const char *what() const noexcept override { return _what; }
-
-private:
-    void copy(const errno_error &ee) {
-        _error = ee._error;
-        memcpy(_buf, ee._buf, sizeof _buf);
-        _what = (ee._what == ee._buf) ? _buf : ee._what;
-    }
-};
-
 //! construct a what() string in printf() format
 struct errorx : backtrace_exception {
-private:
-    char _buf[256];
+protected:
+    static constexpr size_t _bufsize = 256;
+    char _buf[_bufsize];
 
-    void init(const char *msg, size_t len) {
-        len = std::min(len, sizeof(_buf)-1);
-        memcpy(_buf, msg, len);
-        _buf[len] = 0;
-    }
-    void initf(const char *fmt, ...) __attribute__((format (printf, 2, 3))) {
-        _buf[0] = 0;
-        va_list ap;
-        va_start(ap, fmt);
-        vsnprintf(_buf, sizeof(_buf), fmt, ap);
-        va_end(ap);
-    }
+    void init(const char *msg, size_t len);
+    void initf(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
+
+    errorx() { _buf[0] = '\0'; }
 
 public:
     errorx(const std::string &msg) { init(msg.data(), msg.size()); }
@@ -87,6 +51,37 @@ public:
 
     //! \return a string describing the error
     const char *what() const noexcept override { return _buf; }
+};
+
+// helper to make sure errno is saved first, below
+class errno_saver {
+    friend class errno_error;
+    const int _error;
+    errno_saver(const int e = errno) : _error(e) {}
+};
+
+//! exception that sets what() based on current errno value
+struct errno_error : private errno_saver, public errorx {
+public:
+    //! \param err the error as specified by errno
+    errno_error() { _add_strerror(); }
+
+    errno_error(const errno_error &) = default;
+    errno_error(errno_error &&e) = default;
+    errno_error(errno_error &e) : errno_saver(e), errorx(e) {}
+
+    template <typename... Args>
+    errno_error(Args&&... args)
+        : errorx(std::forward<Args>(args)...) { _add_strerror(); }
+
+    template <typename... Args>
+    errno_error(const int err, Args&&... args)
+        : errno_saver(err), errorx(std::forward<Args>(args)...) { _add_strerror(); }
+
+    int error() const { return _error; }
+
+private:
+    void _add_strerror();
 };
 
 //! macro to throw errno_error if exp returns -1
