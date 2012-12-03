@@ -82,13 +82,20 @@ private:
         timeout *insert(std::unique_ptr<timeout> &&to) {
             auto i = std::lower_bound(std::begin(_set),
                    std::end(_set), to.get(), order());
+            DVLOG(1) << "add timeout: " << this << " " << to.get();
             i = _set.insert(i, to.release());
             using ::operator <<;
-            //DVLOG(5) << "add timeout w/ ex task: " << this << " timeouts: " << timeouts;
+            DVLOG(1) << this << " timeouts: " << _set;
             return *i;
         }
 
     public:
+        ~timeout_set() {
+            for (timeout *t : _set) {
+                delete t;
+            }
+        }
+
         template<typename ExceptionT>
         timeout *insert(time_point when, ExceptionT e) {
             std::unique_ptr<timeout> to{new timeout{
@@ -105,6 +112,9 @@ private:
 
         void remove(timeout *to) {
             auto i = std::find(std::begin(_set), std::end(_set), to);
+            DVLOG(1) << "remove " << this << " " << to << " found? " << (i != std::end(_set));
+            using ::operator <<;
+            DVLOG(1) << " " << _set;
             if (i != std::end(_set)) {
                 delete *i;
                 _set.erase(i);
@@ -169,6 +179,7 @@ public:
     void join();
 
 private:
+    friend class deadline;
     friend uint64_t this_task::get_id();
     friend void this_task::yield();
 
@@ -184,6 +195,12 @@ private:
         timeout *set_timeout(const std::chrono::time_point<clock, Duration>& sleep_time) {
             return _timeouts.insert(sleep_time);
         }
+
+    template <class Duration, class ExceptionT>
+        timeout *set_timeout(const std::chrono::time_point<clock, Duration>& sleep_time, ExceptionT e) {
+            return _timeouts.insert(sleep_time, e);
+        }
+
 };
 
 class runtime {
@@ -193,6 +210,7 @@ public:
     typedef std::shared_ptr<task> shared_task;
 private:
     friend class task::cancellation_point;
+    friend class deadline;
     friend void task::post_swap();
     friend void task::trampoline(intptr_t arg);
     friend void task::yield();
@@ -261,12 +279,17 @@ private:
     template <class Duration>
         static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
             runtime *r = thread_local_ptr<runtime>();
-            task *t = current_task();
+            task *t = r->_current_task;
             t->transition(task::state::asleep);
-            t->set_timeout(sleep_time);
+            task::timeout *to = t->set_timeout(sleep_time);
             r->_timeout_tasks.insert(t);
-            task::cancellation_point cancelable;
-            r->schedule();
+            try {
+                task::cancellation_point cancelable;
+                r->schedule();
+            } catch (...) {
+                t->_timeouts.remove(to);
+                throw;
+            }
             //t->yield();
         }
 
@@ -317,6 +340,13 @@ public:
         // TODO: fix this hack
         while (r->_alltasks.size() > 1) {
             this_task::yield();
+        }
+    }
+
+    static void shutdown() {
+        if (is_main_thread()) {
+            runtime *r = thread_local_ptr<runtime>();
+            r->~runtime();
         }
     }
 

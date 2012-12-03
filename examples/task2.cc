@@ -65,6 +65,27 @@ int main() {
     runtime::wait_for_all();
     t1.join();
 
+    runtime::spawn([]() {
+        try {
+            deadline dl{std::chrono::seconds{1}};
+            this_task::sleep_for(std::chrono::seconds{2});
+        } catch (deadline_reached &e) {
+            LOG(INFO) << "deadline reached";
+        }
+
+        try {
+            deadline dl{std::chrono::seconds{2}};
+            this_task::sleep_for(std::chrono::seconds{1});
+            dl.cancel();
+            LOG(INFO) << "deadline canceled";
+            this_task::sleep_for(std::chrono::seconds{5});
+            LOG(INFO) << "after deadline canceled";
+        } catch (deadline_reached &e) {
+        }
+    });
+
+    runtime::wait_for_all();
+
     LOG(INFO) << "run2";
     for (int i=0; i<1000; ++i) {
         runtime::spawn([]() {
@@ -75,7 +96,8 @@ int main() {
         });
     }
     runtime::spawn(counter);
-    this_task::sleep_for(std::chrono::minutes{5});
-    runtime::wait_for_all();
+    this_task::sleep_for(std::chrono::seconds{10});
+    //runtime::wait_for_all();
+    runtime::shutdown();
 }
 

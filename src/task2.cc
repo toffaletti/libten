@@ -145,10 +145,9 @@ void task::join() {
 }
 
 void task::yield() {
-    runtime *r = thread_local_ptr<runtime>();
     DVLOG(5) << "readyq yield " << this;
-    r->_readyq.push_back(this);
-    r->schedule();
+    _runtime->_readyq.push_back(this);
+    _runtime->schedule();
 }
 
 void task::post_swap() {
@@ -165,7 +164,7 @@ void task::post_swap() {
         if (to->when <= runtime::now()) {
             _timeouts.pop_front();
             std::unique_ptr<timeout> tmp{to};
-            DVLOG(5) << to << " reached for " << this << " removing.";
+            DVLOG(1) << to << " reached for " << this << " removing.";
             if (_timeouts.empty()) {
                 // remove from scheduler timeout list
                 _runtime->_timeout_tasks.remove(this);
@@ -228,11 +227,10 @@ void runtime::check_dirty_queue() {
 }
 
 void runtime::check_timeout_tasks() {
-    auto now = update_cached_time();
     auto i = std::begin(_timeout_tasks);
     for (; i != std::end(_timeout_tasks); ++i) {
         task *t = *i;
-        if (t->first_timeout() <= now) {
+        if (t->first_timeout() <= _now) {
             if (t->transition(task::state::ready)) {
                 ready(t);
             } else {
@@ -251,6 +249,7 @@ void runtime::schedule() {
 
     do {
         check_dirty_queue();
+        update_cached_time();
         check_timeout_tasks();
 
         if (_readyq.empty()) {
@@ -278,6 +277,50 @@ void runtime::schedule() {
     _gctasks.clear();
     self->post_swap();
 }
+
+deadline::deadline(std::chrono::milliseconds ms)
+  : timeout_id()
+{
+    if (ms.count() < 0)
+        throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
+    if (ms.count() > 0) {
+        runtime *r = thread_local_ptr<runtime>();
+        task *t = r->_current_task;
+        timeout_id = t->set_timeout(ms+runtime::now(), deadline_reached());
+        DVLOG(1) << "deadline timeout " << timeout_id;
+        r->_timeout_tasks.insert(t);
+    }
+}
+
+void deadline::cancel() {
+    if (timeout_id) {
+        runtime *r = thread_local_ptr<runtime>();
+        task *t = r->_current_task;
+        t->_timeouts.remove((task::timeout *)timeout_id);
+        timeout_id = nullptr;
+        if (t->_timeouts.empty()) {
+            r->_timeout_tasks.remove(t);
+        }
+    }
+}
+
+deadline::~deadline() {
+    cancel();
+}
+
+std::chrono::milliseconds deadline::remaining() const {
+    task::timeout *timeout = (task::timeout *)timeout_id;
+    // TODO: need a way of distinguishing between canceled and over due
+    if (timeout != nullptr) {
+        std::chrono::time_point<std::chrono::steady_clock> now = runtime::now();
+        if (now > timeout->when) {
+            return std::chrono::milliseconds(0);
+        }
+        return std::chrono::duration_cast<std::chrono::milliseconds>(timeout->when - now);
+    }
+    return std::chrono::milliseconds(0);
+}
+
 
 } // task2
 } // ten
