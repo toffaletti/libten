@@ -8,6 +8,7 @@
 #include "ten/error.hh"
 
 #include "ten/task2/context.hh"
+#include "ten/task2/alarm.hh"
 
 #include <chrono>
 #include <functional>
@@ -18,9 +19,7 @@
 #include <condition_variable>
 #include <sys/syscall.h>
 
-
 namespace ten {
-
 namespace task2 {
 
 //! exception to unwind stack on taskcancel
@@ -119,7 +118,7 @@ private:
                 delete *i;
                 _set.erase(i);
             }
-            // TODO: where to add this back in?
+            // XXX: moved to deadline::cancel()
             //if (_set.empty()) {
             //    // remove from scheduler timeout list
             //    cproc->sched().remove_timeout_task(this);
@@ -376,53 +375,7 @@ const char *state(const char *fmt=nullptr, ...);
 //! set/get current task name
 const char * name(const char *fmt=nullptr, ...);
 
-// TODO: sleep_for, sleep_until
-
-//! sleep current task for milliseconds
-void sleep(uint64_t ms);
-
-#if 0
-//! suspend task waiting for io on pollfds
-int poll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
-
-//! suspend task waiting for io on fd
-bool fdwait(int fd, int rw, uint64_t ms=0);
-#endif
-
-
 } // end namespace this_task
-
-struct proc;
-
-
-//typedef std::deque<task *> tasklist;
-//typedef std::deque<proc *> proclist;
-
-#if 0
-//! get a dump of all task names and state for the current proc
-std::string taskdump();
-//! write task dump to FILE stream
-void taskdumpf(FILE *of = stderr);
-
-//! spawn a new thread with a task scheduler
-uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
-//! cancel all non-system tasks and exit procmain
-void procshutdown();
-
-//! return cached time from event loop, not precise
-const std::chrono::time_point<std::chrono::steady_clock> &procnow();
-
-//! main entry point for tasks
-struct procmain {
-private:
-    proc *p;
-public:
-    explicit procmain(task *t = nullptr);
-    ~procmain();
-
-    int main(int argc=0, char *argv[]=nullptr);
-};
-#endif
 
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated

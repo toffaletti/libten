@@ -298,6 +298,7 @@ void deadline::cancel() {
         task *t = r->_current_task;
         t->_timeouts.remove((task::timeout *)timeout_id);
         timeout_id = nullptr;
+        // remove task from scheduler timeout list
         if (t->_timeouts.empty()) {
             r->_timeout_tasks.remove(t);
         }

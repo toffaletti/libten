@@ -43,6 +43,52 @@ void counter() {
 }
 
 int main() {
+    using namespace std::chrono;
+    ten::alarm_set<int, steady_clock> alarms;
+#if 0
+    {
+        auto d1 = alarms.insert(1, steady_clock::now()+seconds(3), nullptr);
+        auto d2 = alarms.insert(1, steady_clock::now()+seconds(3), std::runtime_error("wee"));
+
+        alarms.remove(d1);
+        LOG(INFO) << "empty? " << alarms.empty();
+
+        alarms.remove(d1);
+        LOG(INFO) << "empty? " << alarms.empty();
+
+        alarms.remove(d2);
+        LOG(INFO) << "empty? " << alarms.empty();
+    }
+
+    {
+        auto d1 = alarms.insert(1, steady_clock::now()+seconds(3), nullptr);
+        auto d2 = alarms.insert(1, steady_clock::now()+seconds(3), std::runtime_error("wee"));
+        alarms.remove(1);
+        LOG(INFO) << "empty? " << alarms.empty();
+    }
+
+    {
+        auto d1 = alarms.insert(1, steady_clock::now()+seconds(3), nullptr);
+        auto d2 = alarms.insert(2, steady_clock::now()+seconds(3), std::runtime_error("wee"));
+        alarms.tick(steady_clock::now() + seconds(4), [](int v) {
+                    LOG(INFO) << "alarm fired! " << v;
+                });
+        LOG(INFO) << "empty? " << alarms.empty();
+    }
+#endif
+
+    {
+        {
+            ten::alarm_set<int, steady_clock>::alarm a1(alarms, 1, steady_clock::now()+seconds(3));
+            ten::alarm_set<int, steady_clock>::alarm a2(alarms, 2, steady_clock::now()+seconds(3));
+            a2.cancel();
+            alarms.tick(steady_clock::now() + seconds(4), [](int v) {
+                    LOG(INFO) << "alarm fired! " << v;
+                });
+        }
+        LOG(INFO) << "empty? " << alarms.empty();
+    }
+
     runtime::spawn(bar);
     runtime::spawn(foo, 1, 2);
     runtime::spawn(foo, 4, 4);
