@@ -37,7 +37,7 @@ protected:
         set_type set;
         std::string name;
         alloc_func new_resource;
-        ssize_t max;
+        ssize_t max_resources;
     };
 
     std::mutex _mutex;
@@ -70,7 +70,7 @@ public:
         std::shared_ptr<pool_impl> m = std::make_shared<pool_impl>();
         m->name = name_;
         m->new_resource = alloc_;
-        m->max = max_;
+        m->max_resources = max_;
         set_safe(m);
     }
 
@@ -109,7 +109,7 @@ protected:
     // internal, does not lock mutex
     static std::shared_ptr<ResourceT> create_or_acquire_with_lock(std::shared_ptr<pool_impl> &m, std::unique_lock<qutex> &lk) {
         while (m->q.empty()) {
-            if (m->max < 0 || m->set.size() < (size_t)m->max) {
+            if (m->max_resources < 0 || m->set.size() < (size_t)m->max_resources) {
                 // need to create a new resource
                 return add_new_resource(m, lk);
                 break;
