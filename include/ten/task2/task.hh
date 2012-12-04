@@ -63,77 +63,6 @@ private:
     };
 
 private:
-    struct timeout {
-        time_point when;
-        std::exception_ptr exception;
-    };
-
-    struct timeout_set {
-    private:
-        std::deque<timeout *> _set;
-    private:
-        struct order {
-            bool operator ()(const timeout *a, const timeout *b) const {
-                return a->when < b->when;
-            }
-        };
-
-        timeout *insert(std::unique_ptr<timeout> &&to) {
-            auto i = std::lower_bound(std::begin(_set),
-                   std::end(_set), to.get(), order());
-            DVLOG(1) << "add timeout: " << this << " " << to.get();
-            i = _set.insert(i, to.release());
-            using ::operator <<;
-            DVLOG(1) << this << " timeouts: " << _set;
-            return *i;
-        }
-
-    public:
-        ~timeout_set() {
-            for (timeout *t : _set) {
-                delete t;
-            }
-        }
-
-        template<typename ExceptionT>
-        timeout *insert(time_point when, ExceptionT e) {
-            std::unique_ptr<timeout> to{new timeout{
-                    when,
-                    std::copy_exception(e)}
-            };
-            return insert(std::move(to));
-        }
-        
-        timeout *insert(time_point when) {
-            std::unique_ptr<timeout> to{new timeout{when}};
-            return insert(std::move(to));
-        }
-
-        void remove(timeout *to) {
-            auto i = std::find(std::begin(_set), std::end(_set), to);
-            DVLOG(1) << "remove " << this << " " << to << " found? " << (i != std::end(_set));
-            using ::operator <<;
-            DVLOG(1) << " " << _set;
-            if (i != std::end(_set)) {
-                delete *i;
-                _set.erase(i);
-            }
-            // XXX: moved to deadline::cancel()
-            //if (_set.empty()) {
-            //    // remove from scheduler timeout list
-            //    cproc->sched().remove_timeout_task(this);
-            //}
-        }
-
-        timeout *front() const { return _set.front(); }
-
-        void pop_front() { _set.pop_front(); }
-
-        bool empty() const { return _set.empty(); }
-        size_t size() const { return _set.size(); }
-    };
-
-private:
     // when a task exits, its linked tasks are canceled
     //std::vector<std::shared_ptr<task>> _links;
     context _ctx;
@@ -141,8 +70,8 @@ private:
     uint64_t _cancel_points = 0;
     runtime *_runtime; // TODO: scheduler
     std::function<void ()> _f;
-    timeout_set _timeouts;
     std::atomic<state> _state;
+    std::exception_ptr _exception;
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -150,10 +79,6 @@ private:
     static void trampoline(intptr_t arg);
 private:
     static uint64_t next_id();
-    time_point first_timeout() const {
-        // TODO: assert not empty
-        return _timeouts.front()->when;
-    }
 
     task() : _ctx(), _id{next_id()}, _state(state::ready) {}
 public:
@@ -189,17 +114,6 @@ private:
         state st = _state;
         return (st == state::fresh || st == state::ready || st == state::canceled || st == state::unwinding);
     }
-
-    template <class Duration>
-        timeout *set_timeout(const std::chrono::time_point<clock, Duration>& sleep_time) {
-            return _timeouts.insert(sleep_time);
-        }
-
-    template <class Duration, class ExceptionT>
-        timeout *set_timeout(const std::chrono::time_point<clock, Duration>& sleep_time, ExceptionT e) {
-            return _timeouts.insert(sleep_time, e);
-        }
-
 };
 
 class runtime {
@@ -207,6 +121,7 @@ public:
     typedef std::chrono::steady_clock clock;
     typedef std::chrono::time_point<clock> time_point;
     typedef std::shared_ptr<task> shared_task;
+    typedef alarm_set<task *, clock> alarm_set_type;
 private:
     friend class task::cancellation_point;
     friend class deadline;
@@ -222,41 +137,7 @@ private:
         friend void this_task::sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
 
     static task *current_task();
-private:
-    struct timeout_task_set {
-    public:
-        typedef std::vector<task *> container;
-        typedef container::iterator iterator;
-    private:
-        std::vector<task *> _set;
-        struct order {
-            bool operator ()(const task *a, const task *b) const {
-                return (a->first_timeout() < b->first_timeout());
-            }
-        };
-    public:
-        iterator begin() { return std::begin(_set); }
-        iterator end() { return std::end(_set); }
 
-        task *front() const { return _set.front(); }
-        bool empty() const { return _set.empty(); }
-        size_t size() const { return _set.size(); }
-
-        void insert(task *t) {
-            auto i = std::lower_bound(std::begin(_set), std::end(_set), t, order());
-            _set.insert(i, t);
-        }
-
-        void remove(task *t) {
-            //DCHECK(t->timeouts.empty());
-            auto i = std::remove(std::begin(_set), std::end(_set), t);
-            _set.erase(i, std::end(_set));
-        }
-
-        iterator erase(iterator first, iterator last) {
-            return _set.erase(first, last);
-        }
-    };
 private:
     std::shared_ptr<task> _task;
     task *_current_task = nullptr;
@@ -266,7 +147,7 @@ private:
     //! current time cached in a few places through the event loop
     time_point _now;
     llqueue<task *> _dirtyq;
-    timeout_task_set _timeout_tasks;
+    alarm_set_type _alarms;
     std::mutex _mutex;
     std::condition_variable _cv;
 
@@ -280,16 +161,9 @@ private:
             runtime *r = thread_local_ptr<runtime>();
             task *t = r->_current_task;
             t->transition(task::state::asleep);
-            task::timeout *to = t->set_timeout(sleep_time);
-            r->_timeout_tasks.insert(t);
-            try {
-                task::cancellation_point cancelable;
-                r->schedule();
-            } catch (...) {
-                t->_timeouts.remove(to);
-                throw;
-            }
-            //t->yield();
+            alarm_set_type::alarm alarm(r->_alarms, t, sleep_time);
+            task::cancellation_point cancelable;
+            r->schedule();
         }
 
     void ready(task *t);
@@ -385,7 +259,7 @@ struct deadline_reached : task_interrupted {};
 //! deadline_reached after milliseconds
 class deadline {
 private:
-    void *timeout_id;
+    runtime::alarm_set_type::alarm _alarm;
 public:
     deadline(std::chrono::milliseconds ms);
 

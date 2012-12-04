@@ -82,7 +82,7 @@ int main() {
             ten::alarm_set<int, steady_clock>::alarm a1(alarms, 1, steady_clock::now()+seconds(3));
             ten::alarm_set<int, steady_clock>::alarm a2(alarms, 2, steady_clock::now()+seconds(3));
             a2.cancel();
-            alarms.tick(steady_clock::now() + seconds(4), [](int v) {
+            alarms.tick(steady_clock::now() + seconds(4), [](int v, std::exception_ptr e) {
                     LOG(INFO) << "alarm fired! " << v;
                 });
         }
@@ -97,7 +97,7 @@ int main() {
     runtime::wait_for_all();
 
     auto sleep2 = runtime::spawn([]() {
-        LOG(INFO) << "sleep for 2 sec\n";;
+        LOG(INFO) << "sleep for 2 sec but should be canceled in 1\n";;
         this_task::sleep_for(std::chrono::seconds{2});
         // never reached because canceled
         LOG(INFO) << "done\n";
@@ -112,6 +112,7 @@ int main() {
     t1.join();
 
     runtime::spawn([]() {
+        LOG(INFO) << "should reach deadline in 1 second";
         try {
             deadline dl{std::chrono::seconds{1}};
             this_task::sleep_for(std::chrono::seconds{2});
@@ -119,11 +120,14 @@ int main() {
             LOG(INFO) << "deadline reached";
         }
 
+        LOG(INFO) << "deadline should be canceled in 1 second";
+
         try {
             deadline dl{std::chrono::seconds{2}};
             this_task::sleep_for(std::chrono::seconds{1});
             dl.cancel();
             LOG(INFO) << "deadline canceled";
+            LOG(INFO) << "sleeping for 5 seconds...";
             this_task::sleep_for(std::chrono::seconds{5});
             LOG(INFO) << "after deadline canceled";
         } catch (deadline_reached &e) {

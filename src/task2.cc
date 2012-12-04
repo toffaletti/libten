@@ -159,23 +159,10 @@ void task::post_swap() {
         }
     }
 
-    while (!_timeouts.empty()) {
-        timeout *to = _timeouts.front();
-        if (to->when <= runtime::now()) {
-            _timeouts.pop_front();
-            std::unique_ptr<timeout> tmp{to};
-            DVLOG(1) << to << " reached for " << this << " removing.";
-            if (_timeouts.empty()) {
-                // remove from scheduler timeout list
-                _runtime->_timeout_tasks.remove(this);
-            }
-            if (tmp->exception != nullptr) {
-                DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
-                std::rethrow_exception(tmp->exception);
-            }
-        } else {
-            break;
-        }
+    if (_exception != nullptr) {
+        std::exception_ptr exception = _exception;
+        _exception = nullptr;
+        std::rethrow_exception(exception);
     }
 }
 
@@ -209,7 +196,10 @@ void runtime::remove_task(task *t) {
     //    auto i = find(begin(_readyq), end(_readyq), t);
     //    _readyq.erase(i);
     //}
-    _timeout_tasks.remove(t);
+
+    // TODO: needed?
+    //_alarms.remove(t);
+
     auto i = find_if(begin(_alltasks), end(_alltasks),
             [t](shared_task &other) {
             return other.get() == t;
@@ -227,20 +217,14 @@ void runtime::check_dirty_queue() {
 }
 
 void runtime::check_timeout_tasks() {
-    auto i = std::begin(_timeout_tasks);
-    for (; i != std::end(_timeout_tasks); ++i) {
-        task *t = *i;
-        if (t->first_timeout() <= _now) {
-            if (t->transition(task::state::ready)) {
-                ready(t);
-            } else {
-                DVLOG(5) << "wtf?";
+    _alarms.tick(_now, [this](task *t, std::exception_ptr exception) {
+        if (t->transition(task::state::ready)) {
+            if (exception != nullptr && t->_exception == nullptr) {
+                t->_exception = exception;
             }
-        } else  {
-            break;
+            ready(t);
         }
-    }
-    _timeout_tasks.erase(std::begin(_timeout_tasks), i);
+    });
 }
 
 void runtime::schedule() {
@@ -254,10 +238,10 @@ void runtime::schedule() {
 
         if (_readyq.empty()) {
             std::unique_lock<std::mutex> lock{_mutex};
-            if (_timeout_tasks.empty()) {
+            if (_alarms.empty()) {
                 _cv.wait(lock);
             } else {
-                _cv.wait_until(lock, _timeout_tasks.front()->_timeouts.front()->when);
+                _cv.wait_until(lock, _alarms.front_when());
             }
         }
     } while (_readyq.empty());
@@ -278,31 +262,23 @@ void runtime::schedule() {
     self->post_swap();
 }
 
-deadline::deadline(std::chrono::milliseconds ms)
-  : timeout_id()
-{
+deadline::deadline(std::chrono::milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         runtime *r = thread_local_ptr<runtime>();
         task *t = r->_current_task;
-        timeout_id = t->set_timeout(ms+runtime::now(), deadline_reached());
-        DVLOG(1) << "deadline timeout " << timeout_id;
-        r->_timeout_tasks.insert(t);
+        _alarm = std::move(
+                runtime::alarm_set_type::alarm(
+                    r->_alarms, t, ms+runtime::now(), deadline_reached()
+                    )
+                );
+        DVLOG(1) << "deadline alarm armed: " << _alarm._armed << " in " << ms.count() << "ms";
     }
 }
 
 void deadline::cancel() {
-    if (timeout_id) {
-        runtime *r = thread_local_ptr<runtime>();
-        task *t = r->_current_task;
-        t->_timeouts.remove((task::timeout *)timeout_id);
-        timeout_id = nullptr;
-        // remove task from scheduler timeout list
-        if (t->_timeouts.empty()) {
-            r->_timeout_tasks.remove(t);
-        }
-    }
+    _alarm.cancel();
 }
 
 deadline::~deadline() {
@@ -310,18 +286,8 @@ deadline::~deadline() {
 }
 
 std::chrono::milliseconds deadline::remaining() const {
-    task::timeout *timeout = (task::timeout *)timeout_id;
-    // TODO: need a way of distinguishing between canceled and over due
-    if (timeout != nullptr) {
-        std::chrono::time_point<std::chrono::steady_clock> now = runtime::now();
-        if (now > timeout->when) {
-            return std::chrono::milliseconds(0);
-        }
-        return std::chrono::duration_cast<std::chrono::milliseconds>(timeout->when - now);
-    }
-    return std::chrono::milliseconds(0);
+    return _alarm.remaining();
 }
-
 
 } // task2
 } // ten

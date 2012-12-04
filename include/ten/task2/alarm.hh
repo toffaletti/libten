@@ -32,9 +32,17 @@ private:
         }
     };
 
+    data insert(const T &t, const time_point &when) {
+        data d{t, when};
+        auto i = std::lower_bound(std::begin(_set),
+                std::end(_set), d, order());
+        _set.insert(i, d);
+        return d;
+    }
+
     template<typename Exception>
     data insert(const T &t, const time_point &when, Exception e) {
-        data d{t, when, std::copy_exception(e)};
+        data d{t, when, std::make_exception_ptr(e)};
         auto i = std::lower_bound(std::begin(_set),
                 std::end(_set), d, order());
         _set.insert(i, d);
@@ -63,7 +71,7 @@ public:
         auto i = begin(_set);
         for (; i != end(_set); ++i) {
             if (i->when <= now) {
-                f(i->value);
+                f(i->value, i->exception);
             } else {
                 break;
             }
@@ -73,24 +81,43 @@ public:
 
     bool empty() const { return _set.empty(); }
 
+    time_point front_when() const {
+        return _set.front().when;
+    }
+
 public:
     struct alarm {
 
-        alarm_set<T, Clock> &_set;
+        alarm_set<T, Clock> *_set;
         typename alarm_set<T, Clock>::data _data;
-        bool _armed = true;
+        bool _armed;
+
+        alarm() : _set(nullptr), _armed(false) {
+        }
+
+        alarm(const alarm &) = delete;
+        alarm(alarm &&other) = delete;
+
+        alarm &operator = (alarm &&other) {
+            if (this != &other) {
+                std::swap(_set, other._set);
+                std::swap(_data, other._data);
+                std::swap(_armed, other._armed);
+            }
+            return *this;
+        }
 
         alarm(alarm_set<T, Clock> &s, T value, time_point when)
-            : _set(s)
+            : _set(&s), _armed(true)
         {
-            _data = _set.insert(std::forward<T>(value), when, nullptr);
+            _data = _set->insert(std::forward<T>(value), when);
         }
 
         template <class Exception>
         alarm(alarm_set<T, Clock> &s, T value, time_point when, Exception e)
-            : _set(s)
+            : _set(&s), _armed(true)
         {
-            _data = _set.insert(std::forward<T>(value), when, e);
+            _data = _set->insert(std::forward<T>(value), when, e);
         }
 
         std::chrono::milliseconds remaining() const {
@@ -108,7 +135,7 @@ public:
         void cancel() {
             if (_armed) {
                 _armed = false;
-                _set.remove(_data);
+                _set->remove(_data);
             }
         }
 
