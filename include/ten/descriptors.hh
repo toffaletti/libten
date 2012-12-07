@@ -129,7 +129,7 @@ struct fd_base {
 //! eventfd create a file descriptor for event notification
 struct event_fd : fd_base {
     event_fd(unsigned int initval=0, int flags=0) {
-        fd = ::eventfd(initval, flags | O_CLOEXEC);
+        fd = ::eventfd(initval, flags | EFD_CLOEXEC);
         THROW_ON_ERROR(fd);
     }
 
