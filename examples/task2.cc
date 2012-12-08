@@ -1,5 +1,6 @@
 #include "ten/task2/task.hh"
 #include "ten/logging.hh"
+#include "ten/task2/compat.hh"
 
 #include <memory>
 #include <thread>

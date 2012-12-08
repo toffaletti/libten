@@ -228,7 +228,7 @@ void runtime::check_timeout_tasks() {
 }
 
 void runtime::schedule() {
-    CHECK(!_alltasks.empty());
+    //CHECK(!_alltasks.empty());
     task *self = _current_task;
 
     do {

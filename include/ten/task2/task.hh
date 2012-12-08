@@ -139,7 +139,7 @@ private:
     static task *current_task();
 
 private:
-    std::shared_ptr<task> _task;
+    task _task;
     task *_current_task = nullptr;
     std::vector<shared_task> _alltasks;
     std::vector<shared_task> _gctasks;
@@ -173,17 +173,15 @@ private:
     void remove_task(task *t);
     
 public:
-    runtime()
-        : _task(new task())
-    {
+    runtime() {
         // TODO: reenable this when our libstdc++ is fixed
         static_assert(clock::is_steady, "clock not steady");
         update_cached_time();
-        _task->_runtime = this;
-        _alltasks.push_back(_task);
-        _task->transition(task::state::ready);
+        _task._runtime = this;
+        //_alltasks.push_back(_task);
+        _task.transition(task::state::ready);
         //_readyq.push_back(_task.get());
-        _current_task = _task.get();
+        _current_task = &_task;
     }
 
     //! is this the main thread?
@@ -211,7 +209,7 @@ public:
     static void wait_for_all() {
         runtime *r = thread_local_ptr<runtime>();
         // TODO: fix this hack
-        while (r->_alltasks.size() > 1) {
+        while (!r->_alltasks.empty()) {
             this_task::yield();
         }
     }
