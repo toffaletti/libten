@@ -121,7 +121,7 @@ task::~task() {
 
 void task::clear(bool newid) {
     fn = nullptr;
-    cancel_points = 0;
+    _cancel_points = 0;
     _ready = false;
     systask = false;
     canceled = false;
@@ -165,7 +165,7 @@ void task::swap() {
     // swap to scheduler coroutine
     co.swap(&this_proc()->sched_coro());
 
-    if (canceled && cancel_points > 0) {
+    if (canceled && _cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
@@ -228,12 +228,12 @@ milliseconds deadline::remaining() const {
 
 task::cancellation_point::cancellation_point() {
     task *t = this_task();
-    ++t->cancel_points;
+    ++t->_cancel_points;
 }
 
 task::cancellation_point::~cancellation_point() {
     task *t = this_task();
-    --t->cancel_points;
+    --t->_cancel_points;
 }
 
 

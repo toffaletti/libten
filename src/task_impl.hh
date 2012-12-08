@@ -44,7 +44,7 @@ struct task {
     coroutine co;
     uint64_t id;
     proc *cproc;
-    uint64_t cancel_points;
+    uint64_t _cancel_points;
 
     std::deque<timeout_t *> timeouts;
 
