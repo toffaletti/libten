@@ -243,6 +243,11 @@ void runtime::schedule() {
         check_timeout_tasks();
 
         if (_readyq.empty()) {
+            if (_alltasks.empty()) {
+                // special case when wait_for_all()
+                _readyq.push_back(&_task);
+                break;
+            }
             std::unique_lock<std::mutex> lock{_mutex};
             if (_alarms.empty()) {
                 _cv.wait(lock);

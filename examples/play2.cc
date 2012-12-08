@@ -149,8 +149,10 @@ int main() {
     }
 #endif
     runtime::spawn(counter);
-    this_task::sleep_for(std::chrono::seconds{10});
-    runtime::cancel();
+    runtime::spawn([] {
+        this_task::sleep_for(std::chrono::seconds{10});
+        runtime::cancel();
+    });
     runtime::wait_for_all();
     runtime::shutdown();
 }

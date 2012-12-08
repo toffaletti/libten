@@ -208,9 +208,10 @@ public:
 
     static void wait_for_all() {
         runtime *r = thread_local_ptr<runtime>();
+        CHECK(r->_current_task == &r->_task);
         // TODO: fix this hack
-        while (!r->_alltasks.empty()) {
-            this_task::yield();
+        if (!r->_alltasks.empty()) {
+            r->schedule();
         }
     }
 
