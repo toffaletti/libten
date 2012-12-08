@@ -108,12 +108,14 @@ private:
     friend void this_task::yield();
 
     void yield();
+    void swap();
     void post_swap();
     bool transition(state to);
     bool runnable() const {
         state st = _state;
         return (st == state::fresh || st == state::ready || st == state::canceled || st == state::unwinding);
     }
+
 };
 
 class runtime {
@@ -125,6 +127,7 @@ public:
 private:
     friend class task::cancellation_point;
     friend class deadline;
+    friend void task::swap();
     friend void task::post_swap();
     friend void task::trampoline(intptr_t arg);
     friend void task::yield();
@@ -205,6 +208,15 @@ public:
     static time_point now() { return thread_local_ptr<runtime>()->_now; }
 
     static int dump();
+
+    // compat
+    static shared_task task_with_id(uint64_t id) {
+        runtime *r = thread_local_ptr<runtime>();
+        for (auto t : r->_alltasks) {
+            if (t->_id == id) return t;
+        }
+        return nullptr;
+    }
 
     static void wait_for_all() {
         runtime *r = thread_local_ptr<runtime>();

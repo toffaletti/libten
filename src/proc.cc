@@ -206,15 +206,15 @@ proc::~proc() {
     DVLOG(5) << "proc freed: " << this;
 }
 
-uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
+void procspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = new task(f, stacksize);
-    uint64_t tid = t->id;
+    //uint64_t tid = t->id;
     auto ctx = std::make_shared<proc_context>();
     ctx->t = t;
     ctx->thread = std::move(std::thread(proc::thread_entry, t));
     ctx->thread.detach();
     // XXX: task could be freed at this point
-    return tid;
+    //return tid;
 }
 
 void procshutdown() {

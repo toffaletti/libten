@@ -154,6 +154,10 @@ void task::yield() {
     _runtime->schedule();
 }
 
+void task::swap() {
+    _runtime->schedule();
+}
+
 void task::post_swap() {
     state st = _state;
     if (st == state::canceled && _cancel_points > 0) {

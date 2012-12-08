@@ -55,7 +55,6 @@ void ioproctask(iochannel &);
 //! a pool of threads for making blocking calls
 struct ioproc {
     iochannel ch;
-    std::vector<uint64_t> tids;
 
     ioproc(size_t stacksize = default_stacksize,
            unsigned nprocs = 1,
@@ -64,7 +63,7 @@ struct ioproc {
         : ch(chanbuf ? chanbuf : nprocs)
     {
         for (unsigned i=0; i<nprocs; ++i) {
-            tids.push_back(procspawn(std::bind(proctask, ch), stacksize));
+            procspawn(std::bind(proctask, ch), stacksize);
         }
     }
 
