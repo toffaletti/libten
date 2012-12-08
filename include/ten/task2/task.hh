@@ -179,7 +179,7 @@ public:
         update_cached_time();
         _task._runtime = this;
         //_alltasks.push_back(_task);
-        _task.transition(task::state::ready);
+        //_task.transition(task::state::ready);
         //_readyq.push_back(_task.get());
         _current_task = &_task;
     }
@@ -211,6 +211,13 @@ public:
         // TODO: fix this hack
         while (!r->_alltasks.empty()) {
             this_task::yield();
+        }
+    }
+
+    static void cancel() {
+        runtime *r = thread_local_ptr<runtime>();
+        for (auto t : r->_alltasks) {
+            t->cancel();
         }
     }
 

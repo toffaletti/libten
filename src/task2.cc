@@ -15,6 +15,7 @@ std::ostream &operator << (std::ostream &o, task::state s) {
         "unwinding",
         "finished"
     }};
+    static_assert(names.size() == static_cast<int>(task::state::finished)+1, "enum out of sync");
     o << names[static_cast<int>(s)];
     return o;
 }
@@ -88,7 +89,7 @@ void task::trampoline(intptr_t arg) {
     r->remove_task(self);
     r->schedule();
     // never get here
-    LOG(FATAL) << "Oh no! You fell through the trampoline" << self;
+    LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
 }
 
 bool task::transition(state to) {
@@ -121,13 +122,15 @@ bool task::transition(state to) {
                 break;
             default:
                 // bug
-                std::terminate();
+                std::abort();
         }
 
         if (valid) {
             if (_state.compare_exchange_weak(from, to)) {
                 return true;
             }
+        } else {
+            DVLOG(5) << "invalid transition " << this << " to " << to;
         }
     }
     return false;
@@ -146,6 +149,7 @@ void task::join() {
 
 void task::yield() {
     DVLOG(5) << "readyq yield " << this;
+    task::cancellation_point cancelable;
     _runtime->_readyq.push_back(this);
     _runtime->schedule();
 }
@@ -192,10 +196,12 @@ void runtime::ready(task *t) {
 void runtime::remove_task(task *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
-    //{
-    //    auto i = find(begin(_readyq), end(_readyq), t);
-    //    _readyq.erase(i);
-    //}
+    {
+        auto i = find(begin(_readyq), end(_readyq), t);
+        if (i != end(_readyq)) {
+            _readyq.erase(i);
+        }
+    }
 
     // TODO: needed?
     //_alarms.remove(t);
@@ -247,7 +253,7 @@ void runtime::schedule() {
     } while (_readyq.empty());
 
     using ::operator <<;
-    //DVLOG(5) << "readyq: " << _readyq;
+    DVLOG(5) << "readyq: " << _readyq;
 
     task *t = _readyq.front();
     _readyq.pop_front();
@@ -256,7 +262,9 @@ void runtime::schedule() {
 #ifdef TEN_TASK_TRACE
     self->_trace.capture();
 #endif
-    self->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t));
+    if (t != self) {
+        self->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t));
+    }
     _current_task = self;
     _gctasks.clear();
     self->post_swap();

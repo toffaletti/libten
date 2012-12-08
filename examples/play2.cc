@@ -97,6 +97,7 @@ int main() {
     //runtime::dump();
     runtime::wait_for_all();
 
+#if 1
     auto sleep2 = runtime::spawn([]() {
         LOG(INFO) << "sleep for 2 sec but should be canceled in 1\n";;
         this_task::sleep_for(std::chrono::seconds{2});
@@ -146,9 +147,11 @@ int main() {
             }
         });
     }
+#endif
     runtime::spawn(counter);
     this_task::sleep_for(std::chrono::seconds{10});
-    //runtime::wait_for_all();
+    runtime::cancel();
+    runtime::wait_for_all();
     runtime::shutdown();
 }
 
