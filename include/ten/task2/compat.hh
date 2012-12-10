@@ -1,31 +1,48 @@
+#ifndef TEN_TASK2_COMPAT
+#define TEN_TASK2_COMPAT
+
 #include "ten/task2/task.hh"
+#include <poll.h>
 #include <thread>
 
+#define SEC2MS(s) (s*1000)
+
 namespace ten {
-namespace task2 {
+namespace task2compat {
+
+typedef ten::task2::task_interrupted task_interrupted;
+typedef ten::task2::task task;
+typedef ten::task2::deadline_reached deadline_reached;
+typedef ten::task2::deadline deadline;
+typedef std::deque<task *> tasklist;
 
 constexpr size_t default_stacksize = 256*1024;
 
+// TODO: private
+inline task *this_task() {
+    return ten::task2::runtime::current_task();
+}
+
 //! spawn a new task in the current thread
-uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
-    auto t = runtime::spawn(f);
+inline uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
+    auto t = ten::task2::runtime::spawn(f);
     return t->get_id();
 }
 
 //! current task id
-uint64_t taskid() {
-    return this_task::get_id();
+inline uint64_t taskid() {
+    return ten::task2::this_task::get_id();
 }
 //! allow other tasks to run
-int64_t taskyield() {
-    this_task::yield();
+inline int64_t taskyield() {
+    ten::task2::this_task::yield();
     return 0;
 }
 
 //! cancel a task
-bool taskcancel(uint64_t id) {
+inline bool taskcancel(uint64_t id) {
     // TODO: implement
-    auto t = runtime::task_with_id(id);
+    auto t = ten::task2::runtime::task_with_id(id);
     if (t) {
         t->cancel();
         return true;
@@ -34,21 +51,21 @@ bool taskcancel(uint64_t id) {
 }
 
 //! mark the current task as a system task
-void tasksystem() {
+inline void tasksystem() {
     // TODO: implement
 }
 
 //! set/get current task state
-const char *taskstate(const char *fmt=nullptr, ...) {
+inline const char *taskstate(const char *fmt=nullptr, ...) {
     return "";
 }
 //! set/get current task name
-const char * taskname(const char *fmt=nullptr, ...) {
+inline const char * taskname(const char *fmt=nullptr, ...) {
     return "";
 }
 
 //! spawn a new thread with a task scheduler
-void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
+inline void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
     std::thread proc([=]{
         f();
     });
@@ -56,14 +73,14 @@ void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksi
 }
 
 //! cancel all non-system tasks and exit procmain
-void procshutdown() {
+inline void procshutdown() {
     // TODO: implement
-    runtime::cancel();
+    ten::task2::runtime::cancel();
 }
 
 //! return cached time from event loop, not precise
-std::chrono::time_point<std::chrono::steady_clock> procnow() {
-    return runtime::now();
+inline std::chrono::time_point<std::chrono::steady_clock> procnow() {
+    return ten::task2::runtime::now();
 }
 
 //! main entry point for tasks
@@ -73,17 +90,36 @@ public:
     ~procmain() {}
 
     int main(int argc=0, char *argv[]=nullptr) {
-        runtime::wait_for_all();
-        runtime::shutdown();
+        ten::task2::runtime::wait_for_all();
+        ten::task2::runtime::shutdown();
         return 0;
     }
 };
 
 //! sleep current task for milliseconds
-void tasksleep(uint64_t ms) {
-    this_task::sleep_for(std::chrono::milliseconds{ms});
+inline void tasksleep(uint64_t ms) {
+    ten::task2::this_task::sleep_for(std::chrono::milliseconds{ms});
 }
 
+//! suspend task waiting for io on pollfds
+inline int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0) {
+    // TODO: implement
+    ten::task2::this_task::yield();
+    return nfds;
+}
+
+//! suspend task waiting for io on fd
+inline bool fdwait(int fd, int rw, uint64_t ms=0) {
+    // TODO: implement
+    ten::task2::this_task::yield();
+    return true;
+}
 
 } // task2
+
+using namespace task2compat;
+
 } // ten
+
+#endif // TEN_TASK2_COMPAT
+

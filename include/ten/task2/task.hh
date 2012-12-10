@@ -20,6 +20,9 @@
 #include <sys/syscall.h>
 
 namespace ten {
+class qutex;
+class rendez;
+
 namespace task2 {
 
 //! exception to unwind stack on taskcancel
@@ -47,16 +50,9 @@ public:
     typedef std::chrono::steady_clock clock;
     typedef std::chrono::time_point<clock> time_point;
 
-    enum class state {
-        fresh,
-        ready,
-        asleep,
-        canceled,
-        unwinding,
-        finished
-    };
-
 private:
+    friend class ten::rendez;
+    friend class ten::qutex;
     struct cancellation_point {
         cancellation_point();
         ~cancellation_point();
@@ -70,8 +66,10 @@ private:
     uint64_t _cancel_points = 0;
     runtime *_runtime; // TODO: scheduler
     std::function<void ()> _f;
-    std::atomic<state> _state;
     std::exception_ptr _exception;
+    std::atomic_flag _ready;
+    std::atomic<bool> _canceled;
+    bool _unwinding = false;
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -80,7 +78,7 @@ private:
 private:
     static uint64_t next_id();
 
-    task() : _ctx(), _id{next_id()}, _state(state::ready) {}
+    task() : _ctx(), _id{next_id()}, _ready{true}, _canceled{false} {}
 public:
     //! create a new task
     template<class Function, class... Args> 
@@ -88,7 +86,8 @@ public:
         : _ctx{task::trampoline},
         _id{next_id()},
         _f{std::bind(f, args...)},
-        _state(state::fresh)
+        _ready{true},
+        _canceled{false}
     {
     }
 
@@ -108,14 +107,17 @@ private:
     friend void this_task::yield();
 
     void yield();
-    void swap();
     void post_swap();
-    bool transition(state to);
-    bool runnable() const {
-        state st = _state;
-        return (st == state::fresh || st == state::ready || st == state::canceled || st == state::unwinding);
-    }
 
+private:
+    // TODO: private, compat
+    void swap();
+    void safe_swap() noexcept {
+        // TODO: make sure this doesn't throw
+        // do not call post_swap
+        swap();
+    }
+    void ready();
 };
 
 class runtime {
@@ -127,6 +129,7 @@ public:
 private:
     friend class task::cancellation_point;
     friend class deadline;
+    friend void task::ready();
     friend void task::swap();
     friend void task::post_swap();
     friend void task::trampoline(intptr_t arg);
@@ -139,6 +142,8 @@ private:
     template <class Clock, class Duration>
         friend void this_task::sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
 
+public:
+    // TODO: should be private
     static task *current_task();
 
 private:
@@ -163,7 +168,6 @@ private:
         static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
             runtime *r = thread_local_ptr<runtime>();
             task *t = r->_current_task;
-            t->transition(task::state::asleep);
             alarm_set_type::alarm alarm(r->_alarms, t, sleep_time);
             task::cancellation_point cancelable;
             r->schedule();
@@ -181,9 +185,6 @@ public:
         static_assert(clock::is_steady, "clock not steady");
         update_cached_time();
         _task._runtime = this;
-        //_alltasks.push_back(_task);
-        //_task.transition(task::state::ready);
-        //_readyq.push_back(_task.get());
         _current_task = &_task;
     }
 
@@ -236,8 +237,8 @@ public:
 
     static void shutdown() {
         if (is_main_thread()) {
-            runtime *r = thread_local_ptr<runtime>();
-            r->~runtime();
+            //runtime *r = thread_local_ptr<runtime>();
+            //r->~runtime();
         }
     }
 

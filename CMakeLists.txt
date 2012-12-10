@@ -44,6 +44,8 @@ endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
 
+add_definitions(-DTEN_TASK_TRACE)
+
 add_subdirectory(msgpack)
 add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
@@ -51,8 +53,7 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPER
 add_library(ten
     src/rendez.cc
     src/qutex.cc
-    src/task.cc
-    src/proc.cc
+    src/task2.cc
     src/error.cc
     src/ioproc.cc
     src/net.cc

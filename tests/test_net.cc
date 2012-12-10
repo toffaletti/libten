@@ -6,8 +6,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void dial_google() {
     socket_fd s{AF_INET, SOCK_STREAM};
     int status = netdial(s.fd, "www.google.com", 80);

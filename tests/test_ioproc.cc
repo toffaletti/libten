@@ -5,8 +5,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void ioproc_sleeper() {
     ioproc io;
     int ret = iocall(io, std::bind(usleep, 100));

@@ -46,7 +46,6 @@ target_link_libraries(memg ten boost_program_options)
 add_executable(synch EXCLUDE_FROM_ALL synch.cc)
 target_link_libraries(synch ten)
 
-#add_definitions(-DTEN_TASK_TRACE)
 add_executable(play2 EXCLUDE_FROM_ALL play2.cc
     ../src/coroutine.cc
     ../src/task2.cc

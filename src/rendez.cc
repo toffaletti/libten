@@ -1,5 +1,4 @@
 #include "ten/task/rendez.hh"
-#include "proc.hh"
 #include <mutex>
 
 namespace ten {

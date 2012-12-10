@@ -5,7 +5,6 @@
 #include "ten/channel.hh"
 
 using namespace ten;
-const size_t default_stacksize=245*1024;
 
 static void channel_recv(channel<intptr_t> c) {
     intptr_t d = c.recv();

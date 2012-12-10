@@ -6,23 +6,9 @@
 namespace ten {
 namespace task2 {
 
-std::ostream &operator << (std::ostream &o, task::state s) {
-    static std::array<const char *, 6> names = {{
-        "fresh",
-        "ready",
-        "asleep",
-        "canceled",
-        "unwinding",
-        "finished"
-    }};
-    static_assert(names.size() == static_cast<int>(task::state::finished)+1, "enum out of sync");
-    o << names[static_cast<int>(s)];
-    return o;
-}
-
 std::ostream &operator << (std::ostream &o, const task *t) {
     if (t) {
-        o << "task[" << t->_id << "," << (void *)t << "," << t->_state << "]";
+        o << "task[" << t->_id << "," << (void *)t << "]";
     } else {
         o << "task[null]";
     }
@@ -63,26 +49,14 @@ uint64_t task::next_id() {
     return ++task_id_counter;
 }
 
-template <class Arg>
-bool valid_states(Arg to) {
-    return false;
-}
-
-template <class Arg, class... Args>
-bool valid_states(Arg to, Arg valid, Args ...others) {
-    if (to == valid) return true;
-    return valid_states(to, others...);
-}
-
 void task::trampoline(intptr_t arg) {
     task *self = reinterpret_cast<task *>(arg);
     try {
-        if (self->transition(state::ready)) {
+        if (!self->_canceled) {
             self->_f();
         }
     } catch (task_interrupted &e) {
     }
-    self->transition(state::finished);
     self->_f = nullptr;
 
     runtime *r = self->_runtime;
@@ -92,52 +66,9 @@ void task::trampoline(intptr_t arg) {
     LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
 }
 
-bool task::transition(state to) {
-    bool valid = true;
-    while (valid) {
-        state from = _state;
-        switch (from) {
-            case state::fresh:
-                // from fresh we can go directly to finished
-                // without needing to unwind
-                if (to == state::canceled) {
-                    to = state::finished;
-                }
-                valid = valid_states(to, state::ready, state::finished);
-                break;
-            case state::ready:
-                valid = valid_states(to, state::asleep, state::canceled, state::finished);
-                break;
-            case state::asleep:
-                valid = valid_states(to, state::ready, state::canceled);
-                break;
-            case state::canceled:
-                valid = valid_states(to, state::unwinding, state::finished);
-                break;
-            case state::unwinding:
-                valid = valid_states(to, state::finished);
-                break;
-            case state::finished:
-                valid = valid_states(to);
-                break;
-            default:
-                // bug
-                std::abort();
-        }
-
-        if (valid) {
-            if (_state.compare_exchange_weak(from, to)) {
-                return true;
-            }
-        } else {
-            DVLOG(5) << "invalid transition " << this << " to " << to;
-        }
-    }
-    return false;
-}
-
 void task::cancel() {
-    if (transition(state::canceled)) {
+    bool previous = false;
+    if (_canceled.compare_exchange_strong(previous, true)) {
         DVLOG(5) << "canceling: " << this << "\n";
         _runtime->ready(this);
     }
@@ -150,7 +81,9 @@ void task::join() {
 void task::yield() {
     DVLOG(5) << "readyq yield " << this;
     task::cancellation_point cancelable;
-    _runtime->_readyq.push_back(this);
+    if (!_ready.test_and_set()) {
+        _runtime->_readyq.push_back(this);
+    }
     _runtime->schedule();
 }
 
@@ -158,15 +91,20 @@ void task::swap() {
     _runtime->schedule();
 }
 
+void task::ready() {
+    _runtime->ready(this);
+}
+
 void task::post_swap() {
-    state st = _state;
-    if (st == state::canceled && _cancel_points > 0) {
-        if (transition(state::unwinding)) {
+    if (_canceled && _cancel_points > 0) {
+        if (!_unwinding) {
+            _unwinding = true;
             DVLOG(5) << "unwinding task: " << this;
             throw task_interrupted();
         }
     }
 
+    // TODO: safe_swap
     if (_exception != nullptr) {
         std::exception_ptr exception = _exception;
         _exception = nullptr;
@@ -186,14 +124,16 @@ int runtime::dump() {
 }
 
 void runtime::ready(task *t) {
-    if (this != thread_local_ptr<runtime>()) {
-        _dirtyq.push(t);
-        // TODO: speed this up?
-        std::unique_lock<std::mutex> lock{_mutex};
-        _cv.notify_one();
-    } else {
-        DVLOG(5) << "readyq runtime ready: " << t;
-        _readyq.push_back(t);
+    if (!t->_ready.test_and_set()) {
+        if (this != thread_local_ptr<runtime>()) {
+            _dirtyq.push(t);
+            // TODO: speed this up?
+            std::unique_lock<std::mutex> lock{_mutex};
+            _cv.notify_one();
+        } else {
+            DVLOG(5) << "readyq runtime ready: " << t;
+            _readyq.push_back(t);
+        }
     }
 }
 
@@ -201,6 +141,8 @@ void runtime::remove_task(task *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
     {
+        // TODO: might not need this anymore
+        // assert not in readyq
         auto i = find(begin(_readyq), end(_readyq), t);
         if (i != end(_readyq)) {
             _readyq.erase(i);
@@ -228,12 +170,11 @@ void runtime::check_dirty_queue() {
 
 void runtime::check_timeout_tasks() {
     _alarms.tick(_now, [this](task *t, std::exception_ptr exception) {
-        if (t->transition(task::state::ready)) {
-            if (exception != nullptr && t->_exception == nullptr) {
-                t->_exception = exception;
-            }
-            ready(t);
+        if (exception != nullptr && t->_exception == nullptr) {
+            DVLOG(5) << "alarm with exception fired: " << t;
+            t->_exception = exception;
         }
+        ready(t);
     });
 }
 
@@ -266,6 +207,7 @@ void runtime::schedule() {
 
     task *t = _readyq.front();
     _readyq.pop_front();
+    t->_ready.clear();
     _current_task = t;
     DVLOG(5) << self << " swap to " << t;
 #ifdef TEN_TASK_TRACE

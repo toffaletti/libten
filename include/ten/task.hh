@@ -9,6 +9,9 @@
 #include <poll.h>
 #include "logging.hh"
 
+#include "ten/task2/compat.hh"
+
+#if 0
 //! user must define
 extern const size_t default_stacksize;
 
@@ -96,5 +99,6 @@ public:
 };
 
 } // end namespace ten
+#endif
 
 #endif // LIBTEN_TASK_HH
