@@ -78,7 +78,7 @@ private:
 private:
     static uint64_t next_id();
 
-    task() : _ctx(), _id{next_id()}, _ready{true}, _canceled{false} {}
+    task() : _ctx(), _id{next_id()}, _ready{false}, _canceled{false} {}
 public:
     //! create a new task
     template<class Function, class... Args> 
@@ -107,15 +107,12 @@ private:
     friend void this_task::yield();
 
     void yield();
-    void post_swap();
 
 private:
     // TODO: private, compat
-    void swap();
+    void swap(bool nothrow = false);
     void safe_swap() noexcept {
-        // TODO: make sure this doesn't throw
-        // do not call post_swap
-        swap();
+        swap(true);
     }
     void ready();
 };
@@ -130,10 +127,9 @@ private:
     friend class task::cancellation_point;
     friend class deadline;
     friend void task::ready();
-    friend void task::swap();
-    friend void task::post_swap();
-    friend void task::trampoline(intptr_t arg);
     friend void task::yield();
+    friend void task::swap(bool nothrow);
+    friend void task::trampoline(intptr_t arg);
     friend void task::cancel();
     friend uint64_t this_task::get_id();
     friend void this_task::yield();
@@ -170,7 +166,7 @@ private:
             task *t = r->_current_task;
             alarm_set_type::alarm alarm(r->_alarms, t, sleep_time);
             task::cancellation_point cancelable;
-            r->schedule();
+            t->swap();
         }
 
     void ready(task *t);
@@ -221,10 +217,9 @@ public:
 
     static void wait_for_all() {
         runtime *r = thread_local_ptr<runtime>();
-        CHECK(r->_current_task == &r->_task);
-        // TODO: fix this hack
-        if (!r->_alltasks.empty()) {
-            r->schedule();
+        // TODO: fix this, it is slow
+        while (!r->_alltasks.empty()) {
+            this_task::yield();
         }
     }
 

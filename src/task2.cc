@@ -81,21 +81,16 @@ void task::join() {
 void task::yield() {
     DVLOG(5) << "readyq yield " << this;
     task::cancellation_point cancelable;
-    if (!_ready.test_and_set()) {
+    if (_ready.test_and_set() == false) {
         _runtime->_readyq.push_back(this);
     }
+    swap();
+}
+
+void task::swap(bool nothrow) {
     _runtime->schedule();
-}
+    if (nothrow) return;
 
-void task::swap() {
-    _runtime->schedule();
-}
-
-void task::ready() {
-    _runtime->ready(this);
-}
-
-void task::post_swap() {
     if (_canceled && _cancel_points > 0) {
         if (!_unwinding) {
             _unwinding = true;
@@ -112,9 +107,15 @@ void task::post_swap() {
     }
 }
 
+void task::ready() {
+    _runtime->ready(this);
+}
+
 int runtime::dump() {
 #ifdef TEN_TASK_TRACE
     runtime *r = thread_local_ptr<runtime>();
+    LOG(INFO) << &r->_task;
+    LOG(INFO) << r->_task._trace.str();
     for (shared_task &t : r->_alltasks) {
         LOG(INFO) << t.get();
         LOG(INFO) << t->_trace.str();
@@ -124,7 +125,7 @@ int runtime::dump() {
 }
 
 void runtime::ready(task *t) {
-    if (!t->_ready.test_and_set()) {
+    if (t->_ready.test_and_set() == false) {
         if (this != thread_local_ptr<runtime>()) {
             _dirtyq.push(t);
             // TODO: speed this up?
@@ -188,11 +189,6 @@ void runtime::schedule() {
         check_timeout_tasks();
 
         if (_readyq.empty()) {
-            if (_alltasks.empty()) {
-                // special case when wait_for_all()
-                _readyq.push_back(&_task);
-                break;
-            }
             std::unique_lock<std::mutex> lock{_mutex};
             if (_alarms.empty()) {
                 _cv.wait(lock);
@@ -218,7 +214,6 @@ void runtime::schedule() {
     }
     _current_task = self;
     _gctasks.clear();
-    self->post_swap();
 }
 
 deadline::deadline(std::chrono::milliseconds ms) {

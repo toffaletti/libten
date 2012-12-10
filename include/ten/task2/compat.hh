@@ -34,9 +34,8 @@ inline uint64_t taskid() {
     return ten::task2::this_task::get_id();
 }
 //! allow other tasks to run
-inline int64_t taskyield() {
+inline void taskyield() {
     ten::task2::this_task::yield();
-    return 0;
 }
 
 //! cancel a task
