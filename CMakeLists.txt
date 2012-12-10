@@ -44,7 +44,7 @@ endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
 
-add_definitions(-DTEN_TASK_TRACE)
+#add_definitions(-DTEN_TASK_TRACE)
 
 add_subdirectory(msgpack)
 add_subdirectory(src)
