@@ -145,7 +145,7 @@ void task::ready() {
 
 runtime::runtime() : _canceled{false} {
     // TODO: reenable this when our libstdc++ is fixed
-    static_assert(clock::is_steady, "clock not steady");
+    //static_assert(clock::is_steady, "clock not steady");
     update_cached_time();
     _task._runtime = this;
     _current_task = &_task;

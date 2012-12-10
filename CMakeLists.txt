@@ -60,7 +60,7 @@ add_library(ten
     src/zip.cc
     src/json.cc
     src/term.cc
-    src/chrono_fix.cc
+    #src/chrono_fix.cc
     ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}

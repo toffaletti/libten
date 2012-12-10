@@ -7,7 +7,6 @@
 using namespace ten;
 using namespace std;
 using namespace std::chrono;
-const size_t default_stacksize=256*1024;
 
 void one_ring(channel<int> chin, channel<int> chout, int m, int n) {
     auto start = high_resolution_clock::now();
