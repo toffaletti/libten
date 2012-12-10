@@ -73,8 +73,7 @@ inline void procspawn(const std::function<void ()> &f, size_t stacksize=default_
 
 //! cancel all non-system tasks and exit procmain
 inline void procshutdown() {
-    // TODO: implement
-    ten::task2::runtime::cancel();
+    ten::task2::runtime::shutdown();
 }
 
 //! return cached time from event loop, not precise
@@ -90,7 +89,6 @@ public:
 
     int main(int argc=0, char *argv[]=nullptr) {
         ten::task2::runtime::wait_for_all();
-        ten::task2::runtime::shutdown();
         return 0;
     }
 };

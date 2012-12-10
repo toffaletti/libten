@@ -67,7 +67,7 @@ private:
     runtime *_runtime; // TODO: scheduler
     std::function<void ()> _f;
     std::exception_ptr _exception;
-    std::atomic_flag _ready;
+    std::atomic<bool> _ready;
     std::atomic<bool> _canceled;
     bool _unwinding = false;
 #ifdef TEN_TASK_TRACE
@@ -114,6 +114,8 @@ private:
     void safe_swap() noexcept {
         swap(true);
     }
+public:
+    // TODO: private
     void ready();
 };
 
@@ -154,6 +156,8 @@ private:
     alarm_set_type _alarms;
     std::mutex _mutex;
     std::condition_variable _cv;
+    std::atomic<bool> _canceled;
+    bool _tasks_canceled = false;
 
     const time_point &update_cached_time() {
         _now = clock::now();
@@ -174,15 +178,12 @@ private:
     void check_dirty_queue();
     void check_timeout_tasks();
     void remove_task(task *t);
-    
+    void cancel();
+    int dump();
+    static int dump_all();
 public:
-    runtime() {
-        // TODO: reenable this when our libstdc++ is fixed
-        static_assert(clock::is_steady, "clock not steady");
-        update_cached_time();
-        _task._runtime = this;
-        _current_task = &_task;
-    }
+    runtime();
+    ~runtime();
 
     //! is this the main thread?
     static bool is_main_thread() noexcept {
@@ -204,7 +205,6 @@ public:
 
     static time_point now() { return thread_local_ptr<runtime>()->_now; }
 
-    static int dump();
 
     // compat
     static shared_task task_with_id(uint64_t id) {
@@ -215,28 +215,9 @@ public:
         return nullptr;
     }
 
-    static void wait_for_all() {
-        runtime *r = thread_local_ptr<runtime>();
-        // TODO: fix this, it is slow
-        while (!r->_alltasks.empty()) {
-            this_task::yield();
-        }
-    }
+    static void wait_for_all();
 
-    static void cancel() {
-        runtime *r = thread_local_ptr<runtime>();
-        for (auto t : r->_alltasks) {
-            t->cancel();
-        }
-    }
-
-    static void shutdown() {
-        if (is_main_thread()) {
-            //runtime *r = thread_local_ptr<runtime>();
-            //r->~runtime();
-        }
-    }
-
+    static void shutdown();
 };
 
 namespace this_task {

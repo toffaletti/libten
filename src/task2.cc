@@ -6,9 +6,42 @@
 namespace ten {
 namespace task2 {
 
+namespace {
+static std::mutex runtime_mutex;
+static std::vector<runtime *> runtimes;
+static std::atomic<uint64_t> runtime_count{0};
+static task *waiting_task = nullptr;
+
+static void add_runtime(runtime *r) {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    runtimes.push_back(r);
+    ++runtime_count;
+}
+
+static void remove_runtime(runtime *r) {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    auto i = find(begin(runtimes), end(runtimes), r);
+    if (i != end(runtimes)) {
+        runtimes.erase(i);
+        --runtime_count;
+    }
+
+    if (runtime_count == 1 && waiting_task) {
+        waiting_task->ready();
+    }
+}
+
+}
+
 std::ostream &operator << (std::ostream &o, const task *t) {
     if (t) {
-        o << "task[" << t->_id << "," << (void *)t << "]";
+        o << "task[" << t->_id
+            << "," << (void *)t
+            << ",ready:" << t->_ready
+            << ",canceled:" << t->_canceled
+            << "]";
     } else {
         o << "task[null]";
     }
@@ -67,8 +100,7 @@ void task::trampoline(intptr_t arg) {
 }
 
 void task::cancel() {
-    bool previous = false;
-    if (_canceled.compare_exchange_strong(previous, true)) {
+    if (_canceled.exchange(true) == false) {
         DVLOG(5) << "canceling: " << this << "\n";
         _runtime->ready(this);
     }
@@ -81,7 +113,7 @@ void task::join() {
 void task::yield() {
     DVLOG(5) << "readyq yield " << this;
     task::cancellation_point cancelable;
-    if (_ready.test_and_set() == false) {
+    if (_ready.exchange(true) == false) {
         _runtime->_readyq.push_back(this);
     }
     swap();
@@ -111,21 +143,80 @@ void task::ready() {
     _runtime->ready(this);
 }
 
-int runtime::dump() {
-#ifdef TEN_TASK_TRACE
-    runtime *r = thread_local_ptr<runtime>();
-    LOG(INFO) << &r->_task;
-    LOG(INFO) << r->_task._trace.str();
-    for (shared_task &t : r->_alltasks) {
-        LOG(INFO) << t.get();
-        LOG(INFO) << t->_trace.str();
+runtime::runtime() : _canceled{false} {
+    // TODO: reenable this when our libstdc++ is fixed
+    static_assert(clock::is_steady, "clock not steady");
+    update_cached_time();
+    _task._runtime = this;
+    _current_task = &_task;
+    add_runtime(this);
+}
+
+runtime::~runtime() {
+    remove_runtime(this);
+}
+
+void runtime::cancel() {
+    _canceled = true;
+}
+
+void runtime::shutdown() {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    for (runtime *r : runtimes) {
+        r->cancel();
     }
+}
+
+void runtime::wait_for_all() {
+    using namespace std;
+    CHECK(is_main_thread());
+    runtime *r = thread_local_ptr<runtime>();
+    {
+        lock_guard<mutex> lock(runtime_mutex);
+        waiting_task = r->_current_task;
+        DVLOG(5) << "waiting for all " << waiting_task;
+    }
+
+    while (!r->_alltasks.empty() || runtime_count > 1) {
+        r->schedule();
+    }
+
+    {
+        lock_guard<mutex> lock(runtime_mutex);
+        DVLOG(5) << "done waiting for all";
+        waiting_task = nullptr;
+    }
+}
+
+
+// XXX: only safe to call from debugger
+int runtime::dump_all() {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    for (runtime *r : runtimes) {
+        LOG(INFO) << "runtime: " << r;
+        r->dump();
+    }
+    return 0;
+}
+
+int runtime::dump() {
+    LOG(INFO) << &_task;
+#ifdef TEN_TASK_TRACE
+    LOG(INFO) << _task._trace.str();
 #endif
+    for (shared_task &t : _alltasks) {
+        LOG(INFO) << t.get();
+#ifdef TEN_TASK_TRACE
+        LOG(INFO) << t->_trace.str();
+#endif
+    }
     return 0;
 }
 
 void runtime::ready(task *t) {
-    if (t->_ready.test_and_set() == false) {
+    if (t->_ready.exchange(true) == false) {
         if (this != thread_local_ptr<runtime>()) {
             _dirtyq.push(t);
             // TODO: speed this up?
@@ -183,13 +274,32 @@ void runtime::schedule() {
     //CHECK(!_alltasks.empty());
     task *self = _current_task;
 
+    if (_canceled && !_tasks_canceled) {
+        // TODO: maybe if canceled is set we don't let any more tasks spawn?
+        _tasks_canceled = true;
+        for (auto t : _alltasks) {
+            t->cancel();
+        }
+    }
+
     do {
         check_dirty_queue();
         update_cached_time();
         check_timeout_tasks();
 
         if (_readyq.empty()) {
+            if (_alltasks.empty()) {
+                std::lock_guard<std::mutex> lock(runtime_mutex);
+                if (waiting_task && this == waiting_task->_runtime) {
+                    waiting_task->ready();
+                    continue;
+                }
+            }
             std::unique_lock<std::mutex> lock{_mutex};
+            check_dirty_queue();
+            if (!_readyq.empty()) {
+                continue;
+            }
             if (_alarms.empty()) {
                 _cv.wait(lock);
             } else {
@@ -203,7 +313,7 @@ void runtime::schedule() {
 
     task *t = _readyq.front();
     _readyq.pop_front();
-    t->_ready.clear();
+    t->_ready.store(false);
     _current_task = t;
     DVLOG(5) << self << " swap to " << t;
 #ifdef TEN_TASK_TRACE

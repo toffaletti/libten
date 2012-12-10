@@ -4,8 +4,6 @@
 
 using namespace ten;
 
-extern const size_t default_stacksize=256*1024;
-
 static void sleeper() {
     uint64_t ms = random() % 1000;
     tasksleep(ms);

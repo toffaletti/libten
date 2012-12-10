@@ -5,7 +5,6 @@
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 void client_handler(channel<int> accept_chan) {
     for (;;) {

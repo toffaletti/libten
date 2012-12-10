@@ -4,7 +4,6 @@
 #include "ten/logging.hh"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct state {
     qutex q;

@@ -6,8 +6,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void connecter(address &addr, channel<int> ch) {
     netsock s(AF_INET, SOCK_STREAM);
     if (s.connect(addr, 100) == 0) {

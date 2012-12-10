@@ -6,7 +6,6 @@
 
 using namespace ten;
 using namespace std;
-const size_t default_stacksize=256*1024;
 
 namespace po = boost::program_options;
 
