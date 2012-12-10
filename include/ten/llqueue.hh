@@ -28,7 +28,7 @@ private:
 
     char pad1[CACHE_LINE_SIZE - sizeof(node*)];
     // shared among consumers
-    std::atomic<bool> _consumer_lock;
+    std::atomic_flag _consumer_lock = ATOMIC_FLAG_INIT;
 
     char pad2[CACHE_LINE_SIZE - sizeof(std::atomic<bool>)];
     // for one producer at a time
@@ -36,13 +36,12 @@ private:
 
     char pad3[CACHE_LINE_SIZE - sizeof(node*)];
     // shared among producers
-    std::atomic<bool> _producer_lock;
+    std::atomic_flag _producer_lock = ATOMIC_FLAG_INIT;
 
     char pad4[CACHE_LINE_SIZE - sizeof(std::atomic<bool>)]; 
 public:
     llqueue() {
         _first = _last = new node(nullptr);
-        _producer_lock = _consumer_lock = false;
     }
 
     ~llqueue() {
@@ -62,29 +61,29 @@ public:
         void push(const A &t)
         {
             node *tmp = new node(t);
-            while (_producer_lock.exchange(true))
+            while (_producer_lock.test_and_set(std::memory_order_acquire))
             { } // acquire exclusivity
             _last->next = tmp;      // publish to consumers
             _last = tmp;            // swing last forward
-            _producer_lock = false; // release exclusivity
+            _producer_lock.clear(std::memory_order_release); // release exclusivity
         }
 
     template <typename A, typename std::enable_if<!std::is_pointer<A>::value, int>::type = 0>
         void push(const A &t)
         {
             node *tmp = new node(new T(t));
-            while (_producer_lock.exchange(true))
+            while (_producer_lock.test_and_set(std::memory_order_acquire))
             { } // acquire exclusivity
             _last->next = tmp;      // publish to consumers
             _last = tmp;            // swing last forward
-            _producer_lock = false; // release exclusivity
+            _producer_lock.clear(std::memory_order_release); // release exclusivity
         }
 
 
     template <typename A, typename std::enable_if<std::is_pointer<A>::value, int>::type = 0>
         bool pop(A &result)
         {
-            while (_consumer_lock.exchange(true)) 
+            while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
             { } // acquire exclusivity
             node *first = _first;
             node *next = _first->next;
@@ -93,18 +92,18 @@ public:
                 result = next->value;
                 next->value = nullptr;
                 _first = next;
-                _consumer_lock = false;
+                _consumer_lock.clear(std::memory_order_release); // release exclusivity
                 delete first;
                 return true;            // and report success
             }
-            _consumer_lock = false; // release exclusivity
+            _consumer_lock.clear(std::memory_order_release); // release exclusivity
             return false;           // report queue was empty
         }
 
     template <typename A, typename std::enable_if<!std::is_pointer<A>::value, int>::type = 0>
         bool pop(A &result)
         {
-            while (_consumer_lock.exchange(true)) 
+            while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
             { } // acquire exclusivity
             node *first = _first;
             node *next = _first->next;
@@ -112,21 +111,21 @@ public:
                 V *val = next->value;    // take it out
                 next->value = nullptr;  // of the Node
                 _first = next;          // swing first forward
-                _consumer_lock = false; // release exclusivity
+                _consumer_lock.clear(std::memory_order_release); // release exclusivity
                 result = *val;          // now copy it back
                 delete val;             // clean up the value
                 delete first;           // and the old dummy
                 return true;            // and report success
             }
-            _consumer_lock = false; // release exclusivity
+            _consumer_lock.clear(std::memory_order_release); // release exclusivity
             return false;           // report queue was empty
         }
 
     bool empty() {
-        while (_consumer_lock.exchange(true)) 
+        while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
         { } // acquire exclusivity
         bool rvalue(_first->next == nullptr);
-        _consumer_lock = false;
+        _consumer_lock.clear(std::memory_order_release); // release exclusivity
         return rvalue;
     }
 };
