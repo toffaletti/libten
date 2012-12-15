@@ -34,7 +34,7 @@ public: // non-epoll data
     //! true when asleep and runqueue is empty and no epoll
     bool asleep;
 public:
-    proc_waker() : polling(false), asleep(false) {}
+    proc_waker() : event(0, EFD_NONBLOCK), polling(false), asleep(false) {}
 
     void wake() {
         if (polling.exchange(false)) {
