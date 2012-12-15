@@ -124,7 +124,7 @@ public:
     typedef std::chrono::steady_clock clock;
     typedef std::chrono::time_point<clock> time_point;
     typedef std::shared_ptr<task> shared_task;
-    typedef alarm_set<task *, clock> alarm_set_type;
+    typedef ten::alarm_clock<task *, clock> alarm_clock;
 private:
     friend class task::cancellation_point;
     friend class deadline;
@@ -153,7 +153,7 @@ private:
     //! current time cached in a few places through the event loop
     time_point _now;
     llqueue<task *> _dirtyq;
-    alarm_set_type _alarms;
+    alarm_clock _alarms;
     std::mutex _mutex;
     std::condition_variable _cv;
     std::atomic<bool> _canceled;
@@ -168,7 +168,7 @@ private:
         static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
             runtime *r = thread_local_ptr<runtime>();
             task *t = r->_current_task;
-            alarm_set_type::alarm alarm(r->_alarms, t, sleep_time);
+            alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
             task::cancellation_point cancelable;
             t->swap();
         }
@@ -254,7 +254,7 @@ struct deadline_reached : task_interrupted {};
 //! deadline_reached after milliseconds
 class deadline {
 private:
-    runtime::alarm_set_type::alarm _alarm;
+    runtime::alarm_clock::scoped_alarm _alarm;
 public:
     deadline(std::chrono::milliseconds ms);
 

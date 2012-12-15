@@ -1,12 +1,14 @@
 #include <chrono>
 #include <deque>
+#include "ten/optional.hh"
 
 namespace ten {
 
 template <class T, class Clock>
-struct alarm_set {
+struct alarm_clock {
 public:
     typedef std::chrono::time_point<Clock> time_point;
+private:
     struct data {
         T value;
         time_point when;
@@ -81,24 +83,27 @@ public:
 
     bool empty() const { return _set.empty(); }
 
-    time_point front_when() const {
+    optional<time_point> when() const {
+        if (_set.empty()) {
+            return {};
+        }
         return _set.front().when;
     }
 
 public:
-    struct alarm {
+    struct scoped_alarm {
 
-        alarm_set<T, Clock> *_set;
-        typename alarm_set<T, Clock>::data _data;
+        alarm_clock<T, Clock> *_set;
+        typename alarm_clock<T, Clock>::data _data;
         bool _armed;
 
-        alarm() : _set(nullptr), _armed(false) {
+        scoped_alarm() : _set(nullptr), _armed(false) {
         }
 
-        alarm(const alarm &) = delete;
-        alarm(alarm &&other) = delete;
+        scoped_alarm(const scoped_alarm &) = delete;
+        scoped_alarm(scoped_alarm &&other) = delete;
 
-        alarm &operator = (alarm &&other) {
+        scoped_alarm &operator = (scoped_alarm &&other) {
             if (this != &other) {
                 std::swap(_set, other._set);
                 std::swap(_data, other._data);
@@ -107,18 +112,18 @@ public:
             return *this;
         }
 
-        alarm(alarm_set<T, Clock> &s, T value, time_point when)
+        scoped_alarm(alarm_clock<T, Clock> &s, T value, time_point when)
             : _set(&s), _armed(true)
         {
             _data = _set->insert(std::forward<T>(value), when);
         }
 
         template <class Exception>
-        alarm(alarm_set<T, Clock> &s, T value, time_point when, Exception e)
+            scoped_alarm(alarm_clock<T, Clock> &s, T value, time_point when, Exception e)
             : _set(&s), _armed(true)
-        {
-            _data = _set->insert(std::forward<T>(value), when, e);
-        }
+            {
+                _data = _set->insert(std::forward<T>(value), when, e);
+            }
 
         std::chrono::milliseconds remaining() const {
             using namespace std::chrono;
@@ -139,12 +144,11 @@ public:
             }
         }
 
-        ~alarm() {
+        ~scoped_alarm() {
             cancel();
         }
     };
+
 };
-
-
 
 } // ten

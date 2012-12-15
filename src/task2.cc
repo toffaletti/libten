@@ -300,10 +300,11 @@ void runtime::schedule() {
             if (!_readyq.empty()) {
                 continue;
             }
-            if (_alarms.empty()) {
-                _cv.wait(lock);
+            auto when = _alarms.when();
+            if (when) {
+                _cv.wait_until(lock, *when);
             } else {
-                _cv.wait_until(lock, _alarms.front_when());
+                _cv.wait(lock);
             }
         }
     } while (_readyq.empty());
@@ -332,8 +333,7 @@ deadline::deadline(std::chrono::milliseconds ms) {
     if (ms.count() > 0) {
         runtime *r = thread_local_ptr<runtime>();
         task *t = r->_current_task;
-        _alarm = std::move(
-                runtime::alarm_set_type::alarm(
+        _alarm = std::move(runtime::alarm_clock::scoped_alarm(
                     r->_alarms, t, ms+runtime::now(), deadline_reached()
                     )
                 );
