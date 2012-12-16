@@ -125,7 +125,7 @@ void task_pimpl::ready() {
 task::task(std::function<void ()> f)
     : _pimpl{std::make_shared<task_pimpl>(f)}
 {
-    runtime *r = thread_local_ptr<runtime>();
+    runtime *r = runtime::self();
     _pimpl->_runtime = r;
     r->_alltasks.push_back(_pimpl);
     DVLOG(5) << "spawn readyq " << _pimpl.get();

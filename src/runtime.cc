@@ -1,4 +1,5 @@
 #include "ten/task/runtime.hh"
+#include "ten/thread_local.hh"
 
 namespace ten {
 
@@ -29,10 +30,14 @@ static void remove_runtime(runtime *r) {
     }
 }
 
+} // anon
+
+runtime *runtime::self() {
+    return thread_local_ptr<runtime>();
 }
 
 task_pimpl *runtime::current_task() {
-    return thread_local_ptr<runtime>()->_current_task;
+    return self()->_current_task;
 }
 
 runtime::runtime() : _canceled{false} {
@@ -52,6 +57,26 @@ void runtime::cancel() {
     _canceled = true;
 }
 
+void runtime::sleep_until(const time_point &sleep_time) {
+    runtime *r = runtime::self();
+    task_pimpl *t = r->_current_task;
+    alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
+    task_pimpl::cancellation_point cancelable;
+    t->swap();
+}
+
+runtime::time_point runtime::now() {
+    return runtime::self()->_now;
+}
+
+runtime::shared_task runtime::task_with_id(uint64_t id) {
+    runtime *r = runtime::self();
+    for (auto t : r->_alltasks) {
+        if (t->_id == id) return t;
+    }
+    return nullptr;
+}
+
 void runtime::shutdown() {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
@@ -63,7 +88,7 @@ void runtime::shutdown() {
 void runtime::wait_for_all() {
     using namespace std;
     CHECK(is_main_thread());
-    runtime *r = thread_local_ptr<runtime>();
+    runtime *r = runtime::self();
     {
         lock_guard<mutex> lock(runtime_mutex);
         waiting_task = r->_current_task;
@@ -109,7 +134,7 @@ int runtime::dump() {
 
 void runtime::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
-        if (this != thread_local_ptr<runtime>()) {
+        if (this != runtime::self()) {
             _dirtyq.push(t);
             // TODO: speed this up?
             std::unique_lock<std::mutex> lock{_mutex};
@@ -223,7 +248,7 @@ deadline::deadline(std::chrono::milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
-        runtime *r = thread_local_ptr<runtime>();
+        runtime *r = runtime::self();
         task_pimpl *t = r->_current_task;
         _alarm = std::move(runtime::alarm_clock::scoped_alarm(
                     r->_alarms, t, ms+runtime::now(), deadline_reached()

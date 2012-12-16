@@ -1,7 +1,6 @@
 #include "ten/task/task.hh"
 #include "ten/task/task_pimpl.hh"
 
-#include "ten/thread_local.hh"
 #include "ten/llqueue.hh"
 #include "ten/task/alarm.hh"
 #include <memory>
@@ -38,6 +37,7 @@ private:
 public:
     // TODO: should be private
     static task_pimpl *current_task();
+    static runtime *self();
 
 private:
     task_pimpl _task;
@@ -59,15 +59,6 @@ private:
         return _now;
     }
 
-    template <class Duration>
-        static void sleep_until(const std::chrono::time_point<clock, Duration>& sleep_time) {
-            runtime *r = thread_local_ptr<runtime>();
-            task_pimpl *t = r->_current_task;
-            alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
-            task_pimpl::cancellation_point cancelable;
-            t->swap();
-        }
-
     void ready(task_pimpl *t);
     void schedule();
     void check_dirty_queue();
@@ -76,6 +67,8 @@ private:
     void cancel();
     int dump();
     static int dump_all();
+
+    static void sleep_until(const time_point &sleep_time);
 public:
     runtime();
     ~runtime();
@@ -85,16 +78,10 @@ public:
         return getpid() == syscall(SYS_gettid);
     }
 
-    static time_point now() { return thread_local_ptr<runtime>()->_now; }
+    static time_point now();
 
     // compat
-    static shared_task task_with_id(uint64_t id) {
-        runtime *r = thread_local_ptr<runtime>();
-        for (auto t : r->_alltasks) {
-            if (t->_id == id) return t;
-        }
-        return nullptr;
-    }
+    static shared_task task_with_id(uint64_t id);
 
     static void wait_for_all();
 
