@@ -1,3 +1,4 @@
+#include "ten/thread_local.hh"
 #include "ten/task/runtime.hh"
 #include "ten/logging.hh"
 
@@ -40,6 +41,24 @@ void counter() {
         this_task::yield();
     }
 }
+
+struct Stuff {
+    int a;
+
+    Stuff() {
+        a = 1234;
+    }
+
+    ~Stuff() {
+        a = 5678;
+    }
+};
+
+struct stuff_local {};
+struct stuff_local2 {};
+
+thread_local<stuff_local, Stuff> stuff;
+thread_local<stuff_local2, Stuff> stuff2;
 
 int main() {
     using namespace std::chrono;
@@ -103,7 +122,12 @@ int main() {
         LOG(INFO) << "done\n";
     });
 
+    LOG(INFO) << "stuff: " << stuff->a;
+    LOG(INFO) << "stuff2: " << stuff2->a;
+
     std::thread t1([](task sleep2) {
+            LOG(INFO) << "stuff: " << stuff->a;
+            LOG(INFO) << "stuff2: " << stuff2->a;
             std::this_thread::sleep_for(std::chrono::seconds{1});
             sleep2.cancel();
     }, std::move(sleep2));

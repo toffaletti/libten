@@ -1,3 +1,6 @@
+#ifndef TEN_RUNTIME_HH
+#define TEN_RUNTIME_HH
+
 #include "ten/task/task.hh"
 #include "ten/task/task_pimpl.hh"
 
@@ -141,3 +144,4 @@ public:
 
 } // ten
 
+#endif

@@ -9,6 +9,9 @@ static std::vector<runtime *> runtimes;
 static std::atomic<uint64_t> runtime_count{0};
 static task_pimpl *waiting_task = nullptr;
 
+struct runtime_tag {};
+thread_local<runtime_tag, runtime> thread_runtime;
+
 static void add_runtime(runtime *r) {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
@@ -21,19 +24,18 @@ static void remove_runtime(runtime *r) {
     lock_guard<mutex> lock(runtime_mutex);
     auto i = find(begin(runtimes), end(runtimes), r);
     if (i != end(runtimes)) {
+        if (runtime_count == 2 && waiting_task) {
+            waiting_task->ready();
+        }
         runtimes.erase(i);
         --runtime_count;
-    }
-
-    if (runtime_count == 1 && waiting_task) {
-        waiting_task->ready();
     }
 }
 
 } // anon
 
 runtime *runtime::self() {
-    return thread_local_ptr<runtime>();
+    return thread_runtime.get();
 }
 
 task_pimpl *runtime::current_task() {
