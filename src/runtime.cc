@@ -6,7 +6,7 @@ namespace {
 static std::mutex runtime_mutex;
 static std::vector<runtime *> runtimes;
 static std::atomic<uint64_t> runtime_count{0};
-static task *waiting_task = nullptr;
+static task_pimpl *waiting_task = nullptr;
 
 static void add_runtime(runtime *r) {
     using namespace std;
@@ -31,7 +31,7 @@ static void remove_runtime(runtime *r) {
 
 }
 
-task *runtime::current_task() {
+task_pimpl *runtime::current_task() {
     return thread_local_ptr<runtime>()->_current_task;
 }
 
@@ -107,7 +107,7 @@ int runtime::dump() {
     return 0;
 }
 
-void runtime::ready(task *t) {
+void runtime::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
         if (this != thread_local_ptr<runtime>()) {
             _dirtyq.push(t);
@@ -121,7 +121,7 @@ void runtime::ready(task *t) {
     }
 }
 
-void runtime::remove_task(task *t) {
+void runtime::remove_task(task_pimpl *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
     {
@@ -145,7 +145,7 @@ void runtime::remove_task(task *t) {
 }
 
 void runtime::check_dirty_queue() {
-    task *t = nullptr;
+    task_pimpl *t = nullptr;
     while (_dirtyq.pop(t)) {
         DVLOG(5) << "readyq adding " << t << " from dirtyq";
         _readyq.push_back(t);
@@ -153,7 +153,7 @@ void runtime::check_dirty_queue() {
 }
 
 void runtime::check_timeout_tasks() {
-    _alarms.tick(_now, [this](task *t, std::exception_ptr exception) {
+    _alarms.tick(_now, [this](task_pimpl *t, std::exception_ptr exception) {
         if (exception != nullptr && t->_exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
             t->_exception = exception;
@@ -164,7 +164,7 @@ void runtime::check_timeout_tasks() {
 
 void runtime::schedule() {
     //CHECK(!_alltasks.empty());
-    task *self = _current_task;
+    task_pimpl *self = _current_task;
 
     if (_canceled && !_tasks_canceled) {
         // TODO: maybe if canceled is set we don't let any more tasks spawn?
@@ -204,7 +204,7 @@ void runtime::schedule() {
     using ::operator <<;
     DVLOG(5) << "readyq: " << _readyq;
 
-    task *t = _readyq.front();
+    task_pimpl *t = _readyq.front();
     _readyq.pop_front();
     t->_ready.store(false);
     _current_task = t;
@@ -224,7 +224,7 @@ deadline::deadline(std::chrono::milliseconds ms) {
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         runtime *r = thread_local_ptr<runtime>();
-        task *t = r->_current_task;
+        task_pimpl *t = r->_current_task;
         _alarm = std::move(runtime::alarm_clock::scoped_alarm(
                     r->_alarms, t, ms+runtime::now(), deadline_reached()
                     )

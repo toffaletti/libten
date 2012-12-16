@@ -11,7 +11,7 @@ namespace ten {
 namespace compat {
 
 typedef ten::task_interrupted task_interrupted;
-typedef ten::task task;
+typedef ten::task_pimpl task;
 typedef ten::deadline_reached deadline_reached;
 typedef ten::deadline deadline;
 typedef std::deque<task *> tasklist;
@@ -20,8 +20,8 @@ constexpr size_t default_stacksize = 256*1024;
 
 //! spawn a new task in the current thread
 inline uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
-    auto t = runtime::spawn(f);
-    return t->get_id();
+    auto t = ten::task::spawn(f);
+    return t.get_id();
 }
 
 //! current task id

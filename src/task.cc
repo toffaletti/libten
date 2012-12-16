@@ -3,7 +3,7 @@
 
 namespace ten {
 
-std::ostream &operator << (std::ostream &o, const task *t) {
+std::ostream &operator << (std::ostream &o, const task_pimpl *t) {
     if (t) {
         o << "task[" << t->_id
             << "," << (void *)t
@@ -26,35 +26,35 @@ void yield() {
 }
 } // end namespace this_task
 
-/////// task ///////
+/////// task_pimpl ///////
 
 namespace {
     std::atomic<uint64_t> task_id_counter{0};
 }
 
-task::cancellation_point::cancellation_point() {
-    task *t = runtime::current_task();
+task_pimpl::cancellation_point::cancellation_point() {
+    task_pimpl *t = runtime::current_task();
     ++t->_cancel_points;
 }
 
-task::cancellation_point::~cancellation_point() {
-    task *t = runtime::current_task();
+task_pimpl::cancellation_point::~cancellation_point() {
+    task_pimpl *t = runtime::current_task();
     --t->_cancel_points;
 }
 
-uint64_t task::next_id() {
+uint64_t task_pimpl::next_id() {
     return ++task_id_counter;
 }
 
-task::task()
+task_pimpl::task_pimpl()
     : _ctx(),
     _id{next_id()},
     _ready{false},
     _canceled{false}
 {}
 
-task::task(std::function<void ()> f)
-    : _ctx{task::trampoline},
+task_pimpl::task_pimpl(std::function<void ()> f)
+    : _ctx{task_pimpl::trampoline},
     _id{next_id()},
     _f{std::move(f)},
     _ready{true},
@@ -62,8 +62,8 @@ task::task(std::function<void ()> f)
 {}
 
 
-void task::trampoline(intptr_t arg) {
-    task *self = reinterpret_cast<task *>(arg);
+void task_pimpl::trampoline(intptr_t arg) {
+    task_pimpl *self = reinterpret_cast<task_pimpl *>(arg);
     try {
         if (!self->_canceled) {
             self->_f();
@@ -79,27 +79,23 @@ void task::trampoline(intptr_t arg) {
     LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
 }
 
-void task::cancel() {
+void task_pimpl::cancel() {
     if (_canceled.exchange(true) == false) {
         DVLOG(5) << "canceling: " << this << "\n";
         _runtime->ready(this);
     }
 }
 
-void task::join() {
-    // TODO: implement
-}
-
-void task::yield() {
+void task_pimpl::yield() {
     DVLOG(5) << "readyq yield " << this;
-    task::cancellation_point cancelable;
+    task_pimpl::cancellation_point cancelable;
     if (_ready.exchange(true) == false) {
         _runtime->_readyq.push_back(this);
     }
     swap();
 }
 
-void task::swap(bool nothrow) {
+void task_pimpl::swap(bool nothrow) {
     _runtime->schedule();
     if (nothrow) return;
 
@@ -119,9 +115,54 @@ void task::swap(bool nothrow) {
     }
 }
 
-void task::ready() {
+void task_pimpl::ready() {
     _runtime->ready(this);
 }
+
+
+///////////////////// task //////////////////
+
+task::task(std::function<void ()> f)
+    : _pimpl{std::make_shared<task_pimpl>(f)}
+{
+    runtime *r = thread_local_ptr<runtime>();
+    _pimpl->_runtime = r;
+    r->_alltasks.push_back(_pimpl);
+    DVLOG(5) << "spawn readyq " << _pimpl.get();
+    r->_readyq.push_back(_pimpl.get());
+}
+
+task::task(task &&other) {
+    if (this != &other) {
+        std::swap(_pimpl, other._pimpl);
+    }
+}
+
+task &task::operator=(task &&other) noexcept {
+    if (this != &other) {
+        std::swap(_pimpl, other._pimpl);
+    }
+    return *this;
+}
+
+void task::detach() {
+    // TODO: implement
+    throw errorx("unimplemented");
+}
+
+void task::join() {
+    // TODO: implement
+    throw errorx("unimplemented");
+}
+
+uint64_t task::get_id() const {
+    return _pimpl->get_id();
+}
+
+void task::cancel() {
+    _pimpl->cancel();
+}
+
 
 } // ten
 

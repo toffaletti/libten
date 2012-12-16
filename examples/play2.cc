@@ -1,12 +1,11 @@
-#include "ten/task2/task.hh"
+#include "ten/task/runtime.hh"
 #include "ten/logging.hh"
-#include "ten/task2/compat.hh"
 
 #include <memory>
 #include <thread>
 #include <iostream>
 
-using namespace ten::task2;
+using namespace ten;
 
 void foo(int a, int b) {
     std::cout << "foo: " << a+b << "\n";
@@ -23,14 +22,13 @@ void zaz(const char *msg) {
 }
 
 void bar() {
-    auto baz = runtime::spawn(zaz, "zazzle me");
-    //baz->join();
+    auto baz = task::spawn(zaz, "zazzle me");
     this_task::yield();
 }
 
 void counter() {
     uint64_t count = 0;
-    runtime::spawn([&]() {
+    task::spawn([&]() {
         for (;;) {
             this_task::sleep_for(std::chrono::seconds{1});
             std::cout << count << "\n";
@@ -90,30 +88,30 @@ int main() {
         LOG(INFO) << "empty? " << alarms.empty();
     }
 
-    runtime::spawn(bar);
-    runtime::spawn(foo, 1, 2);
-    runtime::spawn(foo, 4, 4);
+    task::spawn(bar);
+    task::spawn(foo, 1, 2);
+    task::spawn(foo, 4, 4);
 
     //runtime::dump();
     runtime::wait_for_all();
 
 #if 1
-    auto sleep2 = runtime::spawn([]() {
+    auto sleep2 = task::spawn([]() {
         LOG(INFO) << "sleep for 2 sec but should be canceled in 1\n";;
         this_task::sleep_for(std::chrono::seconds{2});
         // never reached because canceled
         LOG(INFO) << "done\n";
     });
 
-    std::thread t1([&sleep2]() {
+    std::thread t1([](task sleep2) {
             std::this_thread::sleep_for(std::chrono::seconds{1});
-            sleep2->cancel();
-    });
+            sleep2.cancel();
+    }, std::move(sleep2));
 
     runtime::wait_for_all();
     t1.join();
 
-    runtime::spawn([]() {
+    task::spawn([]() {
         LOG(INFO) << "should reach deadline in 1 second";
         try {
             deadline dl{std::chrono::seconds{1}};
@@ -140,7 +138,7 @@ int main() {
 
     LOG(INFO) << "run2";
     for (int i=0; i<1000; ++i) {
-        runtime::spawn([]() {
+        task::spawn([]() {
             for (;;) {
                 int ms = random() % 1000;
                 this_task::sleep_for(std::chrono::milliseconds{ms});
@@ -148,8 +146,8 @@ int main() {
         });
     }
 #endif
-    runtime::spawn(counter);
-    runtime::spawn([] {
+    task::spawn(counter);
+    task::spawn([] {
         this_task::sleep_for(std::chrono::seconds{10});
         runtime::shutdown();
     });

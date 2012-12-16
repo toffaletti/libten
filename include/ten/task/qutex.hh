@@ -24,7 +24,7 @@ class qutex {
 private:
     std::timed_mutex _m;
     compat::tasklist _waiting;
-    task *_owner;
+    task_pimpl *_owner;
 
     void unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk);
 public:
