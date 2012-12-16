@@ -1,123 +1,14 @@
-#ifndef LIBTEN_TASK2_HH
-#define LIBTEN_TASK2_HH
+#include "ten/task/task.hh"
 
-#include "ten/descriptors.hh"
-#include "ten/llqueue.hh"
-#include "ten/logging.hh"
 #include "ten/thread_local.hh"
-#include "ten/error.hh"
-
-#include "ten/task2/context.hh"
-#include "ten/task2/alarm.hh"
-
-#include <chrono>
-#include <functional>
-#include <mutex>
+#include "ten/llqueue.hh"
+#include "ten/task/alarm.hh"
 #include <deque>
-#include <vector>
-#include <memory>
+#include <mutex>
 #include <condition_variable>
 #include <sys/syscall.h>
 
 namespace ten {
-class qutex;
-class rendez;
-
-namespace task2 {
-
-//! exception to unwind stack on taskcancel
-struct task_interrupted {};
-
-// forward decl
-namespace this_task {
-uint64_t get_id();
-void yield();
-
-template<class Rep, class Period>
-    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration);
-
-template <class Clock, class Duration>
-    void sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
-
-} // this_task
-
-class runtime;
-
-class task {
-    friend std::ostream &operator << (std::ostream &o, const task *t);
-    friend class runtime;
-public:
-    typedef std::chrono::steady_clock clock;
-    typedef std::chrono::time_point<clock> time_point;
-
-private:
-    friend class ten::rendez;
-    friend class ten::qutex;
-    struct cancellation_point {
-        cancellation_point();
-        ~cancellation_point();
-    };
-
-private:
-    // when a task exits, its linked tasks are canceled
-    //std::vector<std::shared_ptr<task>> _links;
-    context _ctx;
-    uint64_t _id;
-    uint64_t _cancel_points = 0;
-    runtime *_runtime; // TODO: scheduler
-    std::function<void ()> _f;
-    std::exception_ptr _exception;
-    std::atomic<bool> _ready;
-    std::atomic<bool> _canceled;
-    bool _unwinding = false;
-#ifdef TEN_TASK_TRACE
-    saved_backtrace _trace;
-#endif
-
-    static void trampoline(intptr_t arg);
-private:
-    static uint64_t next_id();
-
-    task() : _ctx(), _id{next_id()}, _ready{false}, _canceled{false} {}
-public:
-    //! create a new task
-    template<class Function, class... Args> 
-        explicit task(Function &&f, Args&&... args)
-        : _ctx{task::trampoline},
-        _id{next_id()},
-        _f{std::bind(f, args...)},
-        _ready{true},
-        _canceled{false}
-    {
-    }
-
-public:
-    //! id of this task
-    uint64_t get_id() const { return _id; }
-    //! cancel this task
-    void cancel();
-    //! make the task a system task
-    //void detach();
-    //! join task
-    void join();
-
-private:
-    friend class deadline;
-    friend uint64_t this_task::get_id();
-    friend void this_task::yield();
-
-    void yield();
-
-private:
-    // TODO: private, compat
-    void swap(bool nothrow = false);
-    void safe_swap() noexcept {
-        swap(true);
-    }
-public:
-    // TODO: private
-    void ready();
-};
 
 class runtime {
 public:
@@ -193,8 +84,7 @@ public:
     //! spawn a new task in the current thread
     template<class Function, class... Args> 
     static std::shared_ptr<task> spawn(Function &&f, Args&&... args) {
-        auto t = std::make_shared<task>(std::forward<Function>(f),
-                std::forward<Args>(args)...);
+        auto t = std::make_shared<task>(std::bind(f, args...));
         runtime *r = thread_local_ptr<runtime>();
         t->_runtime = r;
         r->_alltasks.push_back(t);
@@ -270,8 +160,5 @@ public:
     ~deadline();
 };
 
-} // end namespace task2
+} // ten
 
-} // end namespace ten
-
-#endif // LIBTEN_TASK_HH

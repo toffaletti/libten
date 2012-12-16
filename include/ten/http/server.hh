@@ -10,7 +10,7 @@
 
 #include "ten/buffer.hh"
 #include "ten/logging.hh"
-#include "ten/task.hh"
+#include "ten/task/task.hh"
 #include "ten/net.hh"
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
@@ -158,7 +158,7 @@ protected:
     callback_type _log_func;
 
 public:
-    http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
+    http_server(size_t stacksize_=0, unsigned timeout_ms_=0)
         : netsock_server("http", stacksize_, timeout_ms_)
     {
     }

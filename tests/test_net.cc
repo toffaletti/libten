@@ -5,6 +5,7 @@
 #include "ten/http/client.hh"
 
 using namespace ten;
+using namespace ten::compat;
 
 static void dial_google() {
     socket_fd s{AF_INET, SOCK_STREAM};

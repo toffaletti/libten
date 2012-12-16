@@ -6,6 +6,7 @@
 #include "ten/task/rendez.hh"
 
 using namespace ten;
+using namespace ten::compat;
 
 struct state {
     qutex q;

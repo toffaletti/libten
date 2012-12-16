@@ -1,5 +1,5 @@
 #include "ten/app.hh"
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/buffer.hh"
 #include "ten/logging.hh"
 #include "ten/net.hh"
@@ -9,7 +9,7 @@
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 struct my_config : app_config {
     std::string http_address;

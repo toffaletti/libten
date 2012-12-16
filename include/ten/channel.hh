@@ -1,9 +1,9 @@
 #ifndef CHANNEL_HH
 #define CHANNEL_HH
 
-#include "task.hh"
-#include "task/qutex.hh"
-#include "task/rendez.hh"
+#include "ten/task/task.hh"
+#include "ten/task/qutex.hh"
+#include "ten/task/rendez.hh"
 #include <memory>
 #include <queue>
 #include <deque>

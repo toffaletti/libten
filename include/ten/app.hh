@@ -8,10 +8,10 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/algorithm/string.hpp>
 
-#include "task.hh"
-#include "logging.hh"
-#include "term.hh"
-#include "descriptors.hh"
+#include "ten/task/compat.hh"
+#include "ten/logging.hh"
+#include "ten/term.hh"
+#include "ten/descriptors.hh"
 
 namespace ten {
 
@@ -215,7 +215,7 @@ public:
             act.sa_sigaction = application::signal_handler;
             act.sa_flags = SA_RESTART | SA_SIGINFO;
             THROW_ON_ERROR(sigaction(SIGINT, &act, NULL));
-            taskspawn(std::bind(&application::signal_task, this), 4*1024);
+            compat::taskspawn(std::bind(&application::signal_task, this), 4*1024);
         }
         return p.main();
     }
@@ -268,20 +268,20 @@ public:
     }
 
     void quit() {
-        procshutdown();
+        compat::procshutdown();
     }
 private:
     app_config &_conf;
-    procmain p;
+    compat::procmain p;
     pipe_fd sigpi;
     static application *global_app;
 
     void signal_task() {
-        taskname("app::signal_task");
-        tasksystem();
+        compat::taskname("app::signal_task");
+        compat::tasksystem();
         int sig_num = 0;
         for (;;) {
-            fdwait(sigpi.r.fd, 'r');
+            compat::fdwait(sigpi.r.fd, 'r');
             ssize_t nr = sigpi.read(&sig_num, sizeof(sig_num));
             if (nr != sizeof(sig_num)) abort();
             LOG(WARNING) << strsignal(sig_num) << " received";

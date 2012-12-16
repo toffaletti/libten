@@ -1,8 +1,8 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/error.hh"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 void go_crazy() {
     throw errorx("weee!");

@@ -45,7 +45,7 @@ void counter() {
 
 int main() {
     using namespace std::chrono;
-    ten::alarm_set<int, steady_clock> alarms;
+    ten::alarm_clock<int, steady_clock> alarms;
 #if 0
     {
         auto d1 = alarms.insert(1, steady_clock::now()+seconds(3), nullptr);
@@ -80,8 +80,8 @@ int main() {
 
     {
         {
-            ten::alarm_set<int, steady_clock>::alarm a1(alarms, 1, steady_clock::now()+seconds(3));
-            ten::alarm_set<int, steady_clock>::alarm a2(alarms, 2, steady_clock::now()+seconds(3));
+            ten::alarm_clock<int, steady_clock>::scoped_alarm a1(alarms, 1, steady_clock::now()+seconds(3));
+            ten::alarm_clock<int, steady_clock>::scoped_alarm a2(alarms, 2, steady_clock::now()+seconds(3));
             a2.cancel();
             alarms.tick(steady_clock::now() + seconds(4), [](int v, std::exception_ptr e) {
                     LOG(INFO) << "alarm fired! " << v;

@@ -47,10 +47,10 @@ add_executable(synch EXCLUDE_FROM_ALL synch.cc)
 target_link_libraries(synch ten)
 
 add_executable(play2 EXCLUDE_FROM_ALL play2.cc
-    ../src/coroutine.cc
-    ../src/task2.cc
+    ../src/task.cc
+    ../src/runtime.cc
     ../src/error.cc
-    ../src/chrono_fix.cc)
+    )
 target_link_libraries(play2 rt boost_context glog)
 
 if (OPENSSL_FOUND)

@@ -1,10 +1,10 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/descriptors.hh"
 #include "ten/net.hh"
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 void echo_task(int sock) {
     netsock s{sock};

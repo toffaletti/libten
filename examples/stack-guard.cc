@@ -1,7 +1,7 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 static void stack_overflow() {
     char buf[256*1024];

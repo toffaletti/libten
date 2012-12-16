@@ -1,4 +1,4 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/http/http_message.hh"
@@ -7,7 +7,7 @@
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 static void do_get(uri u) {
     netsock s{AF_INET, SOCK_STREAM};

@@ -1,8 +1,9 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/descriptors.hh"
 #include <iostream>
 
 using namespace ten;
+using namespace ten::compat;
 const size_t default_stacksize=256*1024;
 
 // this uses fdwait directly instead of netsock

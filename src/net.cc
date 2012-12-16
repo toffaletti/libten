@@ -8,7 +8,7 @@ int netconnect(int fd, const address &addr, unsigned ms) {
             continue;
         if (errno == EINPROGRESS || errno == EADDRINUSE) {
             errno = 0;
-            if (fdwait(fd, 'w', ms)) {
+            if (compat::fdwait(fd, 'w', ms)) {
                 return 0;
             } else if (errno == 0) {
                 errno = ETIMEDOUT;
@@ -27,7 +27,7 @@ int netaccept(int fd, address &addr, int flags, unsigned timeout_ms) {
             continue;
         if (!io_not_ready())
             return -1;
-        if (!fdwait(fd, 'r', timeout_ms)) {
+        if (!compat::fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
             return -1;
         }
@@ -42,7 +42,7 @@ ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned timeout_ms) {
             continue;
         if (!io_not_ready())
             break;
-        if (!fdwait(fd, 'r', timeout_ms)) {
+        if (!compat::fdwait(fd, 'r', timeout_ms)) {
             errno = ETIMEDOUT;
             break;
         }
@@ -59,7 +59,7 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned timeout
                 continue;
             if (!io_not_ready())
                 return -1;
-            if (!fdwait(fd, 'w', timeout_ms)) {
+            if (!compat::fdwait(fd, 'w', timeout_ms)) {
                 errno = ETIMEDOUT;
                 return total_sent;
             }

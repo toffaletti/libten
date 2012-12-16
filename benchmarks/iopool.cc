@@ -6,6 +6,7 @@
 #include <iostream>
 
 using namespace ten;
+using namespace ten::compat;
 using namespace std;
 
 namespace po = boost::program_options;

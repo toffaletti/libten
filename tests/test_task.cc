@@ -4,10 +4,11 @@
 #include "ten/descriptors.hh"
 #include "ten/semaphore.hh"
 #include "ten/channel.hh"
-#include "ten/task.hh"
+#include "ten/task/task.hh"
 
 using namespace ten;
 using namespace std::chrono;
+using namespace ten::compat;
 
 static void bar(std::thread::id p) {
     // cant use BOOST_CHECK in multi-threaded tests :(

@@ -1,8 +1,9 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/descriptors.hh"
 #include <iostream>
 
 using namespace ten;
+using namespace ten::compat;
 
 static void sleeper() {
     uint64_t ms = random() % 1000;

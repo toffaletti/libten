@@ -2,8 +2,8 @@
 #include "ten/rpc/client.hh"
 
 using namespace ten;
+using namespace ten::compat;
 using namespace msgpack::rpc;
-const size_t default_stacksize=256*1024;
 
 static void client_task() {
     rpc_client c{"localhost", 5500};

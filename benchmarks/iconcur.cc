@@ -4,6 +4,7 @@
 #include "ten/logging.hh"
 
 using namespace ten;
+using namespace ten::compat;
 
 struct state {
     qutex q;

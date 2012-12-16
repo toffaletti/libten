@@ -108,7 +108,7 @@ int netdial(int fd, const char *addr, uint16_t port) {
         fd_sets_to_pollfd(&read_fds, &write_fds, max_fd, &fds, &nfds);
         std::unique_ptr<struct pollfd, void (*)(void *)> fds_p(fds, free);
         tvp = ares_timeout(cd.channel, NULL, &tv);
-        if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
+        if (compat::taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
             pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
             ares_process(cd.channel, &read_fds, &write_fds);
         } else {

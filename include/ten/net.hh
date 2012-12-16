@@ -1,8 +1,8 @@
 #ifndef LIBTEN_NET_HH
 #define LIBTEN_NET_HH
 
-#include "descriptors.hh"
-#include "task.hh"
+#include "ten/descriptors.hh"
+#include "ten/task/compat.hh"
 #include <memory>
 
 namespace ten {
@@ -160,7 +160,7 @@ protected:
     int _timeout_ms;
 public:
     netsock_server(const std::string &protocol_name_,
-            size_t stacksize_=default_stacksize,
+            size_t stacksize_=0,
             int timeout_ms_=-1)
         : _protocol_name(protocol_name_),
         _stacksize(stacksize_),
@@ -197,7 +197,7 @@ public:
         //std::shared_ptr<int> shutdown_guard((int *)0x8008135, std::bind(&netsock_server::do_shutdown, this));
         auto self = shared_from_this();
         for (unsigned n=1; n<threads; ++n) {
-            procspawn(std::bind(&netsock_server::do_accept_loop, self));
+            compat::procspawn(std::bind(&netsock_server::do_accept_loop, self));
         }
         do_accept_loop();
     }
@@ -219,7 +219,7 @@ protected:
             int fd;
             while ((fd = _sock.accept(client_addr, 0)) > 0) {
                 auto self = shared_from_this();
-                taskspawn(std::bind(&netsock_server::client_task, self, fd), _stacksize);
+                compat::taskspawn(std::bind(&netsock_server::client_task, self, fd), _stacksize);
             }
         }
     }

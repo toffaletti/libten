@@ -53,7 +53,8 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPER
 add_library(ten
     src/rendez.cc
     src/qutex.cc
-    src/task2.cc
+    src/task.cc
+    src/runtime.cc
     src/error.cc
     src/ioproc.cc
     src/net.cc

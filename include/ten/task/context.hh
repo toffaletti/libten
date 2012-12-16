@@ -1,70 +1,65 @@
-#ifndef LIBTEN_TASK_CONTEXT_HH
-#define LIBTEN_TASK_CONTEXT_HH
+#ifndef LIBTEN_TASK2_CONTEXT_HH
+#define LIBTEN_TASK2_CONTEXT_HH
 
-//! \file
-//! context handles switching stacks
-//
-//! there are two implementations, ucontext
-//! and fcontext. ucontext is slower because it
-//! also saves and restores the signal handler state
-//! this requires system calls. fcontext only saves
-//! the bare minimum register states.
-
-#if USE_BOOST_FCONTEXT
-#include <string.h>
-#include <boost/version.hpp>
 #include <boost/context/fcontext.hpp>
+#include <boost/context/stack_allocator.hpp>
+#include <boost/context/stack_utils.hpp>
 
-namespace ten {
-
-#if BOOST_VERSION == 105100
-struct context : boost::ctx::fcontext_t {
-    typedef void (*proc)(void *);
-    typedef void (*proc_ctx)(intptr_t);
-    intptr_t arg;
-
-    void init(proc f=nullptr, void *arg_=nullptr, char *stack=nullptr, size_t stack_size=0) {
-        memset(this, 0, sizeof(context));
-        arg = (intptr_t)arg_;
-        if (f && stack && stack_size) {
-            fc_stack.base = stack;
-            // stack grows down
-            fc_stack.limit = stack-stack_size;
-            boost::ctx::make_fcontext(this, (proc_ctx)f);
-        }
-    }
-
-    void swap(context *other) {
-        boost::ctx::jump_fcontext(this, other, other->arg);
-    }
-};
-#elif BOOST_VERSION >= 105200
-struct context : boost::context::fcontext_t {
-    typedef void (*proc)(void *);
-    typedef void (*proc_ctx)(intptr_t);
-    intptr_t arg;
-    boost::context::fcontext_t *ctx;
-
-    void init(proc f=nullptr, void *arg_=nullptr, char *stack=nullptr, size_t stack_size=0) {
-        memset(this, 0, sizeof(context));
-        arg = (intptr_t)arg_;
-        if (f && stack && stack_size) {
-            ctx = boost::context::make_fcontext(stack, stack_size, (proc_ctx)f);
-        } else {
-            ctx = this;
-        }
-    }
-
-    void swap(context *other) {
-        boost::context::jump_fcontext(ctx, other->ctx, other->arg);
-    }
-};
+#ifndef NVALGRIND
+#include <valgrind/valgrind.h>
 #endif
 
-} // end namespace ten 
+class context {
+private:
+    boost::ctx::stack_allocator allocator;
+private:
+    boost::ctx::fcontext_t _ctx;
+#ifndef NVALGRIND
+    //! stack id so valgrind doesn't freak when stack swapping happens
+    int valgrind_stack_id;
+#endif
+public:
+    typedef void (*func_type)(intptr_t);
+public:
+    //context(const context &) = delete;
+    //context(const context &&) = delete;
 
-#else
-#error "no context implementation chosen"
+    //! make context for existing stack
+    context() noexcept {}
+
+    //! make a new context and stack
+    explicit context(func_type f) {
+        size_t stacksize = boost::ctx::default_stacksize();
+        void *stack = allocator.allocate(stacksize);
+#ifndef NVALGRIND
+        valgrind_stack_id =
+            VALGRIND_STACK_REGISTER(stack, reinterpret_cast<intptr_t>(stack)-stacksize);
+#endif
+        _ctx.fc_stack.base = stack;
+        _ctx.fc_stack.limit = reinterpret_cast<void *>(reinterpret_cast<intptr_t>(stack)-stacksize);
+        boost::ctx::make_fcontext(&_ctx, f);
+    }
+
+    intptr_t swap(context &other, intptr_t arg=0) noexcept {
+        return boost::ctx::jump_fcontext(&_ctx,
+                &other._ctx,
+                arg);
+    }
+
+    ~context() {
+        if (_ctx.fc_stack.base) {
+            size_t stacksize = boost::ctx::default_stacksize();
+            void *stack = _ctx.fc_stack.base;
+#ifndef NVALGRIND
+            VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
+#endif
+            allocator.deallocate(stack, stacksize);
+        }
+    }
+};
+
+
+
 #endif
 
-#endif // LIBTEN_TASK_CONTEXT_HH
+

@@ -4,6 +4,7 @@
 #include "ten/descriptors.hh"
 
 using namespace ten;
+using namespace ten::compat;
 
 static void ioproc_sleeper() {
     ioproc io;

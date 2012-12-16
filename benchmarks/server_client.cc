@@ -1,10 +1,11 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/net.hh"
 #include "ten/channel.hh"
 #include <iostream>
 #include <unordered_map>
 
 using namespace ten;
+using namespace ten::compat;
 
 static void connecter(address &addr, channel<int> ch) {
     netsock s(AF_INET, SOCK_STREAM);

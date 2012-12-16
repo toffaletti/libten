@@ -5,6 +5,7 @@
 #include "ten/channel.hh"
 
 using namespace ten;
+using namespace ten::compat;
 
 static void channel_recv(channel<intptr_t> c) {
     intptr_t d = c.recv();
@@ -23,7 +24,7 @@ BOOST_AUTO_TEST_CASE(channel_test) {
     channel<intptr_t> c{10};
     taskspawn(std::bind(channel_recv, c));
     taskspawn(std::bind(channel_send, c));
-    ten::task2::runtime::wait_for_all();
+    ten::runtime::wait_for_all();
     BOOST_CHECK(c.empty());
 }
 
@@ -32,7 +33,7 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
     taskspawn(std::bind(channel_recv, c));
     taskspawn(std::bind(channel_send, c));
     BOOST_CHECK(c.empty());
-    ten::task2::runtime::wait_for_all();
+    ten::runtime::wait_for_all();
 }
 
 static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
@@ -77,7 +78,7 @@ BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
     taskspawn(std::bind(channel_multi_recv, c));
     taskspawn(std::bind(channel_multi_send, c));
     taskspawn(std::bind(channel_multi_send, c));
-    ten::task2::runtime::wait_for_all();
+    ten::runtime::wait_for_all();
     BOOST_CHECK(c.empty());
 }
 

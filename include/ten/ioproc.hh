@@ -1,8 +1,8 @@
 #ifndef LIBTEN_IOPROC_HH
 #define LIBTEN_IOPROC_HH
 
-#include "task.hh"
-#include "channel.hh"
+#include "ten/task/task.hh"
+#include "ten/channel.hh"
 #include <boost/any.hpp>
 #include <type_traits>
 #include <exception>
@@ -56,14 +56,14 @@ void ioproctask(iochannel &);
 struct ioproc {
     iochannel ch;
 
-    ioproc(size_t stacksize = default_stacksize,
+    ioproc(size_t stacksize = 0,
            unsigned nprocs = 1,
            unsigned chanbuf = 0,
            std::function<void(iochannel &)> proctask = ioproctask)
         : ch(chanbuf ? chanbuf : nprocs)
     {
         for (unsigned i=0; i<nprocs; ++i) {
-            procspawn(std::bind(proctask, ch), stacksize);
+            compat::procspawn(std::bind(proctask, ch), stacksize);
         }
     }
 

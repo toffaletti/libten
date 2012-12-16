@@ -2,7 +2,7 @@
 #define LIBTEN_RPC_SERVER_HH
 
 #include "ten/logging.hh"
-#include "ten/task.hh"
+#include "ten/task/task.hh"
 #include "ten/net.hh"
 #include "ten/rpc/protocol.hh"
 #include "ten/rpc/thunk.hh"
@@ -21,7 +21,7 @@ public:
     typedef std::function<msgpack::object (msgpack::object & , msgpack::zone *)> callback_type;
     typedef std::function<void (msgpack::object & , msgpack::zone *)> notify_func;
 
-    rpc_server(size_t stacksize_=default_stacksize)
+    rpc_server(size_t stacksize_=0)
         : netsock_server("msgpack-rpc", stacksize_)
     {
     }

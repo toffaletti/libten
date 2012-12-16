@@ -1,4 +1,4 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/channel.hh"
 #include "ten/net.hh"
 #include <sstream>
@@ -6,7 +6,7 @@
 #include <list>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 struct client {
     netsock s;

@@ -1,10 +1,11 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/channel.hh"
 #include <iostream>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
 
 using namespace ten;
+using namespace ten::compat;
 using namespace std;
 using namespace std::chrono;
 

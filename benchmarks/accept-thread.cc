@@ -1,10 +1,11 @@
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include "ten/channel.hh"
 #include "ten/net.hh"
 #include "ten/logging.hh"
 #include <iostream>
 
 using namespace ten;
+using namespace ten::compat;
 
 void client_handler(channel<int> accept_chan) {
     for (;;) {

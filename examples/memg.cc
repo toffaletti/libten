@@ -8,7 +8,7 @@
 // http://www.darkcoding.net/software/in-memory-key-value-store-in-c-go-and-python/
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
+using namespace ten::compat;
 
 struct memg_config : app_config {
     std::string listen_addr;
@@ -19,7 +19,7 @@ static memg_config conf;
 
 class memg_server : public netsock_server {
 public:
-    memg_server(size_t stacksize_=default_stacksize)
+    memg_server(size_t stacksize_=0)
         : netsock_server("memg", stacksize_)
     {}
 
