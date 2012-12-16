@@ -14,23 +14,12 @@ class task;
 class qutex;
 class rendez;
 class runtime;
-
-// forward decl
-namespace this_task {
-uint64_t get_id();
-void yield();
-
-template<class Rep, class Period>
-    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration);
-
-template <class Clock, class Duration>
-    void sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
-
-} // this_task
+class thread_context;
 
 class task_pimpl {
     friend std::ostream &operator << (std::ostream &o, const task_pimpl *t);
     friend class task;
+    friend class thread_context;
     friend class runtime;
 public:
     typedef std::chrono::steady_clock clock;
@@ -50,7 +39,7 @@ private:
     context _ctx;
     uint64_t _id;
     uint64_t _cancel_points = 0;
-    runtime *_runtime; // TODO: scheduler
+    thread_context *_runtime; // TODO: scheduler
     std::function<void ()> _f;
     std::exception_ptr _exception;
     std::atomic<bool> _ready;

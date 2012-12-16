@@ -1,5 +1,9 @@
+#ifndef TEN_TASK_ALARM_HH
+#define TEN_TASK_ALARM_HH
+
 #include <chrono>
-#include <deque>
+#include <vector>
+#include <algorithm>
 #include "ten/optional.hh"
 
 namespace ten {
@@ -152,3 +156,5 @@ public:
 };
 
 } // ten
+
+#endif

@@ -3,9 +3,24 @@
 
 #include <functional>
 #include <memory>
+#include <chrono>
 #include <cstdint>
 
 namespace ten {
+
+// forward decl
+namespace this_task {
+uint64_t get_id();
+void yield();
+
+template<class Rep, class Period>
+    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration);
+
+template <class Clock, class Duration>
+    void sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
+
+} // this_task
+
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 

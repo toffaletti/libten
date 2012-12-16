@@ -1,66 +1,62 @@
 #include "ten/task/runtime.hh"
-#include "ten/thread_local.hh"
+#include "thread_context.hh"
 
 namespace ten {
 
 namespace {
 static std::mutex runtime_mutex;
-static std::vector<runtime *> runtimes;
-static std::atomic<uint64_t> runtime_count{0};
+static std::vector<thread_context *> threads;
+static std::atomic<uint64_t> thread_count{0};
 static task_pimpl *waiting_task = nullptr;
 
 struct runtime_tag {};
-thread_local<runtime_tag, runtime> thread_runtime;
+ten::thread_local<runtime_tag, thread_context> this_ctx;
 
-static void add_runtime(runtime *r) {
+static void add_thread(thread_context *ctx) {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
-    runtimes.push_back(r);
-    ++runtime_count;
+    threads.push_back(ctx);
+    ++thread_count;
 }
 
-static void remove_runtime(runtime *r) {
+static void remove_thread(thread_context *ctx) {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
-    auto i = find(begin(runtimes), end(runtimes), r);
-    if (i != end(runtimes)) {
-        if (runtime_count == 2 && waiting_task) {
+    auto i = find(begin(threads), end(threads), ctx);
+    if (i != end(threads)) {
+        if (thread_count == 2 && waiting_task) {
             waiting_task->ready();
         }
-        runtimes.erase(i);
-        --runtime_count;
+        threads.erase(i);
+        --thread_count;
     }
 }
 
 } // anon
 
-runtime *runtime::self() {
-    return thread_runtime.get();
-}
-
-task_pimpl *runtime::current_task() {
-    return self()->_current_task;
-}
-
-runtime::runtime() : _canceled{false} {
+thread_context::thread_context() : _canceled{false} {
     // TODO: reenable this when our libstdc++ is fixed
     //static_assert(clock::is_steady, "clock not steady");
     update_cached_time();
     _task._runtime = this;
     _current_task = &_task;
-    add_runtime(this);
+    add_thread(this);
 }
 
-runtime::~runtime() {
-    remove_runtime(this);
+thread_context::~thread_context() {
+    remove_thread(this);
 }
 
-void runtime::cancel() {
+task_pimpl *runtime::current_task() {
+    return this_ctx->_current_task;
+}
+
+void thread_context::cancel() {
     _canceled = true;
 }
 
 void runtime::sleep_until(const time_point &sleep_time) {
-    runtime *r = runtime::self();
+    thread_context *r = this_ctx.get();
     task_pimpl *t = r->_current_task;
     alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
     task_pimpl::cancellation_point cancelable;
@@ -68,11 +64,11 @@ void runtime::sleep_until(const time_point &sleep_time) {
 }
 
 runtime::time_point runtime::now() {
-    return runtime::self()->_now;
+    return this_ctx->_now;
 }
 
 runtime::shared_task runtime::task_with_id(uint64_t id) {
-    runtime *r = runtime::self();
+    thread_context *r = this_ctx.get();
     for (auto t : r->_alltasks) {
         if (t->_id == id) return t;
     }
@@ -82,7 +78,7 @@ runtime::shared_task runtime::task_with_id(uint64_t id) {
 void runtime::shutdown() {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
-    for (runtime *r : runtimes) {
+    for (thread_context *r : threads) {
         r->cancel();
     }
 }
@@ -90,14 +86,14 @@ void runtime::shutdown() {
 void runtime::wait_for_all() {
     using namespace std;
     CHECK(is_main_thread());
-    runtime *r = runtime::self();
+    thread_context *r = this_ctx.get();
     {
         lock_guard<mutex> lock(runtime_mutex);
         waiting_task = r->_current_task;
         DVLOG(5) << "waiting for all " << waiting_task;
     }
 
-    while (!r->_alltasks.empty() || runtime_count > 1) {
+    while (!r->_alltasks.empty() || thread_count > 1) {
         r->schedule();
     }
 
@@ -113,19 +109,19 @@ void runtime::wait_for_all() {
 int runtime::dump_all() {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
-    for (runtime *r : runtimes) {
+    for (thread_context *r : threads) {
         LOG(INFO) << "runtime: " << r;
         r->dump();
     }
     return 0;
 }
 
-int runtime::dump() {
+int thread_context::dump() {
     LOG(INFO) << &_task;
 #ifdef TEN_TASK_TRACE
     LOG(INFO) << _task._trace.str();
 #endif
-    for (shared_task &t : _alltasks) {
+    for (runtime::shared_task &t : _alltasks) {
         LOG(INFO) << t.get();
 #ifdef TEN_TASK_TRACE
         LOG(INFO) << t->_trace.str();
@@ -135,6 +131,10 @@ int runtime::dump() {
 }
 
 void runtime::attach(shared_task t) {
+    this_ctx->attach(t);
+}
+
+void thread_context::attach(runtime::shared_task t) {
     DCHECK(t && t->_runtime == nullptr);
     t->_runtime = this;
     _alltasks.push_back(t);
@@ -142,9 +142,9 @@ void runtime::attach(shared_task t) {
     _readyq.push_back(t.get());
 }
 
-void runtime::ready(task_pimpl *t) {
+void thread_context::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
-        if (this != runtime::self()) {
+        if (this != this_ctx.get()) {
             _dirtyq.push(t);
             // TODO: speed this up?
             std::unique_lock<std::mutex> lock{_mutex};
@@ -156,7 +156,7 @@ void runtime::ready(task_pimpl *t) {
     }
 }
 
-void runtime::remove_task(task_pimpl *t) {
+void thread_context::remove_task(task_pimpl *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
     {
@@ -172,14 +172,14 @@ void runtime::remove_task(task_pimpl *t) {
     //_alarms.remove(t);
 
     auto i = find_if(begin(_alltasks), end(_alltasks),
-            [t](shared_task &other) {
+            [t](runtime::shared_task &other) {
             return other.get() == t;
             });
     _gctasks.push_back(*i);
     _alltasks.erase(i);
 }
 
-void runtime::check_dirty_queue() {
+void thread_context::check_dirty_queue() {
     task_pimpl *t = nullptr;
     while (_dirtyq.pop(t)) {
         DVLOG(5) << "readyq adding " << t << " from dirtyq";
@@ -187,7 +187,7 @@ void runtime::check_dirty_queue() {
     }
 }
 
-void runtime::check_timeout_tasks() {
+void thread_context::check_timeout_tasks() {
     _alarms.tick(_now, [this](task_pimpl *t, std::exception_ptr exception) {
         if (exception != nullptr && t->_exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
@@ -197,7 +197,7 @@ void runtime::check_timeout_tasks() {
     });
 }
 
-void runtime::schedule() {
+void thread_context::schedule() {
     //CHECK(!_alltasks.empty());
     task_pimpl *self = _current_task;
 
@@ -258,7 +258,7 @@ deadline::deadline(std::chrono::milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
-        runtime *r = runtime::self();
+        thread_context *r = this_ctx.get();
         task_pimpl *t = r->_current_task;
         _alarm = std::move(runtime::alarm_clock::scoped_alarm(
                     r->_alarms, t, ms+runtime::now(), deadline_reached()

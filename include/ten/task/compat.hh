@@ -2,8 +2,10 @@
 #define TEN_TASK_COMPAT
 
 #include "ten/task/runtime.hh"
+#include "ten/task/task_pimpl.hh"
 #include <poll.h>
 #include <thread>
+#include <deque>
 
 #define SEC2MS(s) (s*1000)
 

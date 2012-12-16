@@ -1,5 +1,8 @@
 #include "ten/task/runtime.hh"
+#include "ten/task/task_pimpl.hh"
+#include "thread_context.hh"
 #include <algorithm>
+#include <ostream>
 
 namespace ten {
 
@@ -72,7 +75,7 @@ void task_pimpl::trampoline(intptr_t arg) {
     }
     self->_f = nullptr;
 
-    runtime *r = self->_runtime;
+    thread_context *r = self->_runtime;
     r->remove_task(self);
     r->schedule();
     // never get here
@@ -125,7 +128,7 @@ void task_pimpl::ready() {
 task::task(std::function<void ()> f)
     : _pimpl{std::make_shared<task_pimpl>(f)}
 {
-    runtime::self()->attach(_pimpl);
+    runtime::attach(_pimpl);
 }
 
 task::task(task &&other) {

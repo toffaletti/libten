@@ -2,17 +2,16 @@
 #define TEN_RUNTIME_HH
 
 #include "ten/task/task.hh"
-#include "ten/task/task_pimpl.hh"
-
-#include "ten/llqueue.hh"
 #include "ten/task/alarm.hh"
+#include "ten/llqueue.hh"
 #include <memory>
-#include <deque>
-#include <mutex>
-#include <condition_variable>
+
+#include <unistd.h>
 #include <sys/syscall.h>
 
 namespace ten {
+
+struct task_pimpl;
 
 class runtime {
 public:
@@ -21,17 +20,6 @@ public:
     typedef std::shared_ptr<task_pimpl> shared_task;
     typedef ten::alarm_clock<task_pimpl *, clock> alarm_clock;
 private:
-    friend class task;
-    friend class task_pimpl::cancellation_point;
-    friend class deadline;
-    friend void task_pimpl::ready();
-    friend void task_pimpl::yield();
-    friend void task_pimpl::swap(bool nothrow);
-    friend void task_pimpl::trampoline(intptr_t arg);
-    friend void task_pimpl::cancel();
-
-    friend uint64_t this_task::get_id();
-    friend void this_task::yield();
     template<class Rep, class Period>
         friend void this_task::sleep_for(std::chrono::duration<Rep, Period> sleep_duration);
     template <class Clock, class Duration>
@@ -40,42 +28,13 @@ private:
 public:
     // TODO: should be private
     static task_pimpl *current_task();
-    static runtime *self();
-
+    static void attach(shared_task t);
 private:
-    task_pimpl _task;
-    task_pimpl *_current_task = nullptr;
-    std::vector<shared_task> _alltasks;
-    std::vector<shared_task> _gctasks;
-    std::deque<task_pimpl *> _readyq;
-    //! current time cached in a few places through the event loop
-    time_point _now;
-    llqueue<task_pimpl *> _dirtyq;
-    alarm_clock _alarms;
-    std::mutex _mutex;
-    std::condition_variable _cv;
-    std::atomic<bool> _canceled;
-    bool _tasks_canceled = false;
 
-    const time_point &update_cached_time() {
-        _now = clock::now();
-        return _now;
-    }
-
-    void attach(shared_task t);
-    void ready(task_pimpl *t);
-    void schedule();
-    void check_dirty_queue();
-    void check_timeout_tasks();
-    void remove_task(task_pimpl *t);
-    void cancel();
-    int dump();
     static int dump_all();
 
     static void sleep_until(const time_point &sleep_time);
 public:
-    runtime();
-    ~runtime();
 
     //! is this the main thread?
     static bool is_main_thread() noexcept {

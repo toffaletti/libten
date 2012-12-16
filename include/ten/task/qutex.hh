@@ -2,6 +2,7 @@
 #define LIBTEN_TASK_QUTEX_HH
 
 #include "ten/task/compat.hh"
+#include <mutex>
 
 namespace ten {
 
