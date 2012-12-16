@@ -59,6 +59,7 @@ private:
         return _now;
     }
 
+    void attach(shared_task t);
     void ready(task_pimpl *t);
     void schedule();
     void check_dirty_queue();

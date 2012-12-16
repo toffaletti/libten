@@ -132,6 +132,14 @@ int runtime::dump() {
     return 0;
 }
 
+void runtime::attach(shared_task t) {
+    DCHECK(t && t->_runtime == nullptr);
+    t->_runtime = this;
+    _alltasks.push_back(t);
+    DVLOG(5) << "attach readyq " << t.get();
+    _readyq.push_back(t.get());
+}
+
 void runtime::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
         if (this != runtime::self()) {
