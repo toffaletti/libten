@@ -5,27 +5,66 @@
 #include <memory>
 #include <chrono>
 #include <cstdint>
+#include "ten/task/runtime.hh"
 
 namespace ten {
-
-// forward decl
-namespace this_task {
-uint64_t get_id();
-void yield();
-
-template<class Rep, class Period>
-    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration);
-
-template <class Clock, class Duration>
-    void sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time);
-
-} // this_task
 
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
 // forward decl
 class task_pimpl;
+
+namespace this_task {
+
+//! id of the current task
+uint64_t get_id();
+
+//! allow other tasks to run
+void yield();
+
+template<class Rep, class Period>
+    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration) {
+        runtime::sleep_until(runtime::now() + sleep_duration);
+    }
+
+template <class Clock, class Duration>
+    void sleep_until(const std::chrono::time_point<Clock, Duration>& sleep_time) {
+        runtime::sleep_until(sleep_time);
+    }
+
+//! set/get current task state
+const char *state(const char *fmt=nullptr, ...);
+
+//! set/get current task name
+const char * name(const char *fmt=nullptr, ...);
+
+} // end namespace this_task
+
+// inherit from task_interrupted so lock/rendez/poll canceling
+// doesn't need to be duplicated
+struct deadline_reached : task_interrupted {};
+
+//! schedule a deadline to interrupt task with
+//! deadline_reached after milliseconds
+class deadline {
+private:
+    runtime::alarm_clock::scoped_alarm _alarm;
+public:
+    deadline(std::chrono::milliseconds ms);
+
+    deadline(const deadline &) = delete;
+    deadline &operator =(const deadline &) = delete;
+
+    //! milliseconds remaining on the deadline
+    std::chrono::milliseconds remaining() const;
+    
+    //! cancel the deadline
+    void cancel();
+
+    ~deadline();
+};
+
 
 class task {
 private:

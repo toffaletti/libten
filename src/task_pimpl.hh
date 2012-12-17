@@ -4,6 +4,7 @@
 #include "ten/descriptors.hh"
 #include "ten/logging.hh"
 #include "ten/error.hh"
+#include "ten/task/task.hh"
 #include "ten/task/context.hh"
 #include <chrono>
 #include <atomic>

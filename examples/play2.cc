@@ -1,4 +1,5 @@
 #include "ten/thread_local.hh"
+#include "ten/task/task.hh"
 #include "ten/task/runtime.hh"
 #include "ten/logging.hh"
 

@@ -1,6 +1,7 @@
 #ifndef TEN_TASK_COMPAT
 #define TEN_TASK_COMPAT
 
+#include "ten/task/task.hh"
 #include "ten/task/runtime.hh"
 #include <poll.h>
 #include <thread>
