@@ -2,7 +2,6 @@
 #define TEN_TASK_COMPAT
 
 #include "ten/task/runtime.hh"
-#include "ten/task/task_pimpl.hh"
 #include <poll.h>
 #include <thread>
 #include <deque>
@@ -18,65 +17,35 @@ typedef ten::deadline_reached deadline_reached;
 typedef ten::deadline deadline;
 typedef std::deque<task *> tasklist;
 
-constexpr size_t default_stacksize = 256*1024;
-
 //! spawn a new task in the current thread
-inline uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
-    auto t = ten::task::spawn(f);
-    return t.get_id();
-}
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=0);
 
 //! current task id
-inline uint64_t taskid() {
-    return ten::this_task::get_id();
-}
+uint64_t taskid();
+
 //! allow other tasks to run
-inline void taskyield() {
-    ten::this_task::yield();
-}
+void taskyield();
 
 //! cancel a task
-inline bool taskcancel(uint64_t id) {
-    // TODO: implement
-    auto t = runtime::task_with_id(id);
-    if (t) {
-        t->cancel();
-        return true;
-    }
-    return false;
-}
+bool taskcancel(uint64_t id);
 
 //! mark the current task as a system task
-inline void tasksystem() {
-    // TODO: implement
-}
+void tasksystem();
 
 //! set/get current task state
-inline const char *taskstate(const char *fmt=nullptr, ...) {
-    return "";
-}
+const char *taskstate(const char *fmt=nullptr, ...);
+
 //! set/get current task name
-inline const char * taskname(const char *fmt=nullptr, ...) {
-    return "";
-}
+const char * taskname(const char *fmt=nullptr, ...);
 
 //! spawn a new thread with a task scheduler
-inline void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize) {
-    std::thread proc([=]{
-        f();
-    });
-    proc.detach();
-}
+void procspawn(const std::function<void ()> &f, size_t stacksize=0);
 
 //! cancel all non-system tasks and exit procmain
-inline void procshutdown() {
-    runtime::shutdown();
-}
+void procshutdown();
 
 //! return cached time from event loop, not precise
-inline std::chrono::time_point<std::chrono::steady_clock> procnow() {
-    return runtime::now();
-}
+std::chrono::time_point<std::chrono::steady_clock> procnow();
 
 //! main entry point for tasks
 struct procmain {
@@ -91,23 +60,13 @@ public:
 };
 
 //! sleep current task for milliseconds
-inline void tasksleep(uint64_t ms) {
-    ten::this_task::sleep_for(std::chrono::milliseconds{ms});
-}
+void tasksleep(uint64_t ms);
 
 //! suspend task waiting for io on pollfds
-inline int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0) {
-    // TODO: implement
-    ten::this_task::yield();
-    return nfds;
-}
+int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
 
 //! suspend task waiting for io on fd
-inline bool fdwait(int fd, int rw, uint64_t ms=0) {
-    // TODO: implement
-    ten::this_task::yield();
-    return true;
-}
+bool fdwait(int fd, int rw, uint64_t ms=0);
 
 } // compat
 } // ten

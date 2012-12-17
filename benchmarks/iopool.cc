@@ -79,7 +79,7 @@ struct state {
     ioproc io;
 
     state()
-        : io{default_stacksize, conf.threads, 1*1024*1024}
+        : io{0, conf.threads, 1*1024*1024}
     {
     }
 };

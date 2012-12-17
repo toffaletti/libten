@@ -1,5 +1,5 @@
 #include "ten/task/runtime.hh"
-#include "ten/task/task_pimpl.hh"
+#include "task_pimpl.hh"
 #include "thread_context.hh"
 #include <algorithm>
 #include <ostream>

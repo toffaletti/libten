@@ -68,9 +68,7 @@ struct ioproc {
     }
 
     ~ioproc() {
-        DVLOG(5) << "closing ioproc channel: " << this;
         ch.close();
-        DVLOG(5) << "freeing ioproc: " << this;
     }
 };
 

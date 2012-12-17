@@ -54,6 +54,7 @@ add_library(ten
     src/rendez.cc
     src/qutex.cc
     src/task.cc
+    src/compat.cc
     src/runtime.cc
     src/error.cc
     src/ioproc.cc

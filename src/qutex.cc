@@ -1,4 +1,5 @@
 #include "ten/task/qutex.hh"
+#include "task_pimpl.hh"
 
 namespace ten {
 

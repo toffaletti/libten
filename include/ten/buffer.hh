@@ -5,6 +5,7 @@
 #include <memory>
 #include <cassert>
 #include <cstddef>
+#include <string.h>
 
 namespace ten {
 
