@@ -1,4 +1,5 @@
 #include "ten/task/runtime.hh"
+#include "ten/task/deadline.hh"
 #include "thread_context.hh"
 
 namespace ten {
@@ -58,7 +59,7 @@ void thread_context::cancel() {
 void runtime::sleep_until(const time_point &sleep_time) {
     thread_context *r = this_ctx.get();
     task_pimpl *t = r->_current_task;
-    alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
+    thread_context::alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
     task_pimpl::cancellation_point cancelable;
     t->swap();
 }
@@ -254,22 +255,28 @@ void thread_context::schedule() {
     _gctasks.clear();
 }
 
-deadline::deadline(std::chrono::milliseconds ms) {
+struct deadline_pimpl {
+    thread_context::alarm_clock::scoped_alarm alarm;
+};
+
+deadline::deadline(std::chrono::milliseconds ms)
+    : _pimpl(std::make_shared<deadline_pimpl>())
+{
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         thread_context *r = this_ctx.get();
         task_pimpl *t = r->_current_task;
-        _alarm = std::move(runtime::alarm_clock::scoped_alarm(
+        _pimpl->alarm = std::move(thread_context::alarm_clock::scoped_alarm(
                     r->_alarms, t, ms+runtime::now(), deadline_reached()
                     )
                 );
-        DVLOG(1) << "deadline alarm armed: " << _alarm._armed << " in " << ms.count() << "ms";
+        DVLOG(1) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }
 }
 
 void deadline::cancel() {
-    _alarm.cancel();
+    _pimpl->alarm.cancel();
 }
 
 deadline::~deadline() {
@@ -277,8 +284,11 @@ deadline::~deadline() {
 }
 
 std::chrono::milliseconds deadline::remaining() const {
-    return _alarm.remaining();
+    return _pimpl->alarm.remaining();
 }
+
+
+
 
 } // ten
 

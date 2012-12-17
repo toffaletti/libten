@@ -1,5 +1,6 @@
 #ifndef TEN_RUNTIME_CONTEXT_HH
 #define TEN_RUNTIME_CONTET_HH
+#include "alarm.hh"
 #include "task_pimpl.hh"
 #include "ten/task/runtime.hh"
 #include "ten/thread_local.hh"
@@ -11,6 +12,8 @@
 namespace ten {
 //! per-thread context for runtime
 struct thread_context {
+    typedef ten::alarm_clock<task_pimpl *, runtime::clock> alarm_clock;
+
     task_pimpl _task;
     task_pimpl *_current_task = nullptr;
     std::vector<runtime::shared_task> _alltasks;
@@ -19,7 +22,7 @@ struct thread_context {
     //! current time cached in a few places through the event loop
     runtime::time_point _now;
     llqueue<task_pimpl *> _dirtyq;
-    runtime::alarm_clock _alarms;
+    alarm_clock _alarms;
     std::mutex _mutex;
     std::condition_variable _cv;
     std::atomic<bool> _canceled;

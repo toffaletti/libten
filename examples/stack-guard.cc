@@ -1,4 +1,5 @@
 #include "ten/task/compat.hh"
+#include <cstdio>
 
 using namespace ten;
 using namespace ten::compat;

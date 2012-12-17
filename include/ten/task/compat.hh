@@ -3,6 +3,7 @@
 
 #include "ten/task/task.hh"
 #include "ten/task/runtime.hh"
+#include "ten/task/deadline.hh"
 #include <poll.h>
 #include <thread>
 #include <deque>

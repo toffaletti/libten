@@ -1,7 +1,9 @@
 #include "ten/thread_local.hh"
 #include "ten/task/task.hh"
 #include "ten/task/runtime.hh"
+#include "ten/task/deadline.hh"
 #include "ten/logging.hh"
+#include "../src/alarm.hh"
 
 #include <memory>
 #include <thread>

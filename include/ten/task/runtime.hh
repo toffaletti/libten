@@ -1,8 +1,8 @@
 #ifndef TEN_RUNTIME_HH
 #define TEN_RUNTIME_HH
 
-#include "ten/task/alarm.hh"
 #include "ten/llqueue.hh"
+#include <chrono>
 #include <memory>
 
 #include <unistd.h>
@@ -17,7 +17,6 @@ public:
     typedef std::chrono::steady_clock clock;
     typedef std::chrono::time_point<clock> time_point;
     typedef std::shared_ptr<task_pimpl> shared_task;
-    typedef ten::alarm_clock<task_pimpl *, clock> alarm_clock;
 public:
     // TODO: should be private
     static task_pimpl *current_task();

@@ -5,6 +5,7 @@
 #include "ten/task/runtime.hh"
 #include <type_traits>
 #include <pthread.h>
+#include <cstdlib>
 
 namespace ten {
 

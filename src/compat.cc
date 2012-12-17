@@ -37,11 +37,26 @@ void tasksystem() {
 
 //! set/get current task state
 const char *taskstate(const char *fmt, ...) {
-    return "";
+    task_pimpl *t = runtime::current_task();
+    if (fmt && strlen(fmt)) {
+        va_list arg;
+        va_start(arg, fmt);
+        t->vsetstate(fmt, arg);
+        va_end(arg);
+    }
+    return t->get_state();
 }
+
 //! set/get current task name
 const char * taskname(const char *fmt, ...) {
-    return "";
+    task_pimpl *t = runtime::current_task();
+    if (fmt && strlen(fmt)) {
+        va_list arg;
+        va_start(arg, fmt);
+        t->vsetname(fmt, arg);
+        va_end(arg);
+    }
+    return t->get_name();
 }
 
 //! spawn a new thread with a task scheduler

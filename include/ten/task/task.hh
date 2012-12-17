@@ -41,31 +41,6 @@ const char * name(const char *fmt=nullptr, ...);
 
 } // end namespace this_task
 
-// inherit from task_interrupted so lock/rendez/poll canceling
-// doesn't need to be duplicated
-struct deadline_reached : task_interrupted {};
-
-//! schedule a deadline to interrupt task with
-//! deadline_reached after milliseconds
-class deadline {
-private:
-    runtime::alarm_clock::scoped_alarm _alarm;
-public:
-    deadline(std::chrono::milliseconds ms);
-
-    deadline(const deadline &) = delete;
-    deadline &operator =(const deadline &) = delete;
-
-    //! milliseconds remaining on the deadline
-    std::chrono::milliseconds remaining() const;
-    
-    //! cancel the deadline
-    void cancel();
-
-    ~deadline();
-};
-
-
 class task {
 private:
     std::shared_ptr<task_pimpl> _pimpl;

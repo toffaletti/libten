@@ -5,7 +5,7 @@
 #include "ten/logging.hh"
 #include "ten/error.hh"
 #include "ten/task/task.hh"
-#include "ten/task/context.hh"
+#include "context.hh"
 #include <chrono>
 #include <atomic>
 
@@ -46,6 +46,8 @@ private:
     std::atomic<bool> _ready;
     std::atomic<bool> _canceled;
     bool _unwinding = false;
+    char _name[32];
+    char _state[128];
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -58,6 +60,31 @@ private:
 
 public:
     explicit task_pimpl(std::function<void ()> f);
+
+    void setname(const char *fmt, ...) {
+        va_list arg;
+        va_start(arg, fmt);
+        vsetname(fmt, arg);
+        va_end(arg);
+    }
+
+    void vsetname(const char *fmt, va_list arg) {
+        vsnprintf(_name, sizeof(_name), fmt, arg);
+    }
+
+    void setstate(const char *fmt, ...) {
+        va_list arg;
+        va_start(arg, fmt);
+        vsetstate(fmt, arg);
+        va_end(arg);
+    }
+
+    void vsetstate(const char *fmt, va_list arg) {
+        vsnprintf(_state, sizeof(_state), fmt, arg);
+    }
+
+    const char *get_name() const { return _name; }
+    const char *get_state() const { return _state; }
 
 private:
     friend class deadline;
