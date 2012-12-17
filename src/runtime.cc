@@ -56,93 +56,6 @@ void thread_context::cancel() {
     _canceled = true;
 }
 
-void runtime::sleep_until(const time_point &sleep_time) {
-    thread_context *r = this_ctx.get();
-    task_pimpl *t = r->_current_task;
-    thread_context::alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
-    task_pimpl::cancellation_point cancelable;
-    t->swap();
-}
-
-runtime::time_point runtime::now() {
-    return this_ctx->_now;
-}
-
-runtime::shared_task runtime::task_with_id(uint64_t id) {
-    thread_context *r = this_ctx.get();
-    for (auto t : r->_alltasks) {
-        if (t->_id == id) return t;
-    }
-    return nullptr;
-}
-
-void runtime::shutdown() {
-    using namespace std;
-    lock_guard<mutex> lock(runtime_mutex);
-    for (thread_context *r : threads) {
-        r->cancel();
-    }
-}
-
-void runtime::wait_for_all() {
-    using namespace std;
-    CHECK(is_main_thread());
-    thread_context *r = this_ctx.get();
-    {
-        lock_guard<mutex> lock(runtime_mutex);
-        waiting_task = r->_current_task;
-        DVLOG(5) << "waiting for all " << waiting_task;
-    }
-
-    while (!r->_alltasks.empty() || thread_count > 1) {
-        r->schedule();
-    }
-
-    {
-        lock_guard<mutex> lock(runtime_mutex);
-        DVLOG(5) << "done waiting for all";
-        waiting_task = nullptr;
-    }
-}
-
-
-// XXX: only safe to call from debugger
-int runtime::dump_all() {
-    using namespace std;
-    lock_guard<mutex> lock(runtime_mutex);
-    for (thread_context *r : threads) {
-        LOG(INFO) << "runtime: " << r;
-        r->dump();
-    }
-    return 0;
-}
-
-int thread_context::dump() {
-    LOG(INFO) << &_task;
-#ifdef TEN_TASK_TRACE
-    LOG(INFO) << _task._trace.str();
-#endif
-    for (runtime::shared_task &t : _alltasks) {
-        LOG(INFO) << t.get();
-#ifdef TEN_TASK_TRACE
-        LOG(INFO) << t->_trace.str();
-#endif
-    }
-    return 0;
-}
-
-void runtime::attach(shared_task t) {
-    this_ctx->attach(t);
-}
-
-void thread_context::attach(runtime::shared_task t) {
-    DCHECK(t && t->_runtime == nullptr);
-    t->_runtime = this;
-    _alltasks.push_back(t);
-    DVLOG(5) << "attach readyq " << t.get();
-    _readyq.push_back(t.get());
-}
-
 void thread_context::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
         if (this != this_ctx.get()) {
@@ -178,6 +91,20 @@ void thread_context::remove_task(task_pimpl *t) {
             });
     _gctasks.push_back(*i);
     _alltasks.erase(i);
+}
+
+int thread_context::dump() {
+    LOG(INFO) << &_task;
+#ifdef TEN_TASK_TRACE
+    LOG(INFO) << _task._trace.str();
+#endif
+    for (runtime::shared_task &t : _alltasks) {
+        LOG(INFO) << t.get();
+#ifdef TEN_TASK_TRACE
+        LOG(INFO) << t->_trace.str();
+#endif
+    }
+    return 0;
 }
 
 void thread_context::check_dirty_queue() {
@@ -255,6 +182,85 @@ void thread_context::schedule() {
     _gctasks.clear();
 }
 
+void thread_context::attach(runtime::shared_task t) {
+    DCHECK(t && t->_runtime == nullptr);
+    t->_runtime = this;
+    _alltasks.push_back(t);
+    DVLOG(5) << "attach readyq " << t.get();
+    _readyq.push_back(t.get());
+}
+
+///////////// runtime ///////////////
+
+void runtime::sleep_until(const time_point &sleep_time) {
+    thread_context *r = this_ctx.get();
+    task_pimpl *t = r->_current_task;
+    thread_context::alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
+    task_pimpl::cancellation_point cancelable;
+    t->swap();
+}
+
+runtime::time_point runtime::now() {
+    return this_ctx->_now;
+}
+
+runtime::shared_task runtime::task_with_id(uint64_t id) {
+    thread_context *r = this_ctx.get();
+    for (auto t : r->_alltasks) {
+        if (t->_id == id) return t;
+    }
+    return nullptr;
+}
+
+void runtime::shutdown() {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    for (thread_context *r : threads) {
+        r->cancel();
+    }
+}
+
+void runtime::wait_for_all() {
+    using namespace std;
+    CHECK(is_main_thread());
+    thread_context *r = this_ctx.get();
+    {
+        lock_guard<mutex> lock(runtime_mutex);
+        waiting_task = r->_current_task;
+        DVLOG(5) << "waiting for all " << waiting_task;
+    }
+
+    while (!r->_alltasks.empty() || thread_count > 1) {
+        r->schedule();
+    }
+
+    {
+        lock_guard<mutex> lock(runtime_mutex);
+        DVLOG(5) << "done waiting for all";
+        waiting_task = nullptr;
+    }
+}
+
+
+// XXX: only safe to call from debugger
+int runtime::dump_all() {
+    using namespace std;
+    lock_guard<mutex> lock(runtime_mutex);
+    for (thread_context *r : threads) {
+        LOG(INFO) << "runtime: " << r;
+        r->dump();
+    }
+    return 0;
+}
+
+void runtime::attach(shared_task t) {
+    this_ctx->attach(t);
+}
+
+
+///////////// deadline //////////////
+// deadline is here because of this_ctx
+
 struct deadline_pimpl {
     thread_context::alarm_clock::scoped_alarm alarm;
 };
@@ -286,9 +292,6 @@ deadline::~deadline() {
 std::chrono::milliseconds deadline::remaining() const {
     return _pimpl->alarm.remaining();
 }
-
-
-
 
 } // ten
 
