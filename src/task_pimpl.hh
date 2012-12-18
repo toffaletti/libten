@@ -14,13 +14,15 @@ namespace ten {
 class task;
 class qutex;
 class rendez;
-class runtime;
+class scheduler;
 class thread_context;
+class runtime;
 
 class task_pimpl {
     friend std::ostream &operator << (std::ostream &o, const task_pimpl *t);
     friend class task;
     friend class thread_context;
+    friend class scheduler;
     friend class runtime;
 public:
     typedef std::chrono::steady_clock clock;
@@ -40,7 +42,7 @@ private:
     context _ctx;
     uint64_t _id;
     uint64_t _cancel_points = 0;
-    thread_context *_runtime; // TODO: scheduler
+    scheduler *_scheduler;
     std::function<void ()> _f;
     std::exception_ptr _exception;
     std::atomic<bool> _ready;

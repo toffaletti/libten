@@ -99,9 +99,9 @@ void task_pimpl::trampoline(intptr_t arg) {
     }
     self->_f = nullptr;
 
-    thread_context *r = self->_runtime;
-    r->remove_task(self);
-    r->schedule();
+    scheduler *sched = self->_scheduler;
+    sched->remove_task(self);
+    sched->schedule();
     // never get here
     LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
 }
@@ -109,7 +109,7 @@ void task_pimpl::trampoline(intptr_t arg) {
 void task_pimpl::cancel() {
     if (_canceled.exchange(true) == false) {
         DVLOG(5) << "canceling: " << this << "\n";
-        _runtime->ready(this);
+        _scheduler->ready(this);
     }
 }
 
@@ -117,13 +117,13 @@ void task_pimpl::yield() {
     DVLOG(5) << "readyq yield " << this;
     task_pimpl::cancellation_point cancelable;
     if (_ready.exchange(true) == false) {
-        _runtime->_readyq.push_back(this);
+        _scheduler->unsafe_ready(this);
     }
     swap();
 }
 
 void task_pimpl::swap(bool nothrow) {
-    _runtime->schedule();
+    _scheduler->schedule();
     if (nothrow) return;
 
     if (_canceled && _cancel_points > 0) {
@@ -143,7 +143,7 @@ void task_pimpl::swap(bool nothrow) {
 }
 
 void task_pimpl::ready() {
-    _runtime->ready(this);
+    _scheduler->ready(this);
 }
 
 

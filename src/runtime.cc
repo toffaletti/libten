@@ -35,12 +35,7 @@ static void remove_thread(thread_context *ctx) {
 
 } // anon
 
-thread_context::thread_context() : _canceled{false} {
-    // TODO: reenable this when our libstdc++ is fixed
-    //static_assert(clock::is_steady, "clock not steady");
-    update_cached_time();
-    _task._runtime = this;
-    _current_task = &_task;
+thread_context::thread_context() {
     add_thread(this);
 }
 
@@ -48,29 +43,35 @@ thread_context::~thread_context() {
     remove_thread(this);
 }
 
-task_pimpl *runtime::current_task() {
-    return this_ctx->_current_task;
+///////////// scheduler /////////////
+
+scheduler::scheduler() : _canceled{false} {
+    // TODO: reenable this when our libstdc++ is fixed
+    //static_assert(clock::is_steady, "clock not steady");
+    update_cached_time();
+    _task._scheduler = this;
+    _current_task = &_task;
 }
 
-void thread_context::cancel() {
+void scheduler::cancel() {
     _canceled = true;
 }
 
-void thread_context::ready(task_pimpl *t) {
+void scheduler::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
-        if (this != this_ctx.get()) {
+        if (this != &this_ctx->scheduler) {
             _dirtyq.push(t);
             // TODO: speed this up?
             std::unique_lock<std::mutex> lock{_mutex};
             _cv.notify_one();
         } else {
-            DVLOG(5) << "readyq runtime ready: " << t;
+            DVLOG(5) << "readyq scheduler::ready: " << t;
             _readyq.push_back(t);
         }
     }
 }
 
-void thread_context::remove_task(task_pimpl *t) {
+void scheduler::remove_task(task_pimpl *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
     {
@@ -93,7 +94,7 @@ void thread_context::remove_task(task_pimpl *t) {
     _alltasks.erase(i);
 }
 
-int thread_context::dump() {
+int scheduler::dump() {
     LOG(INFO) << &_task;
 #ifdef TEN_TASK_TRACE
     LOG(INFO) << _task._trace.str();
@@ -107,7 +108,7 @@ int thread_context::dump() {
     return 0;
 }
 
-void thread_context::check_dirty_queue() {
+void scheduler::check_dirty_queue() {
     task_pimpl *t = nullptr;
     while (_dirtyq.pop(t)) {
         DVLOG(5) << "readyq adding " << t << " from dirtyq";
@@ -115,7 +116,7 @@ void thread_context::check_dirty_queue() {
     }
 }
 
-void thread_context::check_timeout_tasks() {
+void scheduler::check_timeout_tasks() {
     _alarms.tick(_now, [this](task_pimpl *t, std::exception_ptr exception) {
         if (exception != nullptr && t->_exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
@@ -125,7 +126,7 @@ void thread_context::check_timeout_tasks() {
     });
 }
 
-void thread_context::schedule() {
+void scheduler::schedule() {
     //CHECK(!_alltasks.empty());
     task_pimpl *self = _current_task;
 
@@ -145,7 +146,7 @@ void thread_context::schedule() {
         if (_readyq.empty()) {
             if (_alltasks.empty()) {
                 std::lock_guard<std::mutex> lock(runtime_mutex);
-                if (waiting_task && this == waiting_task->_runtime) {
+                if (waiting_task && this == waiting_task->_scheduler) {
                     waiting_task->ready();
                     continue;
                 }
@@ -182,9 +183,9 @@ void thread_context::schedule() {
     _gctasks.clear();
 }
 
-void thread_context::attach(runtime::shared_task t) {
-    DCHECK(t && t->_runtime == nullptr);
-    t->_runtime = this;
+void scheduler::attach(runtime::shared_task t) {
+    DCHECK(t && t->_scheduler == nullptr);
+    t->_scheduler = this;
     _alltasks.push_back(t);
     DVLOG(5) << "attach readyq " << t.get();
     _readyq.push_back(t.get());
@@ -192,46 +193,46 @@ void thread_context::attach(runtime::shared_task t) {
 
 ///////////// runtime ///////////////
 
+task_pimpl *runtime::current_task() {
+    return this_ctx->scheduler._current_task;
+}
+
 void runtime::sleep_until(const time_point &sleep_time) {
-    thread_context *r = this_ctx.get();
-    task_pimpl *t = r->_current_task;
-    thread_context::alarm_clock::scoped_alarm sleep_alarm(r->_alarms, t, sleep_time);
+    thread_context *ctx = this_ctx.get();
+    task_pimpl *t = ctx->scheduler._current_task;
+    scheduler::alarm_clock::scoped_alarm sleep_alarm(ctx->scheduler._alarms, t, sleep_time);
     task_pimpl::cancellation_point cancelable;
     t->swap();
 }
 
 runtime::time_point runtime::now() {
-    return this_ctx->_now;
+    return this_ctx->scheduler._now;
 }
 
 runtime::shared_task runtime::task_with_id(uint64_t id) {
-    thread_context *r = this_ctx.get();
-    for (auto t : r->_alltasks) {
-        if (t->_id == id) return t;
-    }
-    return nullptr;
+    return this_ctx->scheduler.task_with_id(id);
 }
 
 void runtime::shutdown() {
     using namespace std;
     lock_guard<mutex> lock(runtime_mutex);
     for (thread_context *r : threads) {
-        r->cancel();
+        r->scheduler.cancel();
     }
 }
 
 void runtime::wait_for_all() {
     using namespace std;
     CHECK(is_main_thread());
-    thread_context *r = this_ctx.get();
+    thread_context *ctx = this_ctx.get();
     {
         lock_guard<mutex> lock(runtime_mutex);
-        waiting_task = r->_current_task;
+        waiting_task = ctx->scheduler._current_task;
         DVLOG(5) << "waiting for all " << waiting_task;
     }
 
-    while (!r->_alltasks.empty() || thread_count > 1) {
-        r->schedule();
+    while (!ctx->scheduler._alltasks.empty() || thread_count > 1) {
+        ctx->scheduler.schedule();
     }
 
     {
@@ -248,13 +249,13 @@ int runtime::dump_all() {
     lock_guard<mutex> lock(runtime_mutex);
     for (thread_context *r : threads) {
         LOG(INFO) << "runtime: " << r;
-        r->dump();
+        r->scheduler.dump();
     }
     return 0;
 }
 
 void runtime::attach(shared_task t) {
-    this_ctx->attach(t);
+    this_ctx->scheduler.attach(t);
 }
 
 
@@ -262,7 +263,7 @@ void runtime::attach(shared_task t) {
 // deadline is here because of this_ctx
 
 struct deadline_pimpl {
-    thread_context::alarm_clock::scoped_alarm alarm;
+    scheduler::alarm_clock::scoped_alarm alarm;
 };
 
 deadline::deadline(std::chrono::milliseconds ms)
@@ -272,9 +273,9 @@ deadline::deadline(std::chrono::milliseconds ms)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         thread_context *r = this_ctx.get();
-        task_pimpl *t = r->_current_task;
-        _pimpl->alarm = std::move(thread_context::alarm_clock::scoped_alarm(
-                    r->_alarms, t, ms+runtime::now(), deadline_reached()
+        task_pimpl *t = r->scheduler._current_task;
+        _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm(
+                    r->scheduler._alarms, t, ms+runtime::now(), deadline_reached()
                     )
                 );
         DVLOG(1) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
