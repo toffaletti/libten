@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <type_traits>
+#include "ten/optional.hh"
 
 namespace ten {
 // low lock queue
@@ -14,12 +15,12 @@ namespace ten {
 template <typename T>
 struct llqueue {
 private:
-    typedef typename std::remove_pointer<T>::type V;
+    //struct alignas(64) node {
     struct node {
-        node(V *val) : value(val), next(nullptr) {}
-        V *value;
+        node() : next(nullptr) {}
+        node(T val) : value(std::forward<T>(val)), next(nullptr) {}
+        optional<T> value;
         std::atomic<node *> next;
-        char pad[CACHE_LINE_SIZE - sizeof(V*) - sizeof(std::atomic<node *>)];
     };
 private:
     char pad0[CACHE_LINE_SIZE];
@@ -41,85 +42,46 @@ private:
     char pad4[CACHE_LINE_SIZE - sizeof(std::atomic<bool>)]; 
 public:
     llqueue() {
-        _first = _last = new node(nullptr);
+        _first = _last = new node();
     }
 
     ~llqueue() {
         while (_first != nullptr) {
             node *tmp = _first;
             _first = tmp->next;
-            if (!std::is_pointer<T>::value) {
-                // if T is a pointer already
-                // we dont own pointer so don't delete
-                delete tmp->value;
-            }
             delete tmp;
         }
     }
 
-    template <typename A, typename std::enable_if<std::is_pointer<A>::value, int>::type = 0>
-        void push(const A &t)
-        {
-            node *tmp = new node(t);
-            while (_producer_lock.test_and_set(std::memory_order_acquire))
-            { } // acquire exclusivity
-            _last->next = tmp;      // publish to consumers
-            _last = tmp;            // swing last forward
-            _producer_lock.clear(std::memory_order_release); // release exclusivity
-        }
+    void push(T t)
+    {
+        node *tmp = new node(std::forward<T>(t));
+        while (_producer_lock.test_and_set(std::memory_order_acquire))
+        { } // acquire exclusivity
+        _last->next = tmp;      // publish to consumers
+        _last = tmp;            // swing last forward
+        _producer_lock.clear(std::memory_order_release); // release exclusivity
+    }
 
-    template <typename A, typename std::enable_if<!std::is_pointer<A>::value, int>::type = 0>
-        void push(const A &t)
-        {
-            node *tmp = new node(new T(t));
-            while (_producer_lock.test_and_set(std::memory_order_acquire))
-            { } // acquire exclusivity
-            _last->next = tmp;      // publish to consumers
-            _last = tmp;            // swing last forward
-            _producer_lock.clear(std::memory_order_release); // release exclusivity
-        }
-
-
-    template <typename A, typename std::enable_if<std::is_pointer<A>::value, int>::type = 0>
-        bool pop(A &result)
-        {
-            while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
-            { } // acquire exclusivity
-            node *first = _first;
-            node *next = _first->next;
-            if (next != nullptr) { // if queue is nonempty
-                // optimization when T is already a pointer
-                result = next->value;
-                next->value = nullptr;
-                _first = next;
-                _consumer_lock.clear(std::memory_order_release); // release exclusivity
-                delete first;
-                return true;            // and report success
+    bool pop(T &result)
+    {
+        while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
+        { } // acquire exclusivity
+        node *first = _first;
+        node *next = _first->next;
+        if (next != nullptr) { // if queue is nonempty
+            if (next->value) {
+                result = *(next->value);
+                next->value = optional<T>();
             }
+            _first = next;
             _consumer_lock.clear(std::memory_order_release); // release exclusivity
-            return false;           // report queue was empty
+            delete first;
+            return true;            // and report success
         }
-
-    template <typename A, typename std::enable_if<!std::is_pointer<A>::value, int>::type = 0>
-        bool pop(A &result)
-        {
-            while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
-            { } // acquire exclusivity
-            node *first = _first;
-            node *next = _first->next;
-            if (next != nullptr) { // if queue is nonempty
-                V *val = next->value;    // take it out
-                next->value = nullptr;  // of the Node
-                _first = next;          // swing first forward
-                _consumer_lock.clear(std::memory_order_release); // release exclusivity
-                result = *val;          // now copy it back
-                delete val;             // clean up the value
-                delete first;           // and the old dummy
-                return true;            // and report success
-            }
-            _consumer_lock.clear(std::memory_order_release); // release exclusivity
-            return false;           // report queue was empty
-        }
+        _consumer_lock.clear(std::memory_order_release); // release exclusivity
+        return false;           // report queue was empty
+    }
 
     bool empty() {
         while (_consumer_lock.test_and_set(std::memory_order_acquire)) 
