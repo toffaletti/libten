@@ -56,6 +56,13 @@ scheduler::scheduler() : _canceled{false} {
     _current_task = &_task;
 }
 
+scheduler::~scheduler() {
+    // TODO: this is a little ugly
+    while (!_alltasks.empty()) {
+        schedule();
+    }
+}
+
 void scheduler::cancel() {
     _canceled = true;
 }
@@ -467,7 +474,8 @@ bool io::fdwait(int fd, int rw, uint64_t ms) {
 }
 
 int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-    task_pimpl *t = runtime::current_task();
+    thread_context *ctx = this_ctx.get();
+    task_pimpl *t = ctx->scheduler._current_task;
     if (nfds == 1) {
         t->setstate("poll fd %i r: %i w: %i %ul ms",
                 fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
@@ -479,6 +487,13 @@ int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
 
     DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
     try {
+        optional<scheduler::alarm_clock::scoped_alarm> timeout_alarm;
+        if (ms) {
+            runtime::time_point timeout_time{ctx->scheduler._now
+                + std::chrono::milliseconds{ms}};
+            timeout_alarm.emplace(ctx->scheduler._alarms, t, timeout_time);
+        }
+        task_pimpl::cancellation_point cancelable;
         t->swap();
     } catch (...) {
         remove_pollfds(fds, nfds);

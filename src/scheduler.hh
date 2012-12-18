@@ -12,13 +12,15 @@ namespace ten {
 
 class runtime;
 class deadline;
+class io;
 
 class scheduler {
 public:
     typedef ten::alarm_clock<task_pimpl *, runtime::clock> alarm_clock;
-    // TODO: make not friend
+    // TODO: make not friend when alarms are decoupled
     friend class runtime;
     friend class deadline;
+    friend class io;
 private:
     task_pimpl _task;
     //! current time cached in a few places through the event loop
@@ -67,6 +69,7 @@ public:
     }
 
     scheduler();
+    ~scheduler();
 };
 
 

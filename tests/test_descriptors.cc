@@ -4,7 +4,6 @@
 
 using namespace ten;
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
 BOOST_AUTO_TEST_CASE(fd_move_test) {
     fd_base fd1{0};
     fd_base fd2{std::move(fd1)};
@@ -21,7 +20,6 @@ BOOST_AUTO_TEST_CASE(socketpair_cxx0x_test) {
         BOOST_CHECK_EQUAL(a, 1);
     }
 }
-#endif
 
 BOOST_AUTO_TEST_CASE(socketpair_test) {
     int sv[2];

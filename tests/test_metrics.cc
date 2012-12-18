@@ -7,16 +7,9 @@
 using namespace ten;
 
 void my_thread() {
-#if 1
     metrics::record()
-        //.incr<metrics::counter>("thing")
         .counter("thing").incr();
         ;
-#else
-    metrics::record([](metrics::metric_group &g) {
-        g.get<metrics::counter>("thing").incr();
-    });
-#endif
 }
 
 static const int nthreads = 100;

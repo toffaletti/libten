@@ -47,7 +47,6 @@ BOOST_AUTO_TEST_CASE(schedule_test) {
     BOOST_CHECK_EQUAL(20, count);
 }
 
-#if 0
 static void pipe_write(pipe_fd &p) {
     BOOST_CHECK_EQUAL(p.write("test", 4), 4);
 }
@@ -127,7 +126,6 @@ BOOST_AUTO_TEST_CASE(socket_io_mt) {
     p.main();
     s.wait();
 }
-#endif
 
 static void sleeper(semaphore &s) {
     using namespace std::chrono;
@@ -151,7 +149,6 @@ BOOST_AUTO_TEST_CASE(task_sleep) {
     s.wait();
 }
 
-#if 0
 static void listen_timeout_co(semaphore &sm) {
     socket_fd s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
@@ -172,7 +169,6 @@ BOOST_AUTO_TEST_CASE(poll_timeout_io) {
     p.main();
     s.wait();
 }
-#endif
 
 static void sleep_many(uint64_t &count) {
     ++count;
@@ -254,7 +250,6 @@ BOOST_AUTO_TEST_CASE(task_cancel_channel) {
     p.main();
 }
 
-#if 0
 static void io_wait() {
     pipe_fd p;
     fdwait(p.r.fd, 'r');
@@ -272,7 +267,6 @@ BOOST_AUTO_TEST_CASE(task_cancel_io) {
     taskspawn(cancel_io);
     p.main();
 }
-#endif
 
 static void yield_loop(uint64_t &counter) {
     for (;;) {
