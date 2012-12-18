@@ -1,5 +1,6 @@
 #include "ten/task/runtime.hh"
 #include "ten/task/deadline.hh"
+#include "ten/task/io.hh"
 #include "thread_context.hh"
 
 namespace ten {
@@ -292,6 +293,193 @@ deadline::~deadline() {
 
 std::chrono::milliseconds deadline::remaining() const {
     return _pimpl->alarm.remaining();
+}
+
+//////////////////// io ///////////////////
+
+io::io() {
+    // TODO: event_fd needs to be non blocking with edge-trigger?
+    epoll_event ev{};
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = _evfd.fd;
+    _efd.add(_evfd.fd, ev);
+
+    _poll_thread = std::thread(std::bind(&io::poll_proc, this));
+}
+
+io::~io() {
+}
+
+io &io::singleton() {
+    static io global;
+    return global;
+}
+
+void io::poll_proc() {
+    std::vector<epoll_event> events;
+    events.reserve(1000);
+    for (;;) {
+        events.resize(1000);
+        _efd.wait(events, -1);
+        task_pimpl *t = nullptr;
+        for (epoll_event &ev : events) {
+            std::lock_guard<std::mutex> lock{_mutex};
+            DVLOG(5) << "epoll events " << ev.events << " on " << ev.data.fd;
+
+            // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+            // even if they arent asked for, so we must wake up the tasks on any event
+            // to avoid just spinning in epoll.
+            int fd = ev.data.fd;
+            if (pollfds[fd].t_in) {
+                pollfds[fd].p_in->revents = ev.events;
+                t = pollfds[fd].t_in;
+                DVLOG(5) << "IN EVENT on task: " << t;
+                t->ready();
+            }
+
+            // check to see if pollout is a different task than pollin
+            if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
+                pollfds[fd].p_out->revents = ev.events;
+                t = pollfds[fd].t_out;
+                DVLOG(5) << "OUT EVENT on task: " << t;
+                t->ready();
+            }
+
+            if (ev.data.fd == _evfd.fd) {
+                // our wake up eventfd was written to
+                // clear events by reading value
+                _evfd.read();
+            } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
+                // TODO: otherwise we might want to remove fd from epoll
+                LOG(ERROR) << "event " << ev.events << " for fd: "
+                    << ev.data.fd << " but has no task";
+            }
+        }
+    }
+}
+
+void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
+    for (nfds_t i=0; i<nfds; ++i) {
+        std::lock_guard<std::mutex> lock{_mutex};
+        epoll_event ev;
+        memset(&ev, 0, sizeof(ev));
+        int fd = fds[i].fd;
+        fds[i].revents = 0;
+        // make room for the highest fd number
+        if (pollfds.size() <= (size_t)fd) {
+            pollfds.resize(fd+1);
+        }
+        ev.data.fd = fd;
+        uint32_t saved_events = pollfds[fd].events;
+
+        if (fds[i].events & EPOLLIN) {
+            DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
+            pollfds[fd].t_in = t;
+            pollfds[fd].p_in = &fds[i];
+            pollfds[fd].events |= EPOLLIN;
+        }
+
+        if (fds[i].events & EPOLLOUT) {
+            DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
+            pollfds[fd].t_out = t;
+            pollfds[fd].p_out = &fds[i];
+            pollfds[fd].events |= EPOLLOUT;
+        }
+
+        ev.events = pollfds[fd].events;
+
+        if (saved_events == 0) {
+            THROW_ON_ERROR(_efd.add(fd, ev));
+        } else if (saved_events != pollfds[fd].events) {
+            THROW_ON_ERROR(_efd.modify(fd, ev));
+        }
+        ++npollfds;
+    }
+}
+
+int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
+    int rvalue = 0;
+    for (nfds_t i=0; i<nfds; ++i) {
+        std::lock_guard<std::mutex> lock{_mutex};
+        int fd = fds[i].fd;
+        if (fds[i].revents) rvalue++;
+
+        if (pollfds[fd].p_in == &fds[i]) {
+            pollfds[fd].t_in = nullptr;
+            pollfds[fd].p_in = nullptr;
+            pollfds[fd].events ^= EPOLLIN;
+        }
+
+        if (pollfds[fd].p_out == &fds[i]) {
+            pollfds[fd].t_out = nullptr;
+            pollfds[fd].p_out = nullptr;
+            pollfds[fd].events ^= EPOLLOUT;
+        }
+
+        if (pollfds[fd].events == 0) {
+            _efd.remove(fd);
+        } else {
+            epoll_event ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.data.fd = fd;
+            ev.events = pollfds[fd].events;
+            THROW_ON_ERROR(_efd.modify(fd, ev));
+        }
+        --npollfds;
+    }
+    return rvalue;
+}
+
+bool io::fdwait(int fd, int rw, uint64_t ms) {
+    short events_ = 0;
+    switch (rw) {
+        case 'r':
+            events_ |= EPOLLIN;
+            break;
+        case 'w':
+            events_ |= EPOLLOUT;
+            break;
+    }
+    pollfd fds = {fd, events_, 0};
+    if (poll(&fds, 1, ms) > 0) {
+        if ((fds.revents & EPOLLERR) || (fds.revents & EPOLLHUP)) {
+            return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+    task_pimpl *t = runtime::current_task();
+    if (nfds == 1) {
+        t->setstate("poll fd %i r: %i w: %i %ul ms",
+                fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
+    } else {
+        t->setstate("poll %u fds for %ul ms", nfds, ms);
+    }
+    // TODO: support timeouts
+    add_pollfds(t, fds, nfds);
+
+    DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
+    try {
+        t->swap();
+    } catch (...) {
+        remove_pollfds(fds, nfds);
+        throw;
+    }
+
+    return remove_pollfds(fds, nfds);
+}
+
+void io::wait_for_fd_events(int fd, uint32_t events) {
+    task_pimpl *t = runtime::current_task();
+    try {
+        t->swap();
+    } catch (task_interrupted &e) {
+        // try to remove the fd,task from list
+        throw;
+    }
 }
 
 } // ten

@@ -1,4 +1,5 @@
 #include "ten/task/compat.hh"
+#include "ten/task/io.hh"
 #include "task_pimpl.hh"
 
 namespace ten {
@@ -85,16 +86,12 @@ void tasksleep(uint64_t ms) {
 
 //! suspend task waiting for io on pollfds
 int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-    // TODO: implement
-    ten::this_task::yield();
-    return nfds;
+    return io::singleton().poll(fds, nfds, ms);
 }
 
 //! suspend task waiting for io on fd
 bool fdwait(int fd, int rw, uint64_t ms) {
-    // TODO: implement
-    ten::this_task::yield();
-    return true;
+    return io::singleton().fdwait(fd, rw, ms);
 }
 
 } // compat

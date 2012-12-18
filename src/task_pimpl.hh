@@ -17,6 +17,7 @@ class rendez;
 class scheduler;
 class thread_context;
 class runtime;
+class io;
 
 class task_pimpl {
     friend std::ostream &operator << (std::ostream &o, const task_pimpl *t);
@@ -24,6 +25,7 @@ class task_pimpl {
     friend class thread_context;
     friend class scheduler;
     friend class runtime;
+    friend class io;
 public:
     typedef std::chrono::steady_clock clock;
     typedef std::chrono::time_point<clock> time_point;
