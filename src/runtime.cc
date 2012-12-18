@@ -3,7 +3,9 @@
 #include "ten/task/io.hh"
 #include "thread_context.hh"
 
+
 namespace ten {
+extern void netinit();
 
 namespace {
 static std::mutex runtime_mutex;
@@ -56,6 +58,17 @@ scheduler::scheduler() : _canceled{false} {
 
 void scheduler::cancel() {
     _canceled = true;
+}
+
+void scheduler::ready_for_io(task_pimpl *t) {
+    // like ::ready but doesn't not reference this_ctx
+    // always happens from io thread
+    if (t->_ready.exchange(true) == false) {
+        _dirtyq.push(t);
+        // TODO: speed this up?
+        std::unique_lock<std::mutex> lock{_mutex};
+        _cv.notify_one();
+    }
 }
 
 void scheduler::ready(task_pimpl *t) {
@@ -298,6 +311,7 @@ std::chrono::milliseconds deadline::remaining() const {
 //////////////////// io ///////////////////
 
 io::io() {
+    netinit();
     // TODO: event_fd needs to be non blocking with edge-trigger?
     epoll_event ev{};
     ev.events = EPOLLIN | EPOLLET;
@@ -305,6 +319,8 @@ io::io() {
     _efd.add(_evfd.fd, ev);
 
     _poll_thread = std::thread(std::bind(&io::poll_proc, this));
+    // TODO: maybe join this?
+    _poll_thread.detach();
 }
 
 io::~io() {
@@ -334,7 +350,7 @@ void io::poll_proc() {
                 pollfds[fd].p_in->revents = ev.events;
                 t = pollfds[fd].t_in;
                 DVLOG(5) << "IN EVENT on task: " << t;
-                t->ready();
+                t->ready_for_io();
             }
 
             // check to see if pollout is a different task than pollin
@@ -342,7 +358,7 @@ void io::poll_proc() {
                 pollfds[fd].p_out->revents = ev.events;
                 t = pollfds[fd].t_out;
                 DVLOG(5) << "OUT EVENT on task: " << t;
-                t->ready();
+                t->ready_for_io();
             }
 
             if (ev.data.fd == _evfd.fd) {
@@ -386,7 +402,7 @@ void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
             pollfds[fd].events |= EPOLLOUT;
         }
 
-        ev.events = pollfds[fd].events;
+        ev.events = pollfds[fd].events | EPOLLONESHOT;
 
         if (saved_events == 0) {
             THROW_ON_ERROR(_efd.add(fd, ev));

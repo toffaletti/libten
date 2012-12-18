@@ -47,6 +47,7 @@ private:
     }
 public:
     void ready(task_pimpl *t);
+    void ready_for_io(task_pimpl *t);
 
     void remove_task(task_pimpl *t);
     int dump();

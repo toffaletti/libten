@@ -147,6 +147,10 @@ void task_pimpl::ready() {
 }
 
 
+void task_pimpl::ready_for_io() {
+    _scheduler->ready_for_io(this);
+}
+
 ///////////////////// task //////////////////
 
 task::task(std::function<void ()> f)

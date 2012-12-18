@@ -106,6 +106,7 @@ private:
 public:
     // TODO: private
     void ready();
+    void ready_for_io();
 
     //! cancel this task
     void cancel();
