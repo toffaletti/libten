@@ -108,7 +108,7 @@ void scheduler::remove_task(task_pimpl *t) {
     //_alarms.remove(t);
 
     auto i = find_if(begin(_alltasks), end(_alltasks),
-            [t](runtime::shared_task &other) {
+            [t](shared_task &other) {
             return other.get() == t;
             });
     _gctasks.push_back(*i);
@@ -120,7 +120,7 @@ int scheduler::dump() {
 #ifdef TEN_TASK_TRACE
     LOG(INFO) << _task._trace.str();
 #endif
-    for (runtime::shared_task &t : _alltasks) {
+    for (shared_task &t : _alltasks) {
         LOG(INFO) << t.get();
 #ifdef TEN_TASK_TRACE
         LOG(INFO) << t->_trace.str();
@@ -204,7 +204,7 @@ void scheduler::schedule() {
     _gctasks.clear();
 }
 
-void scheduler::attach(runtime::shared_task t) {
+void scheduler::attach(shared_task &t) {
     DCHECK(t && t->_scheduler == nullptr);
     t->_scheduler = this;
     _alltasks.push_back(t);
@@ -230,7 +230,7 @@ runtime::time_point runtime::now() {
     return this_ctx->scheduler._now;
 }
 
-runtime::shared_task runtime::task_with_id(uint64_t id) {
+shared_task runtime::task_with_id(uint64_t id) {
     return this_ctx->scheduler.task_with_id(id);
 }
 
@@ -275,7 +275,7 @@ int runtime::dump_all() {
     return 0;
 }
 
-void runtime::attach(shared_task t) {
+void runtime::attach(shared_task &t) {
     this_ctx->scheduler.attach(t);
 }
 

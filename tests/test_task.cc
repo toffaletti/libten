@@ -5,6 +5,7 @@
 #include "ten/semaphore.hh"
 #include "ten/channel.hh"
 #include "ten/task/task.hh"
+#include "ten/task/compat.hh"
 
 using namespace ten;
 using namespace std::chrono;

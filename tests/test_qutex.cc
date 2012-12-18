@@ -3,6 +3,7 @@
 #include <thread>
 #include "ten/semaphore.hh"
 #include "ten/synchronized.hh"
+#include "ten/task/compat.hh"
 #include "ten/task/rendez.hh"
 
 using namespace ten;

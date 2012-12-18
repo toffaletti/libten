@@ -19,7 +19,7 @@ class thread_context;
 class runtime;
 class io;
 
-class task_pimpl {
+class task_pimpl : public std::enable_shared_from_this<task_pimpl> {
     friend std::ostream &operator << (std::ostream &o, const task_pimpl *t);
     friend class task;
     friend class thread_context;

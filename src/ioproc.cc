@@ -5,18 +5,18 @@
 namespace ten {
 
 void ioproctask(iochannel &ch) {
-    compat::taskname("ioproctask");
+    this_task::name("ioproctask");
     for (;;) {
         std::unique_ptr<pcall> call;
         try {
-            compat::taskstate("waiting for recv");
+            this_task::state("waiting for recv");
             call = ch.recv();
         } catch (channel_closed_error &e) {
-            compat::taskstate("recv channel closed");
+            this_task::state("recv channel closed");
             break;
         }
         if (!call) break;
-        compat::taskstate("executing call");
+        this_task::state("executing call");
         errno = 0;
         try {
             DVLOG(5) << "ioproc calling op";
@@ -31,7 +31,7 @@ void ioproctask(iochannel &ch) {
         {
             DVLOG(5) << "sending reply";
             iochannel creply = call->ch;
-            compat::taskstate("sending reply");
+            this_task::state("sending reply");
             try {
                 creply.send(std::move(call));
             } catch (channel_closed_error &e) {

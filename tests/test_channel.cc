@@ -3,6 +3,7 @@
 #include "ten/descriptors.hh"
 #include "ten/semaphore.hh"
 #include "ten/channel.hh"
+#include "ten/task/compat.hh"
 
 using namespace ten;
 using namespace ten::compat;

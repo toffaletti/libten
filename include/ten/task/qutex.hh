@@ -1,7 +1,7 @@
 #ifndef LIBTEN_TASK_QUTEX_HH
 #define LIBTEN_TASK_QUTEX_HH
 
-#include "ten/task/compat.hh"
+#include "ten/task/runtime.hh"
 #include <mutex>
 
 namespace ten {
@@ -24,7 +24,7 @@ class safe_lock {
 class qutex {
 private:
     std::timed_mutex _m;
-    compat::tasklist _waiting;
+    tasklist _waiting;
     task_pimpl *_owner;
 
     void unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk);

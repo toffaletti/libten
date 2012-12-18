@@ -29,8 +29,8 @@ private:
 
 
     task_pimpl *_current_task = nullptr;
-    std::vector<runtime::shared_task> _alltasks;
-    std::vector<runtime::shared_task> _gctasks;
+    std::vector<shared_task> _alltasks;
+    std::vector<shared_task> _gctasks;
     std::deque<task_pimpl *> _readyq;
     llqueue<task_pimpl *> _dirtyq;
 
@@ -53,7 +53,7 @@ public:
 
     void remove_task(task_pimpl *t);
     int dump();
-    void attach(runtime::shared_task t);
+    void attach(shared_task &t);
     void schedule();
     void cancel();
 
@@ -61,7 +61,7 @@ public:
         _readyq.push_back(t);
     }
 
-    runtime::shared_task task_with_id(uint64_t id) {
+    shared_task task_with_id(uint64_t id) {
         for (auto t : _alltasks) {
             if (t->_id == id) return t;
         }

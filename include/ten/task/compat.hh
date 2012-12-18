@@ -17,7 +17,6 @@ typedef ten::task_interrupted task_interrupted;
 typedef ten::task_pimpl task;
 typedef ten::deadline_reached deadline_reached;
 typedef ten::deadline deadline;
-typedef std::deque<task *> tasklist;
 
 //! spawn a new task in the current thread
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=0);

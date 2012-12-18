@@ -54,7 +54,7 @@ void rendez::wakeup() {
 }
 
 void rendez::wakeupall() {
-    compat::tasklist waiting;
+    tasklist waiting;
     {
         std::lock_guard<std::timed_mutex> lk(_m);
         std::swap(waiting, _waiting);

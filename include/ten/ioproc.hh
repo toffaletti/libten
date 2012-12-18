@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <exception>
 #include <memory>
+#include <thread>
 #include <fcntl.h>
 
 namespace ten {
@@ -63,7 +64,8 @@ struct ioproc {
         : ch(chanbuf ? chanbuf : nprocs)
     {
         for (unsigned i=0; i<nprocs; ++i) {
-            compat::procspawn(std::bind(proctask, ch), stacksize);
+            std::thread proc(std::bind(proctask, ch), stacksize);
+            proc.detach();
         }
     }
 
