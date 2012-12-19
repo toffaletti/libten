@@ -1,4 +1,5 @@
 #include "ten/channel.hh"
+#include "ten/task/compat.hh"
 #include <iostream>
 
 using namespace ten;

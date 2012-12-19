@@ -1,6 +1,7 @@
 #include <thread>
 #include "ten/semaphore.hh"
 #include "ten/task/rendez.hh"
+#include "ten/task/compat.hh"
 #include "ten/logging.hh"
 
 using namespace ten;
