@@ -11,14 +11,18 @@ namespace ten {
 class io {
 private:
     struct task_poll_state {
-        task_pimpl *t_in; // POLLIN task
-        pollfd *p_in; // pointer to pollfd structure that is on the task's stack
-        task_pimpl *t_out; // POLLOUT task
-        pollfd *p_out; // pointer to pollfd structure that is on the task's stack
-        uint32_t events; // events this fd is registered for
-        task_poll_state() : t_in(nullptr), p_in(nullptr), t_out(nullptr), p_out(nullptr), events(0) {}
+        task_pimpl *task;
+        pollfd *pfd;
+
+        task_poll_state(task_pimpl *task_, pollfd *pfd_)
+            : task(task_), pfd(pfd_) {}
     };
-    typedef std::vector<task_poll_state> poll_task_array;
+    struct fd_poll_state {
+        std::deque<task_poll_state> in;
+        std::deque<task_poll_state> out;
+        uint32_t events = 0; // events this fd is registered for
+    };
+    typedef std::vector<fd_poll_state> fd_array;
 
     epoll_fd _efd;
     event_fd _evfd;
@@ -29,7 +33,7 @@ private:
     //! number of fds we've been asked to wait on
     size_t npollfds;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
-    poll_task_array pollfds;
+    fd_array pollfds;
 
     io();
 

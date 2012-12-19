@@ -63,7 +63,9 @@ const char * taskname(const char *fmt, ...) {
 //! spawn a new thread with a task scheduler
 void procspawn(const std::function<void ()> &f, size_t stacksize) {
     std::thread proc([=]{
-        f();
+        try {
+            f();
+        } catch (task_interrupted &e) {}
     });
     proc.detach();
 }
@@ -92,6 +94,10 @@ int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
 //! suspend task waiting for io on fd
 bool fdwait(int fd, int rw, uint64_t ms) {
     return io::singleton().fdwait(fd, rw, ms);
+}
+
+procmain::procmain() {
+    runtime::current_task();
 }
 
 } // compat

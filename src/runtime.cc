@@ -9,6 +9,7 @@ extern void netinit();
 
 namespace {
 static std::mutex runtime_mutex;
+static std::once_flag init_flag;
 static std::vector<thread_context *> threads;
 static std::atomic<uint64_t> thread_count{0};
 static task_pimpl *waiting_task = nullptr;
@@ -36,9 +37,39 @@ static void remove_thread(thread_context *ctx) {
     }
 }
 
+static void runtime_init() {
+    CHECK(getpid() == syscall(SYS_gettid)) << "must call in main thread before anything else";
+    //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
+    stack_t ss;
+    ss.ss_sp = calloc(1, SIGSTKSZ);
+    ss.ss_size = SIGSTKSZ;
+    ss.ss_flags = 0;
+    THROW_ON_ERROR(sigaltstack(&ss, NULL));
+
+    // allow log files and message queues to be created group writable
+    umask(0);
+    InitGoogleLogging(program_invocation_short_name);
+    InstallFailureSignalHandler();
+    FLAGS_logtostderr = true;
+
+    struct sigaction act;
+
+    // ignore SIGPIPE
+    memset(&act, 0, sizeof(act));
+    THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
+    if (act.sa_handler == SIG_DFL) {
+        act.sa_handler = SIG_IGN;
+        THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
+    }
+
+    netinit();
+}
+
+
 } // anon
 
 thread_context::thread_context() {
+    std::call_once(init_flag, runtime_init);
     add_thread(this);
 }
 
@@ -65,6 +96,8 @@ scheduler::~scheduler() {
 
 void scheduler::cancel() {
     _canceled = true;
+    std::unique_lock<std::mutex> lock{_mutex};
+    _cv.notify_one();
 }
 
 void scheduler::ready_for_io(task_pimpl *t) {
@@ -159,15 +192,16 @@ void scheduler::schedule() {
     //CHECK(!_alltasks.empty());
     task_pimpl *self = _current_task;
 
-    if (_canceled && !_tasks_canceled) {
-        // TODO: maybe if canceled is set we don't let any more tasks spawn?
-        _tasks_canceled = true;
-        for (auto t : _alltasks) {
-            t->cancel();
-        }
-    }
-
     do {
+        if (_canceled && !_tasks_canceled) {
+            // TODO: maybe if canceled is set we don't let any more tasks spawn?
+            _tasks_canceled = true;
+            for (auto t : _alltasks) {
+                t->cancel();
+            }
+            _task.cancel();
+        }
+
         check_dirty_queue();
         update_cached_time();
         check_timeout_tasks();
@@ -326,7 +360,6 @@ std::chrono::milliseconds deadline::remaining() const {
 //////////////////// io ///////////////////
 
 io::io() {
-    netinit();
     // TODO: event_fd needs to be non blocking with edge-trigger?
     epoll_event ev{};
     ev.events = EPOLLIN | EPOLLET;
@@ -361,17 +394,18 @@ void io::poll_proc() {
             // even if they arent asked for, so we must wake up the tasks on any event
             // to avoid just spinning in epoll.
             int fd = ev.data.fd;
-            if (pollfds[fd].t_in) {
-                pollfds[fd].p_in->revents = ev.events;
-                t = pollfds[fd].t_in;
+            if (!pollfds[fd].in.empty()) {
+                pollfds[fd].in.front().pfd->revents = ev.events;
+                // TODO: maybe pop_front here?
+                t = pollfds[fd].in.front().task;
                 DVLOG(5) << "IN EVENT on task: " << t;
                 t->ready_for_io();
             }
 
-            // check to see if pollout is a different task than pollin
-            if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
-                pollfds[fd].p_out->revents = ev.events;
-                t = pollfds[fd].t_out;
+            if (!pollfds[fd].out.empty()) {
+                pollfds[fd].out.front().pfd->revents = ev.events;
+                // TODO: maybe pop_front here?
+                t = pollfds[fd].out.front().task;
                 DVLOG(5) << "OUT EVENT on task: " << t;
                 t->ready_for_io();
             }
@@ -380,7 +414,7 @@ void io::poll_proc() {
                 // our wake up eventfd was written to
                 // clear events by reading value
                 _evfd.read();
-            } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
+            } else if (pollfds[fd].in.empty() && pollfds[fd].out.empty()) {
                 // TODO: otherwise we might want to remove fd from epoll
                 LOG(ERROR) << "event " << ev.events << " for fd: "
                     << ev.data.fd << " but has no task";
@@ -404,20 +438,18 @@ void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
         uint32_t saved_events = pollfds[fd].events;
 
         if (fds[i].events & EPOLLIN) {
-            DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
-            pollfds[fd].t_in = t;
-            pollfds[fd].p_in = &fds[i];
+            pollfds[fd].in.emplace_back(t, &fds[i]);
             pollfds[fd].events |= EPOLLIN;
         }
 
         if (fds[i].events & EPOLLOUT) {
-            DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
-            pollfds[fd].t_out = t;
-            pollfds[fd].p_out = &fds[i];
+            pollfds[fd].out.emplace_back(t, &fds[i]);
             pollfds[fd].events |= EPOLLOUT;
         }
 
         ev.events = pollfds[fd].events | EPOLLONESHOT;
+
+        DVLOG(5) << "fd: " << fd << " events: " << pollfds[fd].events;
 
         if (saved_events == 0) {
             THROW_ON_ERROR(_efd.add(fd, ev));
@@ -429,24 +461,38 @@ void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
 }
 
 int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
+    using namespace std;
     int rvalue = 0;
     for (nfds_t i=0; i<nfds; ++i) {
-        std::lock_guard<std::mutex> lock{_mutex};
+        lock_guard<mutex> lock{_mutex};
         int fd = fds[i].fd;
         if (fds[i].revents) rvalue++;
 
-        if (pollfds[fd].p_in == &fds[i]) {
-            pollfds[fd].t_in = nullptr;
-            pollfds[fd].p_in = nullptr;
-            pollfds[fd].events ^= EPOLLIN;
+        // IN
+        auto it = find_if(begin(pollfds[fd].in), end(pollfds[fd].in),
+                [&](task_poll_state &st) {
+                    return st.pfd == &fds[i];
+                    });
+        if (it != end(pollfds[fd].in)) {
+            pollfds[fd].in.erase(it);
+            if (pollfds[fd].in.empty()) {
+                pollfds[fd].events ^= EPOLLIN;
+            }
         }
+        
 
-        if (pollfds[fd].p_out == &fds[i]) {
-            pollfds[fd].t_out = nullptr;
-            pollfds[fd].p_out = nullptr;
-            pollfds[fd].events ^= EPOLLOUT;
+        // OUT
+        it = find_if(begin(pollfds[fd].out), end(pollfds[fd].out),
+                [&](task_poll_state &st) {
+                    return st.pfd == &fds[i];
+                    });
+        if (it != end(pollfds[fd].out)) {
+            pollfds[fd].out.erase(it);
+            if (pollfds[fd].out.empty()) {
+                pollfds[fd].events ^= EPOLLOUT;
+            }
         }
-
+        
         if (pollfds[fd].events == 0) {
             _efd.remove(fd);
         } else {
