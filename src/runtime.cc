@@ -95,14 +95,11 @@ void scheduler::ready(task_pimpl *t) {
 void scheduler::remove_task(task_pimpl *t) {
     DVLOG(5) << "remove task " << t;
     using namespace std;
-    {
-        // TODO: might not need this anymore
-        // assert not in readyq
-        auto i = find(begin(_readyq), end(_readyq), t);
-        if (i != end(_readyq)) {
-            _readyq.erase(i);
-        }
-    }
+    DCHECK(t->_scheduler == this);
+    // assert not in readyq
+    DCHECK(
+            find(begin(_readyq), end(_readyq), t) == end(_readyq)
+          );
 
     // TODO: needed?
     //_alarms.remove(t);
@@ -111,6 +108,7 @@ void scheduler::remove_task(task_pimpl *t) {
             [t](shared_task &other) {
             return other.get() == t;
             });
+    DCHECK(i != end(_alltasks));
     _gctasks.push_back(*i);
     _alltasks.erase(i);
 }
@@ -130,10 +128,20 @@ int scheduler::dump() {
 }
 
 void scheduler::check_dirty_queue() {
+    using namespace std;
     task_pimpl *t = nullptr;
     while (_dirtyq.pop(t)) {
-        DVLOG(5) << "readyq adding " << t << " from dirtyq";
-        _readyq.push_back(t);
+        if (t == &_task ||
+                find_if(begin(_alltasks), end(_alltasks),
+                    [t](shared_task &other) {
+                    return other.get() == t;
+                    }) != end(_alltasks))
+        {
+            DVLOG(5) << "readyq adding " << t << " from dirtyq";
+            _readyq.push_back(t);
+        } else {
+            DVLOG(5) << "found " << t << " in dirtyq but not in alltasks";
+        }
     }
 }
 
