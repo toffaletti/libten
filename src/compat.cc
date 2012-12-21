@@ -88,12 +88,12 @@ void tasksleep(uint64_t ms) {
 
 //! suspend task waiting for io on pollfds
 int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-    return io::singleton().poll(fds, nfds, ms);
+    return runtime::poll(fds, nfds, ms);
 }
 
 //! suspend task waiting for io on fd
 bool fdwait(int fd, int rw, uint64_t ms) {
-    return io::singleton().fdwait(fd, rw, ms);
+    return runtime::fdwait(fd, rw, ms);
 }
 
 procmain::procmain() {

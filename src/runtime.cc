@@ -96,17 +96,21 @@ scheduler::~scheduler() {
 
 void scheduler::cancel() {
     _canceled = true;
-    std::unique_lock<std::mutex> lock{_mutex};
-    _cv.notify_one();
+    wakeup();
 }
 
 void scheduler::ready_for_io(task_pimpl *t) {
-    // like ::ready but doesn't not reference this_ctx
-    // always happens from io thread
     if (t->_ready.exchange(true) == false) {
-        _dirtyq.push(t);
-        // TODO: speed this up?
-        std::unique_lock<std::mutex> lock{_mutex};
+        _readyq.push_back(t);
+    }
+}
+
+void scheduler::wakeup() {
+    // TODO: speed this up?
+    std::unique_lock<std::mutex> lock{_mutex};
+    if (pending_io()) {
+        get_io()->wakeup();
+    } else {
         _cv.notify_one();
     }
 }
@@ -115,9 +119,7 @@ void scheduler::ready(task_pimpl *t) {
     if (t->_ready.exchange(true) == false) {
         if (this != &this_ctx->scheduler) {
             _dirtyq.push(t);
-            // TODO: speed this up?
-            std::unique_lock<std::mutex> lock{_mutex};
-            _cv.notify_one();
+            wakeup();
         } else {
             DVLOG(5) << "readyq scheduler::ready: " << t;
             _readyq.push_back(t);
@@ -188,8 +190,23 @@ void scheduler::check_timeout_tasks() {
     });
 }
 
+void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<runtime::time_point> when) {
+    if (pending_io()) {
+        lock.unlock();
+        get_io()->wait(when);
+        lock.lock();
+    } else {
+        if (when) {
+            _cv.wait_until(lock, *when);
+        } else {
+            _cv.wait(lock);
+        }
+    }
+}
+
 void scheduler::schedule() {
-    //CHECK(!_alltasks.empty());
+    // TODO: enable if we add main task to alltasks
+    //DCHECK(!_alltasks.empty());
     task_pimpl *self = _current_task;
 
     do {
@@ -220,11 +237,7 @@ void scheduler::schedule() {
                 continue;
             }
             auto when = _alarms.when();
-            if (when) {
-                _cv.wait_until(lock, *when);
-            } else {
-                _cv.wait(lock);
-            }
+            wait(lock, when);
         }
     } while (_readyq.empty());
 
@@ -274,6 +287,14 @@ runtime::time_point runtime::now() {
 
 shared_task runtime::task_with_id(uint64_t id) {
     return this_ctx->scheduler.task_with_id(id);
+}
+
+int runtime::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+    return this_ctx->scheduler.get_io()->poll(fds, nfds, ms);
+}
+
+bool runtime::fdwait(int fd, int rw, uint64_t ms) {
+    return this_ctx->scheduler.get_io()->fdwait(fd, rw, ms);
 }
 
 void runtime::shutdown() {
@@ -360,72 +381,73 @@ std::chrono::milliseconds deadline::remaining() const {
 //////////////////// io ///////////////////
 
 io::io() {
+    _events.reserve(1000);
     // TODO: event_fd needs to be non blocking with edge-trigger?
     epoll_event ev{};
     ev.events = EPOLLIN | EPOLLET;
     ev.data.fd = _evfd.fd;
     _efd.add(_evfd.fd, ev);
-
-    _poll_thread = std::thread(std::bind(&io::poll_proc, this));
-    // TODO: maybe join this?
-    _poll_thread.detach();
 }
 
 io::~io() {
 }
 
-io &io::singleton() {
-    static io global;
-    return global;
-}
+void io::wait(optional<runtime::time_point> when) {
+    _events.resize(1000);
 
-void io::poll_proc() {
-    std::vector<epoll_event> events;
-    events.reserve(1000);
-    for (;;) {
-        events.resize(1000);
-        _efd.wait(events, -1);
-        task_pimpl *t = nullptr;
-        for (epoll_event &ev : events) {
-            std::lock_guard<std::mutex> lock{_mutex};
-            DVLOG(5) << "epoll events " << ev.events << " on " << ev.data.fd;
+    int ms = -1;
+    auto now = runtime::clock::now();
+    if (when && *when > now) {
+        ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();
+        struct itimerspec tspec{};
+        struct itimerspec oldspec{};
+        tspec.it_value.tv_sec = ms / 1000;
+        tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
+        _tfd.settime(0, tspec, oldspec);
+    } else {
+        ms = 0;
+    }
 
-            // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
-            // even if they arent asked for, so we must wake up the tasks on any event
-            // to avoid just spinning in epoll.
-            int fd = ev.data.fd;
-            if (!pollfds[fd].in.empty()) {
-                pollfds[fd].in.front().pfd->revents = ev.events;
-                // TODO: maybe pop_front here?
-                t = pollfds[fd].in.front().task;
-                DVLOG(5) << "IN EVENT on task: " << t;
-                t->ready_for_io();
-            }
+    _efd.wait(_events, ms);
+    task_pimpl *t = nullptr;
+    for (epoll_event &ev : _events) {
+        DVLOG(5) << "epoll events " << ev.events << " on " << ev.data.fd;
 
-            if (!pollfds[fd].out.empty()) {
-                pollfds[fd].out.front().pfd->revents = ev.events;
-                // TODO: maybe pop_front here?
-                t = pollfds[fd].out.front().task;
-                DVLOG(5) << "OUT EVENT on task: " << t;
-                t->ready_for_io();
-            }
+        // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+        // even if they arent asked for, so we must wake up the tasks on any event
+        // to avoid just spinning in epoll.
+        int fd = ev.data.fd;
+        if (!pollfds[fd].in.empty()) {
+            pollfds[fd].in.front().pfd->revents = ev.events;
+            // TODO: maybe pop_front here?
+            t = pollfds[fd].in.front().task;
+            DVLOG(5) << "IN EVENT on task: " << t;
+            t->ready_for_io();
+        }
 
-            if (ev.data.fd == _evfd.fd) {
-                // our wake up eventfd was written to
-                // clear events by reading value
-                _evfd.read();
-            } else if (pollfds[fd].in.empty() && pollfds[fd].out.empty()) {
-                // TODO: otherwise we might want to remove fd from epoll
-                LOG(ERROR) << "event " << ev.events << " for fd: "
-                    << ev.data.fd << " but has no task";
-            }
+        if (!pollfds[fd].out.empty()) {
+            pollfds[fd].out.front().pfd->revents = ev.events;
+            // TODO: maybe pop_front here?
+            t = pollfds[fd].out.front().task;
+            DVLOG(5) << "OUT EVENT on task: " << t;
+            t->ready_for_io();
+        }
+
+        if (ev.data.fd == _evfd.fd) {
+            // our wake up eventfd was written to
+            // clear events by reading value
+            _evfd.read();
+        } else if (ev.data.fd == _tfd.fd) {
+        } else if (pollfds[fd].in.empty() && pollfds[fd].out.empty()) {
+            // TODO: otherwise we might want to remove fd from epoll
+            LOG(ERROR) << "event " << ev.events << " for fd: "
+                << ev.data.fd << " but has no task";
         }
     }
 }
 
 void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
     for (nfds_t i=0; i<nfds; ++i) {
-        std::lock_guard<std::mutex> lock{_mutex};
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
         int fd = fds[i].fd;
@@ -464,7 +486,6 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
     using namespace std;
     int rvalue = 0;
     for (nfds_t i=0; i<nfds; ++i) {
-        lock_guard<mutex> lock{_mutex};
         int fd = fds[i].fd;
         if (fds[i].revents) rvalue++;
 
@@ -555,16 +576,6 @@ int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
     }
 
     return remove_pollfds(fds, nfds);
-}
-
-void io::wait_for_fd_events(int fd, uint32_t events) {
-    task_pimpl *t = runtime::current_task();
-    try {
-        t->swap();
-    } catch (task_interrupted &e) {
-        // try to remove the fd,task from list
-        throw;
-    }
 }
 
 } // ten

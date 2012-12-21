@@ -6,6 +6,7 @@
 #include <deque>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <poll.h>
 
 namespace ten {
 
@@ -43,6 +44,10 @@ public:
     static void wait_for_all();
 
     static void shutdown();
+
+    // compat
+    static int poll(pollfd *fds, nfds_t nfds, uint64_t ms);
+    static bool fdwait(int fd, int rw, uint64_t ms);
 };
 
 } // ten
