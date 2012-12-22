@@ -9,9 +9,13 @@ using namespace ten::compat;
 
 static void connecter(address &addr, channel<int> ch) {
     netsock s(AF_INET, SOCK_STREAM);
-    if (s.connect(addr, 100) == 0) {
-        ch.send(0);
-    } else {
+    try {
+        if (s.connect(addr, 100) == 0) {
+            ch.send(0);
+        } else {
+            ch.send(std::move(errno));
+        }
+    } catch (errorx &e) {
         ch.send(std::move(errno));
     }
 }
@@ -37,7 +41,7 @@ static void listener(netsock &sock) {
 
 static void connecter_spawner(address &addr, channel<int> &ch) {
     for (int i=0; i<1000; ++i) {
-        taskspawn(std::bind(connecter, std::ref(addr), ch));
+        taskspawn(std::bind(connecter, addr, ch));
     }
 }
 
@@ -50,7 +54,7 @@ static void startup() {
     s.getsockname(addr);
     int listen_task = taskspawn(std::bind(listener, std::ref(s)));
     taskyield(); // let listener get setup
-    procspawn(std::bind(connecter_spawner, std::ref(addr), ch));
+    procspawn(std::bind(connecter_spawner, addr, ch));
 
     std::unordered_map<int, unsigned int> results;
     for (unsigned i=0; i<1000; ++i) {
