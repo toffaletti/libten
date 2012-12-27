@@ -53,7 +53,9 @@ add_executable(play2 EXCLUDE_FROM_ALL play2.cc
     )
 target_link_libraries(play2 rt boost_context glog)
 
-add_executable(take2 EXCLUDE_FROM_ALL take2.cc)
+add_executable(take2 EXCLUDE_FROM_ALL take2.cc
+    ../src/error.cc
+    )
 target_link_libraries(take2 rt boost_context glog)
 
 if (OPENSSL_FOUND)
