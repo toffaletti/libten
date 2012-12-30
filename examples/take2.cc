@@ -63,6 +63,7 @@ struct tasklet {
 
     context _ctx;
     std::function<void ()> _f;
+    std::function<void ()> _post;
 
     tasklet(std::function<void ()> &&f)
         : _ctx(tasklet::trampoline),
@@ -72,6 +73,7 @@ struct tasklet {
     }
 
     ~tasklet() {
+        DVLOG(5) << "freeing task: " << this;
         --taskcount;
     }
 
@@ -158,11 +160,23 @@ static void net_init() {
     efd.add(evfd.fd, ev);
 }
 
+static void wait_for_event(int wait_fd, uint32_t event) {
+    tld->self->_post = [=] {
+        epoll_event ev{};
+        ev.events = event | EPOLLONESHOT;
+        ev.data.fd = wait_fd;
+        VLOG(5) << "sending self to io chan";
+        io_chan.send(std::make_pair(wait_fd, std::move(tld->self)));
+        if (efd.add(wait_fd, ev) < 0) {
+            efd.modify(wait_fd, ev);
+        }
+    };
+    tasklet::yield();
+}
+
 static void connection(socket_fd fd) {
     VLOG(5) << "in connection handler " << fd.fd;
-    epoll_event ev{};
-    ev.events = EPOLLIN | EPOLLONESHOT;
-    ev.data.fd = fd.fd;
+
     buffer buf{4096};
     http_request req;
     http_parser parser;
@@ -208,42 +222,20 @@ static void connection(socket_fd fd) {
             }
         }
         if (nr == 0) return;
-        VLOG(5) << "sending self to io chan";
-        {
-            tasklet *tmp = tld->self.get(); 
-            io_chan.send(std::make_pair(fd.fd, std::move(tld->self)));
-            if (efd.add(fd.fd, ev) < 0) {
-                efd.modify(fd.fd, ev);
-            }
-            tmp->_yield();
-        }
-
+        wait_for_event(fd.fd, EPOLLIN);
     }
 }
 
 static void accepter(socket_fd fd) {
     DVLOG(5) << "in accepter";
-    epoll_event ev{};
-    ev.events = EPOLLIN | EPOLLONESHOT;
-    ev.data.fd = fd.fd;
     for (;;) {
-        DVLOG(5) << "sending self to io chan";
-        {
-            tasklet *tmp = tld->self.get(); 
-            io_chan.send(std::make_pair(fd.fd, std::move(tld->self)));
-            if (efd.add(fd.fd, ev) < 0) {
-                efd.modify(fd.fd, ev);
-            }
-            tmp->_yield();
-        }
+        wait_for_event(fd.fd, EPOLLIN);
         DVLOG(5) << "after wait";
         address addr;
         int nfd = fd.accept(addr, SOCK_NONBLOCK);
         DVLOG(5) << "accepted: " << nfd;
-
         std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
         sched_chan.send(std::move(t));
-
     }
 }
 
@@ -251,10 +243,17 @@ static void scheduler() {
     thread_data td;
     tld = &td;
     while (taskcount > 0) {
+        DVLOG(5) << "waiting for task to schedule";
         auto t = sched_chan.recv();
+        DVLOG(5) << "got task to schedule: " << (*t).get();
         if (!t) break;
         tld->self = std::move(*t);
         if (tld->self->swap()) {
+            CHECK(tld->self);
+            if (tld->self->_post) {
+                std::function<void ()> post = std::move(tld->self->_post);
+                post();
+            }
             if (tld->self) {
                 DVLOG(5) << "scheduling " << tld->self.get();
                 sched_chan.send(std::move(tld->self));
@@ -291,7 +290,9 @@ static void io_scheduler() {
             }
             // TODO: send them all in one go
             DCHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
-            sched_chan.send(std::move(io_tasks[fd]));
+            if (io_tasks[fd]) {
+                sched_chan.send(std::move(io_tasks[fd]));
+            }
         }
     }
 }
@@ -308,7 +309,6 @@ int main() {
         std::unique_ptr<tasklet> t(new tasklet(std::bind(counter, i)));
         sched_chan.send(std::move(t));
     }
-
 #endif
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
     address addr{"0.0.0.0", 7700};
