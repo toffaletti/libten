@@ -1,10 +1,14 @@
 #include "ten/logging.hh"
 #include "../src/context.hh"
 #include "ten/descriptors.hh"
+#include "ten/buffer.hh"
+#include "ten/http/http_message.hh"
 
 #include <memory>
 #include <thread>
 #include <atomic>
+
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "t2/channel.hh"
 
@@ -127,20 +131,20 @@ static void recver(channel<Foo> chan) {
         v = std::move(tmp);
     }
     if (v) {
-        LOG(INFO) << "last value: " << v->value;
+        VLOG(5) << "last value: " << v->value;
     }
 }
 
 static void counter(int n) {
     for (int i=0; i<100; ++i) {
-        LOG(INFO) << n << " i: " << i;
+        VLOG(5) << n << " i: " << i;
         tasklet::yield();
         if (i == 5) {
-            LOG(INFO) << "sleepy time";
+            VLOG(5) << "sleepy time";
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
-    LOG(INFO) << "end counter " << n;
+    VLOG(5) << "end counter " << n;
 }
 
 static channel<std::unique_ptr<tasklet>> sched_chan;
@@ -154,26 +158,92 @@ static void net_init() {
     efd.add(evfd.fd, ev);
 }
 
-static void accepter(socket_fd fd) {
-    LOG(INFO) << "in accepter";
+static void connection(socket_fd fd) {
+    VLOG(5) << "in connection handler " << fd.fd;
     epoll_event ev{};
     ev.events = EPOLLIN | EPOLLONESHOT;
     ev.data.fd = fd.fd;
-    efd.add(fd.fd, ev);
+    buffer buf{4096};
+    http_request req;
+    http_parser parser;
+    req.parser_init(&parser);
     for (;;) {
-        LOG(INFO) << "sending self to io chan";
+        buf.reserve(4096);
+        ssize_t nr;
+        while ((nr = fd.recv(buf.back(), buf.available())) > 0) {
+            VLOG(5) << fd.fd << " got " << nr << " bytes\n";
+            buf.commit(nr);
+            size_t nparse = buf.size();
+            req.parse(&parser, buf.front(), nparse);
+            buf.remove(nparse);
+            if (req.complete) {
+                VLOG(5) << " got request " << req.data();
+                http_response resp{200, http_headers{"Content-Length", "0"}};
+#if 0
+                char buf[128];
+                struct tm tm;
+                time_t now = std::chrono::system_clock::to_time_t(
+                        std::chrono::system_clock::now()
+                        );
+                strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
+                resp.set("Date", buf);
+#endif
+
+                if (resp.get("Connection").empty()) {
+                    // obey clients wishes if we have none of our own
+                    std::string conn = req.get("Connection");
+                    if (!conn.empty())
+                        resp.set("Connection", conn);
+                    else if (req.version == http_1_0)
+                        resp.set("Connection", "close");
+                }
+
+                std::string data = resp.data();
+                ssize_t nw = fd.send(data.data(), data.size());
+                (void)nw;
+
+                if (boost::iequals(resp.get("Connection"), "close")) {
+                    return;
+                }
+            }
+        }
+        if (nr == 0) return;
+        VLOG(5) << "sending self to io chan";
         {
             tasklet *tmp = tld->self.get(); 
             io_chan.send(std::make_pair(fd.fd, std::move(tld->self)));
+            if (efd.add(fd.fd, ev) < 0) {
+                efd.modify(fd.fd, ev);
+            }
             tmp->_yield();
         }
-        LOG(INFO) << "after wait";
-        address addr;
-        int nfd = fd.accept(addr);
-        LOG(INFO) << "accepted: " << nfd;
-        close(nfd);
 
-        efd.modify(fd.fd, ev);
+    }
+}
+
+static void accepter(socket_fd fd) {
+    DVLOG(5) << "in accepter";
+    epoll_event ev{};
+    ev.events = EPOLLIN | EPOLLONESHOT;
+    ev.data.fd = fd.fd;
+    for (;;) {
+        DVLOG(5) << "sending self to io chan";
+        {
+            tasklet *tmp = tld->self.get(); 
+            io_chan.send(std::make_pair(fd.fd, std::move(tld->self)));
+            if (efd.add(fd.fd, ev) < 0) {
+                efd.modify(fd.fd, ev);
+            }
+            tmp->_yield();
+        }
+        DVLOG(5) << "after wait";
+        address addr;
+        int nfd = fd.accept(addr, SOCK_NONBLOCK);
+        DVLOG(5) << "accepted: " << nfd;
+
+        std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
+        sched_chan.send(std::move(t));
+
     }
 }
 
@@ -186,12 +256,12 @@ static void scheduler() {
         tld->self = std::move(*t);
         if (tld->self->swap()) {
             if (tld->self) {
-                LOG(INFO) << "scheduling " << tld->self.get();
+                DVLOG(5) << "scheduling " << tld->self.get();
                 sched_chan.send(std::move(tld->self));
             }
         }
     }
-    LOG(INFO) << "exiting scheduler";
+    DVLOG(5) << "exiting scheduler";
     sched_chan.close();
 }
 
@@ -206,9 +276,10 @@ static void io_scheduler() {
         for (auto &tup : new_tasks) {
             int fd = std::get<0>(tup);
             std::unique_ptr<tasklet> t = std::move(std::get<1>(tup));
-            if ((size_t)fd > io_tasks.size()) {
+            if ((size_t)fd >= io_tasks.size()) {
                 io_tasks.resize(fd+1);
             }
+            DVLOG(5) << "inserting task for io on fd " << fd;
             io_tasks[fd] = std::move(t);
         }
 
@@ -219,7 +290,7 @@ static void io_scheduler() {
                 continue;
             }
             // TODO: send them all in one go
-            CHECK((size_t)fd < io_tasks.size());
+            DCHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
             sched_chan.send(std::move(io_tasks[fd]));
         }
     }
@@ -228,7 +299,7 @@ static void io_scheduler() {
 int main() {
     runtime_init();
     net_init();
-    LOG(INFO) << "take2";
+    DVLOG(5) << "take2";
 
     std::thread io_thread(io_scheduler);
 
@@ -241,6 +312,7 @@ int main() {
 #endif
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
     address addr{"0.0.0.0", 7700};
+    listen_fd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     listen_fd.bind(addr);
     LOG(INFO) << "bound to " << addr;
     listen_fd.listen();
@@ -248,7 +320,7 @@ int main() {
     sched_chan.send(std::move(t));
 
     std::vector<std::thread> schedulers;
-    for (int i=0; i<6; ++i) {
+    for (int i=0; i<4; ++i) {
         schedulers.emplace_back(scheduler);
     }
 

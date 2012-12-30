@@ -25,7 +25,7 @@ public:
     //context(const context &&) = delete;
 
     //! make context for existing stack
-    context() noexcept {}
+    context() noexcept : _ctx{} {}
 
     //! make a new context and stack
     explicit context(func_type f) {
