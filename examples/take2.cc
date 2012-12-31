@@ -234,12 +234,11 @@ static void accepter(socket_fd fd) {
         wait_for_event(fd.fd, EPOLLIN);
         address addr;
         int nfd = fd.accept(addr, SOCK_NONBLOCK);
+        // accept can still fail even though EPOLLIN triggered
         if (nfd != -1) {
             DVLOG(5) << "accepted: " << nfd;
             std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
             sched_chan.send(std::move(t));
-        } else {
-            LOG(ERROR) << "ready on " << fd.fd << " but accept returned error";
         }
     }
 }
@@ -296,11 +295,8 @@ static void io_scheduler() {
                 if (e % 7 == 0) return;
                 continue;
             }
+            CHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
             // TODO: send them all in one go
-            if ((size_t)fd >= io_tasks.size()) {
-                LOG(ERROR) << "BUG: " << fd << " larger than " << io_tasks.size();
-                continue;
-            }
             if (io_tasks[fd]) {
                 sched_chan.send(std::move(io_tasks[fd]));
             }
