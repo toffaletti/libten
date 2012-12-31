@@ -153,9 +153,10 @@ static channel<std::unique_ptr<tasklet>> sched_chan;
 static channel<std::tuple<int, std::unique_ptr<tasklet>>> io_chan;
 static epoll_fd efd;
 static event_fd evfd;
+static std::thread io_thread;
 
 static void net_init() {
-    epoll_event ev{EPOLLIN};
+    epoll_event ev{EPOLLIN | EPOLLONESHOT};
     ev.data.fd = evfd.fd;
     efd.add(evfd.fd, ev);
 }
@@ -228,14 +229,18 @@ static void connection(socket_fd fd) {
 
 static void accepter(socket_fd fd) {
     DVLOG(5) << "in accepter";
+    fd.setnonblock(); // needed because of dup()
     for (;;) {
         wait_for_event(fd.fd, EPOLLIN);
-        DVLOG(5) << "after wait";
         address addr;
         int nfd = fd.accept(addr, SOCK_NONBLOCK);
-        DVLOG(5) << "accepted: " << nfd;
-        std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
-        sched_chan.send(std::move(t));
+        if (nfd != -1) {
+            DVLOG(5) << "accepted: " << nfd;
+            std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
+            sched_chan.send(std::move(t));
+        } else {
+            LOG(ERROR) << "ready on " << fd.fd << " but accept returned error";
+        }
     }
 }
 
@@ -284,12 +289,18 @@ static void io_scheduler() {
 
         for (epoll_event &ev : events) {
             int fd = ev.data.fd;
+            DVLOG(5) << "events " << ev.events << " on fd " << fd;
             if (fd == evfd.fd) {
-                if (evfd.read() == 7) return;
+                uint64_t e = evfd.read();
+                DVLOG(5) << "event " << e << " on eventfd";
+                if (e % 7 == 0) return;
                 continue;
             }
             // TODO: send them all in one go
-            DCHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
+            if ((size_t)fd >= io_tasks.size()) {
+                LOG(ERROR) << "BUG: " << fd << " larger than " << io_tasks.size();
+                continue;
+            }
             if (io_tasks[fd]) {
                 sched_chan.send(std::move(io_tasks[fd]));
             }
@@ -297,12 +308,33 @@ static void io_scheduler() {
     }
 }
 
+void install_sigint_handler() {
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGQUIT);
+    // This is lame because i can't move signal_fd into the lambda
+    auto sigfd = std::make_shared<signal_fd>(mask);
+    std::unique_ptr<tasklet> t(new tasklet([sigfd] {
+        LOG(INFO) << "waiting for signal";
+        wait_for_event(sigfd->fd, EPOLLIN);
+        LOG(INFO) << "signal handler";
+        // TODO: lame hack
+        evfd.write(7);
+        io_thread.join();
+        sched_chan.recv_all();
+        sched_chan.close();
+    }));
+    sched_chan.send(std::move(t));
+}
+
 int main() {
     runtime_init();
     net_init();
+    install_sigint_handler();
     DVLOG(5) << "take2";
 
-    std::thread io_thread(io_scheduler);
+    io_thread = std::thread{io_scheduler};
 
 #if 0
     for (int i=0; i<2; ++i) {
@@ -316,8 +348,11 @@ int main() {
     listen_fd.bind(addr);
     LOG(INFO) << "bound to " << addr;
     listen_fd.listen();
-    std::unique_ptr<tasklet> t(new tasklet(std::bind(accepter, dup(listen_fd.fd))));
-    sched_chan.send(std::move(t));
+
+    for (int i=0; i<4; ++i) {
+        std::unique_ptr<tasklet> t(new tasklet(std::bind(accepter, dup(listen_fd.fd))));
+        sched_chan.send(std::move(t));
+    }
 
     std::vector<std::thread> schedulers;
     for (int i=0; i<4; ++i) {
@@ -329,8 +364,5 @@ int main() {
     for (auto &sched : schedulers) {
         sched.join();
     }
-
-    evfd.write(7);
-    io_thread.join();
 }
 

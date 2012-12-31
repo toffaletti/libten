@@ -58,7 +58,7 @@ add_executable(take2 EXCLUDE_FROM_ALL take2.cc
     ../src/http_parser.c
     ../src/http_message.cc
     )
-target_link_libraries(take2 rt boost_context glog)
+target_link_libraries(take2 rt boost_context glog jemalloc)
 
 if (OPENSSL_FOUND)
     add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)
