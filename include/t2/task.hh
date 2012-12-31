@@ -4,27 +4,40 @@
 #include "ten/logging.hh"
 #include "../src/context.hh"
 #include <functional>
-#include <vector>
+#include <list>
 #include <memory>
+#include <mutex>
 #include <atomic>
 
 extern std::atomic<uint64_t> taskcount;
 
 namespace t2 {
 
+struct task_interrupted {};
+
 struct tasklet {
 
     context _ctx;
     std::function<void ()> _f;
     std::function<void ()> _post;
+
+    std::mutex _mutex;
     std::weak_ptr<tasklet> _parent;
-    std::vector<std::weak_ptr<tasklet>> _links;
-    std::atomic_flag _canceled; 
+    std::list<std::shared_ptr<tasklet>> _links;
+    std::list<std::shared_ptr<tasklet>>::iterator _link;
+
+    std::atomic<bool> _ready;
+    std::atomic<bool> _canceled; 
+    bool _unwinding;
 
     tasklet(std::function<void ()> f)
         : _ctx(tasklet::trampoline),
-        _f(std::move(f))
+        _f(std::move(f)),
+        _ready(true),
+        _canceled(false),
+        _unwinding(false)
     {
+        DVLOG(5) << "new task: " << this;
         ++taskcount;
     }
 
@@ -33,9 +46,7 @@ struct tasklet {
         --taskcount;
     }
 
-    void cancel() {
-        _canceled.test_and_set();
-    }
+    static void cancel(std::shared_ptr<tasklet> t);
 
     static void yield();
 

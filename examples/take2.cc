@@ -45,7 +45,12 @@ static void runtime_init() {
     //netinit();
 }
 
+std::atomic<bool> _done{false};
 std::atomic<uint64_t> taskcount{0};
+
+static void runtime_quit() {
+    _done = true;
+}
 
 struct thread_data {
     context ctx;
@@ -155,6 +160,11 @@ static void scheduler() {
         auto t = sched_chan.recv();
         DVLOG(5) << "got task to schedule: " << (*t).get();
         if (!t) break;
+        CHECK((*t)->_ready);
+        if (_done) {
+            DVLOG(5) << "canceling because done " << *t;
+            tasklet::cancel(*t);
+        }
         tld->self = std::move(*t);
         if (tld->self->swap()) {
             CHECK(tld->self);
@@ -163,9 +173,13 @@ static void scheduler() {
                 post();
             }
             if (tld->self) {
-                DVLOG(5) << "scheduling " << tld->self.get();
-                sched_chan.send(std::move(tld->self));
+                DVLOG(5) << "scheduling " << tld->self;
+                if (tld->self->_ready.exchange(true) == false) {
+                    sched_chan.send(std::move(tld->self));
+                }
             }
+        } else {
+            tld->self.reset();
         }
     }
     DVLOG(5) << "exiting scheduler";
@@ -202,7 +216,9 @@ static void io_scheduler() {
             CHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
             // TODO: send them all in one go
             if (io_tasks[fd]) {
-                sched_chan.send(std::move(io_tasks[fd]));
+                if (io_tasks[fd]->_ready.exchange(true) == false) {
+                    sched_chan.send(std::move(io_tasks[fd]));
+                }
             }
         }
     }
@@ -219,11 +235,9 @@ void install_sigint_handler() {
         LOG(INFO) << "waiting for signal";
         wait_for_event(sigfd->fd, EPOLLIN);
         LOG(INFO) << "signal handler";
-        // TODO: lame hack
+        runtime_quit();
         evfd.write(7);
         io_thread.join();
-        sched_chan.recv_all();
-        sched_chan.close();
     });
 }
 
