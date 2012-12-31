@@ -2,6 +2,7 @@
 #define TEN_TASK_IO_HH
 
 #include "ten/descriptors.hh"
+#include "ten/optional.hh"
 #include <thread>
 #include <mutex>
 #include <poll.h>
@@ -26,34 +27,28 @@ private:
 
     epoll_fd _efd;
     event_fd _evfd;
-    std::thread _poll_thread;
-
-    std::mutex _mutex;
-    // TODO: go away
+    timer_fd _tfd;
     //! number of fds we've been asked to wait on
     size_t npollfds;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     fd_array pollfds;
 
-    io();
+    std::vector<epoll_event> _events;
 
-    enum class event {
-        read,
-        write,
-        accept
-    };
-
-    void poll_proc();
     void add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds);
     int remove_pollfds(pollfd *fds, nfds_t nfds);
 public:
-    static io &singleton();
+    io();
+    ~io();
+
+    void wakeup() {
+        _evfd.write(0);
+    }
 
     int poll(pollfd *fds, nfds_t nfds, uint64_t ms);
     bool fdwait(int fd, int rw, uint64_t ms);
-    void wait_for_fd_events(int fd, uint32_t events);
 
-    ~io();
+    void wait(optional<runtime::time_point> when);
 };
 
 } // ten

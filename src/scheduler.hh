@@ -3,6 +3,7 @@
 
 #include "ten/llqueue.hh"
 #include "ten/task/runtime.hh"
+#include "ten/task/io.hh"
 #include <vector>
 #include <deque>
 #include <mutex>
@@ -22,11 +23,12 @@ public:
     friend class deadline;
     friend class io;
 private:
+    std::unique_ptr<io> _io;
+
     task_pimpl _task;
     //! current time cached in a few places through the event loop
     runtime::time_point _now;
     alarm_clock _alarms;
-
 
     task_pimpl *_current_task = nullptr;
     std::vector<shared_task> _alltasks;
@@ -47,6 +49,24 @@ private:
          _now = runtime::clock::now();
          return _now;
     }
+
+    void wait(std::unique_lock <std::mutex> &lock, optional<runtime::time_point> when);
+
+    io *get_io() {
+        if (!_io) {
+            _io = std::unique_ptr<io>(new io());
+        }
+        return _io.get();
+    }
+
+    bool pending_io() {
+        if (_io) {
+            return true;
+        }
+        return false;
+    }
+
+    void wakeup();
 public:
     void ready(task_pimpl *t);
     void ready_for_io(task_pimpl *t);

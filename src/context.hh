@@ -9,9 +9,30 @@
 #include <valgrind/valgrind.h>
 #endif
 
+#include "ten/logging.hh"
+
+class fast_stack_allocator {
+public:
+    void *allocate(size_t stack_size) {
+        void *stack_end = nullptr;
+        int r = posix_memalign(&stack_end, 4096, stack_size);
+        DCHECK(r == 0);
+        DCHECK(stack_end);
+        stack_end = reinterpret_cast<void *>(
+                reinterpret_cast<intptr_t>(stack_end) + stack_size);
+        return stack_end;
+    }
+
+    void deallocate(void *p, size_t stack_size) {
+        free(reinterpret_cast<void *>(
+                    reinterpret_cast<intptr_t>(p)-stack_size));
+    }
+};
+
 class context {
 private:
-    boost::ctx::stack_allocator allocator;
+    //boost::ctx::stack_allocator allocator;
+    fast_stack_allocator allocator;
 private:
     boost::ctx::fcontext_t _ctx;
 #ifndef NVALGRIND
@@ -21,8 +42,8 @@ private:
 public:
     typedef void (*func_type)(intptr_t);
 public:
-    //context(const context &) = delete;
-    //context(const context &&) = delete;
+    context(const context &) = delete;
+    context(const context &&) = delete;
 
     //! make context for existing stack
     context() noexcept : _ctx{} {}
@@ -61,5 +82,4 @@ public:
 
 
 #endif
-
 
