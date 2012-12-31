@@ -1,16 +1,13 @@
-#include "ten/logging.hh"
-#include "../src/context.hh"
 #include "ten/descriptors.hh"
 #include "ten/buffer.hh"
 #include "ten/http/http_message.hh"
 
-#include <memory>
 #include <thread>
-#include <atomic>
 
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "t2/channel.hh"
+#include "t2/task.hh"
 
 #include <sys/syscall.h> // gettid
 #include <sys/stat.h> // umask
@@ -48,109 +45,17 @@ static void runtime_init() {
     //netinit();
 }
 
-static std::atomic<uint64_t> taskcount{0};
-
-struct tasklet;
+std::atomic<uint64_t> taskcount{0};
 
 struct thread_data {
     context ctx;
-    std::unique_ptr<tasklet> self;
+    std::shared_ptr<tasklet> self;
 };
 
 __thread thread_data *tld = nullptr;
 
-struct tasklet {
-
-    context _ctx;
-    std::function<void ()> _f;
-    std::function<void ()> _post;
-
-    tasklet(std::function<void ()> &&f)
-        : _ctx(tasklet::trampoline),
-        _f(f)
-    {
-        ++taskcount;
-    }
-
-    ~tasklet() {
-        DVLOG(5) << "freeing task: " << this;
-        --taskcount;
-    }
-
-    static void yield() {
-        tld->self->_yield();
-    }
-
-    void _yield() {
-        _ctx.swap(tld->ctx, 0);
-    }
-
-    bool swap() {
-        if (_f) {
-            tld->ctx.swap(_ctx, reinterpret_cast<intptr_t>(this));
-        }
-        return static_cast<bool>(_f);
-    }
-
-    static void trampoline(intptr_t arg) noexcept;
-};
-
-void tasklet::trampoline(intptr_t arg) noexcept {
-    tasklet *self = reinterpret_cast<tasklet *>(arg);
-    self->_f();
-    self->_f = nullptr;
-    self->_ctx.swap(tld->ctx, 0);
-    LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
-}
-
-struct Foo {
-    int value;
-
-    Foo(const Foo &) = delete;
-
-    Foo(Foo &&other) : value(0) {
-        std::swap(value, other.value);
-    }
-
-    Foo &operator= (Foo &&other) {
-        std::swap(value, other.value);
-        return *this;
-    }
-
-    //Foo(const Foo &other) {
-    //    LOG(INFO) << "copy ctor";
-    //    value = other.value;
-    //}
-
-    Foo(int v) : value(v) {}
-};
-
-static void recver(channel<Foo> chan) {
-    optional<Foo> v;
-    for (;;) {
-        optional<Foo> tmp = chan.recv();
-        if (!tmp) break;
-        v = std::move(tmp);
-    }
-    if (v) {
-        VLOG(5) << "last value: " << v->value;
-    }
-}
-
-static void counter(int n) {
-    for (int i=0; i<100; ++i) {
-        VLOG(5) << n << " i: " << i;
-        tasklet::yield();
-        if (i == 5) {
-            VLOG(5) << "sleepy time";
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
-    VLOG(5) << "end counter " << n;
-}
-
-static channel<std::unique_ptr<tasklet>> sched_chan;
-static channel<std::tuple<int, std::unique_ptr<tasklet>>> io_chan;
+channel<std::shared_ptr<tasklet>> sched_chan;
+static channel<std::tuple<int, std::shared_ptr<tasklet>>> io_chan;
 static epoll_fd efd;
 static event_fd evfd;
 static std::thread io_thread;
@@ -237,8 +142,7 @@ static void accepter(socket_fd fd) {
         // accept can still fail even though EPOLLIN triggered
         if (nfd != -1) {
             DVLOG(5) << "accepted: " << nfd;
-            std::unique_ptr<tasklet> t(new tasklet(std::bind(connection, nfd)));
-            sched_chan.send(std::move(t));
+            tasklet::spawn_link(connection, nfd);
         }
     }
 }
@@ -269,7 +173,7 @@ static void scheduler() {
 }
 
 static void io_scheduler() {
-    std::vector<std::unique_ptr<tasklet>> io_tasks;
+    std::vector<std::shared_ptr<tasklet>> io_tasks;
     std::vector<epoll_event> events;
     events.reserve(1000);
     for (;;) {
@@ -278,7 +182,7 @@ static void io_scheduler() {
         auto new_tasks = io_chan.recv_all();
         for (auto &tup : new_tasks) {
             int fd = std::get<0>(tup);
-            std::unique_ptr<tasklet> t = std::move(std::get<1>(tup));
+            std::shared_ptr<tasklet> t = std::move(std::get<1>(tup));
             if ((size_t)fd >= io_tasks.size()) {
                 io_tasks.resize(fd+1);
             }
@@ -311,7 +215,7 @@ void install_sigint_handler() {
     sigaddset(&mask, SIGQUIT);
     // This is lame because i can't move signal_fd into the lambda
     auto sigfd = std::make_shared<signal_fd>(mask);
-    std::unique_ptr<tasklet> t(new tasklet([sigfd] {
+    tasklet::spawn([sigfd] {
         LOG(INFO) << "waiting for signal";
         wait_for_event(sigfd->fd, EPOLLIN);
         LOG(INFO) << "signal handler";
@@ -320,8 +224,7 @@ void install_sigint_handler() {
         io_thread.join();
         sched_chan.recv_all();
         sched_chan.close();
-    }));
-    sched_chan.send(std::move(t));
+    });
 }
 
 int main() {
@@ -332,12 +235,6 @@ int main() {
 
     io_thread = std::thread{io_scheduler};
 
-#if 0
-    for (int i=0; i<2; ++i) {
-        std::unique_ptr<tasklet> t(new tasklet(std::bind(counter, i)));
-        sched_chan.send(std::move(t));
-    }
-#endif
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
     address addr{"0.0.0.0", 7700};
     listen_fd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
@@ -346,8 +243,7 @@ int main() {
     listen_fd.listen();
 
     for (int i=0; i<4; ++i) {
-        std::unique_ptr<tasklet> t(new tasklet(std::bind(accepter, dup(listen_fd.fd))));
-        sched_chan.send(std::move(t));
+        tasklet::spawn(accepter, dup(listen_fd.fd));
     }
 
     std::vector<std::thread> schedulers;

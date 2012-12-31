@@ -54,6 +54,7 @@ add_executable(play2 EXCLUDE_FROM_ALL play2.cc
 target_link_libraries(play2 rt boost_context glog)
 
 add_executable(take2 EXCLUDE_FROM_ALL take2.cc
+    ../src/tasklet.cc
     ../src/error.cc
     ../src/http_parser.c
     ../src/http_message.cc
