@@ -1,11 +1,19 @@
 #include "ten/ioproc.hh"
 #include "ten/logging.hh"
 
+#include <iostream>
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
 
 using namespace ten;
-using namespace std;
+using std::exception;
+using std::make_shared;
+using std::shared_ptr;
+using std::ostream;
+using std::bind;
+using std::endl;
+using std::cerr;
+
 const size_t default_stacksize=256*1024;
 
 namespace po = boost::program_options;
@@ -40,7 +48,7 @@ struct options {
 };
 
 static void showhelp(options &opts, ostream &os = cerr) {
-    cerr << opts.visible << endl;
+    os << opts.visible << endl;
 }
 
 static void parse_args(options &opts, int argc, char *argv[]) {
