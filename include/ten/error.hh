@@ -31,7 +31,7 @@ private:
 };
 
 //! construct a what() string in printf() format
-class errorx : backtrace_exception {
+class errorx : public backtrace_exception {
 protected:
     static constexpr size_t _bufsize = 256;
     char _buf[_bufsize];
