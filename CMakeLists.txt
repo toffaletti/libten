@@ -14,6 +14,13 @@ else ()
     add_definitions(-DBOOST_TEST_DYN_LINK)
 endif ()
 
+add_definitions(
+    -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1
+    -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2
+    -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4
+    -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8
+    )
+
 set(Boost_FIND_REQUIRED 1)
 if (BOOST_ROOT)
   # Prevent falling back to system paths when using a custom Boost prefix.
