@@ -2,13 +2,20 @@
 #include "ten/logging.hh"
 #include "ten/task/compat.hh"
 
+#include <iostream>
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <iostream>
 
 using namespace ten;
 using namespace ten::compat;
-using namespace std;
+using std::exception;
+using std::make_shared;
+using std::shared_ptr;
+using std::ostream;
+using std::bind;
+using std::endl;
+using std::cerr;
 
 namespace po = boost::program_options;
 
@@ -42,7 +49,7 @@ struct options {
 };
 
 static void showhelp(options &opts, ostream &os = cerr) {
-    cerr << opts.visible << endl;
+    os << opts.visible << endl;
 }
 
 static void parse_args(options &opts, int argc, char *argv[]) {

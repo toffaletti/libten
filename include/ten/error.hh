@@ -35,7 +35,7 @@ private:
 };
 
 //! construct a what() string in printf() format
-struct errorx : backtrace_exception {
+class errorx : public backtrace_exception {
 protected:
     static constexpr size_t _bufsize = 256;
     char _buf[_bufsize];
@@ -65,7 +65,7 @@ class errno_saver {
 };
 
 //! exception that sets what() based on current errno value
-struct errno_error : private errno_saver, public errorx {
+class errno_error : private errno_saver, public errorx {
 public:
     //! \param err the error as specified by errno
     errno_error() { _add_strerror(); }
