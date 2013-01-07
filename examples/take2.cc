@@ -55,22 +55,12 @@ static void runtime_quit() {
 struct thread_data {
     context ctx;
     std::shared_ptr<tasklet> self;
-
-    thread_data(boost::context::fcontext_t &ctx_) : ctx{ctx_} {}
 };
 
 __thread thread_data *tld = nullptr;
 
 channel<std::shared_ptr<tasklet>> sched_chan;
-struct task_fd {
-    int fd;
-    std::shared_ptr<tasklet> task;
-
-    task_fd() : fd{} {}
-    task_fd(int fd_, std::shared_ptr<tasklet> &task_) 
-        : fd(fd_), task(std::move(task_)) {}
-};
-static channel<task_fd> io_chan;
+static channel<std::tuple<int, std::shared_ptr<tasklet>>> io_chan;
 static epoll_fd efd;
 static event_fd evfd;
 static std::thread io_thread;
@@ -87,7 +77,7 @@ static void wait_for_event(int wait_fd, uint32_t event) {
         ev.events = event | EPOLLONESHOT;
         ev.data.fd = wait_fd;
         VLOG(5) << "sending self to io chan";
-        io_chan.send(task_fd{wait_fd, tld->self});
+        io_chan.send(std::make_pair(wait_fd, std::move(tld->self)));
         if (efd.add(wait_fd, ev) < 0) {
             efd.modify(wait_fd, ev);
         }
@@ -163,11 +153,10 @@ static void accepter(socket_fd fd) {
 }
 
 static void scheduler() {
-    boost::context::fcontext_t ctx;
-    thread_data td{ctx};
+    thread_data td;
     tld = &td;
     while (taskcount > 0) {
-        DVLOG(5) << "waiting for task to schedule " << taskcount;
+        DVLOG(5) << "waiting for task to schedule";
         auto t = sched_chan.recv();
         DVLOG(5) << "got task to schedule: " << (*t).get();
         if (!t) break;
@@ -189,9 +178,9 @@ static void scheduler() {
                     sched_chan.send(std::move(tld->self));
                 }
             }
+        } else {
+            tld->self.reset();
         }
-        DVLOG(5) << "reseting self for " << tld->self << "[" << tld->self.use_count() << "]";
-        tld->self.reset();
     }
     DVLOG(5) << "exiting scheduler";
     sched_chan.close();
@@ -205,13 +194,13 @@ static void io_scheduler() {
         events.resize(1000);
         efd.wait(events, -1);
         auto new_tasks = io_chan.recv_all();
-        for (auto &v : new_tasks) {
-            int fd = v.fd;
-            std::shared_ptr<tasklet> t = std::move(v.task);
+        for (auto &tup : new_tasks) {
+            int fd = std::get<0>(tup);
+            std::shared_ptr<tasklet> t = std::move(std::get<1>(tup));
             if ((size_t)fd >= io_tasks.size()) {
                 io_tasks.resize(fd+1);
             }
-            DVLOG(5) << "inserting " << t << " for io on fd " << fd;
+            DVLOG(5) << "inserting task for io on fd " << fd;
             io_tasks[fd] = std::move(t);
         }
 

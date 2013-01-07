@@ -6,97 +6,9 @@
 #include <condition_variable>
 #include <deque>
 #include <memory>
-#include <atomic>
-#include <boost/lockfree/queue.hpp>
 
 namespace t2 {
 
-#if 1
-
-template <typename T>
-class channel {
-private:
-    struct pimpl;
-    std::shared_ptr<pimpl> _pimpl;
-    bool _autoclose;
-public:
-    channel(bool autoclose=false);
-    ~channel();
-    void close() noexcept;
-
-    bool send(const T &t) {
-        if (_pimpl->closed) return false;
-        bool empty = _pimpl->queue.empty();
-        CHECK(_pimpl->queue.push(t)); // TODO: spin trying?
-        if (empty) {
-            std::lock_guard<std::mutex> lock(_pimpl->mutex);
-            _pimpl->not_empty.notify_all();
-        }
-        return true;
-    }
-
-    ten::optional<T> recv() {
-        T item;
-        // spin waiting for item
-        for (unsigned i=0; i<4000; ++i) {
-            if (_pimpl->queue.pop(item)) {
-                return item;
-            }
-        }
-        std::unique_lock<std::mutex> lock(_pimpl->mutex);
-        for (;;) {
-            if (_pimpl->queue.pop(item)) {
-                return item;
-            }
-            if (_pimpl->closed) {
-                return {};
-            }
-            _pimpl->not_empty.wait(lock);
-        }
-    }
-
-    std::vector<T> recv_all() {
-        T item;
-        std::vector<T> items;
-        while (_pimpl->queue.pop(item)) {
-            items.push_back(std::move(item));
-        }
-        return items;
-    }
-};
-
-template <typename T>
-struct channel<T>::pimpl {
-    boost::lockfree::queue<T> queue;
-    std::mutex mutex;
-    std::condition_variable not_empty;
-    std::atomic<bool> closed;
-
-    pimpl() : queue(128), closed(false) {
-    }
-};
-
-template <typename T>
-channel<T>::channel(bool autoclose)
-    : _autoclose(autoclose)
-{
-    _pimpl = std::make_shared<pimpl>();
-}
-
-template <typename T>
-channel<T>::~channel() {
-    if (_autoclose) close();
-}
-
-template <typename T>
-void channel<T>::close() noexcept {
-    if (_pimpl->closed.exchange(true) == false) {
-        std::lock_guard<std::mutex> lock(_pimpl->mutex);
-        _pimpl->not_empty.notify_all();
-    }
-}
-
-#else
 template <typename T>
 class channel {
 private:
@@ -182,7 +94,6 @@ void channel<T>::close() noexcept {
         _pimpl->not_empty.notify_all();
     }
 }
-#endif
 
 } // t2
 

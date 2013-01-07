@@ -42,7 +42,7 @@ struct tasklet {
     }
 
     ~tasklet() {
-        DVLOG(5) << "freeing task: " << this << " " << taskcount;
+        DVLOG(5) << "freeing task: " << this;
         --taskcount;
     }
 
