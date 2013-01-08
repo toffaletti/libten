@@ -178,7 +178,7 @@ private:
 
     virtual void setup_listen_socket(netsock &s) {
         netsock_server::setup_listen_socket(s);
-        s.setsockopt(SOL_SOCKET, TCP_DEFER_ACCEPT, 5);
+        s.setsockopt(IPPROTO_TCP, TCP_DEFER_ACCEPT, 5);
     }
 
     void on_connection(netsock &s) {
