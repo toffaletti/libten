@@ -174,6 +174,13 @@ public:
         _log_func = f;
     }
 
+private:
+
+    virtual void setup_listen_socket(netsock &s) {
+        netsock_server::setup_listen_socket(s);
+        s.setsockopt(SOL_SOCKET, TCP_DEFER_ACCEPT, 5);
+    }
+
     void on_connection(netsock &s) {
         // TODO: tuneable buffer sizes
         buffer buf(4*1024);

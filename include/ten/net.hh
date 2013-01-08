@@ -182,7 +182,7 @@ public:
         netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
         THROW_ON_NONZERO_ERRNO(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC));
-        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+        setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);
     }
@@ -209,6 +209,10 @@ public:
 protected:
     virtual void on_connection(netsock &s) = 0;
 
+    virtual void setup_listen_socket(netsock &s) {
+        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    }
+
     void do_accept_loop() {
         accept_loop();
     }
@@ -219,7 +223,8 @@ protected:
             int fd;
             while ((fd = _sock.accept(client_addr, 0)) > 0) {
                 auto self = shared_from_this();
-                taskspawn(std::bind(&netsock_server::client_task, self, fd), _stacksize);
+                taskspawn(std::bind(&netsock_server::client_task, std::move(self), fd), _stacksize);
+                taskyield(); // yield to new client task
             }
         }
     }

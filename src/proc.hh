@@ -149,13 +149,17 @@ public:
         }
     }
 
-    void ready(task *t) {
+    void ready(task *t, bool front=false) {
         DVLOG(5) << "readying: " << t;
         if (this != this_proc()) {
             dirtyq.push(t);
             wakeup();
         } else {
-            runqueue.push_back(t);
+            if (front) {
+                runqueue.push_front(t);
+            } else {
+                runqueue.push_back(t);
+            }
         }
     }
 

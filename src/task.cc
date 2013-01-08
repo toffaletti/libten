@@ -24,7 +24,7 @@ int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = this_proc()->newtaskinproc(f, stacksize);
-    t->ready();
+    t->ready(true); // add new tasks to front of runqueue
     return t->id;
 }
 
@@ -107,10 +107,10 @@ void task::init(const std::function<void ()> &f) {
     co.restart(task::start, this);
 }
 
-void task::ready() {
+void task::ready(bool front) {
     proc *p = cproc;
     if (!_ready.exchange(true)) {
-        p->ready(this);
+        p->ready(this, front);
     }
 }
 
