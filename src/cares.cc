@@ -53,6 +53,10 @@ static void pollfd_to_fd_sets(struct pollfd *fds, int nfds, fd_set *read_fds, fd
         if (fds[i].revents & EPOLLOUT) {
             FD_SET(fds[i].fd, write_fds);
         }
+        if (fds[i].revents & EPOLLERR) {
+            FD_SET(fds[i].fd, read_fds);
+            FD_SET(fds[i].fd, write_fds);
+        }
     }
 }
 
@@ -85,6 +89,8 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
 }
 
 int netdial(int fd, const char *addr, uint16_t port) {
+    long open_max = sysconf(_SC_OPEN_MAX);
+
     channel_destroyer cd;
     sock_info si = {addr, fd, ARES_SUCCESS, port};
     int status = ares_init(&cd.channel);
@@ -94,28 +100,30 @@ int netdial(int fd, const char *addr, uint16_t port) {
 
     ares_gethostbyname(cd.channel, addr, AF_INET, gethostbyname_callback, &si);
 
-    fd_set read_fds, write_fds;
+    // we allocate our own fd set because FD_SETSIZE is 1024
+    // and we could easily have more file descriptors
+    // this runs the risk of stack overflow so big stacks
+    // should be used for dns lookup
+    __fd_mask read_fd_buf[open_max / __NFDBITS];
+    __fd_mask write_fd_buf[open_max / __NFDBITS];
+    fd_set *read_fds = (fd_set *)read_fd_buf;
+    fd_set *write_fds = (fd_set *)write_fd_buf;
+    //fd_set read_fds, write_fds;
     struct timeval *tvp, tv;
     int max_fd, nfds;
     while (si.status == ARES_SUCCESS) {
-        FD_ZERO(&read_fds);
-        FD_ZERO(&write_fds);
-        max_fd = ares_fds(cd.channel, &read_fds, &write_fds);
+        FD_ZERO(read_fds);
+        FD_ZERO(write_fds);
+        max_fd = ares_fds(cd.channel, read_fds, write_fds);
         if (max_fd == 0)
             break;
-
         struct pollfd *fds;
-        fd_sets_to_pollfd(&read_fds, &write_fds, max_fd, &fds, &nfds);
+        fd_sets_to_pollfd(read_fds, write_fds, max_fd, &fds, &nfds);
         std::unique_ptr<struct pollfd, void (*)(void *)> fds_p(fds, free);
         tvp = ares_timeout(cd.channel, NULL, &tv);
-        if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
-            pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
-            ares_process(cd.channel, &read_fds, &write_fds);
-        } else {
-            // TODO: figure out how to make ares set this itself
-            // if poll returns without any fds set it was a timeout
-            si.status = ARES_ETIMEOUT;
-        }
+        taskpoll(fds, nfds, tvp ? SEC2MS(tvp->tv_sec) : 0);
+        pollfd_to_fd_sets(fds, nfds, read_fds, write_fds);
+        ares_process(cd.channel, read_fds, write_fds);
     }
     return si.status;
 }
