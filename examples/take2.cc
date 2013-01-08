@@ -12,6 +12,7 @@
 #include <sys/syscall.h> // gettid
 #include <sys/stat.h> // umask
 #include <signal.h> // sigaction
+#include <netinet/tcp.h> // TCP_DEFER_ACCEPT
 
 using namespace ten;
 using namespace t2;
@@ -55,6 +56,9 @@ static void runtime_quit() {
 struct thread_data {
     context ctx;
     std::shared_ptr<tasklet> self;
+
+    thread_data(boost::context::fcontext_t &fctx)
+        : ctx(fctx) {}
 };
 
 __thread thread_data *tld = nullptr;
@@ -153,7 +157,8 @@ static void accepter(socket_fd fd) {
 }
 
 static void scheduler() {
-    thread_data td;
+    boost::context::fcontext_t fctx;
+    thread_data td(fctx);
     tld = &td;
     while (taskcount > 0) {
         DVLOG(5) << "waiting for task to schedule";
@@ -252,6 +257,7 @@ int main() {
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
     address addr{"0.0.0.0", 7700};
     listen_fd.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    listen_fd.setsockopt(SOL_SOCKET, TCP_DEFER_ACCEPT, 5);
     listen_fd.bind(addr);
     LOG(INFO) << "bound to " << addr;
     listen_fd.listen();
