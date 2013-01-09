@@ -23,13 +23,17 @@ namespace ten {
 struct http_exchange {
     http_request &req;
     netsock &sock;
+    bool will_close;
     http_response resp {404};
     bool resp_sent {false};
     std::chrono::high_resolution_clock::time_point start;
 
     http_exchange(http_request &req_, netsock &sock_)
-        : req(req_), sock(sock_),
-          start(std::chrono::steady_clock::now()) {}
+        : req(req_),
+          sock(sock_),
+          will_close(req.version < http_1_1 || boost::iequals(resp.get("Connection"), "close")),
+          start(std::chrono::steady_clock::now())
+        {}
 
     ~http_exchange() {
         if (!resp_sent) {
@@ -37,7 +41,7 @@ struct http_exchange {
             resp = {404};
             send_response();
         }
-        if (boost::iequals(resp.get("Connection"), "close")) {
+        if (will_close) {
             sock.close();
         }
     }
@@ -189,10 +193,8 @@ private:
         if (connect_watch) {
             connect_watch();
         }
-        // TODO: might want to enable this later after
-        // we know this will be a long-lived connection
-        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
+        bool nodelay_set = false;
         http_request req;
         for (;;) {
             req.parser_init(&parser);
@@ -209,8 +211,14 @@ private:
                 req.parse(&parser, buf.front(), nparse);
                 buf.remove(nparse);
                 if (req.complete) {
-                    // handle request
-                    handle_request(req, s);
+                    // handle http exchange (request -> response)
+                    http_exchange ex(req, s);
+                    if (!nodelay_set && !ex.will_close) {
+                        // this is a persistent connection, so low-latency sending is worth the overh
+                        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+                        nodelay_set = true;
+                    }
+                    handle_exchange(ex);
                     break;
                 }
                 if (nr == 0) goto done;
@@ -231,9 +239,8 @@ done:
         }
     }
 
-    void handle_request(http_request &req, netsock &s) {
-        http_exchange ex(req, s);
-        const auto path = req.path();
+    void handle_exchange(http_exchange &ex) {
+        const auto path = ex.req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
         // note: empty string pattern matches everything
