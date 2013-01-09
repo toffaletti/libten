@@ -6,6 +6,7 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
+#include <netinet/tcp.h>
 #include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
@@ -30,6 +31,7 @@ private:
             if (_sock.dial(_host.c_str(), _port) != 0) {
                 throw http_error("dial");
             }
+            _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
     }
 

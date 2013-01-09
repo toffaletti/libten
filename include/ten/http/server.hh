@@ -178,7 +178,7 @@ private:
 
     virtual void setup_listen_socket(netsock &s) {
         netsock_server::setup_listen_socket(s);
-        s.setsockopt(IPPROTO_TCP, TCP_DEFER_ACCEPT, 5);
+        s.setsockopt(IPPROTO_TCP, TCP_DEFER_ACCEPT, 30);
     }
 
     void on_connection(netsock &s) {
@@ -191,8 +191,7 @@ private:
         }
         // TODO: might want to enable this later after
         // we know this will be a long-lived connection
-        // otherwise the overhead of the syscall hurts concurrency
-        //s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
 
         http_request req;
         for (;;) {
