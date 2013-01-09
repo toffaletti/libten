@@ -12,7 +12,7 @@ protected:
 public:
     typedef Mutex mutex_type;
     synchronized() : _v{} {}
-    template <typename ...Args> synchronized(Args... args) : _v{args...} {}
+    template <typename ...Args> synchronized(Args... args) : _v(args...) {}
 
     template <typename Func, typename Sync>
         friend auto synchronize(const Sync &sync, Func &&f) -> decltype(f(sync._v)) {
