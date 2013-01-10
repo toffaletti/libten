@@ -33,6 +33,9 @@ struct http_exchange {
           start(std::chrono::steady_clock::now())
         {}
 
+    http_exchange(const http_exchange &) = delete;
+    http_exchange &operator=(const http_exchange &) = delete;
+
     ~http_exchange() {
         if (!resp_sent) {
             // ensure a response is sent
@@ -47,9 +50,9 @@ struct http_exchange {
         if ((resp.version <= http_1_0 && boost::iequals(resp.get("Connection"), "Keep-Alive")) ||
                 !boost::iequals(resp.get("Connection"), "close"))
         {
-            return true;
+            return false;
         }
-        return false;
+        return true;
     }
 
     //! compose a uri from the request uri
