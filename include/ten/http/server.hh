@@ -23,7 +23,6 @@ namespace ten {
 struct http_exchange {
     http_request &req;
     netsock &sock;
-    bool will_close;
     http_response resp {404};
     bool resp_sent {false};
     std::chrono::high_resolution_clock::time_point start;
@@ -31,19 +30,26 @@ struct http_exchange {
     http_exchange(http_request &req_, netsock &sock_)
         : req(req_),
           sock(sock_),
-          will_close(req.version < http_1_1 || boost::iequals(resp.get("Connection"), "close")),
           start(std::chrono::steady_clock::now())
         {}
 
     ~http_exchange() {
         if (!resp_sent) {
             // ensure a response is sent
-            resp = {404};
             send_response();
         }
-        if (will_close) {
+        if (will_close()) {
             sock.close();
         }
+    }
+
+    bool will_close() {
+        if ((resp.version <= http_1_0 && boost::iequals(resp.get("Connection"), "Keep-Alive")) ||
+                !boost::iequals(resp.get("Connection"), "close"))
+        {
+            return true;
+        }
+        return false;
     }
 
     //! compose a uri from the request uri
@@ -211,9 +217,10 @@ private:
                 req.parse(&parser, buf.front(), nparse);
                 buf.remove(nparse);
                 if (req.complete) {
+                    DVLOG(4) << req.data();
                     // handle http exchange (request -> response)
                     http_exchange ex(req, s);
-                    if (!nodelay_set && !ex.will_close) {
+                    if (!nodelay_set && !ex.will_close()) {
                         // this is a persistent connection, so low-latency sending is worth the overh
                         s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
                         nodelay_set = true;
