@@ -221,8 +221,10 @@ private:
         if (events & ZOOKEEPER_WRITE) {
             pfd.events |= EPOLLOUT;
         }
-        uint64_t ms = (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
-        if (taskpoll(&pfd, 1, ms)) {
+        using std::chrono::milliseconds;
+        if (taskpoll(&pfd, 1,
+                    milliseconds{(tv.tv_sec * 1000) + (tv.tv_usec / 1000)}))
+        {
             events = 0;
             if (pfd.revents & EPOLLIN) {
                 events |= ZOOKEEPER_READ;
