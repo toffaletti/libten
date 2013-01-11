@@ -164,7 +164,7 @@ struct io_scheduler {
         timeout_tasks.erase(i, timeout_tasks.end());
     }
 
-    bool fdwait(int fd, int rw, uint64_t ms) {
+    bool fdwait(int fd, int rw, optional_timeout ms) {
         short events_ = 0;
         switch (rw) {
             case 'r':
@@ -184,17 +184,20 @@ struct io_scheduler {
         return false;
     }
 
-    int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+    int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
         task *t = this_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
-                    fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
+                    fds->fd,
+                    fds->events & EPOLLIN,
+                    fds->events & EPOLLOUT,
+                    ms ? ms->count() : 0);
         } else {
-            taskstate("poll %u fds for %ul ms", nfds, ms);
+            taskstate("poll %u fds for %ul ms", nfds, ms ? ms->count() : 0);
         }
         task::timeout_t *timeout_id = nullptr;
         if (ms) {
-            timeout_id = add_timeout(t, milliseconds(ms));
+            timeout_id = add_timeout(t, *ms);
         }
         add_pollfds(t, fds, nfds);
 

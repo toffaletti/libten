@@ -86,18 +86,18 @@ static int netfd_free(BIO *b) {
 
 static int netfd_write(BIO *b, const char *buf, int num) {
     //netfd_state_t *s = (netfd_state_t *)b->ptr;
-    return netsend(b->num, buf, num, 0, 0);
+    return netsend(b->num, buf, num, 0, {});
 }
 
 static int netfd_read(BIO *b, char *buf, int size) {
     //netfd_state_t *s = (netfd_state_t *)b->ptr;
-    return netrecv(b->num, buf, size, 0, 0);
+    return netrecv(b->num, buf, size, 0, {});
 }
 
 static int netfd_puts(BIO *b, const char *str) {
     //netfd_state_t *s = (netfd_state_t *)b->ptr;
     size_t n = strlen(str);
-    return netsend(b->num, str, n, 0, 0);
+    return netsend(b->num, str, n, 0, {});
 }
 
 static int netfd_connect(BIO *b) {
@@ -262,7 +262,7 @@ void sslsock::initssl(const SSL_METHOD *method, bool client) {
     initssl(SSL_CTX_new((SSL_METHOD *)method), client);
 }
 
-int sslsock::dial(const char *addr, uint16_t port, unsigned timeout_ms) {
+int sslsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms) {
     int status = netdial(s.fd, addr, port);
     if (status != 0) return status;
 

@@ -12,12 +12,12 @@ void tasksleep(uint64_t ms) {
     this_proc()->sched().sleep(milliseconds(ms));
 }
 
-bool fdwait(int fd, int rw, uint64_t ms) {
+bool fdwait(int fd, int rw, optional_timeout ms) {
     task::cancellation_point cancellable;
     return this_proc()->sched().fdwait(fd, rw, ms);
 }
 
-int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     task::cancellation_point cancellable;
     return this_proc()->sched().poll(fds, nfds, ms);
 }

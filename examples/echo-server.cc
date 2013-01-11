@@ -26,9 +26,10 @@ void listen_task() {
     s.listen();
 
     for (;;) {
+        using namespace std::chrono;
         address client_addr;
         int sock;
-        while ((sock = s.accept(client_addr, 0, 60*1000)) > 0) {
+        while ((sock = s.accept(client_addr, 0, duration_cast<milliseconds>(minutes{1}))) > 0) {
             taskspawn(std::bind(echo_task, sock));
         }
         std::cout << "accept timeout reached\n";

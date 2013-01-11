@@ -7,7 +7,8 @@
 #include <deque>
 #include <memory>
 #include <poll.h>
-#include "logging.hh"
+#include "ten/logging.hh"
+#include "ten/optional.hh"
 
 //! user must define
 extern const size_t default_stacksize;
@@ -19,7 +20,7 @@ extern void netinit();
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
-#define SEC2MS(s) (s*1000)
+typedef optional<std::chrono::milliseconds> optional_timeout;
 
 struct task;
 struct proc;
@@ -67,9 +68,9 @@ public:
 //! sleep current task for milliseconds
 void tasksleep(uint64_t ms);
 //! suspend task waiting for io on pollfds
-int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms={});
 //! suspend task waiting for io on fd
-bool fdwait(int fd, int rw, uint64_t ms=0);
+bool fdwait(int fd, int rw, optional_timeout ms={});
 
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated

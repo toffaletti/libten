@@ -71,7 +71,7 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
     si->status = ECONNREFUSED;
     while (host->h_addr_list && host->h_addr_list[n]) {
         address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        si->status = netconnect(si->fd, addr, 0);
+        si->status = netconnect(si->fd, addr, {});
         if (si->status == 0) break;
 
         n++;
@@ -109,7 +109,12 @@ int netdial(int fd, const char *addr, uint16_t port) {
 
         struct timeval *tvp, tv;
         tvp = ares_timeout(cd.channel, NULL, &tv);
-        taskpoll(&fds[0], fds.size(), tvp ? SEC2MS(tvp->tv_sec) : 0);
+        optional_timeout poll_timeout;
+        if (tvp) {
+            using namespace std::chrono;
+            poll_timeout = duration_cast<milliseconds>(seconds(tvp->tv_sec));
+        }
+        taskpoll(&fds[0], fds.size(), poll_timeout);
 
         memset(read_fd_buf,  0, sizeof(read_fd_buf));
         memset(write_fd_buf, 0, sizeof(write_fd_buf));

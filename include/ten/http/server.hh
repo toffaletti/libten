@@ -169,8 +169,8 @@ protected:
     callback_type _log_func;
 
 public:
-    http_server(size_t stacksize_=default_stacksize, unsigned timeout_ms_=0)
-        : netsock_server("http", stacksize_, timeout_ms_)
+    http_server(size_t stacksize_=default_stacksize, optional_timeout recv_timeout_ms_={})
+        : netsock_server("http", stacksize_, recv_timeout_ms_)
     {
     }
 
@@ -212,7 +212,7 @@ private:
                 buf.reserve(4*1024);
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
-                    nr = s.recv(buf.back(), buf.available(), _timeout_ms);
+                    nr = s.recv(buf.back(), buf.available(), 0, _recv_timeout_ms);
                     if (nr < 0) goto done;
                     buf.commit(nr);
                 }
