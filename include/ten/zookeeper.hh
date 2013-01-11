@@ -110,8 +110,7 @@ public:
     }
 
     ~zookeeper_client() {
-        int status = zookeeper_close(zh);
-        if (status != ZOK) throw zk_error(status);
+        CHECK(zookeeper_close(zh) == ZOK);
     }
 private:
     zhandle_t *zh;
