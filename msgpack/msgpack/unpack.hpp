@@ -234,13 +234,12 @@ inline bool unpacker::next(unpacked* result)
 	}
 
 	if(ret == 0) {
-		result->zone().reset();
+        if (result->zone().get() != NULL) result->zone().reset();
 		result->get() = object();
 		return false;
 
 	} else {
-		result->zone().reset();
-		result->zone() = unpacked::ZonePtr( release_zone(), msgpack_zone_free );
+        if (result->zone().get() != NULL) result->zone().reset( release_zone() );
 		result->get() = data();
 		reset();
 		return true;
