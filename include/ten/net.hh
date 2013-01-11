@@ -96,11 +96,11 @@ public:
             optional_timeout ms = {})
         __attribute__((warn_unused_result)) = 0;
 
-    ssize_t recvall(void *buf, size_t len, optional_timeout ms) {
+    ssize_t recvall(void *buf, size_t len, optional_timeout ms={}) {
         size_t pos = 0;
         ssize_t left = len;
         while (pos != len) {
-            ssize_t nr = sockbase::recv(&((char *)buf)[pos], left, 0, ms);
+            ssize_t nr = this->recv(&((char *)buf)[pos], left, 0, ms);
             if (nr > 0) {
                 pos += nr;
                 left -= nr;
