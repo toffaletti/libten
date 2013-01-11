@@ -53,7 +53,8 @@ void proxy_task(int sock) {
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
-            if (req.get("Expect") == "100-continue") {
+            auto exp_hdr = req.get("Expect");
+            if (exp_hdr && *exp_hdr == "100-continue") {
                 http_response cont_resp(100);
                 std::string data = cont_resp.data();
                 ssize_t nw = s.send(data.data(), data.size());
@@ -109,6 +110,7 @@ void proxy_task(int sock) {
             http_response resp{&r};
             resp.parser_init(&parser);
             bool headers_sent = false;
+            optional<std::string> tx_enc_hdr;
             for (;;) {
                 buf.reserve(4*1024);
                 ssize_t nr = cs.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
@@ -125,7 +127,7 @@ void proxy_task(int sock) {
                 }
 
                 if (resp.body.size()) {
-                    if (resp.get("Transfer-Encoding") == "chunked") {
+                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                         char lenbuf[64];
                         int len = snprintf(lenbuf, sizeof(lenbuf)-1, "%zx\r\n", resp.body.size());
                         resp.body.insert(0, lenbuf, len);
@@ -136,8 +138,9 @@ void proxy_task(int sock) {
                     resp.body.clear();
                 }
                 if (resp.complete) {
+                    tx_enc_hdr = resp.get("Transfer-Encoding");
                     // send end chunk
-                    if (resp.get("Transfer-Encoding") == "chunked") {
+                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                         nw = s.send("0\r\n\r\n", 5);
                     }
                     break;

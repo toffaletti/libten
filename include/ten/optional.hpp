@@ -13,18 +13,73 @@
 # include <utility>
 # include <type_traits>
 # include <initializer_list>
+# include <cassert>
+# include <functional>
 
 # define REQUIRES(...) typename enable_if<__VA_ARGS__::value, bool>::type = false
 
-namespace std {
 
-namespace experimental {
+
+namespace std{
+
+
+
+# if (defined __GNUC__) && (__GNUC__ >= 4) && (__GNUC_MINOR__ >= 7)
+    // leave it; our metafunctions are already defined.
+# else
+
+
+// workaround for missing traits in GCC and CLANG
+template <class T>
+struct is_nothrow_move_constructible
+{
+	constexpr static bool value = std::is_nothrow_constructible<T, T&&>::value;
+};
+
+
+template <class T, class U>
+struct is_assignable
+{
+	template <class X, class Y>
+	static constexpr bool has_assign(...) { return false; }
+
+	template <class X, class Y, size_t S = sizeof(std::declval<X>() = std::declval<Y>()) >
+	static constexpr bool has_assign(bool) { return true; }
+
+	constexpr static bool value = has_assign<T, U>(true);
+};
+
+
+template <class T>
+struct is_nothrow_move_assignable
+{
+  template <class X, bool has_any_move_massign>
+  struct has_nothrow_move_assign {
+    constexpr static bool value = false;
+  };
+
+  template <class X>
+  struct has_nothrow_move_assign<X, true> {
+    constexpr static bool value = noexcept( std::declval<X&>() = std::declval<X&&>() );
+  };
+
+	constexpr static bool value = has_nothrow_move_assign<T, is_assignable<T&, T&&>::value>::value;
+};
+// end workaround
+
+
+# endif   
+
+
+namespace experimental{
+
 
 // 20.5.4, optional for object types
 template <class T> class optional;
 
 // 20.5.5, optional for lvalue reference types
 template <class T> class optional<T&>;
+
 
 template <class T, class U>
 struct is_explicitly_convertible
@@ -33,6 +88,7 @@ struct is_explicitly_convertible
 		std::is_constructible<U, T>::value &&
 		!std::is_convertible<T, U>::value;
 };
+
 
 // workaround: std utility functions aren't constexpr yet
 template <class T> inline constexpr T&& constexpr_forward(typename std::remove_reference<T>::type& t) noexcept
@@ -55,6 +111,7 @@ template<class _Ty> inline constexpr _Ty * constexpr_addressof(_Ty& _Val)
 {
     return ((_Ty *) &(char&)_Val);
 }
+
 
 template <class U>
 struct is_not_optional
@@ -195,6 +252,7 @@ class optional : private OptionalBase<T>
 	template <class... Args>
 	void initialize(Args&&... args) noexcept(noexcept(T(std::forward<Args>(args)...)))
 	{
+	  assert(!OptionalBase<T>::init_);
 	  new (dataptr()) T(std::forward<Args>(args)...);
 	  OptionalBase<T>::init_ = true;
 	}
@@ -202,6 +260,7 @@ class optional : private OptionalBase<T>
   template <class U, class... Args>
   void initialize(std::initializer_list<U> il, Args&&... args) noexcept(noexcept(T(il, std::forward<Args>(args)...)))
   {
+    assert(!OptionalBase<T>::init_);
     new (dataptr()) T(il, std::forward<Args>(args)...);
     OptionalBase<T>::init_ = true;
   }
@@ -303,11 +362,12 @@ public:
   }
 
   // 20.5.4.5 Observers 
-  T const* operator ->() const { 
+  constexpr T const* operator ->() const { 
     return dataptr();
   }
 	
   T* operator ->() { 
+    assert (initialized()); 
     return dataptr(); 
   }
   
@@ -316,6 +376,7 @@ public:
   }
   
   T& operator *() { 
+    assert (initialized()); 
     return *dataptr(); 
   }
   
@@ -584,5 +645,18 @@ constexpr optional<X&> make_optional(reference_wrapper<X> v)
 } // namespace experimental
 } // namespace std
 
+namespace std
+{
+  template <typename T> 
+  struct hash<std::experimental::optional<T>>
+  {
+    typedef typename hash<T>::result_type result_type;
+    typedef std::experimental::optional<T> argument_type;
+    
+    constexpr result_type operator()(argument_type const& arg) const {
+      return arg ? std::hash<T>{}(*arg) : result_type{};
+    }
+  };
+}
 
 # endif //___OPTIONAL_HPP___

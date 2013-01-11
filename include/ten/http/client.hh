@@ -125,8 +125,10 @@ public:
             CHECK(_buf.size() == 0);
 
             const auto conn = resp.get("Connection");
-            if (boost::iequals(conn, "close")
-                || (resp.version == http_1_0 && !boost::iequals(conn, "Keep-Alive")))
+            if (
+                    (conn && boost::iequals(*conn, "close")) ||
+                    (resp.version <= http_1_0 && conn && !boost::iequals(*conn, "Keep-Alive"))
+               )
             {
                 _sock.close();
             }

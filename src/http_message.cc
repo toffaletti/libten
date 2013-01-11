@@ -98,20 +98,12 @@ bool http_headers::remove(const std::string &field) {
     return false;
 }
 
-std::string http_headers::get(const std::string &field) const {
+optional<std::string> http_headers::get(const std::string &field) const {
     auto i = find(field);
     if (i != end(headers)) {
         return i->second;
     }
-    return std::string();
-}
-
-maybe<std::string> http_headers::mget(const std::string &field) const {
-    auto i = find(field);
-    if (i != end(headers)) {
-        return i->second;
-    }
-    return nothing;
+    return nullopt;
 }
 
 #ifdef CHIP_UNSURE

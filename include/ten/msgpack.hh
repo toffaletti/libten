@@ -1,31 +1,31 @@
-#ifndef LIBTEN_MAYBEPACK_HH
-#define LIBTEN_MAYBEPACK_HH
+#ifndef LIBTEN_MSGPACK_HH
+#define LIBTEN_MSGPACK_HH
 
 #include "msgpack/msgpack.hpp"
-#include "ten/maybe.hh"
+#include "ten/optional.hh"
 
 namespace msgpack {
 
 template <typename T>
-inline ten::maybe<T> & operator>> (object o, ten::maybe<T>& v) {
+inline ten::optional<T> & operator>> (object o, ten::optional<T>& v) {
     switch (o.type) {
         case type::NIL:
-            v.reset();
+            v = ten::nullopt;
             return v;
         default:
             {
                 T t;
                 o >> t;
-                v.reset(t);
+                v = t;
                 return v;
             }
     }
 }
 
 template <typename Stream, typename T>
-packer<Stream>& operator<< (packer<Stream>& o, const ten::maybe<T>& v) {
-    if (v.ok()) {
-        o << v.get_ref();
+packer<Stream>& operator<< (packer<Stream>& o, const ten::optional<T>& v) {
+    if (v) {
+        o << *v;
     } else {
         o.pack_nil();
     }

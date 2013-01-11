@@ -4,6 +4,7 @@
 
 namespace ten {
     using std::experimental::optional;
+    using std::experimental::nullopt;
 }
 
 #endif
