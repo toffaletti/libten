@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include "ten/error.hh"
 #include "ten/task/context.hh"
+#include "ten/logging.hh"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
