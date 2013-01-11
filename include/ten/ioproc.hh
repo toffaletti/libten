@@ -16,15 +16,14 @@ namespace ten {
 using anyfunc = std::function<boost::any ()>;
 
 namespace anyfunc_impl {
-template <typename F> anyfunc make(const F &f, std::true_type)  { return [f]() -> boost::any { f(); return {};  }; }
-template <typename F> anyfunc make(const F &f, std::false_type) { return f; }
+template <typename F> anyfunc make(F f, std::true_type)         { return [f]() mutable -> boost::any { f(); return {};  }; }
+template <typename F> anyfunc make(const F &f, std::false_type) { return anyfunc(f); }
 }
 template <typename F>
 inline anyfunc make_anyfunc(const F &f) {
     using result_t = typename std::result_of<F()>::type;
     return anyfunc_impl::make(f, typename std::is_void<result_t>::type());
 }
-inline anyfunc make_anyfunc(void (*f)())       { return anyfunc_impl::make(f, std::true_type()); }  // workaround for libstdc++ result_of<>
 inline anyfunc make_anyfunc(const anyfunc  &f) { return f; }
 inline anyfunc make_anyfunc(      anyfunc &&f) { return std::move(f); }
 
