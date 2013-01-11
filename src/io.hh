@@ -299,18 +299,6 @@ struct io_scheduler {
                 DVLOG(5) << "TIMEOUT on task: " << t;
                 t->ready();
             });
-#if 0
-            auto i = timeout_tasks.begin();
-            for (; i != timeout_tasks.end(); ++i) {
-                t = *i;
-                if (t->timeouts.front()->when <= now) {
-                    DVLOG(5) << "TIMEOUT on task: " << t;
-                    t->ready();
-                } else {
-                    break;
-                }
-            }
-#endif
         }
         DVLOG(5) << "BUG: " << this_task() << " is exiting";
     }

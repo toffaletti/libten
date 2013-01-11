@@ -19,9 +19,10 @@ struct task {
         ~cancellation_point();
     };
 
+public:
     std::exception_ptr exception;
-    char name[32];
-    char state[128];
+    char name[16];
+    char state[32];
     std::function<void ()> fn;
     coroutine co;
     uint64_t id;
@@ -32,6 +33,7 @@ struct task {
     bool systask;
     bool canceled;
     
+public:
     task(const std::function<void ()> &f, size_t stacksize);
     void clear(bool newid=true);
     void init(const std::function<void ()> &f);
