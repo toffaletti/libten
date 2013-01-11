@@ -80,9 +80,11 @@ struct deadline_reached : task_interrupted {};
 //! deadline_reached after milliseconds
 class deadline {
 private:
-    void *timeout_id;
+    void *timeout_id = nullptr;
+    void _set_deadline(std::chrono::milliseconds ms);
 public:
-    deadline(std::chrono::milliseconds ms);
+    deadline(optional_timeout timeout);
+    deadline(std::chrono::milliseconds ms); // deprecated
 
     deadline(const deadline &) = delete;
     deadline &operator =(const deadline &) = delete;
