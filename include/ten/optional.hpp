@@ -19,56 +19,7 @@
 # define REQUIRES(...) typename enable_if<__VA_ARGS__::value, bool>::type = false
 
 
-
 namespace std{
-
-
-
-# if (defined __GNUC__) && (__GNUC__ >= 4) && (__GNUC_MINOR__ >= 7)
-    // leave it; our metafunctions are already defined.
-# else
-
-
-// workaround for missing traits in GCC and CLANG
-template <class T>
-struct is_nothrow_move_constructible
-{
-	constexpr static bool value = std::is_nothrow_constructible<T, T&&>::value;
-};
-
-
-template <class T, class U>
-struct is_assignable
-{
-	template <class X, class Y>
-	static constexpr bool has_assign(...) { return false; }
-
-	template <class X, class Y, size_t S = sizeof(std::declval<X>() = std::declval<Y>()) >
-	static constexpr bool has_assign(bool) { return true; }
-
-	constexpr static bool value = has_assign<T, U>(true);
-};
-
-
-template <class T>
-struct is_nothrow_move_assignable
-{
-  template <class X, bool has_any_move_massign>
-  struct has_nothrow_move_assign {
-    constexpr static bool value = false;
-  };
-
-  template <class X>
-  struct has_nothrow_move_assign<X, true> {
-    constexpr static bool value = noexcept( std::declval<X&>() = std::declval<X&&>() );
-  };
-
-	constexpr static bool value = has_nothrow_move_assign<T, is_assignable<T&, T&&>::value>::value;
-};
-// end workaround
-
-
-# endif   
 
 
 namespace experimental{
