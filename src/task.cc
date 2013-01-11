@@ -190,9 +190,19 @@ void task::swap() {
     }
 }
 
-deadline::deadline(milliseconds ms)
-  : timeout_id()
-{
+deadline::deadline(optional_timeout timeout) {
+    if (timeout) {
+        if (timeout->count() == 0)
+            throw errorx("zero optional_deadline - misuse of optional");
+        _set_deadline(*timeout);
+    }
+}
+
+deadline::deadline(milliseconds ms) {
+    _set_deadline(ms);
+}
+
+void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
