@@ -3,6 +3,7 @@
 
 #include "task/rendez.hh"
 #include "ten/logging.hh"
+#include "ten/optional.hh"
 
 #include <boost/call_traits.hpp>
 #include <set>
@@ -37,7 +38,7 @@ protected:
         set_type set;
         std::string name;
         alloc_func new_resource;
-        ssize_t max_resources;
+        optional<size_t> max_resources;
     };
 
     std::mutex _mutex;
@@ -65,7 +66,7 @@ protected:
 public:
     shared_pool(const std::string &name_,
             const alloc_func &alloc_,
-            ssize_t max_ = -1)
+            optional<size_t> max_ = {})
     {
         std::shared_ptr<pool_impl> m = std::make_shared<pool_impl>();
         m->name = name_;
@@ -109,7 +110,7 @@ protected:
     // internal, does not lock mutex
     static std::shared_ptr<ResourceT> create_or_acquire_with_lock(std::shared_ptr<pool_impl> &m, std::unique_lock<qutex> &lk) {
         while (m->q.empty()) {
-            if (m->max_resources < 0 || m->set.size() < (size_t)m->max_resources) {
+            if (!m->max_resources || m->set.size() < *m->max_resources) {
                 // need to create a new resource
                 return add_new_resource(m, lk);
                 break;
