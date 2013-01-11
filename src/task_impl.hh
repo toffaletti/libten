@@ -14,30 +14,12 @@ using namespace std::chrono;
 namespace ten {
 
 struct task {
-    struct timeout_t {
-        time_point<steady_clock> when;
-        std::exception_ptr exception;
-
-        timeout_t(const time_point<steady_clock> &when_)
-            : when(when_) {}
-
-        friend std::ostream &operator <<(std::ostream &o, timeout_t *to) {
-            o << "timeout[" << to->when.time_since_epoch().count() << "]";
-            return o;
-        }
-    };
-
-    struct task_timeout_ordering {
-        bool operator ()(const timeout_t *a, const timeout_t *b) const {
-            return a->when < b->when;
-        }
-    };
-
     struct cancellation_point {
         cancellation_point();
         ~cancellation_point();
     };
 
+    std::exception_ptr exception;
     char name[32];
     char state[128];
     std::function<void ()> fn;
@@ -45,8 +27,6 @@ struct task {
     uint64_t id;
     proc *cproc;
     uint64_t cancel_points;
-
-    std::deque<timeout_t *> timeouts;
 
     std::atomic<bool> _ready;
     bool systask;
@@ -56,29 +36,6 @@ struct task {
     void clear(bool newid=true);
     void init(const std::function<void ()> &f);
     ~task();
-
-    template<typename Rep,typename Period, typename ExceptionT>
-    timeout_t *add_timeout(const duration<Rep,Period> &dura, ExceptionT e) {
-        std::unique_ptr<timeout_t> to(new timeout_t(procnow() + dura));
-        to->exception = std::copy_exception(e);
-        auto i = std::lower_bound(timeouts.begin(), timeouts.end(), to.get(), task_timeout_ordering());
-        i = timeouts.insert(i, to.release());
-        using ::operator <<;
-        DVLOG(5) << "add timeout w/ ex task: " << this << " timeouts: " << timeouts;
-        return *i;
-    }
-
-    template<typename Rep,typename Period>
-    timeout_t *add_timeout(const duration<Rep,Period> &dura) {
-        std::unique_ptr<timeout_t> to(new timeout_t(procnow() + dura));
-        auto i = std::lower_bound(timeouts.begin(), timeouts.end(), to.get(), task_timeout_ordering());
-        i = timeouts.insert(i, to.release());
-        using ::operator <<;
-        DVLOG(5) << "add timeout task: " << this << " timeouts: " << timeouts;
-        return *i;
-    }
-
-    void remove_timeout(timeout_t *to);
 
     void ready(bool front=false);
     void safe_swap() noexcept;

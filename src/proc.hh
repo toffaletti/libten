@@ -59,6 +59,8 @@ struct proc_context {
 };
 
 struct proc {
+public:
+    typedef std::chrono::steady_clock clock;
 protected:
     friend task *this_task();
     friend int64_t taskyield();
@@ -81,7 +83,7 @@ protected:
     //! tasks in this proc
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
-    time_point<steady_clock> now;
+    time_point<clock> now;
     bool _main;
 
 public:

@@ -207,6 +207,9 @@ public:
 
 static metric_global global;
 
+struct metric_tag {};
+thread_cached<metric_tag, metric_group> tls_metric_group;
+
 struct chain {
     metric_group *_mg;
     std::unique_lock<std::mutex> _lock;
@@ -230,11 +233,11 @@ struct chain {
 };
 
 chain record() {
-    return chain(thread_local_ptr<metric_group>());
+    return chain(tls_metric_group.get());
 }
 
 template <typename Func> void record(Func &&f) {
-    metric_group *mg = thread_local_ptr<metric_group>();
+    metric_group *mg = tls_metric_group.get();
     std::lock_guard<std::mutex> lock(mg->_mtx);
     f(std::ref(*mg));
 }

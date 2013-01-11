@@ -130,30 +130,8 @@ void task::clear(bool newid) {
         setname("task[%ju]", id);
         setstate("new");
     }
-
-    if (!timeouts.empty()) {
-        // free timeouts
-        for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
-            delete *i;
-        }
-        timeouts.clear();
-        // remove from scheduler timeout list
-        cproc->sched().remove_timeout_task(this);
-    }
-
+    exception = nullptr;
     cproc = nullptr;
-}
-
-void task::remove_timeout(timeout_t *to) {
-    auto i = std::find(timeouts.begin(), timeouts.end(), to);
-    if (i != timeouts.end()) {
-        delete *i;
-        timeouts.erase(i);
-    }
-    if (timeouts.empty()) {
-        // remove from scheduler timeout list
-        cproc->sched().remove_timeout_task(this);
-    }
 }
 
 void task::safe_swap() noexcept {
@@ -170,23 +148,11 @@ void task::swap() {
         throw task_interrupted();
     }
 
-    while (!timeouts.empty()) {
-        timeout_t *to = timeouts.front();
-        if (to->when <= procnow()) {
-            std::unique_ptr<timeout_t> tmp{to}; // ensure to is freed
-            DVLOG(5) << to << " reached for " << this << " removing.";
-            timeouts.pop_front();
-            if (timeouts.empty()) {
-                // remove from scheduler timeout list
-                cproc->sched().remove_timeout_task(this);
-            }
-            if (tmp->exception != nullptr) {
-                DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
-                std::rethrow_exception(tmp->exception);
-            }
-        } else {
-            break;
-        }
+    if (exception) {
+        DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
+        std::exception_ptr tmp = nullptr;
+        std::swap(tmp, exception);
+        std::rethrow_exception(tmp);
     }
 }
 
@@ -198,6 +164,10 @@ deadline::deadline(optional_timeout timeout) {
     }
 }
 
+struct deadline_pimpl {
+    io_scheduler::alarm_clock::scoped_alarm alarm;
+};
+
 deadline::deadline(milliseconds ms) {
     _set_deadline(ms);
 }
@@ -206,16 +176,19 @@ void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
+        proc *p = this_proc();
         task *t = this_task();
-        timeout_id = this_proc()->sched().add_timeout(t, ms, deadline_reached());
+        auto now = p->cached_time();
+        _pimpl.reset(new deadline_pimpl{});
+        _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
+                p->sched().alarms, t, ms+now, deadline_reached{}
+                });
     }
 }
 
 void deadline::cancel() {
-    if (timeout_id) {
-        task *t = this_task();
-        t->remove_timeout((task::timeout_t *)timeout_id);
-        timeout_id = nullptr;
+    if (_pimpl) {
+        _pimpl->alarm.cancel();
     }
 }
 
@@ -224,16 +197,10 @@ deadline::~deadline() {
 }
 
 milliseconds deadline::remaining() const {
-    task::timeout_t *timeout = (task::timeout_t *)timeout_id;
-    // TODO: need a way of distinguishing between canceled and over due
-    if (timeout != nullptr) {
-        std::chrono::time_point<std::chrono::steady_clock> now = procnow();
-        if (now > timeout->when) {
-            return milliseconds(0);
-        }
-        return duration_cast<milliseconds>(timeout->when - now);
+    if (_pimpl) {
+        return _pimpl->alarm.remaining();
     }
-    return milliseconds(0);
+    return {};
 }
 
 task::cancellation_point::cancellation_point() {

@@ -2,15 +2,13 @@
 #define TASK_IO_HH
 
 #include "proc.hh"
+#include "alarm.hh"
 
 namespace ten {
 
 struct io_scheduler {
-    struct task_timeout_compare {
-        bool operator ()(const task *a, const task *b) const {
-            return (a->timeouts.front()->when < b->timeouts.front()->when);
-        }
-    };
+    typedef ten::alarm_clock<task *, proc::clock> alarm_clock;
+
     struct task_poll_state {
         task *t_in; // POLLIN task
         pollfd *p_in; // pointer to pollfd structure that is on the task's stack
@@ -23,7 +21,7 @@ struct io_scheduler {
     typedef std::vector<epoll_event> event_vector;
 
     //! tasks with pending timeouts
-    std::vector<task *> timeout_tasks;
+    alarm_clock alarms;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
@@ -135,33 +133,12 @@ struct io_scheduler {
         return rvalue;
     }
 
-    template<typename Rep, typename Period, typename ExceptionT>
-    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura, ExceptionT e) {
-        task::timeout_t *to = t->add_timeout(dura, e);
-        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
-        timeout_tasks.insert(i, t);
-        return to;
-    }
-
-    template<typename Rep,typename Period>
-    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura) {
-        task::timeout_t *to = t->add_timeout(dura);
-        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
-        timeout_tasks.insert(i, t);
-        return to;
-    }
-
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
         task *t = this_task();
-        add_timeout(t, dura);
+        auto now = this_proc()->cached_time();
+        alarm_clock::scoped_alarm sleep_alarm(alarms, t, now+dura);
         t->swap();
-    }
-
-    void remove_timeout_task(task *t) {
-        DCHECK(t->timeouts.empty());
-        auto i = std::remove(timeout_tasks.begin(), timeout_tasks.end(), t);
-        timeout_tasks.erase(i, timeout_tasks.end());
     }
 
     bool fdwait(int fd, int rw, optional_timeout ms) {
@@ -195,26 +172,21 @@ struct io_scheduler {
         } else {
             taskstate("poll %u fds for %ul ms", nfds, ms ? ms->count() : 0);
         }
-        task::timeout_t *timeout_id = nullptr;
-        if (ms) {
-            timeout_id = add_timeout(t, *ms);
-        }
         add_pollfds(t, fds, nfds);
 
         DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
         try {
+            optional<alarm_clock::scoped_alarm> timeout_alarm;
+            if (ms) {
+                auto now = this_proc()->cached_time();
+                timeout_alarm.emplace(alarms, t, now + *ms);
+            }
             t->swap();
         } catch (...) {
-            if (timeout_id) {
-                t->remove_timeout(timeout_id);
-            }
             remove_pollfds(fds, nfds);
             throw;
         }
 
-        if (timeout_id) {
-            t->remove_timeout(timeout_id);
-        }
         return remove_pollfds(fds, nfds);
     }
 
@@ -233,15 +205,14 @@ struct io_scheduler {
             // lock must be held while determining whether or not we'll be
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
-            if (!timeout_tasks.empty()) {
-                t = timeout_tasks.front();
-                DCHECK(!t->timeouts.empty()) << "BUG: " << t << " in timeout list with no timeouts set";
+            optional<proc::clock::time_point> timeout_when = alarms.when();
+            if (timeout_when) {
                 auto now = p->cached_time();
-                if (t->timeouts.front()->when <= now) {
+                if (*timeout_when <= now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    uint64_t usec = duration_cast<microseconds>(t->timeouts.front()->when - now).count();
+                    uint64_t usec = duration_cast<microseconds>(*timeout_when - now).count();
                     // TODO: round millisecond timeout up for now
                     // in the future we can provide higher resolution thanks to
                     // timerfd supporting nanosecond resolution
@@ -320,6 +291,15 @@ struct io_scheduler {
 
             auto now = p->update_cached_time();
             // wake up sleeping tasks
+            alarms.tick(now, [this](task *t, std::exception_ptr exception) {
+                if (exception != nullptr && t->exception == nullptr) {
+                    DVLOG(5) << "alarm with exception fired: " << t;
+                    t->exception = exception;
+                }
+                DVLOG(5) << "TIMEOUT on task: " << t;
+                t->ready();
+            });
+#if 0
             auto i = timeout_tasks.begin();
             for (; i != timeout_tasks.end(); ++i) {
                 t = *i;
@@ -330,6 +310,7 @@ struct io_scheduler {
                     break;
                 }
             }
+#endif
         }
         DVLOG(5) << "BUG: " << this_task() << " is exiting";
     }

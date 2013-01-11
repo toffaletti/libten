@@ -76,11 +76,14 @@ bool fdwait(int fd, int rw, optional_timeout ms={});
 // doesn't need to be duplicated
 struct deadline_reached : task_interrupted {};
 
+// forward decl
+struct deadline_pimpl;
+
 //! schedule a deadline to interrupt task with
 //! deadline_reached after milliseconds
 class deadline {
 private:
-    void *timeout_id = nullptr;
+    std::unique_ptr<deadline_pimpl> _pimpl;
     void _set_deadline(std::chrono::milliseconds ms);
 public:
     deadline(optional_timeout timeout);
