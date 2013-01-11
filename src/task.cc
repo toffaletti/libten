@@ -148,13 +148,17 @@ void task::swap() {
         throw task_interrupted();
     }
 
-    if (exception) {
+    if (exception && cancel_points > 0) {
         DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
         std::exception_ptr tmp = nullptr;
         std::swap(tmp, exception);
         std::rethrow_exception(tmp);
     }
 }
+
+struct deadline_pimpl {
+    io_scheduler::alarm_clock::scoped_alarm alarm;
+};
 
 deadline::deadline(optional_timeout timeout) {
     if (timeout) {
@@ -163,10 +167,6 @@ deadline::deadline(optional_timeout timeout) {
         _set_deadline(*timeout);
     }
 }
-
-struct deadline_pimpl {
-    io_scheduler::alarm_clock::scoped_alarm alarm;
-};
 
 deadline::deadline(milliseconds ms) {
     _set_deadline(ms);
@@ -183,6 +183,7 @@ void deadline::_set_deadline(milliseconds ms) {
         _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
                 p->sched().alarms, t, ms+now, deadline_reached{}
                 });
+        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }
 }
 
