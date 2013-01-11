@@ -85,7 +85,7 @@ public:
 
     void clear() {
         std::shared_ptr<pool_impl> m(get_safe());
-        std::lock_guard<qutex> lk(m->ut);
+        std::lock_guard<qutex> lk(m->mut);
         m->q.clear();
         m->set.clear();
     }
