@@ -26,6 +26,7 @@ inline anyfunc make_anyfunc(const F &f) {
 }
 inline anyfunc make_anyfunc(const anyfunc  &f) { return f; }
 inline anyfunc make_anyfunc(      anyfunc &&f) { return std::move(f); }
+inline anyfunc make_anyfunc(void (*f)())       { return anyfunc_impl::make(f, std::true_type()); }  // workaround for libstdc++ result_of<>
 
 // return a boost::any even if it's empty
 
