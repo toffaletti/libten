@@ -51,7 +51,7 @@ static void http_quit(std::weak_ptr<state> wst, http_exchange &ex) {
 
 static void http_root(std::weak_ptr<state> wst, http_exchange &ex) {
     ex.resp = { 200 };
-    ex.resp.set_body("Hello World!\n");
+    ex.resp.set_body("Hello World!\n", "text/plain");
     ex.send_response();
 }
 
