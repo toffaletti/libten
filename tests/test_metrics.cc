@@ -4,6 +4,8 @@
 #include <thread>
 #include <atomic>
 
+#include "ten/ewma.hh"
+
 using namespace ten;
 
 void my_thread() {
@@ -53,5 +55,23 @@ BOOST_AUTO_TEST_CASE(timer_test) {
     to.stop();
     auto mg = metrics::global.aggregate();
     BOOST_CHECK(value<timer>(mg, "timer1").count() >= 5);
+}
+
+BOOST_AUTO_TEST_CASE(ewma_test) {
+    using namespace std::chrono;
+    ewma<seconds> m1(seconds{1});
+    ewma<seconds> m5(seconds{5});
+    ewma<seconds> m60(seconds{60});
+    for (unsigned i=0; i<60*5; ++i) {
+        m1.update(10);
+        m1.tick();
+        m5.update(10);
+        m5.tick();
+        m60.update(10);
+        m60.tick();
+    }
+    LOG(INFO) << "rate1: " << m1.rate();
+    LOG(INFO) << "rate5: " << m5.rate();
+    LOG(INFO) << "rate60: " << m60.rate();
 }
 
