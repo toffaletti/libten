@@ -107,10 +107,10 @@ struct http_base : http_headers {
         complete = {};
     }
 
-    void set_body(const std::string &body_,
+    void set_body(std::string body_,
                   const std::string &content_type_ = std::string())
     {
-        body = body_;
+        body = std::move(body_);
         body_length = body.size();
         set("Content-Length", body_length);
         remove("Content-Type");
