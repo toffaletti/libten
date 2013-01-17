@@ -72,9 +72,9 @@
 #include <vector>
 
 #ifdef __GNUC__
-# include <ext/hash_set>
-# include <ext/hash_map>
-# include <ext/slist>
+//# include <ext/hash_set>
+//# include <ext/hash_map>
+//# include <ext/slist>
 #endif
 
 template<class First, class Second>
@@ -113,7 +113,7 @@ OUTPUT_TWO_ARG_CONTAINER(std::vector)
 OUTPUT_TWO_ARG_CONTAINER(std::deque)
 OUTPUT_TWO_ARG_CONTAINER(std::list)
 #ifdef __GNUC__
-OUTPUT_TWO_ARG_CONTAINER(__gnu_cxx::slist)
+//OUTPUT_TWO_ARG_CONTAINER(__gnu_cxx::slist)
 #endif
 
 #undef OUTPUT_TWO_ARG_CONTAINER
@@ -142,8 +142,8 @@ inline std::ostream& operator<<(std::ostream& out, \
 OUTPUT_FOUR_ARG_CONTAINER(std::map)
 OUTPUT_FOUR_ARG_CONTAINER(std::multimap)
 #ifdef __GNUC__
-OUTPUT_FOUR_ARG_CONTAINER(__gnu_cxx::hash_set)
-OUTPUT_FOUR_ARG_CONTAINER(__gnu_cxx::hash_multiset)
+//OUTPUT_FOUR_ARG_CONTAINER(__gnu_cxx::hash_set)
+//OUTPUT_FOUR_ARG_CONTAINER(__gnu_cxx::hash_multiset)
 #endif
 
 #undef OUTPUT_FOUR_ARG_CONTAINER
@@ -157,8 +157,8 @@ inline std::ostream& operator<<(std::ostream& out, \
 }
 
 #ifdef __GNUC__
-OUTPUT_FIVE_ARG_CONTAINER(__gnu_cxx::hash_map)
-OUTPUT_FIVE_ARG_CONTAINER(__gnu_cxx::hash_multimap)
+//OUTPUT_FIVE_ARG_CONTAINER(__gnu_cxx::hash_map)
+//OUTPUT_FIVE_ARG_CONTAINER(__gnu_cxx::hash_multimap)
 #endif
 
 #undef OUTPUT_FIVE_ARG_CONTAINER
