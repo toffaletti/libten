@@ -6,15 +6,31 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
+#include <netinet/tcp.h>
 #include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
-//! thrown on http network errors
 class http_error : public errorx {
-public:
-    http_error(const std::string &msg) : errorx(msg) {}
+protected:
+    http_error(const char *msg) : errorx(msg) {}
 };
+
+//! thrown on http network errors
+struct http_dial_error : public http_error {
+    http_dial_error() : http_error("dial") {}
+};
+
+//! thrown on http network errors
+struct http_recv_error : public http_error {
+    http_recv_error() : http_error("recv") {}
+};
+
+//! thrown on http network errors
+struct http_send_error : public http_error {
+    http_send_error() : http_error("send") {}
+};
+
 
 //! basic http client
 class http_client {
@@ -28,8 +44,9 @@ private:
         if (!_sock.valid()) {
             _sock = std::move(netsock(AF_INET, SOCK_STREAM));
             if (_sock.dial(_host.c_str(), _port) != 0) {
-                throw http_error("dial");
+                throw http_dial_error{};
             }
+            _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
     }
 
@@ -47,7 +64,7 @@ public:
 
     http_response perform(const std::string &method, const std::string &path,
                           const http_headers &hdrs = {}, const std::string &data = {},
-                          std::chrono::milliseconds timeout = {})
+                          optional_timeout timeout = {})
     {
         uri u;
         u.scheme = "http";
@@ -65,33 +82,25 @@ public:
         return perform(r, timeout);
     }
 
-    http_response perform(http_request &r, std::chrono::milliseconds timeout = {}) {
+    http_response perform(http_request &r, optional_timeout timeout = {}) {
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
         if (r.body.size()) {
             r.set("Content-Length", r.body.size());
         }
 
-        // should really set a time in the future and calculate this each time
-        unsigned ms = boost::numeric_cast<unsigned>(timeout.count());
-
         try {
             ensure_connection();
 
             http_response resp(&r);
 
-            std::string hdata = r.data();
-            ssize_t nw = _sock.send(hdata.c_str(), hdata.size(), 0, ms);
-            bool badw = (size_t)nw != hdata.size();
-            if (!badw && r.body.size()) {
-                nw = _sock.send(r.body.c_str(), r.body.size(), 0, ms);
-                badw = (size_t)nw != r.body.size();
+            std::string data = r.data();
+            if (r.body.size() > 0) {
+                data += r.body;
             }
-            if (badw) {
-                _sock.close(); // socket is unusable after write failure
-                resp.status_code = 499;
-                resp.set_body("Short write");
-                return resp;
+            ssize_t nw = _sock.send(data.data(), data.size(), 0, timeout);
+            if ((size_t)nw != data.size()) {
+                throw http_send_error{};
             }
 
             http_parser parser;
@@ -101,8 +110,8 @@ public:
 
             while (!resp.complete) {
                 _buf.reserve(4*1024);
-                ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, ms);
-                if (nr <= 0) { throw http_error("recv"); }
+                ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, timeout);
+                if (nr <= 0) { throw http_recv_error{}; }
                 _buf.commit(nr);
                 size_t len = _buf.size();
                 resp.parse(&parser, _buf.front(), len);
@@ -116,8 +125,11 @@ public:
             CHECK(_buf.size() == 0);
 
             const auto conn = resp.get("Connection");
-            if (boost::iequals(conn, "close")
-                || (resp.version == http_1_0 && !boost::iequals(conn, "Keep-Alive")))
+            if (
+                    (conn && boost::iequals(*conn, "close")) ||
+                    (resp.version <= http_1_0 && conn && !boost::iequals(*conn, "Keep-Alive")) ||
+                    (resp.version <= http_1_0 && !conn)
+               )
             {
                 _sock.close();
             }
@@ -130,11 +142,11 @@ public:
         }
     }
 
-    http_response get(const std::string &path, std::chrono::milliseconds timeout = {}) {
+    http_response get(const std::string &path, optional_timeout timeout = {}) {
         return perform("GET", path, {}, {}, timeout);
     }
 
-    http_response post(const std::string &path, const std::string &data, std::chrono::milliseconds timeout = {}) {
+    http_response post(const std::string &path, const std::string &data, optional_timeout timeout = {}) {
         return perform("POST", path, {}, data, timeout);
     }
 
@@ -142,7 +154,7 @@ public:
 
 class http_pool : public shared_pool<http_client> {
 public:
-    http_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
+    http_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = {})
         : shared_pool<http_client>("http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
             max_conn

@@ -9,7 +9,7 @@
 
 #include "http_parser.h"
 #include "ten/error.hh"
-#include "ten/maybe.hh"
+#include "ten/optional.hh"
 
 namespace ten {
 
@@ -67,18 +67,12 @@ struct http_headers {
 
     bool remove(const std::string &field);
 
-    std::string get(const std::string &field) const;
-    maybe<std::string> mget(const std::string &field) const;
+    optional<std::string> get(const std::string &field) const;
 
     template <typename ValueT>
-        ValueT get(const std::string &field) const {
+        optional<ValueT> get(const std::string &field) const {
             auto i = find(field);
-            return (i == headers.end()) ? ValueT() : boost::lexical_cast<ValueT>(i->second);
-        }
-    template <typename ValueT>
-        maybe<ValueT> mget(const std::string &field) const {
-            auto i = find(field);
-            return (i == headers.end()) ? nothing : boost::lexical_cast<ValueT>(i->second);
+            return (i == headers.end()) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
         }
 
 #ifdef CHIP_UNSURE
@@ -113,10 +107,10 @@ struct http_base : http_headers {
         complete = {};
     }
 
-    void set_body(const std::string &body_,
+    void set_body(std::string body_,
                   const std::string &content_type_ = std::string())
     {
-        body = body_;
+        body = std::move(body_);
         body_length = body.size();
         set("Content-Length", body_length);
         remove("Content-Type");

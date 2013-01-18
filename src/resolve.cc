@@ -12,7 +12,7 @@ static int _dial(int fd, const char *addr, uint16_t port) {
         for (result = results; result != NULL; result = result->ai_next) {
             address addr(result->ai_addr, result->ai_addrlen);
             addr.port(port);
-            status = netconnect(fd, addr, 0);
+            status = netconnect(fd, addr, {});
             if (status == 0) break;
         }
     }

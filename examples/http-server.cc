@@ -30,11 +30,12 @@ struct state : boost::noncopyable {
 static void log_request(http_exchange &ex) {
     using namespace std::chrono;
     const auto stop = steady_clock::now();
+    auto cl_hdr = ex.resp.get("Content-Length");
     VLOG(1) << ex.agent_ip() << " " <<
         ex.req.method << " " <<
         ex.req.uri << " " <<
         ex.resp.status_code << " " <<
-        ex.resp.get("Content-Length") << " " <<
+        (cl_hdr ? *cl_hdr : "nan") << " " <<
         duration_cast<milliseconds>(stop - ex.start).count();
 }
 
@@ -50,7 +51,7 @@ static void http_quit(std::weak_ptr<state> wst, http_exchange &ex) {
 
 static void http_root(std::weak_ptr<state> wst, http_exchange &ex) {
     ex.resp = { 200 };
-    ex.resp.set_body("Hello World!\n");
+    ex.resp.set_body("Hello World!\n", "text/plain");
     ex.send_response();
 }
 

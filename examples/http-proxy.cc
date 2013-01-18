@@ -10,8 +10,6 @@
 using namespace ten;
 using namespace ten::compat;
 
-#define SEC2MS(s) (s*1000)
-
 void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
     for (;;) {
         buf.reserve(4*1024);
@@ -35,6 +33,7 @@ void send_503_reply(netsock &s) {
 }
 
 void proxy_task(int sock) {
+    using namespace std::chrono;
     netsock s{sock};
     buffer buf{4*1024};
     http_parser parser;
@@ -44,7 +43,7 @@ void proxy_task(int sock) {
     bool got_headers = false;
     for (;;) {
         buf.reserve(4*1024);
-        ssize_t nr = s.recv(buf.back(), buf.available(), SEC2MS(5));
+        ssize_t nr = s.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
         if (nr < 0) { goto request_read_error; }
         buf.commit(nr);
         size_t len = buf.size();
@@ -54,7 +53,8 @@ void proxy_task(int sock) {
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
-            if (req.get("Expect") == "100-continue") {
+            auto exp_hdr = req.get("Expect");
+            if (exp_hdr && *exp_hdr == "100-continue") {
                 http_response cont_resp(100);
                 std::string data = cont_resp.data();
                 ssize_t nw = s.send(data.data(), data.size());
@@ -64,6 +64,7 @@ void proxy_task(int sock) {
     }
 
     try {
+        using namespace std::chrono;
         uri u{req.uri};
         u.normalize();
         LOG(INFO) << req.method << " " << u.compose();
@@ -74,13 +75,13 @@ void proxy_task(int sock) {
             ssize_t pos = u.path.find(':');
             u.host = u.path.substr(1, pos-1);
             u.port = boost::lexical_cast<uint16_t>(u.path.substr(pos+1));
-            if (cs.dial(u.host.c_str(), u.port, SEC2MS(10))) {
+            if (cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}))) {
                 goto request_connect_error;
             }
 
             http_response resp{200};
             std::string data = resp.data();
-            ssize_t nw = s.send(data.data(), data.size(), SEC2MS(5));
+            ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
 
             channel<int> c;
             taskspawn(std::bind(sock_copy, c, std::ref(s), std::ref(cs), std::ref(buf)));
@@ -90,7 +91,7 @@ void proxy_task(int sock) {
             return;
         } else {
             if (u.port == 0) u.port = 80;
-            if (cs.dial(u.host.c_str(), u.port, SEC2MS(10))) {
+            if (cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}))) {
                 goto request_connect_error;
             }
 
@@ -99,19 +100,20 @@ void proxy_task(int sock) {
             r.append("Host", u.host);
             r.headers = req.headers;
             std::string data = r.data();
-            ssize_t nw = cs.send(data.data(), data.size(), SEC2MS(5));
+            ssize_t nw = cs.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
             if (nw <= 0) { goto request_send_error; }
             if (!req.body.empty()) {
-                nw = cs.send(req.body.data(), req.body.size(), SEC2MS(5));
+                nw = cs.send(req.body.data(), req.body.size(), 0, duration_cast<milliseconds>(seconds{5}));
                 if (nw <= 0) { goto request_send_error; }
             }
 
             http_response resp{&r};
             resp.parser_init(&parser);
             bool headers_sent = false;
+            optional<std::string> tx_enc_hdr;
             for (;;) {
                 buf.reserve(4*1024);
-                ssize_t nr = cs.recv(buf.back(), buf.available(), SEC2MS(5));
+                ssize_t nr = cs.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
                 if (nr < 0) { goto response_read_error; }
                 buf.commit(nr);
                 size_t len = buf.size();
@@ -125,7 +127,7 @@ void proxy_task(int sock) {
                 }
 
                 if (resp.body.size()) {
-                    if (resp.get("Transfer-Encoding") == "chunked") {
+                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                         char lenbuf[64];
                         int len = snprintf(lenbuf, sizeof(lenbuf)-1, "%zx\r\n", resp.body.size());
                         resp.body.insert(0, lenbuf, len);
@@ -136,8 +138,9 @@ void proxy_task(int sock) {
                     resp.body.clear();
                 }
                 if (resp.complete) {
+                    tx_enc_hdr = resp.get("Transfer-Encoding");
                     // send end chunk
-                    if (resp.get("Transfer-Encoding") == "chunked") {
+                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                         nw = s.send("0\r\n\r\n", 5);
                     }
                     break;

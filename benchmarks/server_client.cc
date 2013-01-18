@@ -10,7 +10,7 @@ using namespace ten::compat;
 static void connecter(address &addr, channel<int> ch) {
     netsock s(AF_INET, SOCK_STREAM);
     try {
-        if (s.connect(addr, 100) == 0) {
+        if (s.connect(addr, std::chrono::milliseconds{100}) == 0) {
             ch.send(0);
         } else {
             ch.send(std::move(errno));

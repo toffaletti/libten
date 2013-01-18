@@ -118,11 +118,12 @@ static void connection(socket_fd fd) {
                 resp.set("Date", buf);
 #endif
 
-                if (resp.get("Connection").empty()) {
+                auto conn_hdr = resp.get("Connection");
+                if (!conn_hdr || conn_hdr->empty()) {
                     // obey clients wishes if we have none of our own
-                    std::string conn = req.get("Connection");
-                    if (!conn.empty())
-                        resp.set("Connection", conn);
+                    conn_hdr = req.get("Connection");
+                    if (conn_hdr)
+                        resp.set("Connection", *conn_hdr);
                     else if (req.version == http_1_0)
                         resp.set("Connection", "close");
                 }
@@ -131,7 +132,8 @@ static void connection(socket_fd fd) {
                 ssize_t nw = fd.send(data.data(), data.size());
                 (void)nw;
 
-                if (boost::iequals(resp.get("Connection"), "close")) {
+                conn_hdr = resp.get("Connection");
+                if (conn_hdr && boost::iequals(*conn_hdr, "close")) {
                     return;
                 }
             }

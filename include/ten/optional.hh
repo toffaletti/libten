@@ -1,6 +1,10 @@
+#ifndef TEN_OPTIONAL_HH
+#define TEN_OPTIONAL_HH
 #include "ten/optional.hpp"
 
 namespace ten {
-    // import optional into our namespace
     using std::experimental::optional;
-} // ten
+    using std::experimental::nullopt;
+}
+
+#endif

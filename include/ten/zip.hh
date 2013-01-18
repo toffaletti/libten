@@ -5,7 +5,8 @@
 #define MINIZ_HEADER_FILE_ONLY 1
 #include "miniz.c"
 
-#include "error.hh"
+#include "ten/logging.hh"
+#include "ten/error.hh"
 #include <string>
 #include <memory>
 
@@ -33,9 +34,7 @@ struct zip_reader {
     std::string extract(const std::string &file_name, mz_uint flags=0);
 
     ~zip_reader() {
-        if (!mz_zip_reader_end(&arc)) {
-            throw errorx("mz_zip_reader_end");
-        }
+        CHECK(mz_zip_reader_end(&arc));
     }
 };
 
@@ -68,9 +67,7 @@ struct zip_writer {
     }
 
     ~zip_writer() {
-        if (!mz_zip_writer_end(&arc)) {
-            throw errorx("mz_zip_writer_end");
-        }
+        CHECK(mz_zip_writer_end(&arc));
     }
 
 };

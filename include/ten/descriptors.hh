@@ -341,7 +341,7 @@ struct socket_fd : fd_base {
         const T &optval) throw (errno_error)
     {
         socklen_t optlen = sizeof(optval);
-        setsockopt(level, optname, optval, optlen);
+        socket_fd::setsockopt(level, optname, optval, optlen);
     }
 
     socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }

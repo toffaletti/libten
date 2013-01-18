@@ -25,16 +25,16 @@ std::atomic<int> X::del_count(0);
 struct tag1 {};
 struct tag2 {};
 
-thread_local<tag1, X> x1;
-thread_local<tag1, X> x2;
+thread_cached<tag1, X> x1;
+thread_cached<tag1, X> x2;
 
 void my_thread() {
     BOOST_CHECK_EQUAL(x1.get(), x2.get());
     // unique tag, this will create a new X
-    thread_local<tag2, X> x3;
+    thread_cached<tag2, X> x3;
     BOOST_CHECK(x1.get() != x3.get());
     // same tag, we'll get the x3 pointer again
-    thread_local<tag2, X> x4;
+    thread_cached<tag2, X> x4;
     BOOST_CHECK_EQUAL(x3.get(), x4.get());
 }
 

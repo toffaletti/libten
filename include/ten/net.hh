@@ -8,15 +8,15 @@
 namespace ten {
 
 //! connect fd using task io scheduling
-int netconnect(int fd, const address &addr, unsigned ms);
+int netconnect(int fd, const address &addr, optional_timeout ms);
 //! perform address resolution and connect fd, task friendly
 int netdial(int fd, const char *addr, uint16_t port);
 //! task friendly accept
-int netaccept(int fd, address &addr, int flags, unsigned ms);
+int netaccept(int fd, address &addr, int flags, optional_timeout ms);
 //! task friendly recv
-ssize_t netrecv(int fd, void *buf, size_t len, int flags, unsigned ms);
+ssize_t netrecv(int fd, void *buf, size_t len, int flags, optional_timeout ms);
 //! task friendly send
-ssize_t netsend(int fd, const void *buf, size_t len, int flags, unsigned ms);
+ssize_t netsend(int fd, const void *buf, size_t len, int flags, optional_timeout ms);
 
 //! pure-virtual wrapper around socket_fd
 class sockbase {
@@ -39,8 +39,6 @@ public:
         }
         return *this;
     }
-
-
 
     virtual ~sockbase() {}
 
@@ -73,25 +71,36 @@ public:
     bool valid() const { return s.valid(); }
 
     virtual int dial(const char *addr,
-            uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result)) = 0;
+            uint16_t port,
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result)) = 0;
 
     virtual int connect(const address &addr,
-            unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+            optional_timeout ms = {})
+        __attribute__((warn_unused_result)) = 0;
 
     virtual int accept(address &addr,
-            int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+            int flags=0,
+            optional_timeout ms = {})
+        __attribute__((warn_unused_result)) = 0;
 
     virtual ssize_t recv(void *buf,
-            size_t len, int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+            size_t len,
+            int flags=0,
+            optional_timeout ms = {})
+        __attribute__((warn_unused_result)) = 0;
 
     virtual ssize_t send(const void *buf,
-            size_t len, int flags=0, unsigned ms=0) __attribute__((warn_unused_result)) = 0;
+            size_t len,
+            int flags=0,
+            optional_timeout ms = {})
+        __attribute__((warn_unused_result)) = 0;
 
-    ssize_t recvall(void *buf, size_t len, unsigned ms=0) {
+    ssize_t recvall(void *buf, size_t len, optional_timeout ms={}) {
         size_t pos = 0;
         ssize_t left = len;
         while (pos != len) {
-            ssize_t nr = recv(&((char *)buf)[pos], left, 0, ms);
+            ssize_t nr = this->recv(&((char *)buf)[pos], left, 0, ms);
             if (nr > 0) {
                 pos += nr;
                 left -= nr;
@@ -122,32 +131,42 @@ public:
 
     //! dial requires a large 8MB stack size for getaddrinfo
     int dial(const char *addr,
-            uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result));
+            uint16_t port,
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result));
 
     int connect(const address &addr,
-            unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return netconnect(s.fd, addr, timeout_ms);
     }
 
     int accept(address &addr,
-            int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            int flags=0,
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
     }
 
     ssize_t recv(void *buf,
-            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            size_t len,
+            int flags=0,
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return netrecv(s.fd, buf, len, flags, timeout_ms);
     }
 
     ssize_t send(const void *buf,
-            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            size_t len,
+            int flags=0,
+            optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return netsend(s.fd, buf, len, flags, timeout_ms);
     }
-
 
 };
 
@@ -156,15 +175,12 @@ class netsock_server : public std::enable_shared_from_this<netsock_server> {
 protected:
     netsock _sock;
     std::string _protocol_name;
-    size_t _stacksize;
-    int _timeout_ms;
+    optional_timeout _recv_timeout_ms;
 public:
     netsock_server(const std::string &protocol_name_,
-            size_t stacksize_=0,
-            int timeout_ms_=-1)
+            optional_timeout recv_timeout_ms={})
         : _protocol_name(protocol_name_),
-        _stacksize(stacksize_),
-        _timeout_ms(timeout_ms_)
+        _recv_timeout_ms(recv_timeout_ms)
     {
     }
 
@@ -182,7 +198,7 @@ public:
         netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
         THROW_ON_NONZERO_ERRNO(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC));
-        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+        setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);
     }
@@ -209,6 +225,10 @@ public:
 protected:
     virtual void on_connection(netsock &s) = 0;
 
+    virtual void setup_listen_socket(netsock &s) {
+        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+    }
+
     void do_accept_loop() {
         accept_loop();
     }
@@ -219,7 +239,8 @@ protected:
             int fd;
             while ((fd = _sock.accept(client_addr, 0)) > 0) {
                 auto self = shared_from_this();
-                compat::taskspawn(std::bind(&netsock_server::client_task, self, fd), _stacksize);
+                compat::taskspawn(std::bind(&netsock_server::client_task, std::move(self), fd));
+                compat::taskyield(); // yield to new client task
             }
         }
     }

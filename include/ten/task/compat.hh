@@ -64,10 +64,10 @@ public:
 void tasksleep(uint64_t ms);
 
 //! suspend task waiting for io on pollfds
-int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms={});
 
 //! suspend task waiting for io on fd
-bool fdwait(int fd, int rw, uint64_t ms=0);
+bool fdwait(int fd, int rw, optional_timeout ms={});
 
 } // compat
 } // ten

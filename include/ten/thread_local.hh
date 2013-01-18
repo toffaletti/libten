@@ -4,13 +4,19 @@
 // TODO: dont really need this header if we move code around
 #include "ten/task/runtime.hh"
 #include <type_traits>
-#include <pthread.h>
 #include <cstdlib>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 namespace ten {
 
+inline bool is_main_thread() noexcept {
+    return getpid() == syscall(SYS_gettid);
+}
+
 template <class Unique, class T>
-class thread_local {
+class thread_cached {
 private:
     typedef typename std::aligned_storage<sizeof(T),
             std::alignment_of<T>::value>::type storage_type;
@@ -32,11 +38,11 @@ public:
         if (!allocated) {
             new (&storage) T();
             allocated = true;
-            if (runtime::is_main_thread()) {
-                std::atexit(thread_local::atexit);
+            if (is_main_thread()) {
+                std::atexit(thread_cached::atexit);
             } else {
                 static pthread_key_t key;
-                pthread_key_create(&key, thread_local::placement_delete);
+                pthread_key_create(&key, thread_cached::placement_delete);
                 pthread_setspecific(key, &storage);
             }
         }
@@ -49,9 +55,9 @@ public:
 };
 
 template <class Unique, class T>
-__thread typename thread_local<Unique, T>::storage_type thread_local<Unique, T>::storage;
+__thread typename thread_cached<Unique, T>::storage_type thread_cached<Unique, T>::storage;
 template <class Unique, class T>
-__thread bool thread_local<Unique, T>::allocated = false;
+__thread bool thread_cached<Unique, T>::allocated = false;
 
 } // ten
 

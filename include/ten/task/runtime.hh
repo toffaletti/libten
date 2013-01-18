@@ -7,8 +7,11 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <poll.h>
+#include "ten/optional.hh"
 
 namespace ten {
+
+typedef optional<std::chrono::milliseconds> optional_timeout;
 
 struct task_pimpl;
 
@@ -46,8 +49,8 @@ public:
     static void shutdown();
 
     // compat
-    static int poll(pollfd *fds, nfds_t nfds, uint64_t ms);
-    static bool fdwait(int fd, int rw, uint64_t ms);
+    static int poll(pollfd *fds, nfds_t nfds, optional_timeout ms);
+    static bool fdwait(int fd, int rw, optional_timeout ms);
 };
 
 } // ten

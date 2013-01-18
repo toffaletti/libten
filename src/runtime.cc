@@ -15,7 +15,7 @@ static std::atomic<uint64_t> thread_count{0};
 static task_pimpl *waiting_task = nullptr;
 
 struct runtime_tag {};
-ten::thread_local<runtime_tag, thread_context> this_ctx;
+ten::thread_cached<runtime_tag, thread_context> this_ctx;
 
 static void add_thread(thread_context *ctx) {
     using namespace std;
@@ -289,11 +289,11 @@ shared_task runtime::task_with_id(uint64_t id) {
     return this_ctx->scheduler.task_with_id(id);
 }
 
-int runtime::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+int runtime::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     return this_ctx->scheduler.get_io()->poll(fds, nfds, ms);
 }
 
-bool runtime::fdwait(int fd, int rw, uint64_t ms) {
+bool runtime::fdwait(int fd, int rw, optional_timeout ms) {
     return this_ctx->scheduler.get_io()->fdwait(fd, rw, ms);
 }
 
@@ -528,7 +528,7 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
     return rvalue;
 }
 
-bool io::fdwait(int fd, int rw, uint64_t ms) {
+bool io::fdwait(int fd, int rw, optional_timeout ms) {
     short events_ = 0;
     switch (rw) {
         case 'r':
@@ -548,14 +548,14 @@ bool io::fdwait(int fd, int rw, uint64_t ms) {
     return false;
 }
 
-int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     thread_context *ctx = this_ctx.get();
     task_pimpl *t = ctx->scheduler._current_task;
     if (nfds == 1) {
         t->setstate("poll fd %i r: %i w: %i %ul ms",
-                fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
+                fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, (ms ? ms->count() : 0));
     } else {
-        t->setstate("poll %u fds for %ul ms", nfds, ms);
+        t->setstate("poll %u fds for %ul ms", nfds, (ms ? ms->count() : 0));
     }
     // TODO: support timeouts
     add_pollfds(t, fds, nfds);
@@ -565,7 +565,7 @@ int io::poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
         optional<scheduler::alarm_clock::scoped_alarm> timeout_alarm;
         if (ms) {
             runtime::time_point timeout_time{ctx->scheduler._now
-                + std::chrono::milliseconds{ms}};
+                + *ms};
             timeout_alarm.emplace(ctx->scheduler._alarms, t, timeout_time);
         }
         task_pimpl::cancellation_point cancelable;

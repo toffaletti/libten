@@ -1,7 +1,8 @@
 #ifndef LIBTEN_SEMAPHORE_HH
 #define LIBTEN_SEMAPHORE_HH
 
-#include "error.hh"
+#include "ten/logging.hh"
+#include "ten/error.hh"
 #include <semaphore.h>
 
 namespace ten {
@@ -33,7 +34,7 @@ public:
     // TODO: sem_trywait and sem_timedwait
 
     ~semaphore() {
-        THROW_ON_ERROR(sem_destroy(&_s));
+        PCHECK(sem_destroy(&_s) == 0);
     }
 };
 

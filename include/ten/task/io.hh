@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <poll.h>
+#include "ten/task/runtime.hh"
 
 namespace ten {
 
@@ -45,8 +46,8 @@ public:
         _evfd.write(0);
     }
 
-    int poll(pollfd *fds, nfds_t nfds, uint64_t ms);
-    bool fdwait(int fd, int rw, uint64_t ms);
+    int poll(pollfd *fds, nfds_t nfds, optional_timeout ms);
+    bool fdwait(int fd, int rw, optional_timeout ms);
 
     void wait(optional<runtime::time_point> when);
 };

@@ -57,6 +57,8 @@ const char *state(const char *fmt, ...)
 
 namespace {
     std::atomic<uint64_t> task_id_counter{0};
+    struct context_tag {};
+    thread_cached<context_tag, boost::context::fcontext_t> main_ctx;
 }
 
 task_pimpl::cancellation_point::cancellation_point() {
@@ -74,7 +76,7 @@ uint64_t task_pimpl::next_id() {
 }
 
 task_pimpl::task_pimpl()
-    : _ctx(),
+    : _ctx(*main_ctx.get()),
     _id{next_id()},
     _ready{false},
     _canceled{false}

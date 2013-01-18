@@ -208,7 +208,7 @@ public:
 static metric_global global;
 
 struct metric_tag {};
-thread_local<metric_tag, metric_group> tls_metric_group;
+thread_cached<metric_tag, metric_group> tls_metric_group;
 
 struct chain {
     metric_group *_mg;

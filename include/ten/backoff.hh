@@ -4,7 +4,6 @@
 #include <chrono>
 #include <algorithm>
 #include <random>
-#include <tr1/random>
 
 namespace ten {
 
@@ -13,15 +12,15 @@ namespace ten {
 template <typename DurationT> class backoff {
 private:
     std::minstd_rand _eng;
-    std::tr1::variate_generator<std::minstd_rand, std::tr1::uniform_real<float>> _rand;
+    std::function<double ()> _rand;
     DurationT _min_delay;
     DurationT _max_delay;
     uint64_t _retry;
 public:
     backoff(const DurationT &min_delay, const DurationT &max_delay)
-        : _eng(time(0)), _rand(_eng, std::tr1::uniform_real<float>(0.0, 1.0)),
-        _min_delay(min_delay), _max_delay(max_delay), _retry(0)
+        : _eng(time(0)), _min_delay(min_delay), _max_delay(max_delay), _retry(0)
     {
+        _rand = std::bind(std::uniform_real_distribution<float>(0.0f, 1.0f), _eng);
     }
 
     void reset() { _retry = 0; }
