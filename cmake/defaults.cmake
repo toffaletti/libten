@@ -2,13 +2,32 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
+option(USE_GPROF
+    "Profile the project using gprof"
+    OFF)
+if(USE_GPROF)
+    message("Adding profiling info for gprof...")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -pg")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+endif(USE_GPROF)
+
+option(USE_PPROF
+    "Profile the project using gprof"
+    OFF)
+if(USE_PPROF)
+    message("Linking with -lprofiler")
+    set(EXTRA_LIBS profiler)
+endif(USE_PPROF)
+
 if (NOT GCC_FLAGS)
     # general flags for any compilation with gcc/g++
-    set(GCC_FLAGS "-pthread -march=core2")
+    # someday use "-march=core2 -msse4.1" after retiring old Athlons still in use
+    set(GCC_FLAGS "-pthread -mtune=core2")
     set(GCC_FLAGS "${GCC_FLAGS} -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter")
     set(GCC_FLAGS "${GCC_FLAGS} -Wpointer-arith -Wcast-align -Wuninitialized -Wwrite-strings")
-    set(GXX_FLAGS "-std=gnu++0x ${GCC_FLAGS}")
-    set(GCC_FLAGS "${GCC_FLAGS} -std=gnu99 -Wstrict-prototypes -Wmissing-prototypes")
+    #set(GCC_FLAGS "${GCC_FLAGS} -Wshadow")
+    set(GXX_FLAGS "-std=c++11 ${GCC_FLAGS}")
+    set(GCC_FLAGS "${GCC_FLAGS} -std=c11 -Wstrict-prototypes -Wmissing-prototypes")
 
     # profile guided optimization
     if (WITH_PGO STREQUAL "generate")
@@ -39,6 +58,9 @@ endif (NOT GCC_FLAGS)
 
 include(CheckIncludeFiles)
 check_include_files("valgrind/valgrind.h" HAVE_VALGRIND_H)
-if (NOT HAVE_VALGRIND_H)
+if (HAVE_VALGRIND_H)
+    message(STATUS "Valgrind found")
+else()
+    message(STATUS "Valgrind not found")
     add_definitions(-DNVALGRIND)
-endif (NOT HAVE_VALGRIND_H)
+endif ()

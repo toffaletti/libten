@@ -1,6 +1,7 @@
 #ifndef LIBTEN_RPC_CLIENT_HH
 #define LIBTEN_RPC_CLIENT_HH
 
+#include "ten/net.hh"
 #include "ten/shared_pool.hh"
 #include "ten/rpc/protocol.hh"
 #include <boost/lexical_cast.hpp>
@@ -50,6 +51,12 @@ public:
             return rpcall<Result>(mid, method, args...);
         }
 
+    //! make a remote procedure call with no result
+    template <typename ...Args>
+        void notify(const std::string &method, Args ...args) {
+            rnotify(method, args...);
+        }
+
 protected:
     netsock s;
     std::string hostname;
@@ -66,6 +73,32 @@ protected:
             }
         }
     }
+
+    void rnotify(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {
+        ensure_connection();
+        ssize_t nw = s.send(sbuf.data(), sbuf.size());
+        if (nw != (ssize_t)sbuf.size()) {
+            s.close();
+            throw rpc_failure("send");
+        }
+    }
+
+    template <typename Arg, typename ...Args>
+        void rnotify(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf, Arg arg, Args ...args) {
+            pk.pack(arg);
+            rnotify(pk, sbuf, args...);
+        }
+
+    template <typename ...Args>
+        void rnotify(const std::string &method, Args ...args) {
+            msgpack::sbuffer sbuf;
+            msgpack::packer<msgpack::sbuffer> pk(&sbuf);
+            pk.pack_array(3);
+            pk.pack_uint8(2); // request message type
+            pk.pack(method);
+            pk.pack_array(sizeof...(args));
+            rnotify(pk, sbuf, args...);
+        }
 
     template <typename Result>
         Result rpcall(msgpack::packer<msgpack::sbuffer> &pk, msgpack::sbuffer &sbuf) {

@@ -2,15 +2,13 @@
 #define TASK_IO_HH
 
 #include "proc.hh"
+#include "alarm.hh"
 
 namespace ten {
 
 struct io_scheduler {
-    struct task_timeout_compare {
-        bool operator ()(const task *a, const task *b) const {
-            return (a->timeouts.front()->when < b->timeouts.front()->when);
-        }
-    };
+    typedef ten::alarm_clock<task *, proc::clock> alarm_clock;
+
     struct task_poll_state {
         task *t_in; // POLLIN task
         pollfd *p_in; // pointer to pollfd structure that is on the task's stack
@@ -23,28 +21,45 @@ struct io_scheduler {
     typedef std::vector<epoll_event> event_vector;
 
     //! tasks with pending timeouts
-    std::vector<task *> timeout_tasks;
+    alarm_clock alarms;
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
     poll_task_array pollfds;
     //! epoll events
     event_vector events;
+    //! timerfd used for breaking epoll_wait for timeouts
+    // required because the timeout value for epoll_wait is not accurate
+    timer_fd tfd;
     //! the epoll fd used for io in this runner
     epoll_fd efd;
     //! number of fds we've been asked to wait on
     size_t npollfds;
+    std::shared_ptr<proc_waker> _waker;
 
     io_scheduler() : npollfds(0) {
+        _waker = this_proc()->get_waker();
         events.reserve(1000);
         // add the eventfd used to wake up
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;
-        int e_fd = this_proc()->event.fd;
-        ev.data.fd = e_fd;
-        if (pollfds.size() <= (size_t)e_fd) {
-            pollfds.resize(e_fd+1);
+        {
+            epoll_event ev{};
+            ev.events = EPOLLIN | EPOLLET;
+            int e_fd = _waker->event.fd;
+            ev.data.fd = e_fd;
+            if (pollfds.size() <= (size_t)e_fd) {
+                pollfds.resize(e_fd+1);
+            }
+            efd.add(e_fd, ev);
         }
-        efd.add(e_fd, ev);
+
+        {
+            epoll_event ev{};
+            ev.events = EPOLLIN | EPOLLET;
+            int e_fd = tfd.fd;
+            ev.data.fd = e_fd;
+            if (pollfds.size() <= (size_t)e_fd) {
+                pollfds.resize(e_fd+1);
+            }
+            efd.add(e_fd, ev);
+        }
         taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
@@ -62,14 +77,14 @@ struct io_scheduler {
             uint32_t saved_events = pollfds[fd].events;
 
             if (fds[i].events & EPOLLIN) {
-                CHECK(pollfds[fd].t_in == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
+                DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
                 pollfds[fd].t_in = t;
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
-                CHECK(pollfds[fd].t_out == nullptr) << "fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
+                DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
                 pollfds[fd].t_out = t;
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
@@ -118,36 +133,15 @@ struct io_scheduler {
         return rvalue;
     }
 
-    template<typename Rep, typename Period, typename ExceptionT>
-    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura, ExceptionT e) {
-        task::timeout_t *to = t->add_timeout(dura, e);
-        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
-        timeout_tasks.insert(i, t);
-        return to;
-    }
-
-    template<typename Rep,typename Period>
-    task::timeout_t *add_timeout(task *t, const duration<Rep,Period> &dura) {
-        task::timeout_t *to = t->add_timeout(dura);
-        auto i = std::lower_bound(timeout_tasks.begin(), timeout_tasks.end(), t, task_timeout_compare());
-        timeout_tasks.insert(i, t);
-        return to;
-    }
-
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
-        task *t = this_proc()->ctask;
-        add_timeout(t, dura);
+        task *t = this_task();
+        auto now = this_proc()->cached_time();
+        alarm_clock::scoped_alarm sleep_alarm(alarms, t, now+dura);
         t->swap();
     }
 
-    void remove_timeout_task(task *t) {
-        CHECK(t->timeouts.empty());
-        auto i = std::remove(timeout_tasks.begin(), timeout_tasks.end(), t);
-        timeout_tasks.erase(i, timeout_tasks.end());
-    }
-
-    bool fdwait(int fd, int rw, uint64_t ms) {
+    bool fdwait(int fd, int rw, optional_timeout ms) {
         short events_ = 0;
         switch (rw) {
             case 'r':
@@ -167,34 +161,32 @@ struct io_scheduler {
         return false;
     }
 
-    int poll(pollfd *fds, nfds_t nfds, uint64_t ms) {
-        task *t = this_proc()->ctask;
+    int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
+        task *t = this_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
-                    fds->fd, fds->events & EPOLLIN, fds->events & EPOLLOUT, ms);
+                    fds->fd,
+                    fds->events & EPOLLIN,
+                    fds->events & EPOLLOUT,
+                    ms ? ms->count() : 0);
         } else {
-            taskstate("poll %u fds for %ul ms", nfds, ms);
-        }
-        task::timeout_t *timeout_id = nullptr;
-        if (ms) {
-            timeout_id = add_timeout(t, milliseconds(ms));
+            taskstate("poll %u fds for %ul ms", nfds, ms ? ms->count() : 0);
         }
         add_pollfds(t, fds, nfds);
 
         DVLOG(5) << "task: " << t << " poll for " << nfds << " fds";
         try {
+            optional<alarm_clock::scoped_alarm> timeout_alarm;
+            if (ms) {
+                auto now = this_proc()->cached_time();
+                timeout_alarm.emplace(alarms, t, now + *ms);
+            }
             t->swap();
         } catch (...) {
-            if (timeout_id) {
-                t->remove_timeout(timeout_id);
-            }
             remove_pollfds(fds, nfds);
             throw;
         }
 
-        if (timeout_id) {
-            t->remove_timeout(timeout_id);
-        }
         return remove_pollfds(fds, nfds);
     }
 
@@ -203,32 +195,35 @@ struct io_scheduler {
         tasksystem();
         proc *p = this_proc();
         for (;;) {
-            p->now = steady_clock::now();
+            p->update_cached_time();
             // let everyone else run
             taskyield();
-            p->now = steady_clock::now();
+            p->update_cached_time();
             task *t = nullptr;
 
             int ms = -1;
             // lock must be held while determining whether or not we'll be
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
-            std::unique_lock<std::mutex> lk(p->mutex);
-            if (!timeout_tasks.empty()) {
-                t = timeout_tasks.front();
-                CHECK(!t->timeouts.empty()) << t << " in timeout list with no timeouts set";
-                if (t->timeouts.front()->when <= p->now) {
+            optional<proc::clock::time_point> timeout_when = alarms.when();
+            if (timeout_when) {
+                auto now = p->cached_time();
+                if (*timeout_when <= now) {
                     // epoll_wait must return asap
                     ms = 0;
                 } else {
-                    ms = duration_cast<milliseconds>(t->timeouts.front()->when - p->now).count();
+                    uint64_t usec = duration_cast<microseconds>(*timeout_when - now).count();
+                    // TODO: round millisecond timeout up for now
+                    // in the future we can provide higher resolution thanks to
+                    // timerfd supporting nanosecond resolution
+                    ms = (usec + (1000/2)) / 1000;
                     // avoid spinning on timeouts smaller than 1ms
                     if (ms <= 0) ms = 1;
                 }
             }
 
             if (ms != 0) {
-                if (!p->runqueue.empty()) {
+                if (p->is_ready()) {
                     // don't block on epoll if tasks are ready to run
                     ms = 0;
                 }
@@ -237,16 +232,28 @@ struct io_scheduler {
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll %d ms", ms);
                 // only process 1000 events each iteration to keep it fair
-                if (ms > 1 || ms < 0) {
-                    p->polling = true;
+                if (ms > 0) {
+                    struct itimerspec tspec{};
+                    struct itimerspec oldspec{};
+                    tspec.it_value.tv_sec = ms / 1000;
+                    tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
+                    tfd.settime(0, tspec, oldspec);
+                    // epoll_wait timeout is not accurate so we use timerfd
+                    // to break from epoll_wait instead of the timeout value
+                    // -1 means no timeout.
+                    ms = -1;
                 }
-                lk.unlock();
                 events.resize(1000);
-                efd.wait(events, ms);
-                lk.lock();
-                p->polling = false;
-                int e_fd = p->event.fd;
-                lk.unlock();
+                _waker->polling = true;
+                if (p->is_dirty()) {
+                    // another thread(s) changed the dirtyq before we started
+                    // polling. so we should skip epoll and run that task
+                    events.resize(0);
+                } else {
+                    efd.wait(events, ms);
+                }
+                _waker->polling = false;
+                int e_fd = _waker->event.fd;
                 // wake up io tasks
                 for (auto i=events.cbegin(); i!=events.cend(); ++i) {
                     // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
@@ -271,7 +278,9 @@ struct io_scheduler {
                     if (i->data.fd == e_fd) {
                         // our wake up eventfd was written to
                         // clear events by reading value
-                        p->event.read();
+                        _waker->event.read();
+                    } else if (i->data.fd == tfd.fd) {
+                        // timerfd fired, sleeping tasks woken below
                     } else if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
                         // TODO: otherwise we might want to remove fd from epoll
                         LOG(ERROR) << "event " << i->events << " for fd: "
@@ -280,22 +289,18 @@ struct io_scheduler {
                 }
             }
 
-            // must unlock before calling task::ready
-            if (lk.owns_lock()) lk.unlock();
-            p->now = steady_clock::now();
+            auto now = p->update_cached_time();
             // wake up sleeping tasks
-            auto i = timeout_tasks.begin();
-            for (; i != timeout_tasks.end(); ++i) {
-                t = *i;
-                if (t->timeouts.front()->when <= p->now) {
-                    DVLOG(5) << "TIMEOUT on task: " << t;
-                    t->ready();
-                } else {
-                    break;
+            alarms.tick(now, [this](task *t, std::exception_ptr exception) {
+                if (exception != nullptr && t->exception == nullptr) {
+                    DVLOG(5) << "alarm with exception fired: " << t;
+                    t->exception = exception;
                 }
-            }
+                DVLOG(5) << "TIMEOUT on task: " << t;
+                t->ready();
+            });
         }
-        DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";
+        DVLOG(5) << "BUG: " << this_task() << " is exiting";
     }
 };
 

@@ -16,10 +16,14 @@ struct state {
 
 void qlocker(std::shared_ptr<state> st) {
     taskname("qlocker");
+    taskstate("looping");
     for (int i=0; i<1000; ++i) {
         std::unique_lock<qutex> lk(st->q);
         ++(st->x);
     }
+    taskstate("done");
+    std::unique_lock<qutex> lk(st->q);
+    taskname("qlocker %d", st->x);
     st->r.wakeup();
 }
 

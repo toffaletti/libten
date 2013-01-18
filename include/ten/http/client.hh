@@ -4,28 +4,49 @@
 #include "ten/http/http_message.hh"
 #include "ten/shared_pool.hh"
 #include "ten/buffer.hh"
+#include "ten/net.hh"
+#include "ten/uri.hh"
+#include <netinet/tcp.h>
+#include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
-//! thrown on http network errors
 class http_error : public errorx {
-public:
-    http_error(const std::string &msg) : errorx(msg) {}
+protected:
+    http_error(const char *msg) : errorx(msg) {}
 };
+
+//! thrown on http network errors
+struct http_dial_error : public http_error {
+    http_dial_error() : http_error("dial") {}
+};
+
+//! thrown on http network errors
+struct http_recv_error : public http_error {
+    http_recv_error() : http_error("recv") {}
+};
+
+//! thrown on http network errors
+struct http_send_error : public http_error {
+    http_send_error() : http_error("send") {}
+};
+
 
 //! basic http client
 class http_client {
 private:
-    std::shared_ptr<netsock> _s;
+    netsock _sock;
     buffer _buf;
     std::string _host;
     uint16_t _port;
 
     void ensure_connection() {
-        if (_s && _s->valid()) return;
-        _s.reset(new netsock(AF_INET, SOCK_STREAM));
-        if (_s->dial(_host.c_str(), _port) != 0) {
-            throw http_error("dial");
+        if (!_sock.valid()) {
+            _sock = std::move(netsock(AF_INET, SOCK_STREAM));
+            if (_sock.dial(_host.c_str(), _port) != 0) {
+                throw http_dial_error{};
+            }
+            _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
     }
 
@@ -41,7 +62,10 @@ public:
     std::string host() const { return _host; }
     uint16_t port() const { return _port; }
 
-    http_response perform(const std::string &method, const std::string &path, const std::string &data="") {
+    http_response perform(const std::string &method, const std::string &path,
+                          const http_headers &hdrs = {}, const std::string &data = {},
+                          optional_timeout timeout = {})
+    {
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -49,14 +73,18 @@ public:
         u.path = path;
         u.normalize();
 
-        http_request r(method, u.compose_path());
+        http_request r(method, u.compose_path(), hdrs);
         // HTTP/1.1 requires host header
-        r.set("Host", u.host); 
+        if (r.find("Host") == r.headers.end())
+            r.set("Host", u.host); 
         r.body = data;
-        return perform(r);
+
+        return perform(r, timeout);
     }
 
-    http_response perform(http_request &r) {
+    http_response perform(http_request &r, optional_timeout timeout = {}) {
+        VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
+
         if (r.body.size()) {
             r.set("Content-Length", r.body.size());
         }
@@ -64,55 +92,70 @@ public:
         try {
             ensure_connection();
 
-            std::string hdata = r.data();
-            ssize_t nw = _s->send(hdata.c_str(), hdata.size());
-            if (r.body.size()) {
-                nw = _s->send(r.body.c_str(), r.body.size());
+            http_response resp(&r);
+
+            std::string data = r.data();
+            if (r.body.size() > 0) {
+                data += r.body;
+            }
+            ssize_t nw = _sock.send(data.data(), data.size(), 0, timeout);
+            if ((size_t)nw != data.size()) {
+                throw http_send_error{};
             }
 
             http_parser parser;
-            http_response resp;
             resp.parser_init(&parser);
 
             _buf.clear();
 
             while (!resp.complete) {
                 _buf.reserve(4*1024);
-                ssize_t nr = _s->recv(_buf.back(), _buf.available());
-                if (nr <= 0) { throw http_error("recv"); }
+                ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, timeout);
+                if (nr <= 0) { throw http_recv_error{}; }
                 _buf.commit(nr);
                 size_t len = _buf.size();
                 resp.parse(&parser, _buf.front(), len);
                 _buf.remove(len);
                 if (resp.body.size() >= max_content_length) {
-                    _s.reset(); // close this socket, we won't read anymore
+                    _sock.close(); // close this socket, we won't read anymore
                     return resp;
                 }
             }
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
+            const auto conn = resp.get("Connection");
+            if (
+                    (conn && boost::iequals(*conn, "close")) ||
+                    (resp.version <= http_1_0 && conn && !boost::iequals(*conn, "Keep-Alive")) ||
+                    (resp.version <= http_1_0 && !conn)
+               )
+            {
+                _sock.close();
+            }
+
+            VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
         } catch (errorx &e) {
-            _s.reset();
+            _sock.close();
             throw;
         }
     }
 
-    http_response get(const std::string &path) {
-        return perform("GET", path);
+    http_response get(const std::string &path, optional_timeout timeout = {}) {
+        return perform("GET", path, {}, {}, timeout);
     }
 
-    http_response post(const std::string &path, const std::string &data) {
-        return perform("POST", path, data);
+    http_response post(const std::string &path, const std::string &data, optional_timeout timeout = {}) {
+        return perform("POST", path, {}, data, timeout);
     }
 
 };
 
 class http_pool : public shared_pool<http_client> {
 public:
-    http_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
-        : shared_pool<http_client>("http://" + host_,
+    http_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = {})
+        : shared_pool<http_client>("http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
             max_conn
         ),

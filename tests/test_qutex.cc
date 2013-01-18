@@ -2,6 +2,7 @@
 #include <boost/test/unit_test.hpp>
 #include <thread>
 #include "ten/semaphore.hh"
+#include "ten/synchronized.hh"
 #include "ten/task/rendez.hh"
 
 using namespace ten;
@@ -17,7 +18,7 @@ struct state {
 
 void qlocker(std::shared_ptr<state> st) {
     for (int i=0; i<1000; ++i) {
-        std::unique_lock<qutex> lk(st->q);
+        std::unique_lock<qutex> lk{st->q};
         ++(st->x);
     }
     st->r.wakeup();
@@ -32,7 +33,7 @@ void qutex_task_spawn() {
         procspawn(std::bind(qlocker, st));
         taskyield();
     }
-    std::unique_lock<qutex> lk(st->q);
+    std::unique_lock<qutex> lk{st->q};
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
     BOOST_CHECK_EQUAL(st->x, 20*1000);
 }
@@ -43,3 +44,15 @@ BOOST_AUTO_TEST_CASE(qutex_test) {
     p.main();
 }
 
+BOOST_AUTO_TEST_CASE(sync_test) {
+    synchronized<std::string> s("empty");
+
+    synchronize(s, [](std::string &str) {
+            BOOST_CHECK_EQUAL("empty", str);
+            str = "test";
+    });
+
+    synchronize(s, [](std::string &str) {
+            BOOST_CHECK_EQUAL("test", str);
+    });
+}

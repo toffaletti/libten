@@ -13,7 +13,7 @@ struct sslerror : public backtrace_exception {
     long err;
 
     sslerror();
-    const char *what() const throw() { return errstr; }
+    const char *what() const noexcept override { return errstr; }
 };
 
 BIO_METHOD *BIO_s_netfd(void);
@@ -57,28 +57,33 @@ public:
 
     //! dial requires a large 8MB stack size for getaddrinfo
     int dial(const char *addr,
-            uint16_t port, unsigned timeout_ms=0) __attribute__((warn_unused_result));
+            uint16_t port, optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result));
 
     int connect(const address &addr,
-            unsigned ms=0) __attribute__((warn_unused_result))
+            optional_timeout ms={})
+        __attribute__((warn_unused_result))
     {
         return netconnect(s.fd, addr, ms);
     }
 
     int accept(address &addr,
-            int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            int flags=0, optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
     }
 
     ssize_t recv(void *buf,
-            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            size_t len, int flags=0, optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return BIO_read(bio, buf, len);
     }
 
     ssize_t send(const void *buf,
-            size_t len, int flags=0, unsigned timeout_ms=0) __attribute__((warn_unused_result))
+            size_t len, int flags=0, optional_timeout timeout_ms={})
+        __attribute__((warn_unused_result))
     {
         return BIO_write(bio, buf, len);
     }

@@ -3,6 +3,7 @@
 
 #include "error.hh"
 #include "address.hh"
+#include "logging.hh"
 
 #include <errno.h>
 #include <unistd.h>
@@ -20,11 +21,13 @@
 
 namespace ten {
 
-#if EAGAIN != EWOULDBLOCK
-#define IO_NOT_READY_ERROR  ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+inline bool io_not_ready(int e = errno) {
+#if defined(EWOULDBLOCK) && (EWOULDBLOCK != EAGAIN)
+    return (e == EAGAIN) || (e == EWOULDBLOCK);
 #else
-#define IO_NOT_READY_ERROR  (errno == EAGAIN)
+    return (e == EAGAIN);
 #endif
+}
 
 //! \file
 //! contains wrappers around most fd based apis
@@ -55,7 +58,8 @@ struct fd_base {
         return *this;
     }
 
-    bool operator == (int fd_) const { return fd == fd_; }
+    friend bool operator == (const fd_base &fb, int fd_) { return fb.fd == fd_; }
+    friend bool operator == (int fd_, const fd_base &fb) { return fb.fd == fd_; }
 
     int fcntl(int cmd) { return ::fcntl(fd, cmd); }
     int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
@@ -76,7 +80,7 @@ struct fd_base {
     }
 
     //! true if fd != -1
-    bool valid() { return fd != -1; }
+    bool valid() const { return fd != -1; }
 
     //! read from fd
     ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
@@ -125,7 +129,7 @@ struct fd_base {
 //! eventfd create a file descriptor for event notification
 struct event_fd : fd_base {
     event_fd(unsigned int initval=0, int flags=0) {
-        fd = ::eventfd(initval, flags);
+        fd = ::eventfd(initval, flags | EFD_CLOEXEC);
         THROW_ON_ERROR(fd);
     }
 
@@ -150,10 +154,10 @@ struct pipe_fd {
     //! create a pair of unidirectional file descriptors with
     //! pipe2() that can be used for interprocess communication
     //! see man 2 pipe2 for more info
-    //! \param flags can be 0, or xored O_NONBLOCK, O_CLOEXEC
-    pipe_fd(int flags = 0) throw (errno_error) {
+    //! \param flags can be 0, or ORed O_NONBLOCK, O_CLOEXEC
+    pipe_fd(int flags=0) throw (errno_error) {
         int fds[2];
-        THROW_ON_ERROR(pipe2(fds, flags));
+        THROW_ON_ERROR(pipe2(fds, flags | O_CLOEXEC));
         r.fd = fds[0];
         w.fd = fds[1];
     }
@@ -178,10 +182,9 @@ struct pipe_fd {
 struct file_fd : fd_base {
     //! calls open to create file descriptor
     file_fd(const char *pathname, int flags, mode_t mode) {
-        fd = ::open(pathname, flags, mode);
+        fd = ::open(pathname, flags | O_CLOEXEC, mode);
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
     file_fd(file_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     file_fd &operator = (file_fd &&other) {
         if (this != &other) {
@@ -189,7 +192,6 @@ struct file_fd : fd_base {
         }
         return *this;
     }
-#endif
 
     //! read from a given offset
     ssize_t pread(void *buf, size_t count, off_t offset) __attribute__((warn_unused_result)) {
@@ -215,7 +217,7 @@ struct epoll_fd : fd_base {
     //! creates fd with epoll_create
     epoll_fd() throw (errno_error) {
         // size is ignored since linux kernel 2.6.8, but still must be positive
-        fd = epoll_create(1024);
+        fd = epoll_create1(O_CLOEXEC);
         THROW_ON_ERROR(fd);
     }
 
@@ -237,16 +239,16 @@ struct epoll_fd : fd_base {
 
     //! \param events an array of epoll_events structs to contain events available to the caller
     //! \param timeout milliseconds to wait for events, -1 waits indefinitely
-    void wait(std::vector<epoll_event> &events, int timeout=-1) throw (errno_error) {
-        for (;;) {
-            int s = ::epoll_wait(fd, &events[0], events.size(), timeout);
-            // if EINTR, the caller might need to do something else
-            // and then call wait again. so don't throw exception
-            if (s == -1 && errno == EINTR) s=0;
-            THROW_ON_ERROR(s);
-            events.resize(s);
-            break;
-        }
+    void wait(std::vector<epoll_event> &events, int timeout=-1) {
+        int s = ::epoll_wait(fd, &events[0], events.size(), timeout);
+        // if EINTR, the caller might need to do something else
+        // and then call wait again. so don't throw exception
+        if (s == -1 && errno == EINTR) s=0;
+        // XXX: the failures for epoll_wait are all fatal. 
+        // this is perhaps flawed because it is not a clean shutdown
+        // however, clean shutdown might be difficult without epoll...
+        PCHECK(s >= 0) << "epoll_wait failed";
+        events.resize(s);
     }
 };
 
@@ -255,7 +257,7 @@ struct epoll_fd : fd_base {
 struct socket_fd : fd_base {
     //! creates fd with socket()
     socket_fd(int domain, int type, int protocol=0) throw (errno_error) {
-        fd = ::socket(domain, type, protocol);
+        fd = ::socket(domain, type | SOCK_CLOEXEC, protocol);
         THROW_ON_ERROR(fd);
     }
 
@@ -339,11 +341,9 @@ struct socket_fd : fd_base {
         const T &optval) throw (errno_error)
     {
         socklen_t optlen = sizeof(optval);
-        setsockopt(level, optname, optval, optlen);
+        socket_fd::setsockopt(level, optname, optval, optlen);
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
     socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }
     socket_fd &operator = (socket_fd &&other) {
         if (this != &other) {
@@ -355,16 +355,16 @@ struct socket_fd : fd_base {
     //! wrapper around socketpair()
     static std::pair<socket_fd, socket_fd> pair(int domain, int type, int protocol=0) {
         int sv[2];
-        THROW_ON_ERROR(::socketpair(domain, type, protocol, sv));
+        THROW_ON_ERROR(::socketpair(domain, type | SOCK_CLOEXEC, protocol, sv));
         return std::make_pair(sv[0], sv[1]);
     }
-#endif
+
     //! \param addr returns the address of the peer socket
     //! \param flags 0 or xor of SOCK_NONBLOCK, SOCK_CLOEXEC
     //! \return the file descriptor for the peer socket or -1 on error
     int accept(address &addr, int flags=0) __attribute__((warn_unused_result)) {
         socklen_t addrlen = addr.maxlen();
-        return ::accept4(fd, addr.sockaddr(), &addrlen, flags);
+        return ::accept4(fd, addr.sockaddr(), &addrlen, flags | SOCK_CLOEXEC);
     }
 
     //! print socket file descriptor number
@@ -378,7 +378,7 @@ struct socket_fd : fd_base {
 struct timer_fd : fd_base {
     //! creates fd with timerfd_create()
     timer_fd(int clockid=CLOCK_MONOTONIC, int flags=0) throw (errno_error) {
-        fd = timerfd_create(clockid, flags);
+        fd = timerfd_create(clockid, flags | O_CLOEXEC);
         THROW_ON_ERROR(fd);
     }
 
@@ -401,7 +401,7 @@ struct signal_fd : fd_base {
     //! also calls sigprocmask() to block the signals in mask
     signal_fd(const sigset_t &mask, int flags=0) throw (errno_error) {
         THROW_ON_ERROR(::sigprocmask(SIG_BLOCK, &mask, NULL));
-        fd = ::signalfd(-1, &mask, flags);
+        fd = ::signalfd(-1, &mask, flags | O_CLOEXEC);
         THROW_ON_ERROR(fd);
     }
 

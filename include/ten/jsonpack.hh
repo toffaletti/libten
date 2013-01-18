@@ -63,8 +63,6 @@ inline json& operator>> (object o, json& v)
     }
 }
 
-
-
 template <typename Stream>
 packer<Stream>& operator<< (packer<Stream>& o, const json& v)
 {

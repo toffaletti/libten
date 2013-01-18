@@ -11,13 +11,10 @@
 
 namespace ten {
 
-using std::string;
-using boost::lexical_cast;
-
-inline void parse_host_port(string &host, unsigned short &port) {
+inline void parse_host_port(std::string &host, unsigned short &port) {
     size_t pos = host.rfind(':');
-    if (pos != string::npos) {
-        port = lexical_cast<unsigned short>(host.substr(pos+1, -1));
+    if (pos != std::string::npos) {
+        port = boost::lexical_cast<unsigned short>(host.substr(pos+1, -1));
         host = host.substr(0, pos);
     }
 }
@@ -139,7 +136,7 @@ struct address {
         throw errno_error();
     }
 
-    string str() const {
+    std::string str() const {
         std::stringstream ss;
         ss << *this;
         return ss.str();

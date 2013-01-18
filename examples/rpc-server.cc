@@ -6,7 +6,9 @@ using namespace msgpack::rpc;
 const size_t default_stacksize=256*1024;
 
 static void client_task() {
-    rpc_client c("localhost", 5500);
+    rpc_client c{"localhost", 5500};
+    c.notify("notify_me");
+    c.notify("notify_world", std::string("hi"));
     LOG(INFO) << "40+2=" << c.call<int>("add2", 40, 2);
     LOG(INFO) << "4-2=" << c.call<int>("subtract2", 4, 2);
     try {
@@ -18,7 +20,7 @@ static void client_task() {
 }
 
 static int fail() {
-    throw std::runtime_error("fail");
+    throw std::runtime_error{"fail"};
 }
 
 static int add2(int a, int b) {
@@ -30,14 +32,24 @@ static int subtract2(int a, int b) {
     return a - b;
 }
 
+static void notify_me() {
+    LOG(INFO) << "NOTIFY ME";
+}
+
+static void notify_world(std::string s) {
+    LOG(INFO) << "NOTIFY WORLD " << s;
+}
+
 static void startup() {
-    rpc_server rpc;
-    rpc.add_command("add2", add2);
-    rpc.add_command("add2", add2);
-    rpc.add_command("subtract2", subtract2);
-    rpc.add_command("fail", fail);
+    auto rpc = std::make_shared<rpc_server>();
+    rpc->add_command("add2", add2);
+    rpc->add_command("add2", add2);
+    rpc->add_command("subtract2", subtract2);
+    rpc->add_command("fail", fail);
+    rpc->add_notify("notify_me", notify_me);
+    rpc->add_notify("notify_world", notify_world);
     taskspawn(client_task);
-    rpc.serve("0.0.0.0", 5500);
+    rpc->serve("0.0.0.0", 5500);
 }
 
 int main(int argc, char *argv[]) {

@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include "ten/error.hh"
 #include "ten/task/context.hh"
+#include "ten/logging.hh"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
@@ -70,7 +71,7 @@ public:
 
 #ifndef NDEBUG
             size_t pgs = getpagesize();
-            THROW_ON_ERROR(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE));
+            PCHECK(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE) == 0);
             free(stack_end-pgs);
 #else
             free(stack_end);

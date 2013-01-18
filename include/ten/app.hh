@@ -1,17 +1,36 @@
-#ifndef APP_HH
-#define APP_HH
+#ifndef LIBTEN_APP_HH
+#define LIBTEN_APP_HH
 
 #include <sys/resource.h>
 #include <iostream>
 #include <fstream>
 #include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "task.hh"
 #include "logging.hh"
+#include "term.hh"
 #include "descriptors.hh"
 
 namespace ten {
+
+//! remove arguments from arg vector
+inline void remove_arg(std::vector<std::string> &args, const std::string &arg, unsigned after=1) {
+    struct starts_with {
+        const std::string &prefix;
+        starts_with(const std::string &prefix_) : prefix(prefix_) {}
+        bool operator()(const std::string &x) const {
+            return boost::starts_with(x, prefix);
+        }
+    };
+    auto it = std::find_if(args.begin(), args.end(), starts_with(arg));
+    if (it != args.end()) {
+        auto end(it);
+        std::advance(end, after+1);
+        args.erase(it, end);
+    }
+}
 
 static int set_maxrlimit(int resource, rlim_t &max)
 {
@@ -41,20 +60,25 @@ namespace po = boost::program_options;
 
 //! setup basic options for all applications
 struct options {
+    const unsigned line_length;
+
     po::options_description generic;
     po::options_description configuration;
     po::options_description hidden;
-    po::positional_options_description pdesc;
-
+    po::options_description visible;
     po::options_description cmdline_options;
     po::options_description config_file_options;
-    po::options_description visible;
+    po::positional_options_description pdesc;
 
     options(const char *appname, app_config &c) :
-        generic("Generic options"),
-        configuration("Configuration"),
-        hidden("Hidden options"),
-        visible("Allowed options")
+        line_length(terminal_width()),
+        generic("Generic options",     line_length, line_length / 2),
+        configuration("Configuration", line_length, line_length / 2),
+        hidden("Hidden options",       line_length, line_length / 2),
+        visible("Allowed options",     line_length, line_length / 2),
+        cmdline_options(    line_length, line_length / 2),
+        config_file_options(line_length, line_length / 2),
+        pdesc()
     {
         generic.add_options()
             ("version,v", "Show version")
@@ -166,6 +190,11 @@ public:
                 PLOG(ERROR) << "setting max core size limit failed";
             }
         } catch (std::exception &e) {
+            std::cerr << "argv[";
+            for (int i=0; i<argc; ++i) {
+                std::cerr << argv[i] << " ";
+            }
+            std::cerr << "]\n";
             std::cerr << "Error: " << e.what() << std::endl << std::endl;
             showhelp();
             exit(1);
@@ -189,6 +218,53 @@ public:
             taskspawn(std::bind(&application::signal_task, this), 4*1024);
         }
         return p.main();
+    }
+
+    std::vector<std::string> vargs() {
+        struct match_char {
+            char c;
+            match_char(char c_) : c(c_) {}
+            bool operator()(char x) const { return x == c; }
+        };
+        std::string cmdline;
+        {
+            std::ifstream ifs("/proc/self/cmdline", std::ios::binary);
+            std::stringstream ss;
+            ss << ifs.rdbuf();
+            cmdline = ss.str();
+        }
+        std::vector<std::string> splits;
+        boost::split(splits, cmdline, match_char('\0'));
+        std::vector<std::string> args;
+        // filter out empty strings
+        for (auto arg : splits) {
+            if (!arg.empty()) {
+                args.push_back(arg);
+            }
+        }
+        return args;
+    }
+
+    void restart(std::vector<std::string> vargs) {
+        char exe_path[PATH_MAX];
+        THROW_ON_NULL(realpath("/proc/self/exe", exe_path));
+        pid_t child_pid;
+        if ((child_pid = fork()) != 0) {
+            // parent
+            // pid == -1 is error, no child was started
+            THROW_ON_ERROR(child_pid);
+            LOG(INFO) << "restart child pid: " << child_pid;
+            quit();
+        } else {
+            // child
+            char *args[vargs.size()+1];
+            for (unsigned i=0; i<vargs.size(); ++i) {
+                // evil cast away const
+                args[i] = (char *)vargs[i].c_str();
+            }
+            args[vargs.size()] = nullptr;
+            THROW_ON_ERROR(execv(exe_path, args));
+        }
     }
 
     void quit() {

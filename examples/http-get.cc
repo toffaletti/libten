@@ -10,13 +10,13 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
-    netsock s(AF_INET, SOCK_STREAM);
+    netsock s{AF_INET, SOCK_STREAM};
     u.normalize();
     if (u.scheme != "http") return;
     if (u.port == 0) u.port = 80;
     s.dial(u.host.c_str(), u.port);
 
-    http_request r("GET", u.compose_path());
+    http_request r{"GET", u.compose_path()};
     // HTTP/1.1 requires host header
     r.append("Host", u.host); 
 
@@ -25,7 +25,7 @@ static void do_get(uri u) {
     std::cout << data;
     ssize_t nw = s.send(data.c_str(), data.size());
 
-    buffer buf(4*1024);
+    buffer buf{4*1024};
 
     http_parser parser;
     http_response resp;
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
     procmain p;
 
-    uri u(argv[1]);
+    uri u{argv[1]};
     taskspawn(std::bind(do_get, u));
     return p.main(argc, argv);
 }

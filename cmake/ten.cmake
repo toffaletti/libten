@@ -7,13 +7,21 @@ add_definitions(-DUSE_BOOST_FCONTEXT)
 
 include_directories(${CWD}/..) # for stlencoders and stringencoders
 include_directories(${CWD}/../include)
-include_directories(${CWD}/../jansson)
 include_directories(${CWD}/../msgpack)
 include_directories(${CWD}/../glog)
 
-find_library(CARES_LIB cares PATHS 
-    /usr/lib/x86_64-linux-gnu/
-    )
+find_library(JANSSON_LIB jansson)
+find_file(JANSSON_INCLUDE jansson.h)
+if (JANSSON_LIB AND JANSSON_INCLUDE)
+    message(STATUS "Using jansson: ${JANSSON_LIB} ${JANSSON_INCLUDE}")
+    add_definitions(-DHAVE_JANSSON)
+else (JANSSON_LIB AND JANSSON_INCLUDE)
+    message(FATAL_ERROR "jansson not found")
+endif (JANSSON_LIB AND JANSSON_INCLUDE)
+
+
+
+find_library(CARES_LIB cares)
 find_file(CARES_INCLUDE ares.h)
 if (CARES_LIB AND CARES_INCLUDE)
     message(STATUS "Using c-ares: ${CARES_LIB} ${CARES_INCLUDE}")

@@ -52,7 +52,7 @@ static void pipe_write(pipe_fd &p) {
 }
 
 static void pipe_wait(size_t &bytes) {
-    pipe_fd p(O_NONBLOCK);
+    pipe_fd p{O_NONBLOCK};
     taskspawn(std::bind(pipe_write, std::ref(p)));
     fdwait(p.r.fd, 'r');
     char buf[64];
@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(fdwait_test) {
 }
 
 static void connect_to(address addr) {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setnonblock();
     if (s.connect(addr) == 0) {
         // connected!
@@ -82,9 +82,9 @@ static void connect_to(address addr) {
 }
 
 static void listen_co(bool multithread, semaphore &sm) {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     s.listen();
@@ -99,7 +99,7 @@ static void listen_co(bool multithread, semaphore &sm) {
     assert(success);
 
     address client_addr;
-    socket_fd cs(s.accept(client_addr, SOCK_NONBLOCK));
+    socket_fd cs{s.accept(client_addr, SOCK_NONBLOCK)};
     fdwait(cs.fd, 'r');
     char buf[2];
     ssize_t nr = cs.recv(buf, 2);
@@ -137,6 +137,7 @@ static void sleeper(semaphore &s) {
     // annoyingly have to compare count here because duration doesn't have an
     // ostream << operator
     BOOST_CHECK_GE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
+    BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(12).count());
     s.post();
 }
 
@@ -149,14 +150,14 @@ BOOST_AUTO_TEST_CASE(task_sleep) {
 }
 
 static void listen_timeout_co(semaphore &sm) {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     s.listen();
 
-    bool timeout = !fdwait(s.fd, 'r', 5);
+    bool timeout = !fdwait(s.fd, 'r', std::chrono::milliseconds{5});
     BOOST_CHECK(timeout);
     sm.post();
 }
@@ -293,7 +294,7 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
 
 static void deadline_timer() {
     try {
-        deadline dl(milliseconds(100));
+        deadline dl{milliseconds(100)};
         tasksleep(200);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
@@ -303,7 +304,7 @@ static void deadline_timer() {
 
 static void deadline_not_reached() {
     try {
-        deadline dl(milliseconds(100));
+        deadline dl{milliseconds(100)};
         tasksleep(50);
         BOOST_CHECK(true);
     } catch (deadline_reached &e) {
@@ -322,7 +323,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_timer) {
 
 static void deadline_cleared() {
     try {
-        deadline dl(milliseconds(10));
+        deadline dl{milliseconds(10)};
         tasksleep(20000);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
@@ -346,7 +347,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
 static void deadline_cleared_not_reached() {
     try {
         if (true) {
-            deadline dl(milliseconds(100));
+            deadline dl{milliseconds(100)};
             tasksleep(20);
             // deadline should be removed at this point
             BOOST_CHECK(true);
@@ -366,7 +367,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared_not_reached) {
 
 static void deadline_yield() {
     try {
-        deadline dl(milliseconds(5));
+        deadline dl{milliseconds(5)};
         for (;;) {
             taskyield();
         }

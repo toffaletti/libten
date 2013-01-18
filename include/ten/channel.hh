@@ -11,7 +11,9 @@
 namespace ten {
 
 struct channel_closed_error : std::exception {
-    virtual const char *what() const throw () { return "ten::channel_closed_error"; }
+    virtual const char *what() const noexcept override {
+        return "ten::channel_closed_error";
+    }
 };
 
 //! send and receive data between tasks in FIFO order
@@ -160,12 +162,12 @@ public:
 
     //! \return number of unread items
     size_t unread() {
-        std::unique_lock<qutex> lock(_m->qtx);
+        std::lock_guard<qutex> lock(_m->qtx);
         return _m->unread;
     }
 
     void close() {
-        std::unique_lock<qutex> l(_m->qtx);
+        std::lock_guard<qutex> l(_m->qtx);
         _m->closed = true;
         // wake up all users of channel
         _m->not_empty.wakeupall();
@@ -173,7 +175,7 @@ public:
     }
 
     void clear() {
-        std::unique_lock<qutex> l(_m->qtx);
+        std::lock_guard<qutex> l(_m->qtx);
         while (!_m->queue.empty()) {
             _m->queue.pop();
         }

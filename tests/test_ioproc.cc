@@ -9,7 +9,7 @@ const size_t default_stacksize=256*1024;
 
 static void ioproc_sleeper() {
     ioproc io;
-    int ret = iocall<int>(io, std::bind(usleep, 100));
+    int ret = iocall(io, std::bind(usleep, 100));
     BOOST_CHECK_EQUAL(ret, 0);
 }
 
@@ -20,11 +20,11 @@ BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
 }
 
 static void test_pool() {
-    ioproc io(default_stacksize, 4);
+    ioproc io{default_stacksize, 4};
     iochannel reply_chan;
 
     for (int i=0; i<4; ++i) {
-        iocallasync<int>(io, std::bind(usleep, 100), reply_chan);
+        iocallasync(io, std::bind(usleep, 100), reply_chan);
     }
 
     for (int i=0; i<4; ++i) {

@@ -3,29 +3,51 @@
 
 #include "task.hh"
 #include "channel.hh"
-#include <stdarg.h>
-#include <memory>
 #include <boost/any.hpp>
-#include "shared_pool.hh"
-#include <fcntl.h>
-#include <cassert>
+#include <type_traits>
 #include <exception>
+#include <memory>
+#include <fcntl.h>
 
 namespace ten {
 
+// anyfunc - hold and call a function that may return void non-void
+
+using anyfunc = std::function<boost::any ()>;
+
+namespace anyfunc_impl {
+template <typename F> anyfunc make(F f, std::true_type)         { return [f]() mutable -> boost::any { f(); return {};  }; }
+template <typename F> anyfunc make(const F &f, std::false_type) { return anyfunc(f); }
+}
+template <typename F>
+inline anyfunc make_anyfunc(const F &f) {
+    using result_t = typename std::result_of<F()>::type;
+    return anyfunc_impl::make(f, typename std::is_void<result_t>::type());
+}
+inline anyfunc make_anyfunc(const anyfunc  &f) { return f; }
+inline anyfunc make_anyfunc(      anyfunc &&f) { return std::move(f); }
+inline anyfunc make_anyfunc(void (*f)())       { return anyfunc_impl::make(f, std::true_type()); }  // workaround for libstdc++ result_of<>
+
+// return a boost::any even if it's empty
+
+template <class T> inline T    any_value(      const boost::any  &a) { return boost::any_cast<T>(a); }
+template <class T> inline T    any_value(            boost::any &&a) { return std::move(boost::any_cast<T &>(a)); }
+template <>        inline void any_value<void>(const boost::any  &)  {}
+template <>        inline void any_value<void>(      boost::any &&)  {}
+
+// thread pool for io or other tasks
+
 struct pcall;
-typedef channel<std::unique_ptr<pcall> > iochannel;
+using iochannel = channel<std::unique_ptr<pcall>>;
 
 //! remote call in another thread
 struct pcall {
     iochannel ch;
-    std::function<void ()> vop;
-    std::function<boost::any ()> op;
+    anyfunc op;
     std::exception_ptr exception;
     boost::any ret;
 
-    pcall(const std::function<void ()> &vop_, iochannel &ch_) : ch(ch_), vop(vop_) {}
-    pcall(const std::function<boost::any ()> &op_, iochannel &ch_) : ch(ch_), op(op_) {}
+    pcall(anyfunc op_, iochannel &ch_) : ch(ch_), op(std::move(op_)) {}
 };
 
 void ioproctask(iochannel &);
@@ -35,11 +57,10 @@ struct ioproc {
     iochannel ch;
     std::vector<uint64_t> tids;
 
-    ioproc(
-            size_t stacksize = default_stacksize,
-            unsigned nprocs = 1,
-            unsigned chanbuf = 0,
-            void (*proctask)(iochannel &) = ioproctask)
+    ioproc(size_t stacksize = default_stacksize,
+           unsigned nprocs = 1,
+           unsigned chanbuf = 0,
+           std::function<void(iochannel &)> proctask = ioproctask)
         : ch(chanbuf ? chanbuf : nprocs)
     {
         for (unsigned i=0; i<nprocs; ++i) {
@@ -54,31 +75,18 @@ struct ioproc {
     }
 };
 
-//! wait on an iochannel for a call to complete
-inline void iowait(iochannel &reply_chan) {
-    // TODO: maybe this close logic needs to be in channel itself?
-    // is there ever a case where you'd want a channel to stay open
-    // after a task using it has been interrupted? i can't think of one
-    try {
-        std::unique_ptr<pcall> reply(reply_chan.recv());
-        if (reply->exception != 0) {
-            std::rethrow_exception(reply->exception);
-        }
-    } catch (task_interrupted &e) {
-        reply_chan.close();
-        throw;
-    }
+namespace ioproc_impl {
 }
 
 //! wait on an iochannel for a call to complete with a result
-template <typename ReturnT>
-ReturnT iowait(iochannel &reply_chan) {
+template <typename ResultT>
+ResultT iowait(iochannel &reply_chan) {
     try {
         std::unique_ptr<pcall> reply(reply_chan.recv());
-        if (reply->exception != 0) {
+        if (reply->exception != nullptr) {
             std::rethrow_exception(reply->exception);
         }
-        return boost::any_cast<ReturnT>(reply->ret);
+        return any_value<ResultT>(std::move(reply->ret));
     } catch (task_interrupted &e) {
         reply_chan.close();
         throw;
@@ -86,64 +94,36 @@ ReturnT iowait(iochannel &reply_chan) {
 }
 
 //! make an iocall, but dont wait for it to complete
-template <typename ReturnT>
-void iocallasync(
-        ioproc &io,
-        const std::function<boost::any ()> &op,
-        iochannel reply_chan = iochannel())
-{
-    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
+template <typename Func>
+void iocallasync(ioproc &io, Func &&f, iochannel reply_chan = iochannel()) {
+    std::unique_ptr<pcall> call(new pcall(make_anyfunc(f), reply_chan));
     io.ch.send(std::move(call));
 }
 
-inline void iocallasync(
-        ioproc &io,
-        const std::function<void ()> &vop,
-        iochannel reply_chan = iochannel())
-{
-    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
+//! make an iocall, and wait for the result
+template <typename Func, typename Result = typename std::result_of<Func()>::type>
+Result iocall(ioproc &io, Func &&f, iochannel reply_chan = iochannel()) {
+    std::unique_ptr<pcall> call(new pcall(make_anyfunc(f), reply_chan));
     io.ch.send(std::move(call));
-}
-
-//! make an iocall and wait for the result
-template <typename ReturnT>
-ReturnT iocall(
-        ioproc &io,
-        const std::function<boost::any ()> &op,
-        iochannel reply_chan = iochannel())
-{
-    std::unique_ptr<pcall> call(new pcall(op, reply_chan));
-    io.ch.send(std::move(call));
-    return iowait<ReturnT>(reply_chan);
-}
-
-//! make an iocall and wait for it to complete
-inline void iocall(
-        ioproc &io,
-        const std::function<void ()> &vop,
-        iochannel reply_chan = iochannel())
-{
-    std::unique_ptr<pcall> call(new pcall(vop, reply_chan));
-    io.ch.send(std::move(call));
-    iowait(reply_chan);
+    return iowait<Result>(reply_chan);
 }
 
 ////// iorw /////
 
 template <typename ProcT> int ioopen(ProcT &io, char *path, int mode) {
-    return iocall<int>(io, std::bind((int (*)(char *, int))::open, path, mode));
+    return iocall(io, std::bind((int (*)(char *, int))::open, path, mode));
 }
 
 template <typename ProcT>  int ioclose(ProcT &io, int fd) {
-    return iocall<int>(io, std::bind(::close, fd));
+    return iocall(io, std::bind(::close, fd));
 }
 
 template <typename ProcT> ssize_t ioread(ProcT &io, int fd, void *buf, size_t n) {
-    return iocall<ssize_t>(io, std::bind(::read, fd, buf, n));
+    return iocall(io, std::bind(::read, fd, buf, n));
 }
 
 template <typename ProcT> ssize_t iowrite(ProcT &io, int fd, void *buf, size_t n) {
-    return iocall<ssize_t>(io, std::bind(::write, fd, buf, n));
+    return iocall(io, std::bind(::write, fd, buf, n));
 }
 
 } // end namespace ten 

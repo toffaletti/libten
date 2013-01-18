@@ -9,7 +9,7 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 static void dial_google() {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     int status = netdial(s.fd, "www.google.com", 80);
     BOOST_CHECK_EQUAL(status, 0);
 }
@@ -21,16 +21,16 @@ BOOST_AUTO_TEST_CASE(task_socket_dial) {
     p.main();
 }
 
-static void http_callback(http_server::request &env) {
-    env.resp = http_response(200);
-    env.resp.set_body("Hello World");
-    env.send_response();
+static void http_callback(http_exchange &ex) {
+    ex.resp = { 200 };
+    ex.resp.set_body("Hello World");
+    ex.send_response();
 }
 
 static void start_http_server(address &addr) {
-    http_server s;
-    s.add_route("*", http_callback);
-    s.serve(addr);
+    auto s = std::make_shared<http_server>();
+    s->add_route("*", http_callback);
+    s->serve(addr);
 }
 
 static void start_http_test() {
@@ -39,7 +39,7 @@ static void start_http_test() {
             std::bind(start_http_server, std::ref(http_addr))
             ); 
     taskyield(); // allow server to bind and listen
-    http_client c(http_addr.str());
+    http_client c{http_addr.str()};
     http_response resp = c.get("/");
     BOOST_CHECK_EQUAL("Hello World", resp.body);
     resp = c.get("/foobar");

@@ -9,7 +9,7 @@ BOOST_AUTO_TEST_CASE(test1) {
     static std::vector<char> bb(1000, 0x42);
     BOOST_CHECK(std::is_pod<buffer::head>::value);
 
-    buffer b(100);
+    buffer b{100};
     b.reserve(1000); // force a realloc
     BOOST_CHECK(b.end() - b.back() >= 1000);
     std::fill(b.back(), b.end(1000), 0x41);
@@ -33,12 +33,12 @@ BOOST_AUTO_TEST_CASE(test1) {
 BOOST_AUTO_TEST_CASE(test2) {
     // this is just to see if realloc is returning new pointers
     {
-        buffer b(100000);
+        buffer b{100000};
         b.reserve(100001);
     }
 
     {
-        buffer b(100000);
+        buffer b{100000};
         b.reserve(100001);
     }
 }

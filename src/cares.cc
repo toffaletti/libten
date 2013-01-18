@@ -19,38 +19,32 @@ struct channel_destroyer {
 };
 
 // convert read and write fd_set to pollfd
-// max_fd pollfds will be malloced and returned in fds_p
-// actual number of fds will be returned in nfds;
-static void fd_sets_to_pollfd(fd_set *read_fds, fd_set *write_fds, int max_fd, struct pollfd **fds_p, int *nfds) {
-    // using max_fd is over allocating
-    struct pollfd *fds = (struct pollfd *)calloc(max_fd, sizeof(struct pollfd));
-    int ifd = 0;
+std::vector<pollfd> fd_sets_to_pollfd(fd_set *read_fds, fd_set *write_fds, const int max_fd) {
+    std::vector<pollfd> fds;
     for (int fd = 0; fd<max_fd; fd++) {
-        fds[ifd].fd = fd;
+        pollfd p = {};
         if (FD_ISSET(fd, read_fds)) {
-            fds[ifd].events |= EPOLLIN;
+            p.events |= EPOLLIN;
         }
         if (FD_ISSET(fd, write_fds)) {
-            fds[ifd].events |= EPOLLOUT;
+            p.events |= EPOLLOUT;
         }
-        // only increment the fd index if it exists in the fd sets
-        if (fds[ifd].events != 0) {
-            ifd++;
+        if (p.events) {
+            p.fd = fd;
+            fds.push_back(p);
         }
     }
-    *fds_p = fds;
-    *nfds = ifd;
+    return fds;
 }
 
 // convert pollfd to read and write fd_sets
+// NOTE the caller must zero the sets first
 static void pollfd_to_fd_sets(struct pollfd *fds, int nfds, fd_set *read_fds, fd_set *write_fds) {
-    FD_ZERO(read_fds);
-    FD_ZERO(write_fds);
     for (int i = 0; i<nfds; i++) {
-        if (fds[i].revents & EPOLLIN) {
+        if (fds[i].revents & (EPOLLIN|EPOLLERR)) {
             FD_SET(fds[i].fd, read_fds);
         }
-        if (fds[i].revents & EPOLLOUT) {
+        if (fds[i].revents & (EPOLLOUT|EPOLLERR)) {
             FD_SET(fds[i].fd, write_fds);
         }
     }
@@ -77,7 +71,7 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
     si->status = ECONNREFUSED;
     while (host->h_addr_list && host->h_addr_list[n]) {
         address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        si->status = netconnect(si->fd, addr, 0);
+        si->status = netconnect(si->fd, addr, {});
         if (si->status == 0) break;
 
         n++;
@@ -85,6 +79,8 @@ static void gethostbyname_callback(void *arg, int status, int timeouts, struct h
 }
 
 int netdial(int fd, const char *addr, uint16_t port) {
+    long open_max = sysconf(_SC_OPEN_MAX);
+
     channel_destroyer cd;
     sock_info si = {addr, fd, ARES_SUCCESS, port};
     int status = ares_init(&cd.channel);
@@ -94,25 +90,36 @@ int netdial(int fd, const char *addr, uint16_t port) {
 
     ares_gethostbyname(cd.channel, addr, AF_INET, gethostbyname_callback, &si);
 
-    fd_set read_fds, write_fds;
-    struct timeval *tvp, tv;
-    int max_fd, nfds;
+    // we allocate our own fd set because FD_SETSIZE is 1024
+    // and we could easily have more file descriptors
+    // this runs the risk of stack overflow so big stacks
+    // should be used for dns lookup
+    const size_t set_size = (size_t)(open_max + __NFDBITS - 1) / __NFDBITS;
+    __fd_mask read_fd_buf[set_size];  // C99
+    __fd_mask write_fd_buf[set_size]; // C99
+    fd_set * const read_fds  = (fd_set *)read_fd_buf;
+    fd_set * const write_fds = (fd_set *)write_fd_buf;
     while (si.status == ARES_SUCCESS) {
-        FD_ZERO(&read_fds);
-        FD_ZERO(&write_fds);
-        max_fd = ares_fds(cd.channel, &read_fds, &write_fds);
+        memset(read_fd_buf,  0, sizeof(read_fd_buf));
+        memset(write_fd_buf, 0, sizeof(write_fd_buf));
+        int max_fd = ares_fds(cd.channel, read_fds, write_fds);
         if (max_fd == 0)
             break;
+        auto fds = fd_sets_to_pollfd(read_fds, write_fds, max_fd);
 
-        struct pollfd *fds;
-        fd_sets_to_pollfd(&read_fds, &write_fds, max_fd, &fds, &nfds);
-        std::unique_ptr<struct pollfd, void (*)(void *)> fds_p(fds, free);
+        struct timeval *tvp, tv;
         tvp = ares_timeout(cd.channel, NULL, &tv);
-        if (taskpoll(fds, nfds, SEC2MS(tvp->tv_sec)) > 0) {
-            pollfd_to_fd_sets(fds, nfds, &read_fds, &write_fds);
-            ares_process(cd.channel, &read_fds, &write_fds);
+        optional_timeout poll_timeout;
+        if (tvp) {
+            using namespace std::chrono;
+            poll_timeout = duration_cast<milliseconds>(seconds(tvp->tv_sec));
         }
+        taskpoll(&fds[0], fds.size(), poll_timeout);
 
+        memset(read_fd_buf,  0, sizeof(read_fd_buf));
+        memset(write_fd_buf, 0, sizeof(write_fd_buf));
+        pollfd_to_fd_sets(&fds[0], fds.size(), read_fds, write_fds);
+        ares_process(cd.channel, read_fds, write_fds);
     }
     return si.status;
 }

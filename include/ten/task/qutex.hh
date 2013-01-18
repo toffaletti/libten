@@ -5,12 +5,28 @@
 
 namespace ten {
 
+template <typename Lock>
+class safe_lock {
+    private:
+        Lock &_lock;
+    public:
+        safe_lock(Lock &lock) noexcept : _lock(lock) {
+            _lock.safe_lock();
+        }
+
+        ~safe_lock() noexcept {
+            _lock.unlock();
+        }
+};
+
 //! task aware mutex
 class qutex {
 private:
     std::timed_mutex _m;
     tasklist _waiting;
     task *_owner;
+
+    void unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk);
 public:
     qutex() : _owner(nullptr) {
         // a simple memory barrier would be sufficient here
@@ -21,6 +37,7 @@ public:
 
     ~qutex() {}
 
+    void safe_lock() noexcept;
     void lock();
     void unlock();
     bool try_lock();
@@ -32,9 +49,6 @@ public:
         bool try_lock_until(
                 std::chrono::time_point<Clock,Duration> const&
                 absolute_time);
-private:
-    void internal_unlock(
-        std::unique_lock<std::timed_mutex> &lk);
 };
 
 } // namespace

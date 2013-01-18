@@ -19,17 +19,9 @@ void ioproctask(iochannel &ch) {
         taskstate("executing call");
         errno = 0;
         try {
-            if (call->vop) {
-                DVLOG(5) << "ioproc calling vop";
-                call->vop();
-                call->vop = 0;
-            } else if (call->op) {
-                DVLOG(5) << "ioproc calling op";
-                call->ret = call->op();
-                call->op = 0;
-            } else {
-                abort();
-            }
+            DVLOG(5) << "ioproc calling op";
+            call->ret = call->op();
+            call->op = 0;
         } catch (std::exception &e) {
             DVLOG(5) << "ioproc caught exception: " << e.what();
             call->exception = std::current_exception();

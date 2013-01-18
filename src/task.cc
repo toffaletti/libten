@@ -5,41 +5,37 @@
 
 namespace ten {
 
-using std::function;
-using std::atomic;
-using std::stringstream;
-using std::mutex;
-using std::unique_lock;
-using std::unique_ptr;
-using std::rethrow_exception;
-
-static atomic<uint64_t> taskidgen(0);
+static std::atomic<uint64_t> taskidgen(0);
 
 void tasksleep(uint64_t ms) {
+    task::cancellation_point cancellable;
     this_proc()->sched().sleep(milliseconds(ms));
 }
 
-bool fdwait(int fd, int rw, uint64_t ms) {
+bool fdwait(int fd, int rw, optional_timeout ms) {
+    task::cancellation_point cancellable;
     return this_proc()->sched().fdwait(fd, rw, ms);
 }
 
-int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms) {
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
+    task::cancellation_point cancellable;
     return this_proc()->sched().poll(fds, nfds, ms);
 }
 
-uint64_t taskspawn(const function<void ()> &f, size_t stacksize) {
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     task *t = this_proc()->newtaskinproc(f, stacksize);
-    t->ready();
+    t->ready(true); // add new tasks to front of runqueue
     return t->id;
 }
 
 uint64_t taskid() {
-    CHECK(this_proc());
-    CHECK(this_proc()->ctask);
-    return this_proc()->ctask->id;
+    DCHECK(this_proc());
+    DCHECK(this_task());
+    return this_task()->id;
 }
 
 int64_t taskyield() {
+    task::cancellation_point cancellable;
     proc *p = this_proc();
     uint64_t n = p->nswitch;
     task *t = p->ctask;
@@ -52,31 +48,18 @@ int64_t taskyield() {
 
 void tasksystem() {
     proc *p = this_proc();
-    if (!p->ctask->systask) {
-        p->ctask->systask = true;
-        --p->taskcount;
-    }
+    p->mark_system_task();
 }
 
 bool taskcancel(uint64_t id) {
     proc *p = this_proc();
-    task *t = nullptr;
-    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        if ((*i)->id == id) {
-            t = *i;
-            break;
-        }
-    }
-
-    if (t) {
-        t->cancel();
-    }
-    return (bool)t;
+    DCHECK(p) << "BUG: taskcancel called in null proc";
+    return p->cancel_task_by_id(id);
 }
 
 const char *taskname(const char *fmt, ...)
 {
-    task *t = this_proc()->ctask;
+    task *t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -88,7 +71,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	task *t = this_proc()->ctask;
+	task *t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -98,49 +81,36 @@ const char *taskstate(const char *fmt, ...)
     return t->state;
 }
 
-string taskdump() {
-    stringstream ss;
+std::string taskdump() {
+    std::stringstream ss;
     proc *p = this_proc();
-    CHECK(p) << "BUG: taskdump called in null proc";
-    task *t = nullptr;
-    for (auto i = p->alltasks.cbegin(); i != p->alltasks.cend(); ++i) {
-        t = *i;
-        ss << t << "\n";
-    }
+    DCHECK(p) << "BUG: taskdump called in null proc";
+    p->dump_tasks(ss);
     return ss.str();
 }
 
 void taskdumpf(FILE *of) {
-    string dump = taskdump();
+    std::string dump = taskdump();
     fwrite(dump.c_str(), sizeof(char), dump.size(), of);
     fflush(of);
 }
 
-task::task(const function<void ()> &f, size_t stacksize)
+task::task(const std::function<void ()> &f, size_t stacksize)
     : co(task::start, this, stacksize)
 {
     clear();
     fn = f;
 }
 
-void task::init(const function<void ()> &f) {
+void task::init(const std::function<void ()> &f) {
     fn = f;
     co.restart(task::start, this);
 }
 
-void task::ready() {
-    if (exiting) return;
+void task::ready(bool front) {
     proc *p = cproc;
-    unique_lock<mutex> lk(p->mutex);
-    if (find(p->runqueue.cbegin(), p->runqueue.cend(), this) == p->runqueue.cend()) {
-        DVLOG(5) << this_proc()->ctask << " adding task: " << this << " to runqueue for proc: " << p;
-        p->runqueue.push_back(this);
-    } else {
-        DVLOG(5) << "found task: " << this << " already in runqueue for proc: " << p;
-    }
-    // XXX: does this need to be outside of the if(!found) ?
-    if (p != this_proc()) {
-        p->wakeupandunlock(lk);
+    if (!_ready.exchange(true)) {
+        p->ready(this, front);
     }
 }
 
@@ -151,80 +121,75 @@ task::~task() {
 
 void task::clear(bool newid) {
     fn = nullptr;
-    exiting = false;
+    cancel_points = 0;
+    _ready = false;
     systask = false;
     canceled = false;
-    unwinding = false;
     if (newid) {
         id = ++taskidgen;
         setname("task[%ju]", id);
         setstate("new");
     }
-
-    if (!timeouts.empty()) {
-        // free timeouts
-        for (auto i=timeouts.begin(); i<timeouts.end(); ++i) {
-            delete *i;
-        }
-        timeouts.clear();
-        // remove from scheduler timeout list
-        cproc->sched().remove_timeout_task(this);
-    }
-
+    exception = nullptr;
     cproc = nullptr;
 }
 
-void task::remove_timeout(timeout_t *to) {
-    auto i = find(timeouts.begin(), timeouts.end(), to);
-    if (i != timeouts.end()) {
-        delete *i;
-        timeouts.erase(i);
-    }
-    if (timeouts.empty()) {
-        // remove from scheduler timeout list
-        cproc->sched().remove_timeout_task(this);
-    }
+void task::safe_swap() noexcept {
+    // swap to scheduler coroutine
+    co.swap(&this_proc()->sched_coro());
 }
 
 void task::swap() {
     // swap to scheduler coroutine
-    co.swap(&this_proc()->co);
+    co.swap(&this_proc()->sched_coro());
 
-    if (canceled && !unwinding) {
-        unwinding = true;
+    if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
 
-    while (!timeouts.empty()) {
-        timeout_t *to = timeouts.front();
-        if (to->when <= procnow()) {
-            unique_ptr<timeout_t> tmp(to); // ensure to is freed
-            DVLOG(5) << to << " reached for " << this << " removing.";
-            timeouts.pop_front();
-            if (timeouts.empty()) {
-                // remove from scheduler timeout list
-                cproc->sched().remove_timeout_task(this);
-            }
-            if (tmp->exception != nullptr) {
-                rethrow_exception(tmp->exception);
-            }
-        } else {
-            break;
-        }
+    if (exception && cancel_points > 0) {
+        DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
+        std::exception_ptr tmp = nullptr;
+        std::swap(tmp, exception);
+        std::rethrow_exception(tmp);
+    }
+}
+
+struct deadline_pimpl {
+    io_scheduler::alarm_clock::scoped_alarm alarm;
+};
+
+deadline::deadline(optional_timeout timeout) {
+    if (timeout) {
+        if (timeout->count() == 0)
+            throw errorx("zero optional_deadline - misuse of optional");
+        _set_deadline(*timeout);
     }
 }
 
 deadline::deadline(milliseconds ms) {
-    task *t = this_proc()->ctask;
-    timeout_id = this_proc()->sched().add_timeout(t, ms, deadline_reached());
+    _set_deadline(ms);
+}
+
+void deadline::_set_deadline(milliseconds ms) {
+    if (ms.count() < 0)
+        throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
+    if (ms.count() > 0) {
+        proc *p = this_proc();
+        task *t = this_task();
+        auto now = p->cached_time();
+        _pimpl.reset(new deadline_pimpl{});
+        _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
+                p->sched().alarms, t, ms+now, deadline_reached{}
+                });
+        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
+    }
 }
 
 void deadline::cancel() {
-    if (timeout_id) {
-        task *t = this_proc()->ctask;
-        t->remove_timeout((task::timeout_t *)timeout_id);
-        timeout_id = nullptr;
+    if (_pimpl) {
+        _pimpl->alarm.cancel();
     }
 }
 
@@ -233,16 +198,21 @@ deadline::~deadline() {
 }
 
 milliseconds deadline::remaining() const {
-    task::timeout_t *timeout = (task::timeout_t *)timeout_id;
-    // TODO: need a way of distinguishing between canceled and over due
-    if (timeout != nullptr) {
-        std::chrono::time_point<std::chrono::steady_clock> now = procnow();
-        if (now > timeout->when) {
-            return milliseconds(0);
-        }
-        return duration_cast<milliseconds>(timeout->when - now);
+    if (_pimpl) {
+        return _pimpl->alarm.remaining();
     }
-    return milliseconds(0);
+    return {};
 }
+
+task::cancellation_point::cancellation_point() {
+    task *t = this_task();
+    ++t->cancel_points;
+}
+
+task::cancellation_point::~cancellation_point() {
+    task *t = this_task();
+    --t->cancel_points;
+}
+
 
 } // end namespace ten

@@ -1,0 +1,36 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Getopt::Long;
+
+my $strict;
+
+my $result = GetOptions(
+    "strict" => \$strict
+);
+
+if ($_ = `git symbolic-ref -q HEAD 2>/dev/null`) {
+    my ($branch) = m{^refs\/heads\/(\w\S+)$}xm;
+    if ($strict) {
+        my $tag = $branch; # tag and branch should have the same name
+        my ($branch_rev, $branch_msg) = split(/\s+/,
+            `git log -1 --no-walk --oneline refs/heads/$branch 2>/dev/null`, 2);
+        my ($tag_rev, $tag_msg) = split(/\s+/,
+            `git log -1 --no-walk --oneline refs/tags/$tag 2>/dev/null`, 2);
+        die "No tag named $tag\n"
+            unless ${^CHILD_ERROR_NATIVE} == 0;
+        die "branch $branch ref $branch_rev does not match tag ref of same name $tag_rev\n"
+            unless $tag_rev eq $branch_rev;
+        my $clean_checkout = `git status --porcelain -uno`;
+        die "checkout has been modified. see git status\n"
+            unless $clean_checkout eq '';
+    }
+    my ($hash, $date, $time, $tz) =
+        split /\s+/, `git log -n1 --pretty=format:'%H %ci'`;
+    my $rev = substr($hash, 0, 8);
+    $rev .= ".$date";
+    $branch //= 'unknown';
+    print "$branch.$rev\n";
+} else {
+    die "No source control or not in a branch\n";
+}

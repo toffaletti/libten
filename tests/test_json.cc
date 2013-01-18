@@ -48,14 +48,14 @@ const char json_text[] =
 
 
 BOOST_AUTO_TEST_CASE(json_test_path1) {
-    json o(json::load(json_text));
+    json o{json::load(json_text)};
     BOOST_REQUIRE(o.get());
 
     static const char a1[] = "[\"Nigel Rees\", \"Evelyn Waugh\", \"Herman Melville\", \"J. R. R. Tolkien\"]";
-    json r1(o.path("/store/book/author"));
+    json r1{o.path("/store/book/author")};
     BOOST_CHECK_EQUAL(json::load(a1), r1);
 
-    json r2(o.path("//author"));
+    json r2{o.path("//author")};
     BOOST_CHECK_EQUAL(json::load(a1), r2);
 
     // jansson hashtable uses size_t for hash
@@ -65,8 +65,8 @@ BOOST_AUTO_TEST_CASE(json_test_path1) {
 #elif (__SIZEOF_SIZE_T__ == 8)
     static const char a3[] = "[{\"color\": \"red\", \"price\": 19.95}, {\"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95}, {\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}]";
 #endif
-    json r3(o.path("/store/*"));
-    json t3(json::load(a3));
+    json r3{o.path("/store/*")};
+    json t3{json::load(a3)};
     BOOST_CHECK_EQUAL(t3, r3);
 
 #if (__SIZEOF_SIZE_T__ == 4)
@@ -74,30 +74,30 @@ BOOST_AUTO_TEST_CASE(json_test_path1) {
 #elif (__SIZEOF_SIZE_T__ == 8)
     static const char a4[] = "[19.95, 8.95, 12.99, 8.99, 22.99]";
 #endif
-    json r4(o.path("/store//price"));
+    json r4{o.path("/store//price")};
     BOOST_CHECK_EQUAL(json::load(a4), r4);
 
     static const char a5[] = "{\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}";
-    json r5(o.path("//book[3]"));
+    json r5{o.path("//book[3]")};
     BOOST_CHECK_EQUAL(json::load(a5), r5);
 
     static const char a6[] = "\"J. R. R. Tolkien\"";
-    json r6(o.path("/store/book[3]/author"));
+    json r6{o.path("/store/book[3]/author")};
     BOOST_CHECK_EQUAL(json::load(a6), r6);
     BOOST_CHECK(json::load(a6) == r6);
 
     static const char a7[] = "[{\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}]";
-    json r7(o.path("/store/book[category=\"fiction\"]"));
+    json r7{o.path("/store/book[category=\"fiction\"]")};
     BOOST_CHECK_EQUAL(json::load(a7), r7);
 }
 
 BOOST_AUTO_TEST_CASE(json_test_path2) {
-    json o(json::load("[{\"type\": 0}, {\"type\": 1}]"));
+    json o{json::load("[{\"type\": 0}, {\"type\": 1}]")};
     BOOST_CHECK_EQUAL(json::load("[{\"type\":1}]"), o.path("/[type=1]"));
 }
 
 BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
-    json o(json::load(json_text));
+    json o{json::load(json_text)};
     BOOST_REQUIRE(o.get());
 
     static const char a[] = "["
@@ -113,16 +113,16 @@ BOOST_AUTO_TEST_CASE(json_test_filter_key_exists) {
 "        \"isbn\": \"0-395-19395-8\","
 "        \"price\": 22.99"
 "      }]";
-    json r(o.path("//book[isbn]"));
+    json r{o.path("//book[isbn]")};
     BOOST_CHECK_EQUAL(json::load(a), r);
 
-    json r1(o.path("//book[doesnotexist]"));
+    json r1{o.path("//book[doesnotexist]")};
     BOOST_REQUIRE(r1.is_array());
     BOOST_CHECK_EQUAL(0, r1.asize());
 }
 
 BOOST_AUTO_TEST_CASE(json_test_truth) {
-    json o({}); // empty init list
+    json o{{}}; // empty init list
     BOOST_CHECK(o.get("nothing").is_true() == false);
     BOOST_CHECK(o.get("nothing").is_false() == false);
     BOOST_CHECK(o.get("nothing").is_null() == false);
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(json_test_truth) {
 }
 
 BOOST_AUTO_TEST_CASE(json_test_path3) {
-    json o(json::load(json_text));
+    json o{json::load(json_text)};
     BOOST_REQUIRE(o.get());
 
     BOOST_CHECK_EQUAL(o, o.path("/"));
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(json_conversions) {
 }
 
 BOOST_AUTO_TEST_CASE(json_create) {
-    json obj1({});
+    json obj1{{}};
     BOOST_CHECK(obj1);
     obj1.set("test", "set");
     BOOST_CHECK(obj1.get("test"));
@@ -243,7 +243,7 @@ inline void serialize(AR &ar, captain &c) {
 
 
 BOOST_AUTO_TEST_CASE(json_serial) {
-    corge c1(42, 17);
+    corge c1{42, 17};
     auto j = jsave_all(c1);
     corge c2;
     json_loader(j) >> c2;

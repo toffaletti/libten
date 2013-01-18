@@ -1,7 +1,5 @@
 /*
- * Copyright (c) 2012 Thomas Kemmer <tkemmer@computer.org>
- *
- * http://code.google.com/p/stlencoders/
+ * Copyright (c) 2011, 2012 Thomas Kemmer <tkemmer@computer.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -32,11 +30,13 @@
 #include "traits.hpp"
 
 /**
-   @brief stlencoders namespace
-*/
+ * @file
+ *
+ * Implementation of the Base16 encoding scheme.
+ */
 namespace stlencoders {
     namespace detail {
-        template<char C> struct base16_table { enum { value = 0xff }; };
+        template<char C> struct base16_table { enum { value = 0x10 }; };
 
         template<> struct base16_table<'0'> { enum { value = 0x00 }; };
         template<> struct base16_table<'1'> { enum { value = 0x01 }; };
@@ -64,59 +64,117 @@ namespace stlencoders {
     }
 
     /**
-       @brief base16 traits template
-    */
+     * @em %base16 character encoding traits class template.
+     *
+     * @tparam charT the encoding character type
+     */
     template<class charT> struct base16_traits;
 
     /**
-       @brief base16 character traits
-    */
+     * Character encoding traits specialization for @c char.
+     *
+     * This character encoding traits class defines the encoding
+     * alphabet for the @em %base16 encoding scheme as defined in RFC
+     * 4648 for the encoding character type @c char.
+     */
     template<>
     struct base16_traits<char> {
+        /**
+         * The encoding character type.
+         */
         typedef char char_type;
 
+        /**
+         * An integral type representing an octet.
+         */
     	typedef unsigned char int_type;
 
+        /**
+         * Returns whether the character @a lhs is to be treated equal
+         * to the character @a rhs.
+         */
         static bool eq(const char_type& lhs, const char_type& rhs) {
             return lhs == rhs;
         }
 
+        /**
+         * Returns whether the integral value @a lhs is to be treated
+         * equal to @a rhs.
+         */
         static bool eq_int_type(const int_type& lhs, const int_type& rhs) {
             return lhs == rhs;
         }
 
+        /**
+         * Returns the character representation of a 4-bit value.
+         */
     	static char_type to_char_type(const int_type& c) {
             return to_char_type_upper(c);
         }
 
+        /**
+         * Returns the uppercase character representation of a 4-bit
+         * value.
+         */
     	static char_type to_char_type_upper(const int_type& c) {
             return "0123456789ABCDEF"[c];
     	}
 
+        /**
+         * Returns the lowercase character representation of a 4-bit
+         * value.
+         */
     	static char_type to_char_type_lower(const int_type& c) {
             return "0123456789abcdef"[c];
         }
 
+        /**
+         * Returns the 4-bit value represented by a character, or
+         * inv() for characters not in the encoding alphabet.
+         */
     	static int_type to_int_type(const char_type& c) {
-            return lookup<detail::base16_table>(c, inv());
+            return lookup<detail::base16_table, int_type>(c);
     	}
 
+        /**
+         * Returns an integral value represented by no character in
+         * the encoding alphabet.
+         */
         static int_type inv() {
             return detail::base16_table<'\0'>::value;
         }
     };
 
     /**
-       @brief base16 wide character traits
-    */
+     * Character encoding traits specialization for @c wchar_t.
+     *
+     * This character encoding traits class defines the encoding
+     * alphabet for the @em %base16 encoding scheme as defined in RFC
+     * 4648 for the encoding character type @c wchar_t.
+     */
     template<>
     struct base16_traits<wchar_t>
-    : public detail::wchar_encoding_traits<base16_traits> {
+    : public portable_wchar_encoding_traits<base16_traits<char> > {
     };
 
     /**
-       @brief base16 encoder/decoder
-    */
+     * This class template implements the Base16 encoding as defined
+     * in RFC 4648 for a given character type and encoding alphabet.
+     *
+     * Base16 encoding is the standard case insensitive hexadecimal
+     * encoding.
+     *
+     * The encoding process represents 8-bit groups (octets) of input
+     * data as output strings of 2 encoded characters.  Proceeding
+     * from left to right, an 8-bit input is taken from the input
+     * data.  These 8 bits are then treated as 2 concatenated 4-bit
+     * groups, each of which is translated into a single character in
+     * the Base16 alphabet.
+     *
+     * @tparam charT the encoding character type
+     *
+     * @tparam traits the character encoding traits type
+     */
     template<class charT, class traits = base16_traits<charT> >
     class base16 {
     private:
@@ -124,35 +182,42 @@ namespace stlencoders {
 
     public:
         /**
-           @brief encoding character type
-        */
+         * The encoding character type.
+         */
         typedef charT char_type;
 
         /**
-           @brief integral type
-        */
-        typedef typename traits::int_type int_type;
-
-        /**
-           @brief traits type
-        */
+         * The character encoding traits type.
+         */
     	typedef traits traits_type;
 
         /**
-           @brief base16 encode a range of octets
+         * An integral type representing an octet.
+         */
+        typedef typename traits::int_type int_type;
 
-           @param first an input iterator to the first position in the
-           octet sequence to be encoded
-
-           @param last an input iterator to the final position in the
-           octet sequence to be encoded
-
-           @param result an output iterator to the initial position in
-           the destination character sequence
-
-           @return an iterator to the last element of the destination
-           sequence
-        */
+        /**
+         * Encodes a range of octets.
+         *
+         * @tparam InputIterator an iterator type satisfying input
+         * iterator requirements and referring to elements implicitly
+         * convertible to int_type
+         *
+         * @tparam OutputIterator an iterator type satisfying output
+         * iterator requirements
+         *
+         * @param first an input iterator to the first position in the
+         * octet range to be encoded
+         *
+         * @param last an input iterator to the final position in the
+         * octet range to be encoded
+         *
+         * @param result an output iterator to the encoded character
+         * range
+         *
+         * @return an output iterator referring to one past the last
+         * value assigned to the output range
+         */
         template<class InputIterator, class OutputIterator>
         static OutputIterator encode(
             InputIterator first, InputIterator last, OutputIterator result
@@ -170,70 +235,96 @@ namespace stlencoders {
         }
 
         /**
-           @brief base16 encode a range of octets using the lowercase
-           encoding alphabet
-
-           @param first an input iterator to the first position in the
-           octet sequence to be encoded
-
-           @param last an input iterator to the final position in the
-           octet sequence to be encoded
-
-           @param result an output iterator to the initial position in
-           the destination character sequence
-
-           @return an iterator to the last element of the destination
-           sequence
-        */
+         * Encodes a range of octets using the lowercase encoding
+         * alphabet.
+         *
+         * @tparam InputIterator an iterator type satisfying input
+         * iterator requirements and referring to elements implicitly
+         * convertible to int_type
+         *
+         * @tparam OutputIterator an iterator type satisfying output
+         * iterator requirements
+         *
+         * @param first an input iterator to the first position in the
+         * octet range to be encoded
+         *
+         * @param last an input iterator to the final position in the
+         * octet range to be encoded
+         *
+         * @param result an output iterator to the encoded character
+         * range
+         *
+         * @return an output iterator referring to one past the last
+         * value assigned to the output range
+         */
         template<class InputIterator, class OutputIterator>
         static OutputIterator encode_lower(
             InputIterator first, InputIterator last, OutputIterator result
             )
         {
-            typedef lower_encoding_traits<traits> lower_traits;
+            typedef lower_char_encoding_traits<traits> lower_traits;
             return base16<charT, lower_traits>::encode(first, last, result);
         }
 
         /**
-           @brief base16 encode a range of octets using the uppercase
-           encoding alphabet
-
-           @param first an input iterator to the first position in the
-           octet sequence to be encoded
-
-           @param last an input iterator to the final position in the
-           octet sequence to be encoded
-
-           @param result an output iterator to the initial position in
-           the destination character sequence
-
-           @return an iterator to the last element of the destination
-           sequence
-        */
+         * Encodes a range of octets using the uppercase encoding
+         * alphabet.
+         *
+         * @tparam InputIterator an iterator type satisfying input
+         * iterator requirements and referring to elements implicitly
+         * convertible to int_type
+         *
+         * @tparam OutputIterator an iterator type satisfying output
+         * iterator requirements
+         *
+         * @param first an input iterator to the first position in the
+         * octet range to be encoded
+         *
+         * @param last an input iterator to the final position in the
+         * octet range to be encoded
+         *
+         * @param result an output iterator to the encoded character
+         * range
+         *
+         * @return an output iterator referring to one past the last
+         * value assigned to the output range
+         */
         template<class InputIterator, class OutputIterator>
         static OutputIterator encode_upper(
             InputIterator first, InputIterator last, OutputIterator result
             )
         {
-            typedef upper_encoding_traits<traits> upper_traits;
+            typedef upper_char_encoding_traits<traits> upper_traits;
             return base16<charT, upper_traits>::encode(first, last, result);
         }
 
         /**
-           @brief base16 decode a range of characters
-
-           @param first an input iterator to the first position in the
-           character sequence to be decoded
-
-           @param last an input iterator to the final position in the
-           character sequence to be decoded
-
-           @param result an output iterator to the initial position in
-           the destination octet sequence
-
-           @return an iterator to the last element of the destination
-           sequence
-        */
+         * Decodes a range of characters.
+         *
+         * @tparam InputIterator an iterator type satisfying input
+         * iterator requirements and referring to elements implicitly
+         * convertible to char_type
+         *
+         * @tparam OutputIterator an iterator type satisfying output
+         * iterator requirements
+         *
+         * @param first an input iterator to the first position in the
+         * character range to be decoded
+         *
+         * @param last an input iterator to the final position in the
+         * character range to be decoded
+         *
+         * @param result an output iterator to the decoded octet range
+         *
+         * @return an output iterator referring to one past the last
+         * value assigned to the output range
+         *
+         * @throw invalid_character if a character not in the encoding
+         * alphabet is encountered
+         *
+         * @throw invalid_length if the input range contains an odd
+         * number of encoding characters
+         */
         template<class InputIterator, class OutputIterator>
         static OutputIterator decode(
             InputIterator first, InputIterator last, OutputIterator result
@@ -243,32 +334,50 @@ namespace stlencoders {
         }
 
         /**
-           @brief base16 decode a range of characters
-
-           @param first an input iterator to the first position in the
-           character sequence to be decoded
-
-           @param last an input iterator to the final position in the
-           character sequence to be decoded
-
-           @param result an output iterator to the initial position in
-           the destination octet sequence
-
-           @param skip a function object that, when applied to a
-           character not in the encoding set, returns true if the
-           character is to be ignored, or false if decoding is to be
-           stopped by throwing an exception
-
-           @return an iterator to the last element of the destination
-           sequence
-        */
+         * Decodes a range of characters.
+         *
+         * For every character @c c not in the encoding alphabet,
+         *
+         * - if @a skip(c) evaluates to @c true, the character is
+         *   ignored
+         * - otherwise, throws invalid_character
+         *
+         * @tparam InputIterator an iterator type satisfying input
+         * iterator requirements and referring to elements implicitly
+         * convertible to char_type
+         *
+         * @tparam OutputIterator an iterator type satisfying output
+         * iterator requirements
+         *
+         * @tparam Predicate a predicate type
+         *
+         * @param first an input iterator to the first position in the
+         * character range to be decoded
+         *
+         * @param last an input iterator to the final position in the
+         * character range to be decoded
+         *
+         * @param result an output iterator to the decoded octet range
+         *
+         * @param skip a function object that, when applied to a value
+         * of type char_type, returns a value testable as @c true
+         *
+         * @return an output iterator referring to one past the last
+         * value assigned to the output range
+         *
+         * @throw invalid_character if a character not in the encoding
+         * alphabet is encountered
+         *
+         * @throw invalid_length if the input range contains an odd
+         * number of encoding characters
+         */
         template<class InputIterator, class OutputIterator, class Predicate>
         static OutputIterator decode(
             InputIterator first, InputIterator last, OutputIterator result,
             Predicate skip
             )
         {
-            do {
+            for (;;) {
                 int_type c0 = seek(first, last, skip);
                 if (traits::eq_int_type(c0, traits::inv())) {
                     return result;
@@ -281,30 +390,34 @@ namespace stlencoders {
 
                 *result = c0 << 4 | c1;
                 ++result;
-            } while (first != last);
-
-            return result;
+            }
         }
 
         /**
-           @brief computes the maximum length of an encoded sequence
-
-           @param n the length of the input octet sequence
-
-           @return the maximum size of the encoded character sequence
-        */
+         * Computes the maximum length of an encoded character
+         * sequence.
+         *
+         * @tparam sizeT an integral type
+         *
+         * @param n the length of the input octet sequence
+         *
+         * @return the maximum length of the encoded character
+         * sequence
+         */
         template<class sizeT>
         static sizeT max_encode_size(sizeT n) {
             return n * 2;
         }
 
         /**
-           @brief computes the maximum length of a decoded sequence
-
-           @param n the length of the input character sequence
-
-           @return the maximum size of the decoded octet sequence
-        */
+         * Computes the maximum length of a decoded octet sequence.
+         *
+         * @tparam sizeT an integral type
+         *
+         * @param n the length of the input character sequence
+         *
+         * @return the maximum length of the decoded octet sequence
+         */
         template<class sizeT>
         static sizeT max_decode_size(sizeT n) {
             return n / 2;

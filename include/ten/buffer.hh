@@ -1,6 +1,7 @@
 #ifndef BUFFER_HH
 #define BUFFER_HH
 
+#include <stdexcept>
 #include <memory>
 #include <cassert>
 #include <cstddef>

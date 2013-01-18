@@ -21,7 +21,7 @@ static void channel_send(channel<intptr_t> c) {
 }
 
 void channel_test_task() {
-    channel<intptr_t> c(10);
+    channel<intptr_t> c{10};
     taskspawn(std::bind(channel_recv, c));
     taskspawn(std::bind(channel_send, c));
     while (taskyield()) {}
@@ -85,7 +85,7 @@ static void channel_multi_recv(channel<intptr_t> c) {
 }
 
 void multiple_senders_task() {
-    channel<intptr_t> c(4);
+    channel<intptr_t> c{4};
     c.send(1234);
     taskspawn(std::bind(channel_multi_recv, c));
     taskspawn(std::bind(channel_multi_send, c));
@@ -112,7 +112,7 @@ static void delayed_channel(address addr) {
     int a = c.recv();
     (void)a;
 
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setnonblock();
     if (s.connect(addr) == 0) {
     } else if (errno == EINPROGRESS) {
@@ -125,9 +125,9 @@ static void delayed_channel(address addr) {
 }
 
 static void wait_on_io() {
-    socket_fd s(AF_INET, SOCK_STREAM);
+    socket_fd s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr("127.0.0.1", 0);
+    address addr{"127.0.0.1", 0};
     s.bind(addr);
     s.getsockname(addr);
     s.listen();
