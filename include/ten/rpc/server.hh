@@ -42,11 +42,11 @@ private:
     std::unordered_map<std::string, callback_type> _cmds;
     std::unordered_map<std::string, notify_func> _notifs;
 
-    void on_connection(netsock &s) {
+    void on_connection(netsock &s) override {
         size_t bsize = 4096;
         msgpack::unpacker pac;
 
-        for (;;) {
+        while (s.valid()) {
             msgpack::zone z;
             pac.reserve_buffer(bsize);
             ssize_t nr = s.recv(pac.buffer(), bsize);
