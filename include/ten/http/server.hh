@@ -194,12 +194,12 @@ public:
 
 private:
 
-    virtual void setup_listen_socket(netsock &s) {
+    void setup_listen_socket(netsock &s) override {
         netsock_server::setup_listen_socket(s);
         s.setsockopt(IPPROTO_TCP, TCP_DEFER_ACCEPT, 30);
     }
 
-    void on_connection(netsock &s) {
+    void on_connection(netsock &s) override {
         // TODO: tuneable buffer sizes
         buffer buf(4*1024);
         http_parser parser;
@@ -210,7 +210,7 @@ private:
 
         bool nodelay_set = false;
         http_request req;
-        for (;;) {
+        while (s.valid()) {
             req.parser_init(&parser);
             bool got_headers = false;
             for (;;) {

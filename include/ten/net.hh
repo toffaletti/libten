@@ -132,11 +132,11 @@ public:
     //! dial requires a large 8MB stack size for getaddrinfo
     int dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={})
+            optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result));
 
     int connect(const address &addr,
-            optional_timeout timeout_ms={})
+            optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return netconnect(s.fd, addr, timeout_ms);
@@ -144,7 +144,7 @@ public:
 
     int accept(address &addr,
             int flags=0,
-            optional_timeout timeout_ms={})
+            optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
@@ -153,7 +153,7 @@ public:
     ssize_t recv(void *buf,
             size_t len,
             int flags=0,
-            optional_timeout timeout_ms={})
+            optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return netrecv(s.fd, buf, len, flags, timeout_ms);
@@ -162,7 +162,7 @@ public:
     ssize_t send(const void *buf,
             size_t len,
             int flags=0,
-            optional_timeout timeout_ms={})
+            optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return netsend(s.fd, buf, len, flags, timeout_ms);
@@ -226,11 +226,12 @@ public:
     }
 
 protected:
-    virtual void on_connection(netsock &s) = 0;
 
     virtual void setup_listen_socket(netsock &s) {
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
+
+    virtual void on_connection(netsock &s) = 0;
 
     void do_accept_loop() {
         accept_loop();
