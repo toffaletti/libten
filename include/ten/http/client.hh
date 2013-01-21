@@ -2,6 +2,7 @@
 #define LIBTEN_HTTP_CLIENT_HH
 
 #include "ten/http/http_message.hh"
+#include "ten/http/http_error.hh"
 #include "ten/shared_pool.hh"
 #include "ten/buffer.hh"
 #include "ten/net.hh"
@@ -10,39 +11,6 @@
 #include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
-
-class http_error : public errorx {
-public:
-    // TODO: variadic or inherited ctors
-    http_error(const char *msg) : errorx(msg) {}
-};
-
-class http_errno_error : public errno_error {
-protected:
-    // TODO: variadic or inherited ctors
-    http_errno_error(const char *msg) : errno_error(msg) {}
-};
-
-//! thrown on http network errors
-struct http_makesock_error : public http_errno_error {
-    http_makesock_error() : http_errno_error("makesock") {}
-};
-
-//! thrown on http network errors
-struct http_dial_error : public http_errno_error {
-    http_dial_error() : http_errno_error("dial") {}
-};
-
-//! thrown on http network errors
-struct http_recv_error : public http_errno_error {
-    http_recv_error() : http_errno_error("recv") {}
-};
-
-//! thrown on http network errors
-struct http_send_error : public http_errno_error {
-    http_send_error() : http_errno_error("send") {}
-};
-
 
 //! basic http client
 class http_client {
@@ -132,7 +100,8 @@ public:
             while (!resp.complete) {
                 _buf.reserve(4*1024);
                 ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, timeout);
-                if (nr <= 0) { throw http_recv_error{}; }
+                if (nr < 0) { throw http_recv_error{}; }
+                if (!nr) { throw http_closed_error{}; }
                 _buf.commit(nr);
                 size_t len = _buf.size();
                 resp.parse(&parser, _buf.front(), len);
