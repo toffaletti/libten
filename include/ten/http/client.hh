@@ -12,23 +12,35 @@
 namespace ten {
 
 class http_error : public errorx {
-protected:
+public:
+    // TODO: variadic or inherited ctors
     http_error(const char *msg) : errorx(msg) {}
 };
 
-//! thrown on http network errors
-struct http_dial_error : public http_error {
-    http_dial_error() : http_error("dial") {}
+class http_errno_error : public errno_error {
+protected:
+    // TODO: variadic or inherited ctors
+    http_errno_error(const char *msg) : errno_error(msg) {}
 };
 
 //! thrown on http network errors
-struct http_recv_error : public http_error {
-    http_recv_error() : http_error("recv") {}
+struct http_makesock_error : public http_errno_error {
+    http_makesock_error() : http_errno_error("makesock") {}
 };
 
 //! thrown on http network errors
-struct http_send_error : public http_error {
-    http_send_error() : http_error("send") {}
+struct http_dial_error : public http_errno_error {
+    http_dial_error() : http_errno_error("dial") {}
+};
+
+//! thrown on http network errors
+struct http_recv_error : public http_errno_error {
+    http_recv_error() : http_errno_error("recv") {}
+};
+
+//! thrown on http network errors
+struct http_send_error : public http_errno_error {
+    http_send_error() : http_errno_error("send") {}
 };
 
 
@@ -43,6 +55,10 @@ private:
     void ensure_connection() {
         if (!_sock.valid()) {
             _sock = std::move(netsock(AF_INET, SOCK_STREAM));
+            if (!_sock.valid()) {
+                throw http_makesock_error{};
+            }
+            errno = 0; // "fred is not a tty"
             if (_sock.dial(_host.c_str(), _port) != 0) {
                 throw http_dial_error{};
             }
@@ -99,8 +115,13 @@ public:
                 data += r.body;
             }
             ssize_t nw = _sock.send(data.data(), data.size(), 0, timeout);
-            if ((size_t)nw != data.size()) {
+            if (nw < 0) {
                 throw http_send_error{};
+            }
+            else if ((size_t)nw != data.size()) {
+                std::ostringstream ss;
+                ss << "short write: " << nw << " < " << data.size();
+                throw http_error(ss.str().c_str());
             }
 
             http_parser parser;
