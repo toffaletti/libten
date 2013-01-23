@@ -10,6 +10,9 @@
 #endif
 #include <array>
 
+#include "ten/logging.hh"
+#include "ten/jsonbuilder.hh"
+
 using namespace std;
 using namespace ten;
 
@@ -290,3 +293,13 @@ BOOST_AUTO_TEST_CASE(json_serial) {
 }
 
 #endif // TEN_JSON_CXX11
+
+BOOST_AUTO_TEST_CASE(json_stream) {
+    // TODO: improve these tests or don't. this is a hack anyway
+    jsonbuilder b;
+    b.object("hi", 1.5f, "thing", "stuff", "boo", 123);
+    BOOST_CHECK(json::load(b.build()));
+    b.array("hi", 1.5f, "thing", "stuff", "boo", 123);
+    BOOST_CHECK(json::load(b.build()));
+}
+
