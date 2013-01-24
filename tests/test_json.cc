@@ -302,6 +302,6 @@ BOOST_AUTO_TEST_CASE(json_stream) {
         << "key" << 1234
         << "list" << begin_array << "1" << 2.0f << 3.14 << 4 << 5 << end_array
     << end_object;
-    LOG(INFO) << s.str();
+    BOOST_CHECK(json::load(s.str()));
 }
 
