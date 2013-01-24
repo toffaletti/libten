@@ -80,6 +80,13 @@ struct jsonstream {
         }
     }
 
+    jsonstream &operator<<(const std::string &s) {
+        transition(true, [&] {
+            ss << "\"" << s << "\"";
+        });
+        return *this;
+    }
+
     jsonstream &operator<<(const char *s) {
         transition(true, [&] {
             ss << "\"" << s << "\"";
