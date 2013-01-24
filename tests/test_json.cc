@@ -11,7 +11,7 @@
 #include <array>
 
 #include "ten/logging.hh"
-#include "ten/jsonbuilder.hh"
+#include "ten/jsonstream.hh"
 
 using namespace std;
 using namespace ten;
@@ -296,10 +296,12 @@ BOOST_AUTO_TEST_CASE(json_serial) {
 
 BOOST_AUTO_TEST_CASE(json_stream) {
     // TODO: improve these tests or don't. this is a hack anyway
-    jsonbuilder b;
-    b.object("hi", 1.5f, "thing", "stuff", "boo", 123);
-    BOOST_CHECK(json::load(b.build()));
-    b.array("hi", 1.5f, "thing", "stuff", "boo", 123);
-    BOOST_CHECK(json::load(b.build()));
+    using namespace jsonstream_manip;
+    jsonstream s;
+    s << begin_object
+        << "key" << 1234
+        << "list" << begin_array << "1" << 2.0f << 3.14 << 4 << 5 << end_array
+    << end_object;
+    LOG(INFO) << s.str();
 }
 
