@@ -2,6 +2,7 @@
 #define TEN_JSONSTREAM_HH
 
 #include <iomanip>
+#include <ostream>
 #include <stdexcept>
 #include <stack>
 #include <type_traits>
@@ -16,9 +17,9 @@ namespace jsonstream_manip {
         struct jsend {};
     }
 
-    detail::jsobject jsobject;
-    detail::jsarray jsarray;
-    detail::jsend jsend;
+    extern detail::jsobject jsobject;
+    extern detail::jsarray jsarray;
+    extern detail::jsend jsend;
 }
 
 struct jsonstream_error : public std::runtime_error {
@@ -148,7 +149,6 @@ struct jsonstream {
         return *this;
     }
 
-private:
     template <class T, class Func>
     void transition(const T&, Func &&f) {
         switch (states.top()) {
