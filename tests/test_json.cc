@@ -12,6 +12,7 @@
 
 #include "ten/logging.hh"
 #include "ten/jsonstream.hh"
+#include <map>
 
 using namespace std;
 using namespace ten;
@@ -297,11 +298,19 @@ BOOST_AUTO_TEST_CASE(json_serial) {
 BOOST_AUTO_TEST_CASE(json_stream) {
     // TODO: improve these tests or don't. this is a hack anyway
     using namespace jsonstream_manip;
-    jsonstream s;
-    s << begin_object
-        << "key" << 1234
-        << "list" << begin_array << "1" << 2.0f << 3.14 << 4 << 5 << end_array
-    << end_object;
-    BOOST_CHECK(json::load(s.str()));
+    std::stringstream ss;
+    jsonstream s(ss);
+    s << jsobject
+        << "key1" << 1234
+        << "key2" << "value"
+        << "list" << jsarray << "1" << 2.0f << 3.14e-20 << 4 << 5 << jsend
+        << "list2" << jsarray << jsobject << jsend << jsend
+        << "max_dbl" << std::numeric_limits<double>::max()
+        << "inf" << std::numeric_limits<float>::infinity()
+        << "nan" << (1.0 / 0.0)
+        << "vec" << std::vector<int>({0, 1, 2, 3})
+        //<< "map" << std::map<const char *, int>({{"key", 1}})
+    << jsend;
+    BOOST_CHECK(json::load(ss.str()));
 }
 
