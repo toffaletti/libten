@@ -300,6 +300,7 @@ BOOST_AUTO_TEST_CASE(json_stream) {
     using namespace jsonstream_manip;
     std::stringstream ss;
     jsonstream s(ss);
+    int8_t c = 0;
     s << jsobject
         << "key1" << 1234
         << "key2" << "value"
@@ -309,6 +310,7 @@ BOOST_AUTO_TEST_CASE(json_stream) {
         << "inf" << std::numeric_limits<float>::infinity()
         << "nan" << (1.0 / 0.0)
         << "vec" << std::vector<int>({0, 1, 2, 3})
+        << "char" << c
         //<< "map" << std::map<const char *, int>({{"key", 1}})
     << jsend;
     BOOST_CHECK(json::load(ss.str()));

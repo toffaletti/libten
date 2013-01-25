@@ -96,7 +96,9 @@ struct jsonstream {
         std::is_integral<T>::value, jsonstream &>::type
     operator<<(T number) {
         transition(number, [&] {
-            os << number;
+            os << static_cast<
+                typename std::conditional<std::is_signed<T>::value, intmax_t, uintmax_t>::type
+                >(number);
         });
         return *this;
     }
