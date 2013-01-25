@@ -74,6 +74,13 @@ struct jsonstream {
         return *this;
     }
 
+    jsonstream &operator<<(bool b) {
+        transition(b, [&] {
+            os << b;
+        });
+        return *this;
+    }
+
     template <class T>
     typename std::enable_if<
         std::is_floating_point<T>::value, jsonstream &>::type

@@ -311,6 +311,7 @@ BOOST_AUTO_TEST_CASE(json_stream) {
         << "nan" << (1.0 / 0.0)
         << "vec" << std::vector<int>({0, 1, 2, 3})
         << "char" << c
+        << "bool" << false
         //<< "map" << std::map<const char *, int>({{"key", 1}})
     << jsend;
     BOOST_CHECK(json::load(ss.str()));
