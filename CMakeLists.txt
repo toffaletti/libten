@@ -58,6 +58,7 @@ add_library(ten
     src/net.cc
     src/zip.cc
     src/json.cc
+    src/jsonstream.cc
     src/term.cc
     ${ASM}
     ${RESOLVER_SRC}
