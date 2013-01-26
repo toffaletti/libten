@@ -315,6 +315,10 @@ BOOST_AUTO_TEST_CASE(json_stream) {
         << jsescape
         << "escape" << "\n\t\""
         << "noescape" << "blahblah"
+        << "raw" << jsraw
+            << "[]"
+        << jsnoraw
+        << "lahalha" << 666
         //<< "map" << std::map<const char *, int>({{"key", 1}})
     << jsend;
     LOG(INFO) << ss.str();

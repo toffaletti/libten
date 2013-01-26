@@ -18,6 +18,8 @@ namespace jsonstream_manip {
         struct jsend {};
         struct jsescape {};
         struct jsnoescape {};
+        struct jsraw {};
+        struct jsnoraw {};
     }
 
     extern detail::jsobject jsobject;
@@ -25,6 +27,8 @@ namespace jsonstream_manip {
     extern detail::jsend jsend;
     extern detail::jsescape jsescape;
     extern detail::jsnoescape jsnoescape;
+    extern detail::jsraw jsraw;
+    extern detail::jsnoraw jsnoraw;
 }
 
 struct jsonstream_error : public std::runtime_error {
@@ -76,6 +80,7 @@ struct jsonstream {
     std::ostream &os;
     std::stack<state> states;
     bool escape = false;
+    bool raw = false;
 
     jsonstream(std::ostream &os_) : os (os_) {
         os << std::boolalpha;
@@ -85,26 +90,34 @@ struct jsonstream {
 
     jsonstream &operator<<(const std::string &s) {
         transition(s, [&] {
-            os << "\"";
-            if (escape) {
-                json_escape_string(os, begin(s), end(s));
-            } else {
+            if (raw) {
                 os << s;
+            } else {
+                os << "\"";
+                if (escape) {
+                    json_escape_string(os, begin(s), end(s));
+                } else {
+                    os << s;
+                }
+                os << "\"";
             }
-            os << "\"";
         });
         return *this;
     }
 
     jsonstream &operator<<(const char *s) {
         transition(s, [&] {
-            os << "\"";
-            if (escape) {
-                json_escape_string(os, s, s+strlen(s));
-            } else {
+            if (raw) {
                 os << s;
+            } else {
+                os << "\"";
+                if (escape) {
+                    json_escape_string(os, s, s+strlen(s));
+                } else {
+                    os << s;
+                }
+                os << "\"";
             }
-            os << "\"";
         });
         return *this;
     }
@@ -142,6 +155,16 @@ struct jsonstream {
                 typename std::conditional<std::is_signed<T>::value, intmax_t, uintmax_t>::type
                 >(number);
         });
+        return *this;
+    }
+
+    jsonstream &operator<<(jsonstream_manip::detail::jsraw mip) {
+        raw = true;
+        return *this;
+    }
+
+    jsonstream &operator<<(jsonstream_manip::detail::jsnoraw mip) {
+        raw = false;
         return *this;
     }
 
