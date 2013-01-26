@@ -312,8 +312,12 @@ BOOST_AUTO_TEST_CASE(json_stream) {
         << "vec" << std::vector<int>({0, 1, 2, 3})
         << "char" << c
         << "bool" << false
+        << jsescape
+        << "escape" << "\n\t\""
+        << "noescape" << "blahblah"
         //<< "map" << std::map<const char *, int>({{"key", 1}})
     << jsend;
+    LOG(INFO) << ss.str();
     BOOST_CHECK(json::load(ss.str()));
 }
 

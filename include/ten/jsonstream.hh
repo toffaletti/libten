@@ -7,6 +7,7 @@
 #include <stack>
 #include <type_traits>
 #include <cmath>
+#include <string.h>
 
 namespace ten {
 
@@ -15,11 +16,15 @@ namespace jsonstream_manip {
         struct jsobject {};
         struct jsarray {};
         struct jsend {};
+        struct jsescape {};
+        struct jsnoescape {};
     }
 
     extern detail::jsobject jsobject;
     extern detail::jsarray jsarray;
     extern detail::jsend jsend;
+    extern detail::jsescape jsescape;
+    extern detail::jsnoescape jsnoescape;
 }
 
 struct jsonstream_error : public std::runtime_error {
@@ -39,6 +44,23 @@ struct can_json_key<const char *> : std::true_type {};
 template<>
 struct can_json_key<char *> : std::true_type {};
 
+template <class Iterator>
+void json_escape_string(std::ostream &o, Iterator iter, const Iterator &stop) {
+    for (; iter != stop; iter++) {
+        switch (*iter) {
+            case '\\': o << "\\\\"; break;
+            case  '"': o << "\\\""; break;
+            case  '/': o << "\\/"; break;
+            case '\b': o << "\\b"; break;
+            case '\f': o << "\\f"; break;
+            case '\n': o << "\\n"; break;
+            case '\r': o << "\\r"; break;
+            case '\t': o << "\\t"; break;
+            default  : o << *iter; break;
+        }
+    }
+}
+
 //! dangerously fast construction of json output, maybe
 // XXX: you probably don't want to use this. see json.hh
 struct jsonstream {
@@ -53,6 +75,7 @@ struct jsonstream {
 
     std::ostream &os;
     std::stack<state> states;
+    bool escape = false;
 
     jsonstream(std::ostream &os_) : os (os_) {
         os << std::boolalpha;
@@ -62,14 +85,26 @@ struct jsonstream {
 
     jsonstream &operator<<(const std::string &s) {
         transition(s, [&] {
-            os << "\"" << s << "\"";
+            os << "\"";
+            if (escape) {
+                json_escape_string(os, begin(s), end(s));
+            } else {
+                os << s;
+            }
+            os << "\"";
         });
         return *this;
     }
 
     jsonstream &operator<<(const char *s) {
         transition(s, [&] {
-            os << "\"" << s << "\"";
+            os << "\"";
+            if (escape) {
+                json_escape_string(os, s, s+strlen(s));
+            } else {
+                os << s;
+            }
+            os << "\"";
         });
         return *this;
     }
@@ -107,6 +142,16 @@ struct jsonstream {
                 typename std::conditional<std::is_signed<T>::value, intmax_t, uintmax_t>::type
                 >(number);
         });
+        return *this;
+    }
+
+    jsonstream &operator<<(jsonstream_manip::detail::jsescape mip) {
+        escape = true;
+        return *this;
+    }
+
+    jsonstream &operator<<(jsonstream_manip::detail::jsnoescape mip) {
+        escape = false;
         return *this;
     }
 
