@@ -79,7 +79,7 @@ extern "C" void gethostbyname_callback(void *arg, int status, int /*timeouts*/, 
 
     for (int n = 0; host->h_addr_list && host->h_addr_list[n]; ++n) {
         const address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        if (!netconnect(si->fd, addr, {})) {
+        if (!netconnect(si->fd, addr, si->connect_ms)) {
             si->status = ARES_SUCCESS;
             return;
         }
