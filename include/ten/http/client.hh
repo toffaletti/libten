@@ -26,9 +26,11 @@ private:
             if (!_sock.valid()) {
                 throw http_makesock_error{};
             }
-            errno = 0; // "fred is not a tty"
-            if (_sock.dial(_host.c_str(), _port) != 0) {
-                throw http_dial_error{};
+            try {
+                _sock.dial(_host.c_str(), _port);
+            }
+            catch (const std::exception &e) {
+                throw http_dial_error{e.what()};
             }
             _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }

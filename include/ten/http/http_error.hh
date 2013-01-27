@@ -17,14 +17,14 @@ protected:
     http_errno_error(const char *msg) : errno_error(msg) {}
 };
 
-//! thrown on http network errors
-struct http_makesock_error : public http_errno_error {
-    http_makesock_error() : http_errno_error("makesock") {}
+//! thrown on http dial errors, which always come with specific messages
+struct http_dial_error : public http_error {
+    http_dial_error(const char *msg) : http_error(msg) {}
 };
 
 //! thrown on http network errors
-struct http_dial_error : public http_errno_error {
-    http_dial_error() : http_errno_error("dial") {}
+struct http_makesock_error : public http_errno_error {
+    http_makesock_error() : http_errno_error("makesock") {}
 };
 
 //! thrown on http network errors
