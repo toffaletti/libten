@@ -66,10 +66,15 @@ protected:
 
     void ensure_connection() {
         if (!s.valid()) {
-            netsock tmp(AF_INET, SOCK_STREAM);
-            std::swap(s, tmp);
-            if (s.dial(hostname.c_str(), port) != 0) {
-                throw rpc_failure("dial");
+            s = std::move(netsock(AF_INET, SOCK_STREAM));
+            if (!s.valid()) {
+                throw rpc_failure("socket");
+            }
+            try {
+                s.dial(hostname.c_str(), port);
+            }
+            catch (const std::exception &e) {
+                throw rpc_failure(e.what());
             }
         }
     }

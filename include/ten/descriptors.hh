@@ -47,12 +47,13 @@ struct fd_base {
     fd_base(const fd_base &) = delete;
     fd_base &operator =(const fd_base &) = delete;
 
-    fd_base(fd_base &&other) : fd(-1) {
-        std::swap(fd, other.fd);
+    fd_base(fd_base &&other) {
+        fd = other.fd;
+        other.fd = -1;
     }
-
     fd_base &operator = (fd_base &&other) {
         if (this != &other) {
+            if (valid()) close();
             std::swap(fd, other.fd);
         }
         return *this;
@@ -61,6 +62,10 @@ struct fd_base {
     friend bool operator == (const fd_base &fb, int fd_) { return fb.fd == fd_; }
     friend bool operator == (int fd_, const fd_base &fb) { return fb.fd == fd_; }
 
+    //protect against accidental boolean comparison
+    friend bool operator == (const fd_base &fb, bool) __attribute__((error("fd == bool")));
+    friend bool operator == (bool, const fd_base &fb) __attribute__((error("fd == bool")));
+
     int fcntl(int cmd) { return ::fcntl(fd, cmd); }
     int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
     int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
@@ -68,12 +73,12 @@ struct fd_base {
     //! make fd nonblocking by setting O_NONBLOCK flag
     void setblock(bool block = true) throw (errno_error) {
         int flags;
-        THROW_ON_ERROR((flags = fcntl(F_GETFL)));
+        THROW_ON_ERROR((flags = fcntl(F_GETFL)), "fcntl(F_GETFL)");
         if (block)
             flags &= O_NONBLOCK;
         else
             flags |= O_NONBLOCK;
-        THROW_ON_ERROR(fcntl(F_SETFL, flags));
+        THROW_ON_ERROR(fcntl(F_SETFL, flags), "fcntl(F_SETFL)");
     }
     void setnonblock() throw (errno_error) {
         setblock(false);
@@ -113,7 +118,7 @@ struct fd_base {
                 case EIO: // catastrophic
                 case EBADF: // programming error
                 default:
-                    throw errno_error();
+                    throw errno_error("close");
             }
         }
         fd = -1;
@@ -183,14 +188,6 @@ struct file_fd : fd_base {
     //! calls open to create file descriptor
     file_fd(const char *pathname, int flags, mode_t mode) {
         fd = ::open(pathname, flags | O_CLOEXEC, mode);
-    }
-
-    file_fd(file_fd &&other) : fd_base(other.fd) { other.fd = -1; }
-    file_fd &operator = (file_fd &&other) {
-        if (this != &other) {
-            std::swap(fd, other.fd);
-        }
-        return *this;
     }
 
     //! read from a given offset
@@ -309,7 +306,7 @@ struct socket_fd : fd_base {
         if (::getpeername(fd, addr.sockaddr(), &addrlen) == 0) {
             return true;
         } else if (errno != ENOTCONN) {
-            throw errno_error();
+            throw errno_error("getpeername");
         }
         addr.clear();
         // return false if socket is not connected
@@ -342,14 +339,6 @@ struct socket_fd : fd_base {
     {
         socklen_t optlen = sizeof(optval);
         socket_fd::setsockopt(level, optname, optval, optlen);
-    }
-
-    socket_fd(socket_fd &&other) : fd_base(other.fd) { other.fd = -1; }
-    socket_fd &operator = (socket_fd &&other) {
-        if (this != &other) {
-            std::swap(fd, other.fd);
-        }
-        return *this;
     }
 
     //! wrapper around socketpair()

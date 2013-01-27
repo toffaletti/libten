@@ -2,6 +2,7 @@
 #define LIBTEN_HTTP_CLIENT_HH
 
 #include "ten/http/http_message.hh"
+#include "ten/http/http_error.hh"
 #include "ten/shared_pool.hh"
 #include "ten/buffer.hh"
 #include "ten/net.hh"
@@ -10,27 +11,6 @@
 #include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
-
-class http_error : public errorx {
-protected:
-    http_error(const char *msg) : errorx(msg) {}
-};
-
-//! thrown on http network errors
-struct http_dial_error : public http_error {
-    http_dial_error() : http_error("dial") {}
-};
-
-//! thrown on http network errors
-struct http_recv_error : public http_error {
-    http_recv_error() : http_error("recv") {}
-};
-
-//! thrown on http network errors
-struct http_send_error : public http_error {
-    http_send_error() : http_error("send") {}
-};
-
 
 //! basic http client
 class http_client {
@@ -43,8 +23,14 @@ private:
     void ensure_connection() {
         if (!_sock.valid()) {
             _sock = std::move(netsock(AF_INET, SOCK_STREAM));
-            if (_sock.dial(_host.c_str(), _port) != 0) {
-                throw http_dial_error{};
+            if (!_sock.valid()) {
+                throw http_makesock_error{};
+            }
+            try {
+                _sock.dial(_host.c_str(), _port);
+            }
+            catch (const std::exception &e) {
+                throw http_dial_error{e.what()};
             }
             _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
@@ -99,8 +85,13 @@ public:
                 data += r.body;
             }
             ssize_t nw = _sock.send(data.data(), data.size(), 0, timeout);
-            if ((size_t)nw != data.size()) {
+            if (nw < 0) {
                 throw http_send_error{};
+            }
+            else if ((size_t)nw != data.size()) {
+                std::ostringstream ss;
+                ss << "short write: " << nw << " < " << data.size();
+                throw http_error(ss.str().c_str());
             }
 
             http_parser parser;
@@ -111,7 +102,8 @@ public:
             while (!resp.complete) {
                 _buf.reserve(4*1024);
                 ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, timeout);
-                if (nr <= 0) { throw http_recv_error{}; }
+                if (nr < 0) { throw http_recv_error{}; }
+                if (!nr) { throw http_closed_error{}; }
                 _buf.commit(nr);
                 size_t len = _buf.size();
                 resp.parse(&parser, _buf.front(), len);

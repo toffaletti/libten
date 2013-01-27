@@ -28,7 +28,7 @@ public:
     sslsock(int fd=-1) throw (errno_error);
     sslsock(int domain, int type, int protocol=0) throw (errno_error);
 
-    ~sslsock();
+    ~sslsock() override;
 
     //! false for server mode
     void initssl(SSL_CTX *ctx_, bool client);
@@ -56,33 +56,34 @@ public:
 #endif
 
     //! dial requires a large 8MB stack size for getaddrinfo
-    int dial(const char *addr,
-            uint16_t port, optional_timeout timeout_ms={})
-        __attribute__((warn_unused_result));
+    void dial(const char *addr,
+            uint16_t port,
+            optional_timeout timeout_ms={})
+        throw(errno_error, hostname_error) override;
 
     int connect(const address &addr,
-            optional_timeout ms={})
+            optional_timeout ms={}) override
         __attribute__((warn_unused_result))
     {
         return netconnect(s.fd, addr, ms);
     }
 
     int accept(address &addr,
-            int flags=0, optional_timeout timeout_ms={})
+            int flags=0, optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
     }
 
     ssize_t recv(void *buf,
-            size_t len, int flags=0, optional_timeout timeout_ms={})
+            size_t len, int flags=0, optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return BIO_read(bio, buf, len);
     }
 
     ssize_t send(const void *buf,
-            size_t len, int flags=0, optional_timeout timeout_ms={})
+            size_t len, int flags=0, optional_timeout timeout_ms={}) override
         __attribute__((warn_unused_result))
     {
         return BIO_write(bio, buf, len);
