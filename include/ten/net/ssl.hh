@@ -56,9 +56,10 @@ public:
 #endif
 
     //! dial requires a large 8MB stack size for getaddrinfo
-    int dial(const char *addr,
-            uint16_t port, optional_timeout timeout_ms={}) override
-        __attribute__((warn_unused_result));
+    void dial(const char *addr,
+            uint16_t port,
+            optional_timeout timeout_ms={})
+        throw(errno_error, hostname_error) override;
 
     int connect(const address &addr,
             optional_timeout ms={}) override

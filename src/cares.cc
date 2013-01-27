@@ -50,55 +50,69 @@ static void pollfd_to_fd_sets(struct pollfd *fds, int nfds, fd_set *read_fds, fd
     }
 }
 
+namespace {
+
 struct sock_info {
     const char *addr;
-    int fd;
-    int status;
     uint16_t port;
+    int fd;
+    optional_timeout connect_ms;
+    int status;
+    int sys_errno;
 };
+constexpr int SYSTEM_ERROR = -1; // not a valid ares status
 
-static void gethostbyname_callback(void *arg, int status, int timeouts, struct hostent *host) {
-    sock_info *si = (sock_info *)arg;
-    (void)timeouts; // the number of times the quest timed out during request
-    si->status = status;
-    if (status != ARES_SUCCESS)
-    {
+extern "C" void gethostbyname_callback(void *arg, int status, int /*timeouts*/, hostent *host) noexcept {
+    sock_info * const si = reinterpret_cast<sock_info *>(arg);
+
+    if (status != ARES_SUCCESS) {
+        si->status = status;
         DVLOG(3) << "CARES: " << ares_strerror(status);
         return;
     }
 
-    int n = 0;
-    si->status = ECONNREFUSED;
-    while (host->h_addr_list && host->h_addr_list[n]) {
-        address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        si->status = netconnect(si->fd, addr, {});
-        if (si->status == 0) break;
+    if (!host->h_addr_list || !host->h_addr_list[0]) {
+        si->status = ARES_ENODATA;
+        LOG(WARNING) << "BUG: c-ares returned empty address list for " << si->addr << ":" << si->port;
+        return;
+    }
 
-        n++;
+    for (int n = 0; host->h_addr_list && host->h_addr_list[n]; ++n) {
+        const address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
+        if (!netconnect(si->fd, addr, {})) {
+            si->status = ARES_SUCCESS;
+            return;
+        }
+        si->status = SYSTEM_ERROR;  // not a valid ares status
+        si->sys_errno = errno;
     }
 }
 
-int netdial(int fd, const char *addr, uint16_t port) {
-    long open_max = sysconf(_SC_OPEN_MAX);
+} // anon
 
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms)
+    throw (errno_error, hostname_error)
+{
     channel_destroyer cd;
-    sock_info si = {addr, fd, ARES_SUCCESS, port};
     int status = ares_init(&cd.channel);
     if (status != ARES_SUCCESS) {
-        return status;
+        throw hostname_error("unknown host %s: %s", addr, ares_strerror(status));
     }
 
+    sock_info si = {addr, port, fd, connect_ms, ARES_SUCCESS, 0};
     ares_gethostbyname(cd.channel, addr, AF_INET, gethostbyname_callback, &si);
 
     // we allocate our own fd set because FD_SETSIZE is 1024
     // and we could easily have more file descriptors
     // this runs the risk of stack overflow so big stacks
     // should be used for dns lookup
-    const size_t set_size = (size_t)(open_max + __NFDBITS - 1) / __NFDBITS;
+    const long open_max = sysconf(_SC_OPEN_MAX);
+    const size_t set_size = static_cast<size_t>((open_max + __NFDBITS - 1) / __NFDBITS);
     __fd_mask read_fd_buf[set_size];  // C99
     __fd_mask write_fd_buf[set_size]; // C99
     fd_set * const read_fds  = (fd_set *)read_fd_buf;
     fd_set * const write_fds = (fd_set *)write_fd_buf;
+
     while (si.status == ARES_SUCCESS) {
         memset(read_fd_buf,  0, sizeof(read_fd_buf));
         memset(write_fd_buf, 0, sizeof(write_fd_buf));
@@ -121,7 +135,13 @@ int netdial(int fd, const char *addr, uint16_t port) {
         pollfd_to_fd_sets(&fds[0], fds.size(), read_fds, write_fds);
         ares_process(cd.channel, read_fds, write_fds);
     }
-    return si.status;
+
+    if (si.status == SYSTEM_ERROR) {
+        throw errno_error(si.sys_errno, "%s:%u", addr, port);
+    }
+    if (si.status != ARES_SUCCESS) {
+        throw hostname_error("unknown host %s: %s", addr, ares_strerror(si.status));
+    }
 }
 
 void netinit() {

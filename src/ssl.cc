@@ -107,12 +107,10 @@ static int netfd_connect(BIO *b) {
             return -1;
         }
     }
-    if (netdial(b->num, s->param_hostname, s->port) == 0) {
-        // success!
-        return 1;
-    }
-
-    return 0;
+    try { netdial(b->num, s->param_hostname, s->port, {}); }
+    catch (hostname_error &) { return 0; } // TODO: log
+    catch (errno_error &)    { return 0; } // TODO: log
+    return 1;
 }
 
 static long netfd_ctrl(BIO *b, int cmd, long num, void *ptr) {
@@ -262,13 +260,11 @@ void sslsock::initssl(const SSL_METHOD *method, bool client) {
     initssl(SSL_CTX_new((SSL_METHOD *)method), client);
 }
 
-int sslsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms) {
-    int status = netdial(s.fd, addr, port);
-    if (status != 0) return status;
-
+void sslsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms)
+    throw(errno_error, hostname_error)
+{
+    netdial(s.fd, addr, port, timeout_ms);
     handshake();
-
-    return 0;
 }
 
 void sslsock::handshake() {
