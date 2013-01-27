@@ -386,6 +386,8 @@ struct timer_fd : fd_base {
 
 //! wrapper around signalfd
 struct signal_fd : fd_base {
+    signal_fd() {}
+
     //! create fd with signalfd()
     //! also calls sigprocmask() to block the signals in mask
     signal_fd(const sigset_t &mask, int flags=0) throw (errno_error) {

@@ -8,8 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
-
-extern std::atomic<uint64_t> taskcount;
+#include "t2/kernel.hh"
 
 namespace t2 {
 
@@ -38,12 +37,12 @@ struct tasklet {
         _unwinding(false)
     {
         DVLOG(5) << "new task: " << this;
-        ++taskcount;
+        ++ten::the_kernel.taskcount;
     }
 
     ~tasklet() {
         DVLOG(5) << "freeing task: " << this;
-        --taskcount;
+        --ten::the_kernel.taskcount;
     }
 
     static void cancel(std::shared_ptr<tasklet> t);

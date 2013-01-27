@@ -9,48 +9,54 @@
 #include "t2/channel.hh"
 #include "t2/task.hh"
 
-#include <sys/syscall.h> // gettid
-#include <sys/stat.h> // umask
-#include <signal.h> // sigaction
+
 #include <netinet/tcp.h> // TCP_DEFER_ACCEPT
 
 using namespace ten;
 using namespace t2;
 
-static void runtime_init() {
-    // allow log files and message queues to be created group writable
-    umask(0);
-    InitGoogleLogging(program_invocation_short_name);
-    InstallFailureSignalHandler();
-    FLAGS_logtostderr = true;
+kernel ten::the_kernel;
 
+class io_scheduler {
+public:
+    channel<std::tuple<int, std::shared_ptr<tasklet>>> chan;
+    epoll_fd efd;
+    event_fd evfd;
+    signal_fd sigfd;
+    std::thread thread;
+public:
+    io_scheduler(const io_scheduler&) = delete;
+    io_scheduler &operator =(const io_scheduler &) = delete;
 
-    CHECK(getpid() == syscall(SYS_gettid)) << "must call in main thread before anything else";
-    //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
-    stack_t ss;
-    ss.ss_sp = calloc(1, SIGSTKSZ);
-    ss.ss_size = SIGSTKSZ;
-    ss.ss_flags = 0;
-    PCHECK(sigaltstack(&ss, NULL) == 0) << "setting signal stack failed";
+    io_scheduler() {
+        epoll_event ev{EPOLLIN | EPOLLONESHOT};
+        ev.data.fd = evfd.fd;
+        efd.add(evfd.fd, ev);
 
-    struct sigaction act;
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigaddset(&mask, SIGQUIT);
+        sigfd = signal_fd(mask);
 
-    // ignore SIGPIPE
-    memset(&act, 0, sizeof(act));
-    PCHECK(sigaction(SIGPIPE, NULL, &act) == 0) << "getting sigpipe handler failed";
-    if (act.sa_handler == SIG_DFL) {
-        act.sa_handler = SIG_IGN;
-        PCHECK(sigaction(SIGPIPE, &act, NULL) == 0) << "setting sigpipe handler failed";
+        thread = std::thread{[&] {
+            loop();
+        }};
+
+        install_sigint_handler();
     }
 
-    //netinit();
-}
+    ~io_scheduler() {
+    }
 
-std::atomic<bool> _done{false};
-std::atomic<uint64_t> taskcount{0};
+    void loop();
+    void install_sigint_handler();
+    void wait_for_event(int wait_fd, uint32_t event);
+};
 
-static void runtime_quit() {
-    _done = true;
+static io_scheduler &io() {
+    static io_scheduler sched;
+    return sched;
 }
 
 struct thread_data {
@@ -64,24 +70,14 @@ struct thread_data {
 __thread thread_data *tld = nullptr;
 
 channel<std::shared_ptr<tasklet>> sched_chan;
-static channel<std::tuple<int, std::shared_ptr<tasklet>>> io_chan;
-static epoll_fd efd;
-static event_fd evfd;
-static std::thread io_thread;
 
-static void net_init() {
-    epoll_event ev{EPOLLIN | EPOLLONESHOT};
-    ev.data.fd = evfd.fd;
-    efd.add(evfd.fd, ev);
-}
-
-static void wait_for_event(int wait_fd, uint32_t event) {
+void io_scheduler::wait_for_event(int wait_fd, uint32_t event) {
     tld->self->_post = [=] {
         epoll_event ev{};
         ev.events = event | EPOLLONESHOT;
         ev.data.fd = wait_fd;
         VLOG(5) << "sending self to io chan";
-        io_chan.send(std::make_pair(wait_fd, std::move(tld->self)));
+        chan.send(std::make_pair(wait_fd, std::move(tld->self)));
         if (efd.add(wait_fd, ev) < 0) {
             efd.modify(wait_fd, ev);
         }
@@ -139,7 +135,7 @@ static void connection(socket_fd fd) {
             }
         }
         if (nr == 0) return;
-        wait_for_event(fd.fd, EPOLLIN);
+        io().wait_for_event(fd.fd, EPOLLIN);
     }
 }
 
@@ -147,7 +143,7 @@ static void accepter(socket_fd fd) {
     DVLOG(5) << "in accepter";
     fd.setnonblock(); // needed because of dup()
     for (;;) {
-        wait_for_event(fd.fd, EPOLLIN);
+        io().wait_for_event(fd.fd, EPOLLIN);
         address addr;
         int nfd = fd.accept(addr, SOCK_NONBLOCK);
         // accept can still fail even though EPOLLIN triggered
@@ -162,13 +158,13 @@ static void scheduler() {
     boost::context::fcontext_t fctx;
     thread_data td(fctx);
     tld = &td;
-    while (taskcount > 0) {
+    while (the_kernel.taskcount > 0) {
         DVLOG(5) << "waiting for task to schedule";
         auto t = sched_chan.recv();
         DVLOG(5) << "got task to schedule: " << (*t).get();
         if (!t) break;
         CHECK((*t)->_ready);
-        if (_done) {
+        if (the_kernel.shutdown) {
             DVLOG(5) << "canceling because done " << *t;
             tasklet::cancel(*t);
         }
@@ -193,14 +189,14 @@ static void scheduler() {
     sched_chan.close();
 }
 
-static void io_scheduler() {
+void io_scheduler::loop() {
     std::vector<std::shared_ptr<tasklet>> io_tasks;
     std::vector<epoll_event> events;
     events.reserve(1000);
     for (;;) {
         events.resize(1000);
         efd.wait(events, -1);
-        auto new_tasks = io_chan.recv_all();
+        auto new_tasks = chan.recv_all();
         for (auto &tup : new_tasks) {
             int fd = std::get<0>(tup);
             std::shared_ptr<tasklet> t = std::move(std::get<1>(tup));
@@ -231,30 +227,20 @@ static void io_scheduler() {
     }
 }
 
-void install_sigint_handler() {
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGINT);
-    sigaddset(&mask, SIGQUIT);
+void io_scheduler::install_sigint_handler() {
     // This is lame because i can't move signal_fd into the lambda
-    auto sigfd = std::make_shared<signal_fd>(mask);
-    tasklet::spawn([sigfd] {
+    tasklet::spawn([&] {
         LOG(INFO) << "waiting for signal";
-        wait_for_event(sigfd->fd, EPOLLIN);
+        wait_for_event(sigfd.fd, EPOLLIN);
         LOG(INFO) << "signal handler";
-        runtime_quit();
+        the_kernel.shutdown = true;
         evfd.write(7);
-        io_thread.join();
+        thread.join();
     });
 }
 
 int main() {
-    runtime_init();
-    net_init();
-    install_sigint_handler();
     DVLOG(5) << "take2";
-
-    io_thread = std::thread{io_scheduler};
 
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
     address addr{"0.0.0.0", 7700};
