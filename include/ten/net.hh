@@ -7,10 +7,16 @@
 
 namespace ten {
 
+class hostname_error : public errorx {
+public:
+    template <class ...A>
+    hostname_error(const char *s, A... args) : errorx(s, std::forward<A>(args)...) {}
+};
+
+//! perform address resolution and connect fd, task friendly, all errors by exception
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) throw (errno_error, hostname_error);
 //! connect fd using task io scheduling
 int netconnect(int fd, const address &addr, optional_timeout ms);
-//! perform address resolution and connect fd, task friendly
-int netdial(int fd, const char *addr, uint16_t port);
 //! task friendly accept
 int netaccept(int fd, address &addr, int flags, optional_timeout ms);
 //! task friendly recv
@@ -33,10 +39,8 @@ public:
     sockbase(sockbase &&other) : s(-1) {
         std::swap(s, other.s);
     }
-    sockbase &operator =(sockbase &&other) {
-        if (this != &other) {
-            std::swap(s, other.s);
-        }
+    sockbase &operator = (sockbase &&other) {
+        s = std::move(other.s);
         return *this;
     }
 
@@ -70,10 +74,10 @@ public:
     void close() { s.close(); }
     bool valid() const { return s.valid(); }
 
-    virtual int dial(const char *addr,
+    virtual void dial(const char *addr,
             uint16_t port,
             optional_timeout timeout_ms={})
-        __attribute__((warn_unused_result)) = 0;
+        throw(errno_error, hostname_error) = 0;
 
     virtual int connect(const address &addr,
             optional_timeout ms = {})
@@ -129,11 +133,11 @@ public:
         return *this;
     }
 
-    //! dial requires a large 8MB stack size for getaddrinfo
-    int dial(const char *addr,
+    //! dial requires a large 8MB stack size for getaddrinfo; throws on error
+    void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={}) override
-        __attribute__((warn_unused_result));
+            optional_timeout timeout_ms={})
+        throw(errno_error, hostname_error) override;
 
     int connect(const address &addr,
             optional_timeout timeout_ms={}) override

@@ -85,22 +85,22 @@ private:
 };
 
 //! macro to throw errno_error if exp returns -1
-#define THROW_ON_ERROR(exp) \
+#define THROW_ON_ERROR(exp, ...) \
     if ((exp) == -1) { \
-        throw errno_error(); \
-    }
+        throw errno_error(__VA_ARGS__); \
+    } else {}
 
-//! macro to throw errno_error if exp returns NULL
-#define THROW_ON_NULL(exp) \
-    if ((exp) == NULL) { \
-        throw errno_error(); \
-    }
+//! macro to throw errno_error if exp returns nullptr
+#define THROW_ON_NULL(exp, ...) \
+    if ((exp) == nullptr) { \
+        throw errno_error(__VA_ARGS__); \
+    } else {}
 
 //! macro to throw errno_error if exp != 0
-#define THROW_ON_NONZERO_ERRNO(exp) \
+#define THROW_ON_NONZERO_ERRNO(exp, ...) \
     do { \
         int _rv = (exp); \
-        if (_rv != 0) throw errno_error(_rv); \
+        if (_rv != 0) throw errno_error(_rv, ##__VA_ARGS__); \
     } while (0)
 
 } // end namespace ten

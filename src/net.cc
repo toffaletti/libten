@@ -70,9 +70,10 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, optional_timeout
     return total_sent;
 }
 
-int netsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms) {
-    // TODO: use timeout_ms
-    return netdial(s.fd, addr, port);
+void netsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms)
+    throw(errno_error, hostname_error) 
+{
+    netdial(s.fd, addr, port, timeout_ms);
 }
 
 } // end namespace ten
