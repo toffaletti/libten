@@ -60,17 +60,17 @@ public:
     template <typename T>
     void getsockopt(int level, int optname, T &optval, socklen_t &optlen) throw (errno_error)
     {
-        return s.getsockopt(level, optname, optval, optlen);
+        s.getsockopt(level, optname, optval, optlen);
     }
     template <typename T>
     void setsockopt(int level, int optname, const T &optval, socklen_t optlen) throw (errno_error)
     {
-        return s.setsockopt(level, optname, optval, optlen);
+        s.setsockopt(level, optname, optval, optlen);
     }
     template <typename T>
     void setsockopt(int level, int optname, const T &optval) throw (errno_error)
     {
-        return s.setsockopt(level, optname, optval);
+        s.setsockopt(level, optname, optval);
     }
 
     virtual void dial(const char *addr,
