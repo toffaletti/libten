@@ -32,7 +32,7 @@ private:
             catch (const std::exception &e) {
                 throw http_dial_error{e.what()};
             }
-            _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+            _sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
     }
 
