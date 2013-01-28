@@ -120,7 +120,7 @@ struct http_exchange {
 
     //! the ip of the host making the request
     //! might use the X-Forwarded-For header
-    std::string agent_ip(bool use_xff=false) const {
+    optional<std::string> agent_ip(bool use_xff=false) const {
         if (use_xff) {
             auto xff_hdr = req.get("X-Forwarded-For");
             if (xff_hdr && !(*xff_hdr).empty()) {
@@ -142,10 +142,10 @@ struct http_exchange {
         if (sock.getpeername(addr)) {
             char buf[INET6_ADDRSTRLEN];
             if (addr.ntop(buf, sizeof(buf))) {
-                return buf;
+                return optional<std::string>(emplace, buf);
             }
         }
-        return "";
+        return nullopt;
     }
 };
 
