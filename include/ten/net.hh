@@ -29,22 +29,24 @@ class sockbase {
 public:
     socket_fd s;
 
-    sockbase(int fd=-1) throw (errno_error) : s(fd) {}
     sockbase(int domain, int type, int protocol=0) throw (errno_error)
         : s(domain, type | SOCK_NONBLOCK, protocol) {}
+    sockbase(int fd=-1) noexcept
+        : s(fd) {}
 
     sockbase(const sockbase &) = delete;
     sockbase &operator =(const sockbase &) = delete;
 
-    sockbase(sockbase &&other) : s(-1) {
-        std::swap(s, other.s);
-    }
-    sockbase &operator = (sockbase &&other) {
-        s = std::move(other.s);
-        return *this;
-    }
+    sockbase(sockbase &&other) = default;
+    sockbase &operator = (sockbase &&other) = default;
 
     virtual ~sockbase() {}
+
+    void close() { s.close(); }
+    bool valid() const { return s.valid(); }
+
+    int fcntl(int cmd) { return s.fcntl(cmd); }
+    int fcntl(int cmd, long arg) { return s.fcntl(cmd, arg); }
 
     void bind(address &addr) throw (errno_error) { s.bind(addr); }
     // use a ridiculous number, kernel will truncate to max
@@ -53,26 +55,23 @@ public:
         return s.getpeername(addr);
     }
     void getsockname(address &addr) throw (errno_error) {
-        return s.getsockname(addr);
+         s.getsockname(addr);
     }
-    template <typename T> void getsockopt(int level, int optname,
-        T &optval, socklen_t &optlen) throw (errno_error)
+    template <typename T>
+    void getsockopt(int level, int optname, T &optval, socklen_t &optlen) throw (errno_error)
     {
         return s.getsockopt(level, optname, optval, optlen);
     }
-    template <typename T> void setsockopt(int level, int optname,
-        const T &optval, socklen_t optlen) throw (errno_error)
+    template <typename T>
+    void setsockopt(int level, int optname, const T &optval, socklen_t optlen) throw (errno_error)
     {
         return s.setsockopt(level, optname, optval, optlen);
     }
-    template <typename T> void setsockopt(int level, int optname,
-        const T &optval) throw (errno_error)
+    template <typename T>
+    void setsockopt(int level, int optname, const T &optval) throw (errno_error)
     {
         return s.setsockopt(level, optname, optval);
     }
-
-    void close() { s.close(); }
-    bool valid() const { return s.valid(); }
 
     virtual void dial(const char *addr,
             uint16_t port,
@@ -119,19 +118,16 @@ public:
 //! task friendly socket wrapper
 class netsock : public sockbase {
 public:
-    netsock(int fd=-1) throw (errno_error) : sockbase(fd) {}
     netsock(int domain, int type, int protocol=0) throw (errno_error)
         : sockbase(domain, type, protocol) {}
+    netsock(int fd=-1) noexcept
+        : sockbase(fd) {}
 
-    netsock(netsock &&other) : sockbase() {
-        std::swap(s, other.s);
-    }
-    netsock &operator = (netsock &&other) {
-        if (this != &other) {
-            std::swap(s, other.s);
-        }
-        return *this;
-    }
+    netsock(const netsock &) = delete;
+    netsock &operator =(const netsock &) = delete;
+
+    netsock(netsock &&other) = default;
+    netsock &operator = (netsock &&other) = default;
 
     //! dial requires a large 8MB stack size for getaddrinfo; throws on error
     void dial(const char *addr,
@@ -204,7 +200,7 @@ public:
     void serve(address &baddr, unsigned threads=1) {
         netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
-        THROW_ON_NONZERO_ERRNO(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC));
+        THROW_ON_NONZERO_ERRNO(s.fcntl(F_SETFD, s.fcntl(F_GETFD) ^ FD_CLOEXEC));
         setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);

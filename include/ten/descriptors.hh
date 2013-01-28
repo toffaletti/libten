@@ -260,7 +260,7 @@ struct socket_fd : fd_base {
 
     //! create a socket_fd from an already existing file descriptor
     //! used for accept() and socketpair()
-    socket_fd(int fd_) : fd_base(fd_) {}
+    socket_fd(int fd_) noexcept : fd_base(fd_) {}
 
     //! bind socket to address
     void bind(address &addr) throw (errno_error) {
