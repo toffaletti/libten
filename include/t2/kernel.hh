@@ -7,10 +7,10 @@
 #include <sys/stat.h> // umask
 #include <signal.h> // sigaction
 
-namespace ten {
+namespace t2 {
 class kernel;
 
-extern kernel the_kernel;
+extern kernel *the_kernel;
 
 class kernel {
 public:
@@ -32,6 +32,7 @@ public:
 
 private:
     static void _init() {
+        using namespace ten;
         // allow log files and message queues to be created group writable
         umask(0);
         InitGoogleLogging(program_invocation_short_name);
@@ -61,7 +62,7 @@ private:
     }
 };
 
-} // ten
+} // t2
 
 #endif
 

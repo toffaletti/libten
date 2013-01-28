@@ -1,20 +1,11 @@
-#include "t2/task.hh"
-#include "t2/channel.hh"
-
-struct thread_data {
-    context ctx;
-    std::shared_ptr<t2::tasklet> self;
-};
-
-extern t2::channel<std::shared_ptr<t2::tasklet>> sched_chan;
-extern __thread thread_data *tld;
+#include "t2/scheduler.hh"
 
 namespace t2 {
 
 void tasklet::cancel(std::shared_ptr<tasklet> t) {
     t->_canceled = true;
     if (t->_ready.exchange(true) == false) {
-        sched_chan.send(std::move(t));
+        the_scheduler->add(std::move(t));
     }
 }
 
@@ -65,7 +56,7 @@ void tasklet::trampoline(intptr_t arg) noexcept {
 
 void tasklet::_spawn(std::function<void ()> f) {
     auto t = std::make_shared<tasklet>(std::move(f));
-    sched_chan.send(std::move(t));
+    the_scheduler->add(std::move(t));
 }
 
 void tasklet::_spawn_link(std::function<void ()> f) {
@@ -77,7 +68,7 @@ void tasklet::_spawn_link(std::function<void ()> f) {
         tld->self->_links.push_front(t);
         t->_link = tld->self->_links.begin();
     }
-    sched_chan.send(std::move(t));
+    the_scheduler->add(std::move(t));
 }
 
 } // t2

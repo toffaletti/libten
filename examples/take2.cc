@@ -2,20 +2,19 @@
 #include "ten/buffer.hh"
 #include "ten/http/http_message.hh"
 
-#include <thread>
-
 #include <boost/algorithm/string/predicate.hpp>
-
-#include "t2/channel.hh"
-#include "t2/task.hh"
-
+#include "t2/scheduler.hh"
 
 #include <netinet/tcp.h> // TCP_DEFER_ACCEPT
 
 using namespace ten;
 using namespace t2;
 
-kernel ten::the_kernel;
+namespace t2 {
+__thread thread_data *tld = nullptr;
+scheduler *the_scheduler = nullptr;
+kernel *the_kernel = nullptr;
+} // t2
 
 class io_scheduler {
 public:
@@ -47,6 +46,7 @@ public:
     }
 
     ~io_scheduler() {
+        thread.join();
     }
 
     void loop();
@@ -58,18 +58,6 @@ static io_scheduler &io() {
     static io_scheduler sched;
     return sched;
 }
-
-struct thread_data {
-    context ctx;
-    std::shared_ptr<tasklet> self;
-
-    thread_data(boost::context::fcontext_t &fctx)
-        : ctx(fctx) {}
-};
-
-__thread thread_data *tld = nullptr;
-
-channel<std::shared_ptr<tasklet>> sched_chan;
 
 void io_scheduler::wait_for_event(int wait_fd, uint32_t event) {
     tld->self->_post = [=] {
@@ -154,41 +142,6 @@ static void accepter(socket_fd fd) {
     }
 }
 
-static void scheduler() {
-    boost::context::fcontext_t fctx;
-    thread_data td(fctx);
-    tld = &td;
-    while (the_kernel.taskcount > 0) {
-        DVLOG(5) << "waiting for task to schedule";
-        auto t = sched_chan.recv();
-        DVLOG(5) << "got task to schedule: " << (*t).get();
-        if (!t) break;
-        CHECK((*t)->_ready);
-        if (the_kernel.shutdown) {
-            DVLOG(5) << "canceling because done " << *t;
-            tasklet::cancel(*t);
-        }
-        tld->self = std::move(*t);
-        if (tld->self->swap()) {
-            CHECK(tld->self);
-            if (tld->self->_post) {
-                std::function<void ()> post = std::move(tld->self->_post);
-                post();
-            }
-            if (tld->self) {
-                DVLOG(5) << "scheduling " << tld->self;
-                if (tld->self->_ready.exchange(true) == false) {
-                    sched_chan.send(std::move(tld->self));
-                }
-            }
-        } else {
-            tld->self.reset();
-        }
-    }
-    DVLOG(5) << "exiting scheduler";
-    sched_chan.close();
-}
-
 void io_scheduler::loop() {
     std::vector<std::shared_ptr<tasklet>> io_tasks;
     std::vector<epoll_event> events;
@@ -220,7 +173,7 @@ void io_scheduler::loop() {
             // TODO: send them all in one go
             if (io_tasks[fd]) {
                 if (io_tasks[fd]->_ready.exchange(true) == false) {
-                    sched_chan.send(std::move(io_tasks[fd]));
+                    the_scheduler->add(std::move(io_tasks[fd]));
                 }
             }
         }
@@ -228,18 +181,21 @@ void io_scheduler::loop() {
 }
 
 void io_scheduler::install_sigint_handler() {
-    // This is lame because i can't move signal_fd into the lambda
     tasklet::spawn([&] {
         LOG(INFO) << "waiting for signal";
         wait_for_event(sigfd.fd, EPOLLIN);
         LOG(INFO) << "signal handler";
-        the_kernel.shutdown = true;
+        the_kernel->shutdown = true;
         evfd.write(7);
         thread.join();
     });
 }
 
 int main() {
+    kernel k;
+    the_kernel = &k;
+    scheduler sched;
+    the_scheduler = &sched;
     DVLOG(5) << "take2";
 
     socket_fd listen_fd{AF_INET, SOCK_STREAM};
@@ -252,17 +208,6 @@ int main() {
 
     for (int i=0; i<4; ++i) {
         tasklet::spawn(accepter, dup(listen_fd.fd));
-    }
-
-    std::vector<std::thread> schedulers;
-    for (int i=0; i<4; ++i) {
-        schedulers.emplace_back(scheduler);
-    }
-
-    LOG(INFO) << "joining";
-
-    for (auto &sched : schedulers) {
-        sched.join();
     }
 }
 

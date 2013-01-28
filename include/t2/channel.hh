@@ -8,6 +8,7 @@
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <vector>
 
 #include "t2/double_lock_queue.hh"
 

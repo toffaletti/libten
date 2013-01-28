@@ -37,12 +37,12 @@ struct tasklet {
         _unwinding(false)
     {
         DVLOG(5) << "new task: " << this;
-        ++ten::the_kernel.taskcount;
+        ++the_kernel->taskcount;
     }
 
     ~tasklet() {
         DVLOG(5) << "freeing task: " << this;
-        --ten::the_kernel.taskcount;
+        --the_kernel->taskcount;
     }
 
     static void cancel(std::shared_ptr<tasklet> t);
