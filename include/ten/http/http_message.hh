@@ -4,10 +4,13 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <mutex>
 #include <stdarg.h>
 #include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "http_parser.h"
+#include "ten/task.hh"
 #include "ten/error.hh"
 #include "ten/optional.hh"
 
@@ -26,6 +29,14 @@ enum http_version {
     default_http_version = http_1_1
 };
 const std::string &version_string(http_version ver);
+
+namespace hs {
+//! common strings for HTTP
+extern const std::string
+    GET, HEAD, POST, PUT, DELETE,
+    Connection, close, keep_alive,
+    Host, Date, Content_Type, Content_Length;
+}
 
 //! http headers
 struct http_headers {
@@ -62,8 +73,7 @@ struct http_headers {
             append(field, boost::lexical_cast<std::string>(value));
         }
 
-    header_list::iterator       find(const std::string &field);
-    header_list::const_iterator find(const std::string &field) const;
+    bool contains(const std::string &field) const;
 
     bool remove(const std::string &field);
 
@@ -71,8 +81,8 @@ struct http_headers {
 
     template <typename ValueT>
         optional<ValueT> get(const std::string &field) const {
-            auto i = find(field);
-            return (i == headers.end()) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
+            const auto i = find(field);
+            return (i == end(headers)) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
         }
 
 #ifdef CHIP_UNSURE
@@ -82,11 +92,16 @@ struct http_headers {
 
     template <typename ValueT>
         bool is(const std::string &field, const ValueT &value) const {
-            auto i = headers.find(field);
-            return (i != headers.end()) && (boost::lexical_cast<ValueT>(i->second) == value);
+            const auto i = find(field);
+            return (i != end(headers)) && (boost::lexical_cast<ValueT>(i->second) == value);
         }
 
-#endif
+#endif // CHIP_UNSURE
+
+protected:
+    // iterator-based access requires knowledge of value_type, so not public
+    header_list::iterator       find(const std::string &field);
+    header_list::const_iterator find(const std::string &field) const;
 };
 
 //! base class for http request and response
@@ -112,11 +127,36 @@ struct http_base : http_headers {
     {
         body = std::move(body_);
         body_length = body.size();
-        set("Content-Length", body_length);
-        remove("Content-Type");
+        set(hs::Content_Length, body_length);
+        remove(hs::Content_Type);
         if (!content_type_.empty()) {
-            append("Content-Type", content_type_);
+            append(hs::Content_Type, content_type_);
         }
+    }
+
+    bool close_after() const {
+        const auto conn = get(hs::Connection);
+        return version <= http_1_0
+                 ? (!conn || !boost::iequals(*conn, hs::keep_alive))
+                 : (conn && boost::iequals(*conn, hs::close));
+    }
+
+    // strftime can be quite expensive, so don't do it more than once per second
+    static std::string rfc822_date() {
+        static std::mutex last_mut;
+        static time_t last_time = -1;
+        static std::string last_date;
+
+        time_t now = std::chrono::system_clock::to_time_t(procnow());
+        std::unique_lock<std::mutex> lk(last_mut);
+        if (now == last_time) {
+            char buf[128];
+            struct tm tm;
+            strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
+            last_time = now;
+            last_date = buf;
+        }
+        return last_date;
     }
 };
 
@@ -186,7 +226,10 @@ struct http_response : http_base {
         { set_body(std::move(body_), std::move(content_type_)); }
 
     // TODO: remove this special case
-    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
+    http_response(http_request *req_)
+        : http_base(),
+          guillotine{req_ && req_->method == hs::HEAD}
+        {}
 
     void clear() {
         http_base::clear();

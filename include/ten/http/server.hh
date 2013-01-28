@@ -10,7 +10,6 @@
 
 #include "ten/buffer.hh"
 #include "ten/logging.hh"
-#include "ten/task.hh"
 #include "ten/net.hh"
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
@@ -41,42 +40,25 @@ struct http_exchange {
             // ensure a response is sent
             send_response();
         }
-        if (will_close()) {
+        if (resp.close_after()) {
             sock.close();
         }
     }
 
-    bool will_close() {
-        auto conn_hdr = resp.get("Connection");
-        if (
-                (resp.version <= http_1_0 && conn_hdr && boost::iequals(*conn_hdr, "Keep-Alive")) ||
-                (conn_hdr && !boost::iequals(*conn_hdr, "close")) ||
-                !conn_hdr
-           )
-        {
-            return false;
-        }
-        return true;
-    }
-
     //! compose a uri from the request uri
-    uri get_uri(std::string host="") const {
-        if (host.empty()) {
-            auto tmp = req.get("Host");
-            if (tmp) {
-                host = *tmp;
-            } else {
-                // just make up a host
-                host = "localhost";
-            }
-            // TODO: transform to preserve passed in host
+    uri get_uri(optional<std::string> host = {}) const {
+        if (!host) {
             if (boost::starts_with(req.uri, "http://")) {
+                // TODO: transform to preserve passed in host
                 return req.uri;
             }
+            host = req.get(hs::Host);
+            if (!host)
+                host.emplace("localhost");
         }
         uri tmp;
-        tmp.host = host;
         tmp.scheme = "http";
+        tmp.host = *host;
         tmp.path = req.uri;
         return tmp.compose();
     }
@@ -88,30 +70,29 @@ struct http_exchange {
         // TODO: Content-Length might be good to add to normal responses,
         //    but only if Transfer-Encoding isn't chunked?
         if (resp.status_code >= 400 && resp.status_code <= 599
-             && !resp.get("Content-Length")
-             && req.method != "HEAD")
+            && !resp.get(hs::Content_Length)
+            && req.method != hs::HEAD)
         {
-            resp.set("Content-Length", resp.body.size());
+            resp.set(hs::Content_Length, resp.body.size());
         }
+
         // HTTP/1.1 requires Date, so lets add it
-        if (!resp.get("Date")) {
-            char buf[128];
-            struct tm tm;
-            time_t now = std::chrono::system_clock::to_time_t(procnow());
-            strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
-            resp.set("Date", buf);
+        if (!resp.get(hs::Date)) {
+            resp.set(hs::Date, http_base::rfc822_date());
         }
-        if (!resp.get("Connection")) {
-            // obey clients wishes if we have none of our own
-            auto conn_hdr = req.get("Connection");
+
+        // obey client's wishes on closing if we have none of our own,
+        //  else prefer to keep http 1.1 open
+        if (!resp.get(hs::Connection)) {
+            const auto conn_hdr = req.get(hs::Connection);
             if (conn_hdr)
-                resp.set("Connection", *conn_hdr);
+                resp.set(hs::Connection, *conn_hdr);
             else if (req.version == http_1_0)
-                resp.set("Connection", "close");
+                resp.set(hs::Connection, hs::close);
         }
 
         auto data = resp.data();
-        if (!resp.body.empty() && req.method != "HEAD") {
+        if (!resp.body.empty() && req.method != hs::HEAD) {
             data += resp.body;
         }
         ssize_t nw = sock.send(data.data(), data.size());
@@ -228,9 +209,9 @@ private:
                     DVLOG(4) << req.data();
                     // handle http exchange (request -> response)
                     http_exchange ex(req, s);
-                    if (!nodelay_set && !ex.will_close()) {
-                        // this is a persistent connection, so low-latency sending is worth the overh
-                        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+                    if (!nodelay_set && !req.close_after()) {
+                        // this is likely a persistent connection, so low-latency sending is worth the overh
+                        s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
                         nodelay_set = true;
                     }
                     handle_exchange(ex);
@@ -267,7 +248,7 @@ done:
                     i.callback(ex);
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
-                    ex.resp = http_response(500, http_headers{"Connection", "close"});
+                    ex.resp = http_response(500, http_headers{hs::Connection, hs::close});
                     std::string msg = e.what();
                     if (!msg.empty() && *msg.rbegin() != '\n')
                         msg += '\n';

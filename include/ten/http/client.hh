@@ -8,7 +8,6 @@
 #include "ten/net.hh"
 #include "ten/uri.hh"
 #include <netinet/tcp.h>
-#include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
@@ -48,10 +47,24 @@ public:
     std::string host() const { return _host; }
     uint16_t port() const { return _port; }
 
+    http_response get(const std::string &path, optional_timeout timeout = {}) {
+        return perform(hs::GET, path, {}, {}, timeout);
+    }
+    http_response delete_(const std::string &path, optional_timeout timeout = {}) {
+        return perform(hs::DELETE, path, {}, {}, timeout);
+    }
+    http_response post(const std::string &path, std::string data, optional_timeout timeout = {}) {
+        return perform(hs::POST, path, {}, std::move(data), timeout);
+    }
+    http_response put(const std::string &path, std::string data, optional_timeout timeout = {}) {
+        return perform(hs::PUT, path, {}, std::move(data), timeout);
+    }
+
     http_response perform(const std::string &method, const std::string &path,
-                          const http_headers &hdrs = {}, const std::string &data = {},
+                          http_headers hdrs = {}, std::string data = {},
                           optional_timeout timeout = {})
     {
+        // Calculate canonical path
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -59,12 +72,11 @@ public:
         u.path = path;
         u.normalize();
 
-        http_request r(method, u.compose_path(), hdrs);
-        // HTTP/1.1 requires host header
-        if (r.find("Host") == r.headers.end())
-            r.set("Host", u.host); 
-        r.body = data;
+        // HTTP/1.1 requires host header; include it always, why not
+        if (!hdrs.contains(hs::Host))
+            hdrs.set(hs::Host, u.host);
 
+        http_request r{method, u.compose_path(), std::move(hdrs), std::move(data)};
         return perform(r, timeout);
     }
 
@@ -72,7 +84,7 @@ public:
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
         if (r.body.size()) {
-            r.set("Content-Length", r.body.size());
+            r.set(hs::Content_Length, r.body.size());
         }
 
         try {
@@ -116,15 +128,9 @@ public:
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
-            const auto conn = resp.get("Connection");
-            if (
-                    (conn && boost::iequals(*conn, "close")) ||
-                    (resp.version <= http_1_0 && conn && !boost::iequals(*conn, "Keep-Alive")) ||
-                    (resp.version <= http_1_0 && !conn)
-               )
-            {
+            // if response requests closing socket, do it
+            if (resp.close_after())
                 _sock.close();
-            }
 
             VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
@@ -133,15 +139,6 @@ public:
             throw;
         }
     }
-
-    http_response get(const std::string &path, optional_timeout timeout = {}) {
-        return perform("GET", path, {}, {}, timeout);
-    }
-
-    http_response post(const std::string &path, const std::string &data, optional_timeout timeout = {}) {
-        return perform("POST", path, {}, data, timeout);
-    }
-
 };
 
 class http_pool : public shared_pool<http_client> {

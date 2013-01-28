@@ -49,6 +49,18 @@ static const std::unordered_map<http_response::status_t, std::string> http_statu
     { 505, "HTTP Version Not Supported" },
 };
 
+namespace hs {
+    extern const std::string
+        GET{"GET"}, HEAD{"HEAD"}, POST{"POST"}, PUT{"PUT"}, DELETE{"DELETE"},
+        Connection{"Connection"},
+        close{"close"},
+        keep_alive{"Keep-Alive"},
+        Host{"Host"},
+        Date{"Date"},
+        Content_Type{"Content-Type"},
+        Content_Length{"Content-Length"};
+}
+
 const std::string &version_string(http_version ver) {
     static const std::string v09{"HTTP/0.9"}, v10{"HTTP/1.0"}, v11{"HTTP/1.1"};
     switch (ver) {
@@ -62,7 +74,7 @@ const std::string &version_string(http_version ver) {
 namespace {
 struct is_header {
     const std::string &field;
-    bool operator()(const std::pair<std::string, std::string> &header) {
+    bool operator()(const header_pair &header) {
         return boost::iequals(header.first, field);
     }
 };
@@ -77,7 +89,7 @@ header_list::const_iterator http_headers::find(const std::string &field) const {
 }
 
 void http_headers::set(const std::string &field, const std::string &value) {
-    auto i = find(field);
+    const auto i = find(field);
     if (i != end(headers)) {
         i->second = value;
     } else {
@@ -87,6 +99,10 @@ void http_headers::set(const std::string &field, const std::string &value) {
 
 void http_headers::append(const std::string &field, const std::string &value) {
     headers.emplace_back(field, value);
+}
+
+bool http_headers::contains(const std::string &field) const {
+    return find(field) != end(headers);
 }
 
 bool http_headers::remove(const std::string &field) {
@@ -109,16 +125,16 @@ optional<std::string> http_headers::get(const std::string &field) const {
 #ifdef CHIP_UNSURE
 
 bool http_headers::is(const std::string &field, const std::string &value) const {
-    auto i = find(field);
-    return (i != end(headers)) && (i->second == value);
+    const auto i = find(field);
+    return (i != hend()) && (i->second == value);
 }
 
 bool http_headers::is_nocase(const std::string &field, const std::string &value) const {
-    auto i = find(field);
-    return (i != end(headers)) && boost::iequals(i->second, value);
+    const auto i = find(field);
+    return (i != hend()) && boost::iequals(i->second, value);
 }
 
-#endif
+#endif // CHIP_UNSURE
 
 static bool set_version(http_version &ver, http_parser *p) {
     if      (p->http_major == 0 && p->http_minor == 9) ver = http_0_9;
