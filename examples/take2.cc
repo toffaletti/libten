@@ -1,4 +1,3 @@
-#include "ten/descriptors.hh"
 #include "ten/buffer.hh"
 #include "ten/http/http_message.hh"
 
@@ -9,6 +8,9 @@
 
 using namespace ten;
 using namespace t2;
+
+class io_scheduler;
+io_scheduler *the_io_scheduler = nullptr;
 
 namespace t2 {
 __thread thread_data *tld = nullptr;
@@ -21,7 +23,6 @@ public:
     channel<std::tuple<int, std::shared_ptr<tasklet>>> chan;
     epoll_fd efd;
     event_fd evfd;
-    signal_fd sigfd;
     std::thread thread;
 public:
     io_scheduler(const io_scheduler&) = delete;
@@ -32,17 +33,12 @@ public:
         ev.data.fd = evfd.fd;
         efd.add(evfd.fd, ev);
 
-        sigset_t mask;
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGINT);
-        sigaddset(&mask, SIGQUIT);
-        sigfd = signal_fd(mask);
+        install_sigint_handler();
 
         thread = std::thread{[&] {
             loop();
         }};
 
-        install_sigint_handler();
     }
 
     ~io_scheduler() {
@@ -53,11 +49,6 @@ public:
     void install_sigint_handler();
     void wait_for_event(int wait_fd, uint32_t event);
 };
-
-static io_scheduler &io() {
-    static io_scheduler sched;
-    return sched;
-}
 
 void io_scheduler::wait_for_event(int wait_fd, uint32_t event) {
     tld->self->_post = [=] {
@@ -123,7 +114,7 @@ static void connection(socket_fd fd) {
             }
         }
         if (nr == 0) return;
-        io().wait_for_event(fd.fd, EPOLLIN);
+        the_io_scheduler->wait_for_event(fd.fd, EPOLLIN);
     }
 }
 
@@ -131,7 +122,7 @@ static void accepter(socket_fd fd) {
     DVLOG(5) << "in accepter";
     fd.setnonblock(); // needed because of dup()
     for (;;) {
-        io().wait_for_event(fd.fd, EPOLLIN);
+        the_io_scheduler->wait_for_event(fd.fd, EPOLLIN);
         address addr;
         int nfd = fd.accept(addr, SOCK_NONBLOCK);
         // accept can still fail even though EPOLLIN triggered
@@ -166,7 +157,17 @@ void io_scheduler::loop() {
             if (fd == evfd.fd) {
                 uint64_t e = evfd.read();
                 DVLOG(5) << "event " << e << " on eventfd";
-                if (e % 7 == 0) return;
+                if (e % 7 == 0) {
+                    // ready all tasks, they will be canceled because shutdown
+                    for (auto &task : io_tasks) {
+                        if (task) {
+                            if (task->_ready.exchange(true) == false) {
+                                the_scheduler->add(std::move(task));
+                            }
+                        }
+                    }
+                    return;
+                }
                 continue;
             }
             CHECK((size_t)fd < io_tasks.size()) << fd << " larger than " << io_tasks.size();
@@ -183,11 +184,10 @@ void io_scheduler::loop() {
 void io_scheduler::install_sigint_handler() {
     tasklet::spawn([&] {
         LOG(INFO) << "waiting for signal";
-        wait_for_event(sigfd.fd, EPOLLIN);
+        wait_for_event(the_kernel->sigfd.fd, EPOLLIN);
         LOG(INFO) << "signal handler";
         the_kernel->shutdown = true;
         evfd.write(7);
-        thread.join();
     });
 }
 
@@ -196,6 +196,8 @@ int main() {
     the_kernel = &k;
     scheduler sched;
     the_scheduler = &sched;
+    io_scheduler io_sched;
+    the_io_scheduler = &io_sched;
     DVLOG(5) << "take2";
 
     socket_fd listen_fd{AF_INET, SOCK_STREAM};

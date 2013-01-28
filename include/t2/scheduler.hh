@@ -31,8 +31,8 @@ private:
         while (the_kernel->taskcount > 0 || !the_kernel->shutdown) {
             DVLOG(5) << "waiting for task to schedule";
             auto t = chan.recv();
-            DVLOG(5) << "got task to schedule: " << (*t).get();
             if (!t) break;
+            DVLOG(5) << "got task to schedule: " << (*t).get();
             CHECK((*t)->_ready);
             if (the_kernel->shutdown) {
                 DVLOG(5) << "canceling because done " << *t;
