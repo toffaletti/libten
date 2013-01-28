@@ -30,9 +30,8 @@ struct state : boost::noncopyable {
 static void log_request(http_exchange &ex) {
     using namespace std::chrono;
     const auto stop = steady_clock::now();
-    auto ip = ex.agent_ip();
     auto cl_hdr = ex.resp.get("Content-Length");
-    VLOG(1) << (ip ? ip->str() : "noaddr") << ": " <<
+    VLOG(1) << get_value_or(ex.agent_ip(), "noaddr") << ": " <<
         ex.req.method << " " <<
         ex.req.uri << " " <<
         ex.resp.status_code << " " <<
