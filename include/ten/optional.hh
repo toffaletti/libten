@@ -5,6 +5,7 @@
 namespace ten {
     using std::experimental::optional;
     using std::experimental::nullopt;
+    using std::experimental::emplace;
     using std::experimental::is_not_optional;
 }
 
