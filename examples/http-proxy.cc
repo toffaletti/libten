@@ -75,9 +75,7 @@ void proxy_task(int sock) {
             ssize_t pos = u.path.find(':');
             u.host = u.path.substr(1, pos-1);
             u.port = boost::lexical_cast<uint16_t>(u.path.substr(pos+1));
-            if (cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}))) {
-                goto request_connect_error;
-            }
+            cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
 
             http_response resp{200};
             std::string data = resp.data();
@@ -91,9 +89,7 @@ void proxy_task(int sock) {
             return;
         } else {
             if (u.port == 0) u.port = 80;
-            if (cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}))) {
-                goto request_connect_error;
-            }
+            cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
 
             http_request r{req.method, u.compose_path()};
             // HTTP/1.1 requires host header
@@ -149,16 +145,16 @@ void proxy_task(int sock) {
             }
             return;
         }
+    } catch (errno_error &e) {
+        PLOG(ERROR) << "request connect error " << req.method << " " << req.uri;
+        send_503_reply(s);
+        return;
     } catch (std::exception &e) {
         LOG(ERROR) << "exception error: " << req.uri << " : " << e.what();
         return;
     }
 request_read_error:
     PLOG(ERROR) << "request read error";
-    return;
-request_connect_error:
-    PLOG(ERROR) << "request connect error " << req.method << " " << req.uri;
-    send_503_reply(s);
     return;
 request_send_error:
     PLOG(ERROR) << "request send error: " << req.method << " " << req.uri;
