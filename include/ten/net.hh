@@ -14,7 +14,7 @@ public:
 };
 
 //! perform address resolution and connect fd, task friendly, all errors by exception
-void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) throw (errno_error, hostname_error);
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) throw (errno_error, hostname_error, task_interrupted);
 //! connect fd using task io scheduling
 int netconnect(int fd, const address &addr, optional_timeout ms);
 //! task friendly accept
@@ -77,7 +77,7 @@ public:
     virtual void dial(const char *addr,
             uint16_t port,
             optional_timeout timeout_ms={})
-        throw(errno_error, hostname_error) = 0;
+        throw(errno_error, hostname_error, task_interrupted) = 0;
 
     virtual int connect(const address &addr,
             optional_timeout ms = {})
@@ -137,7 +137,7 @@ public:
     void dial(const char *addr,
             uint16_t port,
             optional_timeout timeout_ms={})
-        throw(errno_error, hostname_error) override;
+        throw(errno_error, hostname_error, task_interrupted) override;
 
     int connect(const address &addr,
             optional_timeout timeout_ms={}) override
