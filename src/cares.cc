@@ -59,39 +59,47 @@ struct sock_info {
     optional_timeout connect_ms;
     int status;
     int sys_errno;
+    std::exception_ptr eptr;
 };
 constexpr int SYSTEM_ERROR = -1; // not a valid ares status
 
 extern "C" void gethostbyname_callback(void *arg, int status, int /*timeouts*/, hostent *host) noexcept {
     sock_info * const si = reinterpret_cast<sock_info *>(arg);
-
-    if (status != ARES_SUCCESS) {
-        si->status = status;
-        DVLOG(3) << "CARES: " << ares_strerror(status);
-        return;
-    }
-
-    if (!host->h_addr_list || !host->h_addr_list[0]) {
-        si->status = ARES_ENODATA;
-        LOG(WARNING) << "BUG: c-ares returned empty address list for " << si->addr << ":" << si->port;
-        return;
-    }
-
-    for (int n = 0; host->h_addr_list && host->h_addr_list[n]; ++n) {
-        const address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
-        if (!netconnect(si->fd, addr, {})) {
-            si->status = ARES_SUCCESS;
+    try {
+        if (status != ARES_SUCCESS) {
+            si->status = status;
+            DVLOG(3) << "CARES: " << ares_strerror(status);
             return;
         }
-        si->status = SYSTEM_ERROR;  // not a valid ares status
-        si->sys_errno = errno;
+
+        if (!host->h_addr_list || !host->h_addr_list[0]) {
+            si->status = ARES_ENODATA;
+            LOG(WARNING) << "BUG: c-ares returned empty address list for " << si->addr << ":" << si->port;
+            return;
+        }
+
+        for (int n = 0; host->h_addr_list && host->h_addr_list[n]; ++n) {
+            const address addr(host->h_addrtype, host->h_addr_list[n], host->h_length, si->port);
+            if (!netconnect(si->fd, addr, si->connect_ms)) {
+                si->status = ARES_SUCCESS;
+                return;
+            }
+            si->status = SYSTEM_ERROR;  // not a valid ares status
+            si->sys_errno = errno;
+        }
+    } catch (...) {
+        // this will be rethrown once we're back in C++ code
+        // to avoid possible memory leaks in C code not expecting exceptions
+        // task_interrupted is the likely exception here
+        si->status = SYSTEM_ERROR;
+        si->eptr = std::current_exception();
     }
 }
 
 } // anon
 
 void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms)
-    throw (errno_error, hostname_error)
+    throw (errno_error, hostname_error, task_interrupted)
 {
     channel_destroyer cd;
     int status = ares_init(&cd.channel);
@@ -99,7 +107,7 @@ void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_m
         throw hostname_error("unknown host %s: %s", addr, ares_strerror(status));
     }
 
-    sock_info si = {addr, port, fd, connect_ms, ARES_SUCCESS, 0};
+    sock_info si = {addr, port, fd, connect_ms, ARES_SUCCESS, 0, nullptr};
     ares_gethostbyname(cd.channel, addr, AF_INET, gethostbyname_callback, &si);
 
     // we allocate our own fd set because FD_SETSIZE is 1024
@@ -137,6 +145,9 @@ void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_m
     }
 
     if (si.status == SYSTEM_ERROR) {
+        if (si.eptr) {
+            std::rethrow_exception(si.eptr);
+        }
         throw errno_error(si.sys_errno, "%s:%u", addr, port);
     }
     if (si.status != ARES_SUCCESS) {
