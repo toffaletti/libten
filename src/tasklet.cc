@@ -3,6 +3,8 @@
 namespace t2 {
 
 void tasklet::cancel(std::shared_ptr<tasklet> t) {
+    CHECK(t);
+    DVLOG(5) << "canceling " << t;
     t->_canceled = true;
     if (t->_ready.exchange(true) == false) {
         the_scheduler->add(std::move(t));
@@ -16,7 +18,7 @@ void tasklet::yield() {
 
 void tasklet::_yield() {
     _ctx.swap(tld->ctx, 0);
-    if (_canceled && !_unwinding) {
+    if (_canceled && _unwinding.exchange(true) == false) {
         throw task_interrupted{};
     }
 }
@@ -25,6 +27,9 @@ bool tasklet::swap() {
     if (_f) {
         _ready = false;
         tld->ctx.swap(_ctx, reinterpret_cast<intptr_t>(this));
+        if (_canceled && _unwinding.exchange(true) == false) {
+            throw task_interrupted{};
+        }
     }
     return static_cast<bool>(_f);
 }
@@ -40,7 +45,8 @@ void tasklet::trampoline(intptr_t arg) noexcept {
         auto parent = self->_parent.lock();
         // TODO: maybe propogate exceptions?
         if (parent) {
-            //parent->cancel();
+            // TODO: adding this causes all kinds of bad
+            //tasklet::cancel(parent);
             std::lock_guard<std::mutex> lock(parent->_mutex);
             parent->_links.erase(self->_link);
         }

@@ -27,7 +27,7 @@ struct tasklet {
 
     std::atomic<bool> _ready;
     std::atomic<bool> _canceled; 
-    bool _unwinding;
+    std::atomic<bool> _unwinding;
 
     tasklet(std::function<void ()> f)
         : _ctx(tasklet::trampoline),

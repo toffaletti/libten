@@ -74,6 +74,9 @@ public:
     }
 
     void add(std::shared_ptr<tasklet> task) {
+        CHECK(task);
+        CHECK(task->_ready);
+        DVLOG(5) << task << " added to scheduler chan";
         chan.send(std::move(task));
     }
 };
