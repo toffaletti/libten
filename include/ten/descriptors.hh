@@ -71,16 +71,16 @@ struct fd_base {
     int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
 
     //! make fd nonblocking by setting O_NONBLOCK flag
-    void setblock(bool block = true) throw (errno_error) {
+    void setblock(bool block = true) {
         int flags;
-        THROW_ON_ERROR((flags = fcntl(F_GETFL)), "fcntl(F_GETFL)");
+        throw_if((flags = fcntl(F_GETFL)) == -1, "fcntl(F_GETFL)");
         if (block)
             flags &= O_NONBLOCK;
         else
             flags |= O_NONBLOCK;
-        THROW_ON_ERROR(fcntl(F_SETFL, flags), "fcntl(F_SETFL)");
+        throw_if(fcntl(F_SETFL, flags) == -1, "fcntl(F_SETFL)");
     }
-    void setnonblock() throw (errno_error) {
+    void setnonblock() {
         setblock(false);
     }
 
@@ -88,28 +88,27 @@ struct fd_base {
     bool valid() const { return fd != -1; }
 
     //! read from fd
-    ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
+    ssize_t read(void *buf, size_t count) noexcept __attribute__((warn_unused_result)) {
         return ::read(fd, buf, count);
     }
 
     //! write to fd
-    ssize_t write(const void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
+    ssize_t write(const void *buf, size_t count) noexcept __attribute__((warn_unused_result)) {
         return ::write(fd, buf, count);
     }
 
     //! wrapper around readv
-    ssize_t readv(const struct iovec *iov, int iovcnt) throw () __attribute__((warn_unused_result)) {
+    ssize_t readv(const struct iovec *iov, int iovcnt) noexcept __attribute__((warn_unused_result)) {
         return ::readv(fd, iov, iovcnt);
     }
 
     //! wrapper around writev
-    ssize_t writev(const struct iovec *iov, int iovcnt) throw () __attribute__((warn_unused_result)) {
+    ssize_t writev(const struct iovec *iov, int iovcnt) noexcept __attribute__((warn_unused_result)) {
         return ::writev(fd, iov, iovcnt);
     }
 
     //! attempts to close fd, it will retry on EINTR
-    //! and throw errno_error for all other errors (EIO, EBADF)
-    void close() throw (errno_error) {
+    void close() noexcept {
         // man 2 close says close can result in EBADF, EIO, and EINTR
         while (::close(fd) == -1) {
             switch (errno) {
@@ -118,7 +117,7 @@ struct fd_base {
                 case EIO: // catastrophic
                 case EBADF: // programming error
                 default:
-                    throw errno_error("close");
+                    break;
             }
         }
         fd = -1;
@@ -126,7 +125,7 @@ struct fd_base {
 
     //! attempts to close fd if it is valid
     //! see close() for when this can throw
-    ~fd_base() throw (errno_error) {
+    ~fd_base() {
         if (valid()) close();
     }
 };
@@ -135,16 +134,16 @@ struct fd_base {
 struct event_fd : fd_base {
     event_fd(unsigned int initval=0, int flags=0) {
         fd = ::eventfd(initval, flags | EFD_CLOEXEC);
-        THROW_ON_ERROR(fd);
+        throw_if(fd == -1);
     }
 
     void write(uint64_t val) {
-        THROW_ON_ERROR(fd_base::write(&val, sizeof(val)));
+        throw_if(fd_base::write(&val, sizeof(val)) == -1);
     }
 
     uint64_t read() {
         uint64_t val;
-        THROW_ON_ERROR(fd_base::read(&val, sizeof(val)));
+        throw_if(fd_base::read(&val, sizeof(val)) == -1);
         return val;
     }
 };
@@ -160,24 +159,24 @@ struct pipe_fd {
     //! pipe2() that can be used for interprocess communication
     //! see man 2 pipe2 for more info
     //! \param flags can be 0, or ORed O_NONBLOCK, O_CLOEXEC
-    pipe_fd(int flags=0) throw (errno_error) {
+    pipe_fd(int flags=0) {
         int fds[2];
-        THROW_ON_ERROR(pipe2(fds, flags | O_CLOEXEC));
+        throw_if(pipe2(fds, flags | O_CLOEXEC) == -1);
         r.fd = fds[0];
         w.fd = fds[1];
     }
 
     //! read from the read fd end of the pipe
-    ssize_t read(void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
+    ssize_t read(void *buf, size_t count) noexcept __attribute__((warn_unused_result)) {
         return r.read(buf, count);
     }
 
     //! write to the write fd end of the pipe
-    ssize_t write(const void *buf, size_t count) throw () __attribute__((warn_unused_result)) {
+    ssize_t write(const void *buf, size_t count) noexcept __attribute__((warn_unused_result)) {
         return w.write(buf, count);
     }
 
-    void setnonblock() throw (errno_error) {
+    void setnonblock() {
         r.setnonblock();
         w.setnonblock();
     }
@@ -212,10 +211,10 @@ struct file_fd : fd_base {
 struct epoll_fd : fd_base {
 
     //! creates fd with epoll_create
-    epoll_fd() throw (errno_error) {
+    epoll_fd() {
         // size is ignored since linux kernel 2.6.8, but still must be positive
         fd = epoll_create1(O_CLOEXEC);
-        THROW_ON_ERROR(fd);
+        throw_if(fd == -1);
     }
 
     //! register the target file descriptor with the epoll instance
@@ -253,9 +252,9 @@ struct epoll_fd : fd_base {
 //! light wrapper around socket file descriptor
 struct socket_fd : fd_base {
     //! creates fd with socket()
-    socket_fd(int domain, int type, int protocol=0) throw (errno_error) {
+    socket_fd(int domain, int type, int protocol=0) {
         fd = ::socket(domain, type | SOCK_CLOEXEC, protocol);
-        THROW_ON_ERROR(fd);
+        throw_if(fd == -1);
     }
 
     //! create a socket_fd from an already existing file descriptor
@@ -263,14 +262,14 @@ struct socket_fd : fd_base {
     socket_fd(int fd_) : fd_base(fd_) {}
 
     //! bind socket to address
-    void bind(address &addr) throw (errno_error) {
-        THROW_ON_ERROR(::bind(fd, addr.sockaddr(), addr.addrlen()));
+    void bind(address &addr) {
+        throw_if(::bind(fd, addr.sockaddr(), addr.addrlen()) == -1);
     }
 
     //! marks the socket as passive, to be used to accept incoming connections using accept()
     //! \param backlog the queue length for completely established connections waiting to be accepted
-    void listen(int backlog=128) throw (errno_error) {
-        THROW_ON_ERROR(::listen(fd, backlog));
+    void listen(int backlog=128) {
+        throw_if(::listen(fd, backlog) == -1);
     }
 
     //! connects fd to the address specified by addr
@@ -301,7 +300,7 @@ struct socket_fd : fd_base {
 
     //! \param addr returns the address of the peer connected to the socket fd
     //! \return true on success, false if socket is not connected
-    bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {
+    bool getpeername(address &addr) __attribute__((warn_unused_result)) {
         socklen_t addrlen = addr.maxlen();
         if (::getpeername(fd, addr.sockaddr(), &addrlen) == 0) {
             return true;
@@ -314,28 +313,28 @@ struct socket_fd : fd_base {
     }
 
     //! \param addr returns the address to which the socket fd is bound
-    void getsockname(address &addr) throw (errno_error) {
+    void getsockname(address &addr) {
         socklen_t addrlen = addr.maxlen();
-        THROW_ON_ERROR(::getsockname(fd, addr.sockaddr(), &addrlen));
+        throw_if(::getsockname(fd, addr.sockaddr(), &addrlen) == -1);
     }
 
     //! wrapper around getsockopt()
     template <typename T> void getsockopt(int level, int optname,
-        T &optval, socklen_t &optlen) throw (errno_error)
+        T &optval, socklen_t &optlen)
     {
-        THROW_ON_ERROR(::getsockopt(fd, level, optname, &optval, &optlen));
+        throw_if(::getsockopt(fd, level, optname, &optval, &optlen) == -1);
     }
 
     //! wrapper around setsockopt()
     template <typename T> void setsockopt(int level, int optname,
-        const T &optval, socklen_t optlen) throw (errno_error)
+        const T &optval, socklen_t optlen)
     {
-        THROW_ON_ERROR(::setsockopt(fd, level, optname, &optval, optlen));
+        throw_if(::setsockopt(fd, level, optname, &optval, optlen) == -1);
     }
 
     //! template version of setsockopt that frees you from specifying optlen for basic types
     template <typename T> void setsockopt(int level, int optname,
-        const T &optval) throw (errno_error)
+        const T &optval)
     {
         socklen_t optlen = sizeof(optval);
         socket_fd::setsockopt(level, optname, optval, optlen);
@@ -344,7 +343,7 @@ struct socket_fd : fd_base {
     //! wrapper around socketpair()
     static std::pair<socket_fd, socket_fd> pair(int domain, int type, int protocol=0) {
         int sv[2];
-        THROW_ON_ERROR(::socketpair(domain, type | SOCK_CLOEXEC, protocol, sv));
+        throw_if(::socketpair(domain, type | SOCK_CLOEXEC, protocol, sv) == -1);
         return std::make_pair(sv[0], sv[1]);
     }
 
@@ -366,21 +365,21 @@ struct socket_fd : fd_base {
 //! wrapper around timerfd
 struct timer_fd : fd_base {
     //! creates fd with timerfd_create()
-    timer_fd(int clockid=CLOCK_MONOTONIC, int flags=0) throw (errno_error) {
+    timer_fd(int clockid=CLOCK_MONOTONIC, int flags=0) {
         fd = timerfd_create(clockid, flags | O_CLOEXEC);
-        THROW_ON_ERROR(fd);
+        throw_if(fd == -1);
     }
 
     //! arms or disarms the timer referred to by fd
     void settime(int flags, const struct itimerspec &new_value,
-      struct itimerspec &old_value) throw (errno_error)
+      struct itimerspec &old_value)
     {
-        THROW_ON_ERROR(timerfd_settime(fd, flags, &new_value, &old_value));
+        throw_if(timerfd_settime(fd, flags, &new_value, &old_value) == -1);
     }
 
     //! \param curr_value will contain the current value of the timer
-    void gettime(struct itimerspec &curr_value) throw (errno_error) {
-        THROW_ON_ERROR(timerfd_gettime(fd, &curr_value));
+    void gettime(struct itimerspec &curr_value) {
+        throw_if(timerfd_gettime(fd, &curr_value) == -1);
     }
 };
 
@@ -388,16 +387,16 @@ struct timer_fd : fd_base {
 struct signal_fd : fd_base {
     //! create fd with signalfd()
     //! also calls sigprocmask() to block the signals in mask
-    signal_fd(const sigset_t &mask, int flags=0) throw (errno_error) {
-        THROW_ON_ERROR(::sigprocmask(SIG_BLOCK, &mask, NULL));
+    signal_fd(const sigset_t &mask, int flags=0) {
+        throw_if(::sigprocmask(SIG_BLOCK, &mask, NULL) == -1);
         fd = ::signalfd(-1, &mask, flags | O_CLOEXEC);
-        THROW_ON_ERROR(fd);
+        throw_if(fd == -1);
     }
 
     //! convenience method for reading struct siginalfd_siginfo
-    void read(struct signalfd_siginfo &siginfo) throw (errno_error) {
+    void read(struct signalfd_siginfo &siginfo) {
         ssize_t r = fd_base::read(&siginfo, sizeof(siginfo));
-        THROW_ON_ERROR(r);
+        throw_if(r == -1);
     }
 };
 

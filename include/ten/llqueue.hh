@@ -8,11 +8,9 @@
 namespace ten {
 // low lock queue
 // http://www.drdobbs.com/parallel/211601363 by herb sutter
+// CACHE_LINE_SIZE = getconf LEVEL1_DCACHE_LINESIZE
 
-// getconf LEVEL1_DCACHE_LINESIZE
-#define CACHE_LINE_SIZE 64
-
-template <typename T>
+template <typename T, size_t CACHE_LINE_SIZE=64>
 struct llqueue {
 private:
     //struct alignas(64) node {

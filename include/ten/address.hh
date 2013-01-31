@@ -116,10 +116,10 @@ struct address {
         const char *rvalue = NULL;
         if (family() == AF_INET) {
             rvalue = inet_ntop(family(), &addr.sa_in.sin_addr, dst, size);
-            THROW_ON_NULL(rvalue);
+            throw_if(rvalue == nullptr);
         } else if (family() == AF_INET6) {
             rvalue = inet_ntop(family(), &addr.sa_in6.sin6_addr, dst, size);
-            THROW_ON_NULL(rvalue);
+            throw_if(rvalue == nullptr);
         }
         return rvalue;
     }

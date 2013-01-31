@@ -234,12 +234,12 @@ sslerror::sslerror() {
 }
 
 
-sslsock::sslsock(int fd) throw (errno_error)
+sslsock::sslsock(int fd)
     : sockbase(fd), ctx(0), bio(0)
 {
 }
 
-sslsock::sslsock(int domain, int type, int protocol) throw (errno_error)
+sslsock::sslsock(int domain, int type, int protocol)
     : sockbase(domain, type | SOCK_NONBLOCK, protocol), ctx(0), bio(0)
 {
 }
@@ -260,9 +260,7 @@ void sslsock::initssl(const SSL_METHOD *method, bool client) {
     initssl(SSL_CTX_new((SSL_METHOD *)method), client);
 }
 
-void sslsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms)
-    throw(errno_error, hostname_error)
-{
+void sslsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms) {
     netdial(s.fd, addr, port, timeout_ms);
     handshake();
 }

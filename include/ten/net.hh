@@ -14,7 +14,7 @@ public:
 };
 
 //! perform address resolution and connect fd, task friendly, all errors by exception
-void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) throw (errno_error, hostname_error, task_interrupted);
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms);
 //! connect fd using task io scheduling
 int netconnect(int fd, const address &addr, optional_timeout ms);
 //! task friendly accept
@@ -29,8 +29,8 @@ class sockbase {
 public:
     socket_fd s;
 
-    sockbase(int fd=-1) throw (errno_error) : s(fd) {}
-    sockbase(int domain, int type, int protocol=0) throw (errno_error)
+    sockbase(int fd=-1) : s(fd) {}
+    sockbase(int domain, int type, int protocol=0)
         : s(domain, type | SOCK_NONBLOCK, protocol) {}
 
     sockbase(const sockbase &) = delete;
@@ -46,27 +46,27 @@ public:
 
     virtual ~sockbase() {}
 
-    void bind(address &addr) throw (errno_error) { s.bind(addr); }
+    void bind(address &addr) { s.bind(addr); }
     // use a ridiculous number, kernel will truncate to max
-    void listen(int backlog=100000) throw (errno_error) { s.listen(backlog); }
-    bool getpeername(address &addr) throw (errno_error) __attribute__((warn_unused_result)) {
+    void listen(int backlog=100000) { s.listen(backlog); }
+    bool getpeername(address &addr) __attribute__((warn_unused_result)) {
         return s.getpeername(addr);
     }
-    void getsockname(address &addr) throw (errno_error) {
+    void getsockname(address &addr) {
         return s.getsockname(addr);
     }
     template <typename T> void getsockopt(int level, int optname,
-        T &optval, socklen_t &optlen) throw (errno_error)
+        T &optval, socklen_t &optlen)
     {
         return s.getsockopt(level, optname, optval, optlen);
     }
     template <typename T> void setsockopt(int level, int optname,
-        const T &optval, socklen_t optlen) throw (errno_error)
+        const T &optval, socklen_t optlen)
     {
         return s.setsockopt(level, optname, optval, optlen);
     }
     template <typename T> void setsockopt(int level, int optname,
-        const T &optval) throw (errno_error)
+        const T &optval)
     {
         return s.setsockopt(level, optname, optval);
     }
@@ -76,8 +76,7 @@ public:
 
     virtual void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={})
-        throw(errno_error, hostname_error, task_interrupted) = 0;
+            optional_timeout timeout_ms={}) = 0;
 
     virtual int connect(const address &addr,
             optional_timeout ms = {})
@@ -119,8 +118,8 @@ public:
 //! task friendly socket wrapper
 class netsock : public sockbase {
 public:
-    netsock(int fd=-1) throw (errno_error) : sockbase(fd) {}
-    netsock(int domain, int type, int protocol=0) throw (errno_error)
+    netsock(int fd=-1) : sockbase(fd) {}
+    netsock(int domain, int type, int protocol=0)
         : sockbase(domain, type, protocol) {}
 
     netsock(netsock &&other) : sockbase() {
@@ -136,8 +135,7 @@ public:
     //! dial requires a large 8MB stack size for getaddrinfo; throws on error
     void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={})
-        throw(errno_error, hostname_error, task_interrupted) override;
+            optional_timeout timeout_ms={}) override;
 
     int connect(const address &addr,
             optional_timeout timeout_ms={}) override
@@ -204,7 +202,7 @@ public:
     void serve(address &baddr, unsigned threads=1) {
         netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
-        THROW_ON_NONZERO_ERRNO(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC));
+        throw_if(s.s.fcntl(F_SETFD, s.s.fcntl(F_GETFD) ^ FD_CLOEXEC) != 0);
         setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);

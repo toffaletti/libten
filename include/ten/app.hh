@@ -210,11 +210,11 @@ public:
         struct sigaction act;
         memset(&act, 0, sizeof(act));
         // install SIGINT handler
-        THROW_ON_ERROR(sigaction(SIGINT, NULL, &act));
+        throw_if(sigaction(SIGINT, NULL, &act) == -1);
         if (act.sa_handler == SIG_DFL) {
             act.sa_sigaction = application::signal_handler;
             act.sa_flags = SA_RESTART | SA_SIGINFO;
-            THROW_ON_ERROR(sigaction(SIGINT, &act, NULL));
+            throw_if(sigaction(SIGINT, &act, NULL) == -1);
             taskspawn(std::bind(&application::signal_task, this), 4*1024);
         }
         return p.main();
@@ -247,12 +247,12 @@ public:
 
     void restart(std::vector<std::string> vargs) {
         char exe_path[PATH_MAX];
-        THROW_ON_NULL(realpath("/proc/self/exe", exe_path));
+        throw_if(realpath("/proc/self/exe", exe_path) == nullptr);
         pid_t child_pid;
         if ((child_pid = fork()) != 0) {
             // parent
             // pid == -1 is error, no child was started
-            THROW_ON_ERROR(child_pid);
+            throw_if(child_pid == -1);
             LOG(INFO) << "restart child pid: " << child_pid;
             quit();
         } else {
@@ -263,7 +263,7 @@ public:
                 args[i] = (char *)vargs[i].c_str();
             }
             args[vargs.size()] = nullptr;
-            THROW_ON_ERROR(execv(exe_path, args));
+            throw_if(execv(exe_path, args) == -1);
         }
     }
 

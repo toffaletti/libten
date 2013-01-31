@@ -25,8 +25,8 @@ public:
     SSL_CTX *ctx;
     BIO *bio;
 
-    sslsock(int fd=-1) throw (errno_error);
-    sslsock(int domain, int type, int protocol=0) throw (errno_error);
+    sslsock(int fd=-1);
+    sslsock(int domain, int type, int protocol=0);
 
     ~sslsock() override;
 
@@ -58,8 +58,7 @@ public:
     //! dial requires a large 8MB stack size for getaddrinfo
     void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={})
-        throw(errno_error, hostname_error) override;
+            optional_timeout timeout_ms={}) override;
 
     int connect(const address &addr,
             optional_timeout ms={}) override
