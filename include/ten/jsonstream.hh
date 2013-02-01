@@ -2,6 +2,7 @@
 #define TEN_JSONSTREAM_HH
 
 #include <iomanip>
+#include <limits>
 #include <ostream>
 #include <stdexcept>
 #include <stack>
@@ -139,8 +140,9 @@ struct jsonstream {
             } else if (std::isinf(number)) {
                 os << "null";
             } else {
-                //os << std::setprecision(std::numeric_limits<T>::digits10+1);
-                os << number;
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%g", number);
+                os << buf;
             }
         });
         return *this;

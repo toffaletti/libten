@@ -1,3 +1,4 @@
+#include "ten/logging.hh"
 #include "ten/jsonstream.hh"
 
 namespace ten {
