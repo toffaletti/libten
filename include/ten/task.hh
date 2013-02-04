@@ -52,7 +52,9 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 void procshutdown();
 
 //! return cached time from event loop, not precise
-const std::chrono::time_point<std::chrono::steady_clock> &procnow();
+using proc_clock_t = std::chrono::steady_clock;
+using proc_time_t = std::chrono::time_point<proc_clock_t>;
+const proc_time_t &procnow();
 
 //! main entry point for tasks
 struct procmain {

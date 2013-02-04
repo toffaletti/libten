@@ -7,7 +7,7 @@
 namespace ten {
 
 struct io_scheduler {
-    typedef ten::alarm_clock<task *, proc::clock> alarm_clock;
+    typedef ten::alarm_clock<task *, proc_clock_t> alarm_clock;
 
     struct task_poll_state {
         task *t_in; // POLLIN task
@@ -205,7 +205,7 @@ struct io_scheduler {
             // lock must be held while determining whether or not we'll be
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
-            optional<proc::clock::time_point> timeout_when = alarms.when();
+            optional<proc_time_t> timeout_when = alarms.when();
             if (timeout_when) {
                 auto now = p->cached_time();
                 if (*timeout_when <= now) {
