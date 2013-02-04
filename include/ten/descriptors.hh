@@ -1,5 +1,5 @@
-#ifndef DESCRIPTORS_HH
-#define DESCRIPTORS_HH
+#ifndef LIBTEN_DESCRIPTORS_HH
+#define LIBTEN_DESCRIPTORS_HH
 
 #include "error.hh"
 #include "address.hh"
@@ -403,5 +403,4 @@ struct signal_fd : fd_base {
 
 } // end namespace ten
 
-#endif // DESCRIPTORS_HH
-
+#endif // LIBTEN_DESCRIPTORS_HH

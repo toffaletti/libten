@@ -1,5 +1,5 @@
-#ifndef TASK_IO_HH
-#define TASK_IO_HH
+#ifndef LIBTEN_IO_HH
+#define LIBTEN_IO_HH
 
 #include "proc.hh"
 #include "alarm.hh"
@@ -306,5 +306,4 @@ struct io_scheduler {
 
 } // end namespace ten
 
-#endif // TASK_IO_HH
-
+#endif // LIBTEN_IO_HH

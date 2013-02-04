@@ -1,5 +1,5 @@
-#ifndef TASK_PROC_HH
-#define TASK_PROC_HH
+#ifndef LIBTEN_PROC_HH
+#define LIBTEN_PROC_HH
 
 #include <condition_variable>
 #include "ten/descriptors.hh"
@@ -222,4 +222,4 @@ public:
 
 } // end namespace ten
 
-#endif // TASK_PROC_HH
+#endif // LIBTEN_PROC_HH
