@@ -148,8 +148,8 @@ struct http_base : http_headers {
         static std::string last_date;
 
         time_t now = std::chrono::system_clock::to_time_t(procnow());
-        std::unique_lock<std::mutex> lk(last_mut);
-        if (now == last_time) {
+        std::lock_guard<std::mutex> lk(last_mut);
+        if (last_time != now) {
             char buf[128];
             struct tm tm;
             strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
