@@ -252,7 +252,7 @@ done:
                     std::string msg = e.what();
                     if (!msg.empty() && *msg.rbegin() != '\n')
                         msg += '\n';
-                    ex.resp.set_body(msg);
+                    ex.resp.set_body(msg, hs::text_plain);
                     ex.send_response();
                 }
                 break;
