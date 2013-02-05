@@ -43,14 +43,23 @@ extern const std::string
 
 //! http headers
 struct http_headers {
-    header_list headers;
+protected:
+    header_list _hlist;
 
+    header_list::iterator       _hfind(const std::string &field);
+    header_list::const_iterator _hfind(const std::string &field) const;
+
+    void _hwrite(std::ostream &os) const;
+
+    struct parsing; // grants access
+
+public:
     http_headers() {}
 
     template <typename ...Args>
         http_headers(Args&& ...args) {
             static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-            headers.reserve(sizeof...(args) / 2);
+            _hlist.reserve(sizeof...(args) / 2);
             init(std::forward<Args>(args)...);
         }
 
@@ -76,6 +85,8 @@ struct http_headers {
             append(field, boost::lexical_cast<std::string>(value));
         }
 
+    bool empty() const;
+
     bool contains(const std::string &field) const;
 
     bool remove(const std::string &field);
@@ -84,8 +95,8 @@ struct http_headers {
 
     template <typename ValueT>
         optional<ValueT> get(const std::string &field) const {
-            const auto i = find(field);
-            return (i == end(headers)) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
+            const auto i = _hfind(field);
+            return (i == end(_hlist)) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
         }
 
 #ifdef CHIP_UNSURE
@@ -95,16 +106,11 @@ struct http_headers {
 
     template <typename ValueT>
         bool is(const std::string &field, const ValueT &value) const {
-            const auto i = find(field);
-            return (i != end(headers)) && (boost::lexical_cast<ValueT>(i->second) == value);
+            const auto i = _hfind(field);
+            return (i != end(_hlist)) && (boost::lexical_cast<ValueT>(i->second) == value);
         }
 
 #endif // CHIP_UNSURE
-
-protected:
-    // iterator-based access requires knowledge of value_type, so not public
-    header_list::iterator       find(const std::string &field);
-    header_list::const_iterator find(const std::string &field) const;
 };
 
 //! base class for http request and response
@@ -118,7 +124,7 @@ struct http_base : http_headers {
         : http_headers(std::move(headers_)), version{version_} {}
 
     void clear() {
-        headers.clear();
+        _hlist.clear();
         version = default_http_version;
         body.clear();
         body_length = {};
@@ -176,15 +182,28 @@ struct http_request : http_base {
           method{std::move(method_)},
           uri{std::move(uri_)}
     {}
+
     http_request(std::string method_,
                  std::string uri_,
                  http_headers headers_,
                  std::string body_,
-                 std::string content_type_ = std::string())
+                 optional<std::string> content_type_ = {})
         : http_base(std::move(headers_)),
           method{std::move(method_)},
           uri{std::move(uri_)}
     { set_body(std::move(body_), std::move(content_type_)); }
+
+    http_request(std::string method_,
+                 std::string uri_,
+                 http_headers headers_,
+                 std::string body_,
+                 const char *content_type_)
+        : http_request(std::move(method_),
+                       std::move(uri_),
+                       std::move(headers_),
+                       std::move(body_),
+                       std::string(content_type_))
+    {}
 
     void clear() {
         http_base::clear();
@@ -199,10 +218,9 @@ struct http_request : http_base {
 
     std::string path() const {
         std::string p = uri;
-        size_t pos = p.find_first_of("?#");
-        if (pos != std::string::npos) {
-            p = p.substr(0, pos);
-        }
+        const size_t pos = p.find_first_of("?#");
+        if (pos != std::string::npos)
+            p.erase(pos, std::string::npos);
         return p;
     }
 };
