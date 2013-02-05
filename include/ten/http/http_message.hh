@@ -125,16 +125,15 @@ struct http_base : http_headers {
         complete = {};
     }
 
-    void set_body(std::string body_,
-                  const std::string &content_type_ = std::string())
-    {
+    void set_body(std::string body_, const char *content_type) {
+        set_body(std::move(body_), optional<std::string>(emplace, content_type));
+    }
+    void set_body(std::string body_, optional<std::string> content_type = {}) {
         body = std::move(body_);
         body_length = body.size();
         set(hs::Content_Length, body_length);
-        remove(hs::Content_Type);
-        if (!content_type_.empty()) {
-            append(hs::Content_Type, content_type_);
-        }
+        if (content_type)
+            set(hs::Content_Type, *content_type);
     }
 
     bool close_after() const {
