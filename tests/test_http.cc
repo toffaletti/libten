@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
     }
 
     BOOST_CHECK(req.complete);
-    BOOST_MESSAGE("Request: \n" << req.data());
+    BOOST_MESSAGE("Request:\n" << req.data());
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
@@ -479,6 +479,7 @@ BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
     }
 
     BOOST_CHECK(resp.complete);
+    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
@@ -540,6 +541,7 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     size_t len = strlen(sdata);
     resp.parse(&parser, sdata, len);
     BOOST_CHECK(resp.complete);
+    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
@@ -547,6 +549,4 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     BOOST_CHECK_EQUAL("text/plain", *resp.get("Content-Type"));
     BOOST_CHECK_EQUAL("chunked", *resp.get("Transfer-Encoding"));
     BOOST_CHECK_EQUAL(resp.body_length, 76);
-
-    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 }
