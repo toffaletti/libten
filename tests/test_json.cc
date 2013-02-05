@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(json_stream) {
     using namespace jsonstream_manip;
     std::stringstream ss;
     jsonstream s(ss);
-    int8_t c = 0;
+    int8_t c = 'C'; // printable
     s << jsobject
         << "key1" << 1234
         << "key2" << "value"
