@@ -52,13 +52,11 @@ static const std::unordered_map<http_response::status_t, std::string> http_statu
 namespace hs {
     extern const std::string
         GET{"GET"}, HEAD{"HEAD"}, POST{"POST"}, PUT{"PUT"}, DELETE{"DELETE"},
-        Connection{"Connection"},
-        close{"close"},
-        keep_alive{"Keep-Alive"},
+        Connection{"Connection"}, close{"close"}, keep_alive{"Keep-Alive"},
         Host{"Host"},
         Date{"Date"},
-        Content_Type{"Content-Type"},
-        Content_Length{"Content-Length"};
+        Content_Length{"Content-Length"},
+        Content_Type{"Content-Type"}, text_plain{"text/plain"}, app_octet_stream{"application/octet-stream"};
 }
 
 const std::string &version_string(http_version ver) {

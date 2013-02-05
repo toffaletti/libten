@@ -35,7 +35,10 @@ namespace hs {
 extern const std::string
     GET, HEAD, POST, PUT, DELETE,
     Connection, close, keep_alive,
-    Host, Date, Content_Type, Content_Length;
+    Host,
+    Date,
+    Content_Length,
+    Content_Type, text_plain, app_octet_stream;
 }
 
 //! http headers
