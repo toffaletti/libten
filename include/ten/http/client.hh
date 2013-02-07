@@ -21,12 +21,13 @@ class http_client {
 public:
     using lifetime_t = optional<std::chrono::seconds>;
     using retire_t = optional<proc_time_t>;
+    static constexpr double pretire_factor = 0.8;
 private:
     netsock _sock;
     buffer _buf;
     std::string _host;
     uint16_t _port;
-    retire_t _retire;
+    retire_t _pretire, _retire;
 
     void ensure_connection() {
         if (!_sock.valid()) {
@@ -51,14 +52,21 @@ public:
         : _buf(4*1024), _host(host_), _port(port_)
     {
         parse_host_port(_host, _port);
-        if (lifetime)
+
+        if (lifetime) {
             _retire = procnow() + *lifetime;
+            const auto pre_elig = (intmax_t)(lifetime->count() * pretire_factor);
+            if (pre_elig >= 1)
+                _pretire = procnow() + lifetime_t::value_type(pre_elig);
+        }
     }
 
     std::string host() const { return _host; }
-    uint16_t port() const { return _port; }
-    retire_t retire() const { return _retire; }
-    bool retire_by(proc_time_t when) { return _retire && when >= *_retire; }
+    uint16_t port() const    { return _port; }
+    retire_t pretire() const { return _pretire; }
+    retire_t retire() const  { return _retire; }
+    bool pretire_by(proc_time_t when) { return _pretire && when >= *_pretire; }
+    bool retire_by(proc_time_t when)  { return _retire  && when >= *_retire; }
 
     http_response get(const std::string &path, optional_timeout timeout = {}) {
         return perform(hs::GET, path, {}, {}, timeout);
@@ -174,6 +182,8 @@ public:
           _port(port_),
           _lifetime(lifetime_)
     {
+        if (_lifetime && _lifetime->count() <= 0)
+            throw errorx("%s: invalid client lifetime %jd", name().c_str(), (intmax_t)_lifetime->count());
         _lt_start();
     }
     ~http_pool() {
@@ -199,8 +209,6 @@ protected:
 
     void _lt_start() {
         if (!_lt && _lifetime) {
-            if (_lifetime->count() <= 0)
-                throw errorx("%s: invalid client lifetime %jd", name().c_str(), (intmax_t)_lifetime->count());
             _lt = std::make_shared<lt_state>();
             _lt->id = taskspawn(std::bind(_lt_run, _impl(), _lt, _lifetime));
         }
@@ -253,7 +261,8 @@ protected:
                 catch (std::exception &) {
                     // any other exception has been logged; skip this replacement
                     continue;
-                } 
+                }
+                VLOG(4) << "LT: created " << c;
                 im->avail.push_front(c);
                 im->not_empty.wakeup();
             }
@@ -262,13 +271,15 @@ protected:
 
             while (!im->avail.empty()) {
                 auto c = im->avail.back();
-                if (!c->retire_by(procnow() - *lifetime))
+                if (!c->retire_by(procnow()))
                     break;
-                VLOG(3) << im->name << ": LT dropping stale client " << c;
+                VLOG(3) << im->name << ": LT dropping stale " << c;
                 im->avail.pop_back();
                 im->set.erase(c);
                 doomed.push_back(std::move(c));
             }
+            if (!doomed.empty())
+                im->not_empty.wakeup();  // in theory, this should never matter
         }
     }
 };
@@ -284,10 +295,11 @@ public:
     explicit http_scoped_resource(http_pool &p)
         : scoped_resource{p},
           _lt{p._lt},
-          _mustdie{_c->retire_by(procnow())}
+          _mustdie{_c->pretire_by(procnow())}
     {
         if (_mustdie) {
             _lt->retired++;
+            VLOG(4) << "LT: waking task, retired=" << _lt->retired.load();
             _lt->worker.wakeup();
         }
     }
