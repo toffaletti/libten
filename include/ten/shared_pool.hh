@@ -78,7 +78,7 @@ protected:
             // pop resource from front of queue
             res_ptr c{std::move(avail.front())};
             avail.pop_front();
-            CHECK(c) << "acquire shared resource failed in pool: " << name;
+            CHECK(c) << "acquire shared resource failed in pool " << name;
             return c;
         }
 
@@ -89,11 +89,11 @@ protected:
             try {
                 c = new_resource();
             } catch (std::exception &e) {
-                LOG(ERROR) << "exception creating new resource for pool: " << name << " " << e.what();
+                LOG(ERROR) << "exception creating new resource for pool " << name << ": " << e.what();
                 throw;
             }
-            CHECK(c) << "new_resource failed for pool: " << name;
-            DVLOG(4) << "inserting to shared_pool(" << name << "): " << c;
+            CHECK(c) << "new_resource failed for pool " << name;
+            VLOG(3) << "adding shared resource to pool " << name << ": " << c;
             lk.lock(); // re-lock before inserting to set
             set.insert(c);
             return c;
@@ -123,9 +123,10 @@ protected:
             not_empty.wakeup();
             lk.unlock();
 
+            const void * const addr = c.get();
             c.reset();
             if (!can_keep)
-                LOG(WARNING) << "destroyed shared resource from pool " << name;
+                VLOG(3) << "destroyed shared resource from pool " << name << ": " << addr;
         }
     };
 
