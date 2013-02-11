@@ -223,16 +223,16 @@ public:
 	constexpr optional() noexcept : OptionalBase<T>()  {};
 	constexpr optional(nullopt_t) noexcept : OptionalBase<T>() {};
 
-	optional(const optional& rhs) 
-	: OptionalBase<T>(only_set_initialized, rhs.initialized())
-	{
-		if (rhs.initialized()) new (dataptr()) T(*rhs);
+	optional(const optional& rhs)
+	: OptionalBase<T>() {
+		if (rhs.initialized())
+			initialize(*rhs);
 	}
 
 	optional(optional&& rhs) noexcept(std::is_nothrow_move_constructible<T>::value)
-	: OptionalBase<T>(only_set_initialized, rhs.initialized())
-	{
-		if (rhs.initialized()) new (dataptr()) T(std::move(*rhs));
+	: OptionalBase<T>() {
+		if (rhs.initialized())
+			initialize(std::move(*rhs));
 	}
 
 	constexpr optional(const T& v) : OptionalBase<T>(v) {}
