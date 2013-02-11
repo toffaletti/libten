@@ -51,8 +51,6 @@ protected:
 
     void _hwrite(std::ostream &os) const;
 
-    struct parsing; // grants access
-
 public:
     http_headers() {}
 
@@ -111,6 +109,10 @@ public:
         }
 
 #endif // CHIP_UNSURE
+
+    //! parser entry points
+    int parse_header_field(const char *at, size_t length);
+    int parse_header_value(const char *at, size_t length);
 };
 
 //! base class for http request and response

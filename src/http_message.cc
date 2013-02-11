@@ -153,23 +153,31 @@ static bool set_version(http_version &ver, http_parser *p) {
     return true;
 }
 
+int http_headers::parse_header_field(const char *at, size_t length) {
+    // TODO: see if this test fails when a header value is entirely empty
+    if (_hlist.empty() || !_hlist.back().second.empty())
+        _hlist.emplace_back();
+    _hlist.back().first.append(at, length);
+    return 0;
+}
+
+int http_headers::parse_header_value(const char *at, size_t length) {
+    assert(!_hlist.empty());
+    _hlist.back().second.append(at, length);
+    return 0;
+};
+
 extern "C" {
 
-struct http_headers::parsing {
-    static int _on_header_field(http_parser *p, const char *at, size_t length) {
-        http_base *m = reinterpret_cast<http_base *>(p->data);
-        // TODO: see if this test fails when a header value is entirely empty
-        if (m->_hlist.empty() || !m->_hlist.back().second.empty())
-            m->_hlist.emplace_back();
-        m->_hlist.back().first.append(at, length);
-        return 0;
-    }
-    static int _on_header_value(http_parser *p, const char *at, size_t length) {
-        http_base *m = reinterpret_cast<http_base *>(p->data);
-        m->_hlist.back().second.append(at, length);
-        return 0;
-    }
-};
+static int _on_header_field(http_parser *p, const char *at, size_t length) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    return m->parse_header_field(at, length);
+}
+
+static int _on_header_value(http_parser *p, const char *at, size_t length) {
+    http_base *m = reinterpret_cast<http_base *>(p->data);
+    return m->parse_header_value(at, length);
+}
 
 static int _on_body(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
@@ -194,6 +202,7 @@ static int _request_on_headers_complete(http_parser *p) {
     http_request *m = reinterpret_cast<http_request*>(p->data);
     m->method = http_method_str((http_method)p->method);
     if (!set_version(m->version, p)) {
+        LOG(INFO) << "on_headers_complete: invalid version";
         return -1;
     }
     if (p->content_length > 0 && p->content_length != UINT64_MAX) {
@@ -212,13 +221,12 @@ void http_request::parser_init(struct http_parser *p) {
 }
 
 void http_request::parse(struct http_parser *p, const char *data_, size_t &len) {
-    http_parser_settings s;
-    s.on_message_begin = NULL;
-    s.on_url = _request_on_url;
-    s.on_header_field = http_headers::parsing::_on_header_field;
-    s.on_header_value = http_headers::parsing::_on_header_value;
+    http_parser_settings s{};
+    s.on_url              = _request_on_url;
+    s.on_header_field     = _on_header_field;
+    s.on_header_value     = _on_header_value;
     s.on_headers_complete = _request_on_headers_complete;
-    s.on_body = _on_body;
+    s.on_body             = _on_body;
     s.on_message_complete = _on_message_complete;
 
     ssize_t nparsed = http_parser_execute(p, &s, data_, len);
@@ -263,13 +271,11 @@ void http_response::parser_init(struct http_parser *p) {
 }
 
 void http_response::parse(struct http_parser *p, const char *data_, size_t &len) {
-    http_parser_settings s;
-    s.on_message_begin = NULL;
-    s.on_url = NULL;
-    s.on_header_field = http_headers::parsing::_on_header_field;
-    s.on_header_value = http_headers::parsing::_on_header_value;
+    http_parser_settings s{};
+    s.on_header_field     = _on_header_field;
+    s.on_header_value     = _on_header_value;
     s.on_headers_complete = _response_on_headers_complete;
-    s.on_body = _on_body;
+    s.on_body             = _on_body;
     s.on_message_complete = _on_message_complete;
 
     ssize_t nparsed = http_parser_execute(p, &s, data_, len);
