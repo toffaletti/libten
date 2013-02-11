@@ -238,7 +238,6 @@ static void procmain_init() {
     umask(02); // allow group-readable logs
     InitGoogleLogging(program_invocation_short_name);
     InstallFailureSignalHandler();
-    FLAGS_logtostderr = true;
 
     struct sigaction act;
 

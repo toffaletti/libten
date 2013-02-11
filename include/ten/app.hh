@@ -2,6 +2,7 @@
 #define LIBTEN_APP_HH
 
 #include <sys/resource.h>
+#include <syslog.h>
 #include <iostream>
 #include <fstream>
 #include <boost/program_options.hpp>
@@ -49,11 +50,31 @@ struct app_config {
     rlim_t min_fds;
 
     // google glog options
-    std::string glog_log_dir;
-    int glog_minloglevel;
+    int glog_min_level;
+    int glog_stderr_level;
+    int glog_syslog_level;
+    int glog_syslog_facility;
+    int glog_file_level;
+    std::string glog_dir;
+    int glog_maxsize;
     int glog_v;
     std::string glog_vmodule;
-    int glog_max_log_size;
+
+    void configure_glog(const char *name) const {
+        FLAGS_minloglevel = glog_min_level;
+        FLAGS_stderrthreshold = glog_stderr_level;
+        FLAGS_log_dir = glog_dir;
+        FLAGS_max_log_size = glog_maxsize;
+        FLAGS_v = glog_v;
+        FLAGS_vmodule = glog_vmodule;
+
+        // TODO: expose these as simple flags?
+        if (glog_syslog_level >= 0 && glog_syslog_facility >= 0)
+            SetSyslogLogging(glog_syslog_level, glog_syslog_facility);
+
+        if (glog_file_level >= 0)
+            SetLogDestination(glog_file_level, name);
+    }
 };
 
 namespace po = boost::program_options;
@@ -88,14 +109,20 @@ struct options {
         std::string conffile(appname);
         conffile += ".conf";
         configuration.add_options()
-            ("config", po::value<std::string>(&c.config_path)->default_value(conffile), "config file path")
+            ("config", po::value(&c.config_path)->default_value(conffile), "config file path")
             ("min-fds", po::value<rlim_t>(&c.min_fds)->default_value(0), "minimum number of file descriptors required to run")
-            ("glog-log-dir", po::value<std::string>(&c.glog_log_dir)->default_value(""), "log files will be written to this directory")
-            ("glog-minloglevel", po::value<int>(&c.glog_minloglevel)->default_value(0), "log messages at or above this level")
-            ("glog-v", po::value<int>(&c.glog_v)->default_value(0), "show vlog messages for <= to value")
-            ("glog-vmodule", po::value<std::string>(&c.glog_vmodule), "comma separated <module>=<level>. overides glog-v")
-            ("glog-max-log-size", po::value<int>(&c.glog_max_log_size)->default_value(1800), "max log size (in MB)")
+            ("glog-min", po::value(&c.glog_min_level)->default_value(0), "ignore log messages below this level")
+            ("glog-stderr", po::value(&c.glog_stderr_level)->default_value(0), "log to stderr at or above this level")
+            ("glog-syslog", po::value(&c.glog_syslog_level)->default_value(-1), "log to syslog at or above this level (if nonnegative)")
+            ("glog-file", po::value(&c.glog_file_level)->default_value(-1), "log to file at or above this level (if nonnegative)")
+            ("glog-dir", po::value(&c.glog_dir)->default_value(""), "write log files to this directory")
+            ("glog-maxsize", po::value(&c.glog_maxsize)->default_value(1800), "max log size (in MB)")
+            ("glog-v", po::value(&c.glog_v)->default_value(0), "log vlog messages at or below this value")
+            ("glog-vmodule", po::value(&c.glog_vmodule), "comma separated <module>=<level>. overides glog-v")
             ;
+
+        // TODO: make this cmdline-configurable
+        c.glog_syslog_facility = LOG_USER;
     }
 
     void setup() {
@@ -163,16 +190,8 @@ public:
                 exit(1);
             }
 
-            // configure glog since we use our own command line/config parsing
-            // instead of the google arg parsing
-            if (_conf.glog_log_dir.empty()) {
-                FLAGS_logtostderr = true;
-            }
-            FLAGS_log_dir = _conf.glog_log_dir;
-            FLAGS_minloglevel = _conf.glog_minloglevel;
-            FLAGS_v = _conf.glog_v;
-            FLAGS_vmodule = _conf.glog_vmodule;
-            FLAGS_max_log_size = _conf.glog_max_log_size;
+            // apply glog options
+            _conf.configure_glog(name.c_str());
 
             // setrlimit to increase max fds
             // http://www.kernel.org/doc/man-pages/online/pages/man2/getrlimit.2.html
