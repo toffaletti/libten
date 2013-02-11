@@ -245,7 +245,7 @@ done:
             DVLOG(5) << "matching pattern: " << i.pattern;
             if (i.pattern.empty() || fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
                 try {
-                    i.callback(ex);
+                    i.callback(std::ref(ex));
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
                     ex.resp = http_response(500, http_headers{hs::Connection, hs::close});
