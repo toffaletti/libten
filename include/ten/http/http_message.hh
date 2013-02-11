@@ -134,7 +134,7 @@ struct http_base : http_headers {
     void set_body(std::string body_, const char *content_type) {
         set_body(std::move(body_), optional<std::string>(emplace, content_type));
     }
-    void set_body(std::string body_, optional<std::string> content_type = {}) {
+    void set_body(std::string body_, optional<std::string> content_type = nullopt) {
         body = std::move(body_);
         body_length = body.size();
         set(hs::Content_Length, body_length);
@@ -187,7 +187,7 @@ struct http_request : http_base {
                  std::string uri_,
                  http_headers headers_,
                  std::string body_,
-                 optional<std::string> content_type_ = {})
+                 optional<std::string> content_type_ = nullopt)
         : http_base(std::move(headers_)),
           method{std::move(method_)},
           uri{std::move(uri_)}

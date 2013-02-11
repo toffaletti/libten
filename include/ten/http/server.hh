@@ -46,7 +46,7 @@ struct http_exchange {
     }
 
     //! compose a uri from the request uri
-    uri get_uri(optional<std::string> host = {}) const {
+    uri get_uri(optional<std::string> host = nullopt) const {
         if (!host) {
             if (boost::starts_with(req.uri, "http://")) {
                 // TODO: transform to preserve passed in host
