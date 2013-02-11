@@ -199,7 +199,7 @@ private:
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
                     nr = s.recv(buf.back(), buf.available(), 0, _recv_timeout_ms);
-                    if (nr < 0) goto done;
+                    if (nr <= 0) goto done;
                     buf.commit(nr);
                 }
                 size_t nparse = buf.size();
