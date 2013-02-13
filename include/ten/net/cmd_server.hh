@@ -42,7 +42,7 @@ private:
     void on_connection(netsock &s) override {
         buffer buf(4*1024);
 
-        s.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+        s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         std::stringstream ss;
         std::string line;
 

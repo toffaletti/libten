@@ -49,6 +49,16 @@ static const std::unordered_map<http_response::status_t, std::string> http_statu
     { 505, "HTTP Version Not Supported" },
 };
 
+namespace hs {
+    extern const std::string
+        GET{"GET"}, HEAD{"HEAD"}, POST{"POST"}, PUT{"PUT"}, DELETE{"DELETE"},
+        Connection{"Connection"}, close{"close"}, keep_alive{"Keep-Alive"},
+        Host{"Host"},
+        Date{"Date"},
+        Content_Length{"Content-Length"},
+        Content_Type{"Content-Type"}, text_plain{"text/plain"}, app_octet_stream{"application/octet-stream"};
+}
+
 const std::string &version_string(http_version ver) {
     static const std::string v09{"HTTP/0.9"}, v10{"HTTP/1.0"}, v11{"HTTP/1.1"};
     switch (ver) {
@@ -62,63 +72,78 @@ const std::string &version_string(http_version ver) {
 namespace {
 struct is_header {
     const std::string &field;
-    bool operator()(const std::pair<std::string, std::string> &header) {
+    bool operator()(const header_pair &header) {
         return boost::iequals(header.first, field);
     }
 };
 } // ns
 
-header_list::iterator http_headers::find(const std::string &field) {
-    return std::find_if(begin(headers), end(headers), is_header{field});
+header_list::iterator http_headers::_hfind(const std::string &field) {
+    return std::find_if(begin(_hlist), end(_hlist), is_header{field});
 }
 
-header_list::const_iterator http_headers::find(const std::string &field) const {
-    return std::find_if(begin(headers), end(headers), is_header{field});
+header_list::const_iterator http_headers::_hfind(const std::string &field) const {
+    return std::find_if(begin(_hlist), end(_hlist), is_header{field});
 }
 
 void http_headers::set(const std::string &field, const std::string &value) {
-    auto i = find(field);
-    if (i != end(headers)) {
+    const auto i = _hfind(field);
+    if (i != end(_hlist)) {
         i->second = value;
     } else {
-        headers.emplace_back(field, value);
+        _hlist.emplace_back(field, value);
     }
 }
 
 void http_headers::append(const std::string &field, const std::string &value) {
-    headers.emplace_back(field, value);
+    _hlist.emplace_back(field, value);
+}
+
+bool http_headers::empty() const {
+    return _hlist.empty();
+}
+
+bool http_headers::contains(const std::string &field) const {
+    return _hfind(field) != end(_hlist);
 }
 
 bool http_headers::remove(const std::string &field) {
-    auto i = std::remove_if(begin(headers), end(headers), is_header{field});
-    if (i != end(headers)) {
-        headers.erase(i, end(headers)); // remove now-invalid tail
+    auto i = std::remove_if(begin(_hlist), end(_hlist), is_header{field});
+    if (i != end(_hlist)) {
+        _hlist.erase(i, end(_hlist)); // remove now-invalid tail
         return true;
     }
     return false;
 }
 
 optional<std::string> http_headers::get(const std::string &field) const {
-    auto i = find(field);
-    if (i != end(headers)) {
+    auto i = _hfind(field);
+    if (i != end(_hlist)) {
         return i->second;
     }
     return nullopt;
 }
 
+void http_headers::_hwrite(std::ostream &os) const {
+    for (auto const &h : _hlist) {
+        os << h.first << ": " << h.second << "\r\n";
+    }
+    os << "\r\n";
+}
+
 #ifdef CHIP_UNSURE
 
 bool http_headers::is(const std::string &field, const std::string &value) const {
-    auto i = find(field);
-    return (i != end(headers)) && (i->second == value);
+    const auto i = _hfind(field);
+    return (i != hend()) && (i->second == value);
 }
 
 bool http_headers::is_nocase(const std::string &field, const std::string &value) const {
-    auto i = find(field);
-    return (i != end(headers)) && boost::iequals(i->second, value);
+    const auto i = _hfind(field);
+    return (i != hend()) && boost::iequals(i->second, value);
 }
 
-#endif
+#endif // CHIP_UNSURE
 
 static bool set_version(http_version &ver, http_parser *p) {
     if      (p->http_major == 0 && p->http_minor == 9) ver = http_0_9;
@@ -130,20 +155,21 @@ static bool set_version(http_version &ver, http_parser *p) {
 
 extern "C" {
 
-static int _on_header_field(http_parser *p, const char *at, size_t length) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    if (m->headers.empty() || !m->headers.back().second.empty()) {
-        m->headers.emplace_back();
+struct http_headers::parsing {
+    static int _on_header_field(http_parser *p, const char *at, size_t length) {
+        http_base *m = reinterpret_cast<http_base *>(p->data);
+        // TODO: see if this test fails when a header value is entirely empty
+        if (m->_hlist.empty() || !m->_hlist.back().second.empty())
+            m->_hlist.emplace_back();
+        m->_hlist.back().first.append(at, length);
+        return 0;
     }
-    m->headers.back().first.append(at, length);
-    return 0;
-}
-
-static int _on_header_value(http_parser *p, const char *at, size_t length) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    m->headers.back().second.append(at, length);
-    return 0;
-}
+    static int _on_header_value(http_parser *p, const char *at, size_t length) {
+        http_base *m = reinterpret_cast<http_base *>(p->data);
+        m->_hlist.back().second.append(at, length);
+        return 0;
+    }
+};
 
 static int _on_body(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
@@ -189,8 +215,8 @@ void http_request::parse(struct http_parser *p, const char *data_, size_t &len) 
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = _request_on_url;
-    s.on_header_field = _on_header_field;
-    s.on_header_value = _on_header_value;
+    s.on_header_field = http_headers::parsing::_on_header_field;
+    s.on_header_value = http_headers::parsing::_on_header_value;
     s.on_headers_complete = _request_on_headers_complete;
     s.on_body = _on_body;
     s.on_message_complete = _on_message_complete;
@@ -208,10 +234,7 @@ void http_request::parse(struct http_parser *p, const char *data_, size_t &len) 
 std::string http_request::data() const {
     std::ostringstream ss;
     ss << method << " " << uri << " " << version_string(version) << "\r\n";
-    for (auto const &h : headers) {
-        ss << h.first << ": " << h.second << "\r\n";
-    }
-    ss << "\r\n";
+    _hwrite(ss);
     return ss.str();
 }
 
@@ -243,8 +266,8 @@ void http_response::parse(struct http_parser *p, const char *data_, size_t &len)
     http_parser_settings s;
     s.on_message_begin = NULL;
     s.on_url = NULL;
-    s.on_header_field = _on_header_field;
-    s.on_header_value = _on_header_value;
+    s.on_header_field = http_headers::parsing::_on_header_field;
+    s.on_header_value = http_headers::parsing::_on_header_value;
     s.on_headers_complete = _response_on_headers_complete;
     s.on_body = _on_body;
     s.on_message_complete = _on_message_complete;
@@ -271,10 +294,7 @@ const std::string &http_response::reason() const {
 std::string http_response::data() const {
     std::ostringstream ss;
     ss << version_string(version) << " " << status_code << " " << reason() << "\r\n";
-    for (const auto &h : headers) {
-        ss << h.first << ": " << h.second << "\r\n";
-    }
-    ss << "\r\n";
+    _hwrite(ss);
     return ss.str();
 }
 
