@@ -92,7 +92,7 @@ static bool BoolFromEnv(const char *varname, bool defval) {
 GLOG_DEFINE_bool(logtostderr, BoolFromEnv("GOOGLE_LOGTOSTDERR", false),
                  "log messages go to stderr instead of logfiles");
 GLOG_DEFINE_bool(alsologtostderr, BoolFromEnv("GOOGLE_ALSOLOGTOSTDERR", false),
-                 "log messages go to stderr in addition to logfiles");
+                 "log messages go to stderr in addition to logfiles (obsolete)");
 #ifdef OS_LINUX
 GLOG_DEFINE_bool(drop_log_memory, true, "Drop in-memory buffers of log contents. "
                  "Logs can grow very quickly and they are rarely read before they "
@@ -113,7 +113,14 @@ _END_GOOGLE_NAMESPACE_
 DEFINE_int32(stderrthreshold,
              GOOGLE_NAMESPACE::GLOG_ERROR,
              "log messages at or above this level are copied to stderr in "
-             "addition to logfiles.  This flag obsoletes --alsologtostderr.");
+             "addition to other destinations.  This flag obsoletes --alsologtostderr.");
+
+// Errors are sent to syslog if they reach this severity, in addition to
+// anywhere else they are also sent.
+DEFINE_int32(syslogthreshold,
+             EnvToInt("GLOG_syslog", GOOGLE_NAMESPACE::NUM_SEVERITIES),
+             "log messages at or above this level are sent to syslog in "
+             "addition to logfiles.");
 
 GLOG_DEFINE_string(alsologtoemail, "",
                    "log messages go to these email addresses "
@@ -283,6 +290,7 @@ class LogFileObject : public base::Logger {
 
 }  // namespace
 
+// Messages of a given severity get logged to lower severity logs, too.
 class LogDestination {
  public:
   friend class LogMessage;
@@ -291,13 +299,15 @@ class LogDestination {
   friend void base::SetLogger(LogSeverity, base::Logger*);
 
   // These methods are just forwarded to by their global versions.
+  static void SetLogMinimum(LogSeverity severity);
   static void SetLogDestination(LogSeverity severity,
 				const char* base_filename);
   static void SetLogSymlink(LogSeverity severity,
                             const char* symlink_basename);
+  static void SetLogFilenameExtension(const char* filename_extension);
   static void AddLogSink(LogSink *destination);
   static void RemoveLogSink(LogSink *destination);
-  static void SetLogFilenameExtension(const char* filename_extension);
+  static void SetSyslogLogging(LogSeverity min_severity, int facility);
   static void SetStderrLogging(LogSeverity min_severity);
   static void SetEmailLogging(LogSeverity min_severity, const char* addresses);
   static void LogToStderr();
@@ -323,10 +333,15 @@ class LogDestination {
   static void MaybeLogToStderr(LogSeverity severity, const char* message,
 			       size_t len);
 
+  // Take a log message of a particular severity and log it to syslog
+  static void WriteToSyslog(LogSeverity severity, const char* message,
+                            size_t len);
+
   // Take a log message of a particular severity and log it to email
   // iff it's of a high enough severity to deserve it.
   static void MaybeLogToEmail(LogSeverity severity, const char* message,
 			      size_t len);
+
   // Take a log message of a particular severity and log it to a file
   // iff the base filename is not "" (which means "don't log to me")
   static void MaybeLogToLogfile(LogSeverity severity,
@@ -358,6 +373,7 @@ class LogDestination {
   base::Logger* logger_;      // Either &fileobject_, or wrapper around it
 
   static LogDestination* log_destinations_[NUM_SEVERITIES];
+  static int syslog_facility_;
   static LogSeverity email_logging_severity_;
   static string addresses_;
   static string hostname_;
@@ -374,8 +390,11 @@ class LogDestination {
   LogDestination& operator=(const LogDestination&);
 };
 
+// Syslog uses LOG_USER by default.
+int LogDestination::syslog_facility_ = LOG_USER;
+
 // Errors do not get logged to email by default.
-LogSeverity LogDestination::email_logging_severity_ = 99999;
+LogSeverity LogDestination::email_logging_severity_ = NUM_SEVERITIES;
 
 string LogDestination::addresses_;
 string LogDestination::hostname_;
@@ -425,6 +444,14 @@ inline void LogDestination::FlushLogFiles(int min_severity) {
   }
 }
 
+inline void LogDestination::SetLogMinimum(LogSeverity severity) {
+  assert(severity >= 0 && severity <= NUM_SEVERITIES); // NUM_* to disable
+  // Prevent any subtle race conditions by wrapping a mutex lock around
+  // all this stuff.
+  MutexLock l(&log_mutex);
+  FLAGS_minloglevel = severity;
+}
+
 inline void LogDestination::SetLogDestination(LogSeverity severity,
 					      const char* base_filename) {
   assert(severity >= 0 && severity < NUM_SEVERITIES);
@@ -436,10 +463,18 @@ inline void LogDestination::SetLogDestination(LogSeverity severity,
 
 inline void LogDestination::SetLogSymlink(LogSeverity severity,
                                           const char* symlink_basename) {
-  CHECK_GE(severity, 0);
-  CHECK_LT(severity, NUM_SEVERITIES);
+  assert(severity >= 0 && severity < NUM_SEVERITIES);
   MutexLock l(&log_mutex);
   log_destination(severity)->fileobject_.SetSymlinkBasename(symlink_basename);
+}
+
+inline void LogDestination::SetLogFilenameExtension(const char* ext) {
+  // Prevent any subtle race conditions by wrapping a mutex lock around
+  // all this stuff.
+  MutexLock l(&log_mutex);
+  for ( int severity = 0; severity < NUM_SEVERITIES; ++severity ) {
+    log_destination(severity)->fileobject_.SetExtension(ext);
+  }
 }
 
 inline void LogDestination::AddLogSink(LogSink *destination) {
@@ -466,17 +501,8 @@ inline void LogDestination::RemoveLogSink(LogSink *destination) {
   }
 }
 
-inline void LogDestination::SetLogFilenameExtension(const char* ext) {
-  // Prevent any subtle race conditions by wrapping a mutex lock around
-  // all this stuff.
-  MutexLock l(&log_mutex);
-  for ( int severity = 0; severity < NUM_SEVERITIES; ++severity ) {
-    log_destination(severity)->fileobject_.SetExtension(ext);
-  }
-}
-
 inline void LogDestination::SetStderrLogging(LogSeverity min_severity) {
-  assert(min_severity >= 0 && min_severity < NUM_SEVERITIES);
+  assert(min_severity >= 0 && min_severity <= NUM_SEVERITIES);
   // Prevent any subtle race conditions by wrapping a mutex lock around
   // all this stuff.
   MutexLock l(&log_mutex);
@@ -492,9 +518,19 @@ inline void LogDestination::LogToStderr() {
   }
 }
 
+inline void LogDestination::SetSyslogLogging(LogSeverity min_severity, int facility) {
+  assert(min_severity >= 0 && min_severity <= NUM_SEVERITIES);
+  assert(!(facility & ~LOG_FACMASK));
+  // Prevent any subtle race conditions by wrapping a mutex lock around
+  // all this stuff.
+  MutexLock l(&log_mutex);
+  FLAGS_syslogthreshold = min_severity;
+  syslog_facility_ = facility;
+}
+
 inline void LogDestination::SetEmailLogging(LogSeverity min_severity,
 					    const char* addresses) {
-  assert(min_severity >= 0 && min_severity < NUM_SEVERITIES);
+  assert(min_severity >= 0 && min_severity <= NUM_SEVERITIES);
   // Prevent any subtle race conditions by wrapping a mutex lock around
   // all this stuff.
   MutexLock l(&log_mutex);
@@ -519,6 +555,28 @@ inline void LogDestination::MaybeLogToStderr(LogSeverity severity,
   }
 }
 
+inline void LogDestination::WriteToSyslog(LogSeverity severity,
+                                          const char* message, size_t len) {
+#ifdef HAVE_SYSLOG_H
+  // Before any calls to syslog(), make a single call to openlog()
+  static bool openlog_already_called = false;
+  if (!openlog_already_called) {
+    openlog(glog_internal_namespace_::ProgramInvocationShortName(),
+            LOG_CONS | LOG_NDELAY | LOG_PID,
+            syslog_facility_);
+    openlog_already_called = true;
+  }
+
+  // This array maps Google severity levels to syslog levels
+  assert(severity >= 0 && severity < NUM_SEVERITIES);
+  const int SEVERITY_TO_LEVEL[] = { LOG_INFO, LOG_WARNING, LOG_ERR, LOG_EMERG };
+  syslog(syslog_facility_ | SEVERITY_TO_LEVEL[static_cast<int>(severity)],
+         "%.*s", static_cast<int>(len), message);
+#else
+  FLAGS_syslogthreshold = NUM_SEVERITIES; // prevent recursion
+  LOG(ERROR) << "No syslog support: message=" << data_->message_text_;
+#endif
+}
 
 inline void LogDestination::MaybeLogToEmail(LogSeverity severity,
 					    const char* message, size_t len) {
@@ -630,8 +688,7 @@ LogFileObject::LogFileObject(LogSeverity severity,
     file_length_(0),
     rollover_attempt_(kRolloverAttemptFrequency-1),
     next_flush_time_(0) {
-  assert(severity >= 0);
-  assert(severity < NUM_SEVERITIES);
+  assert(severity_ >= 0 && severity_ < NUM_SEVERITIES);
 }
 
 LogFileObject::~LogFileObject() {
@@ -937,6 +994,8 @@ static LogMessage::LogStream fatal_msg_stream_shared(
 LogMessage::LogMessageData LogMessage::fatal_msg_data_exclusive_;
 LogMessage::LogMessageData LogMessage::fatal_msg_data_shared_;
 
+LogMessage::LogMessageData::LogMessageData() {}
+
 LogMessage::LogMessageData::~LogMessageData() {
   delete[] buf_;
   delete stream_alloc_;
@@ -1015,6 +1074,7 @@ void LogMessage::Init(const char* file,
   stream().fill('0');
   data_->preserved_errno_ = errno;
   data_->severity_ = severity;
+  data_->to_syslog_ = (severity >= FLAGS_syslogthreshold);
   data_->line_ = line;
   data_->send_method_ = send_method;
   data_->sink_ = NULL;
@@ -1144,6 +1204,7 @@ void ReprintFatalMessage() {
   }
 }
 
+// Send a log message to all the places it would normally go.
 // L >= log_mutex (callers must hold the log_mutex).
 void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
   static bool already_warned_before_initgoogle = false;
@@ -1152,8 +1213,6 @@ void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
 
   RAW_DCHECK(data_->num_chars_to_log_ > 0 &&
              data_->message_text_[data_->num_chars_to_log_-1] == '\n', "");
-
-  // Messages of a given severity get logged to lower severity logs, too
 
   if (!already_warned_before_initgoogle && !IsGoogleLoggingInitialized()) {
     const char w[] = "WARNING: Logging before InitGoogleLogging() is "
@@ -1176,7 +1235,6 @@ void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
                                (data_->num_chars_to_log_ -
                                 data_->num_prefix_chars_ - 1));
   } else {
-
     // log this message to all log files of severity <= severity_
     LogDestination::LogToAllLogfiles(data_->severity_, data_->timestamp_,
                                      data_->message_text_,
@@ -1184,8 +1242,15 @@ void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
 
     LogDestination::MaybeLogToStderr(data_->severity_, data_->message_text_,
                                      data_->num_chars_to_log_);
+
+    if (data_->to_syslog_)
+      LogDestination::WriteToSyslog(data_->severity_,
+                                    data_->message_text_ + data_->num_prefix_chars_,
+                                    data_->num_chars_to_syslog_);
+
     LogDestination::MaybeLogToEmail(data_->severity_, data_->message_text_,
                                     data_->num_chars_to_log_);
+
     LogDestination::LogToSinks(data_->severity_,
                                data_->fullname_, data_->basename_,
                                data_->line_, &data_->tm_time_,
@@ -1327,26 +1392,9 @@ void LogMessage::WriteToStringAndLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
 }
 
 // L >= log_mutex (callers must hold the log_mutex).
-void LogMessage::SendToSyslogAndLog() {
-#ifdef HAVE_SYSLOG_H
-  // Before any calls to syslog(), make a single call to openlog()
-  static bool openlog_already_called = false;
-  if (!openlog_already_called) {
-    openlog(glog_internal_namespace_::ProgramInvocationShortName(),
-            LOG_CONS | LOG_NDELAY | LOG_PID,
-            LOG_USER);
-    openlog_already_called = true;
-  }
-
-  // This array maps Google severity levels to syslog levels
-  const int SEVERITY_TO_LEVEL[] = { LOG_INFO, LOG_WARNING, LOG_ERR, LOG_EMERG };
-  syslog(LOG_USER | SEVERITY_TO_LEVEL[static_cast<int>(data_->severity_)], "%.*s",
-         int(data_->num_chars_to_syslog_),
-         data_->message_text_ + data_->num_prefix_chars_);
+void LogMessage::SendToSyslogAndLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
+  data_->to_syslog_ = true;  // regardless of severity
   SendToLog();
-#else
-  LOG(ERROR) << "No syslog support: message=" << data_->message_text_;
-#endif
 }
 
 base::Logger* base::GetLogger(LogSeverity severity) {
@@ -1396,12 +1444,20 @@ void FlushLogFilesUnsafe(LogSeverity min_severity) {
   LogDestination::FlushLogFilesUnsafe(min_severity);
 }
 
+void SetLogMinimum(LogSeverity severity) {
+  LogDestination::SetLogMinimum(severity);
+}
+
 void SetLogDestination(LogSeverity severity, const char* base_filename) {
   LogDestination::SetLogDestination(severity, base_filename);
 }
 
 void SetLogSymlink(LogSeverity severity, const char* symlink_basename) {
   LogDestination::SetLogSymlink(severity, symlink_basename);
+}
+
+void SetLogFilenameExtension(const char* ext) {
+  LogDestination::SetLogFilenameExtension(ext);
 }
 
 LogSink::~LogSink() {
@@ -1414,7 +1470,7 @@ void LogSink::WaitTillSent() {
 string LogSink::ToString(LogSeverity severity, const char* file, int line,
                          const struct ::tm* tm_time,
                          const char* message, size_t message_len) {
-  ostringstream stream(string(message, message_len));
+  ostringstream stream;
   stream.fill('0');
 
   // FIXME(jrvb): Updating this to use the correct value for usecs
@@ -1436,7 +1492,7 @@ string LogSink::ToString(LogSeverity severity, const char* file, int line,
          << ' '
          << file << ':' << line << "] ";
 
-  stream << string(message, message_len);
+  stream.write(message, message_len);
   return stream.str();
 }
 
@@ -1448,12 +1504,12 @@ void RemoveLogSink(LogSink *destination) {
   LogDestination::RemoveLogSink(destination);
 }
 
-void SetLogFilenameExtension(const char* ext) {
-  LogDestination::SetLogFilenameExtension(ext);
-}
-
 void SetStderrLogging(LogSeverity min_severity) {
   LogDestination::SetStderrLogging(min_severity);
+}
+
+void SetSyslogLogging(LogSeverity min_severity, int facility) {
+  LogDestination::SetSyslogLogging(min_severity, facility);
 }
 
 void SetEmailLogging(LogSeverity min_severity, const char* addresses) {

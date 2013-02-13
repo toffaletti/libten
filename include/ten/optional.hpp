@@ -16,7 +16,7 @@
 # include <cassert>
 # include <functional>
 
-# define REQUIRES(...) typename enable_if<__VA_ARGS__::value, bool>::type = false
+# define OPTIONAL_REQUIRES(...) typename enable_if<__VA_ARGS__::value, bool>::type = false
 
 
 namespace std{
@@ -141,11 +141,11 @@ struct optional_base
     explicit constexpr optional_base(T&& v) : init_(true), storage_(constexpr_move(v)) {}
 
     template <class... Args> explicit optional_base(emplace_t, Args&&... args)
-        : init_(true), storage_(constexpr_forward<Args>(args)...) {}
+	: init_(true), storage_(constexpr_forward<Args>(args)...) {}
 
-    template <class U, class... Args, REQUIRES(is_constructible<T, std::initializer_list<U>>)>
+    template <class U, class... Args, OPTIONAL_REQUIRES(is_constructible<T, std::initializer_list<U>>)>
     explicit optional_base(emplace_t, std::initializer_list<U> il, Args&&... args)
-        : init_(true), storage_(il, std::forward<Args>(args)...) {}
+	: init_(true), storage_(il, std::forward<Args>(args)...) {}
 
     ~optional_base() { if (init_) storage_.value_.T::~T(); }
 };
@@ -166,11 +166,11 @@ struct constexpr_optional_base
     explicit constexpr constexpr_optional_base(T&& v) : init_(true), storage_(constexpr_move(v)) {}
 
     template <class... Args> explicit constexpr_optional_base(emplace_t, Args&&... args)
-        : init_(true), storage_(constexpr_forward<Args>(args)...) {}
+	: init_(true), storage_(constexpr_forward<Args>(args)...) {}
 
-    template <class U, class... Args, REQUIRES(is_constructible<T, std::initializer_list<U>>)>
+    template <class U, class... Args, OPTIONAL_REQUIRES(is_constructible<T, std::initializer_list<U>>)>
     explicit constexpr_optional_base(emplace_t, std::initializer_list<U> il, Args&&... args)
-        : init_(true), storage_(il, std::forward<Args>(args)...) {}
+	: init_(true), storage_(il, std::forward<Args>(args)...) {}
 
     ~constexpr_optional_base() = default;
 };
@@ -223,16 +223,16 @@ public:
 	constexpr optional() noexcept : OptionalBase<T>()  {};
 	constexpr optional(nullopt_t) noexcept : OptionalBase<T>() {};
 
-	optional(const optional& rhs) 
-	: OptionalBase<T>(only_set_initialized, rhs.initialized())
-	{
-		if (rhs.initialized()) new (dataptr()) T(*rhs);
+	optional(const optional& rhs)
+	: OptionalBase<T>() {
+		if (rhs.initialized())
+			initialize(*rhs);
 	}
 
 	optional(optional&& rhs) noexcept(std::is_nothrow_move_constructible<T>::value)
-	: OptionalBase<T>(only_set_initialized, rhs.initialized())
-	{
-		if (rhs.initialized()) new (dataptr()) T(std::move(*rhs));
+	: OptionalBase<T>() {
+		if (rhs.initialized())
+			initialize(std::move(*rhs));
 	}
 
 	constexpr optional(const T& v) : OptionalBase<T>(v) {}
@@ -240,10 +240,10 @@ public:
 	constexpr optional(T&& v) : OptionalBase<T>(constexpr_move(v)) {}
 
 	template <class... Args> 
-    constexpr explicit optional(emplace_t, Args&&... args)
+        constexpr explicit optional(emplace_t, Args&&... args)
         : OptionalBase<T>(emplace_t{}, constexpr_forward<Args>(args)...) {}
 
-    template <class U, class... Args, REQUIRES(is_constructible<T, std::initializer_list<U>>)>
+    template <class U, class... Args, OPTIONAL_REQUIRES(is_constructible<T, std::initializer_list<U>>)>
     explicit optional(emplace_t, std::initializer_list<U> il, Args&&... args)
         : OptionalBase<T>(emplace_t{}, il, constexpr_forward<Args>(args)...) {}
 

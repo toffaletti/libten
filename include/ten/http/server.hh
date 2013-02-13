@@ -46,7 +46,7 @@ struct http_exchange {
     }
 
     //! compose a uri from the request uri
-    uri get_uri(optional<std::string> host = {}) const {
+    uri get_uri(optional<std::string> host = nullopt) const {
         if (!host) {
             if (boost::starts_with(req.uri, "http://")) {
                 // TODO: transform to preserve passed in host
@@ -199,7 +199,7 @@ private:
                 ssize_t nr = -1;
                 if (buf.size() == 0) {
                     nr = s.recv(buf.back(), buf.available(), 0, _recv_timeout_ms);
-                    if (nr < 0) goto done;
+                    if (nr <= 0) goto done;
                     buf.commit(nr);
                 }
                 size_t nparse = buf.size();
@@ -245,7 +245,7 @@ done:
             DVLOG(5) << "matching pattern: " << i.pattern;
             if (i.pattern.empty() || fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
                 try {
-                    i.callback(ex);
+                    i.callback(std::ref(ex));
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
                     ex.resp = http_response(500, http_headers{hs::Connection, hs::close});

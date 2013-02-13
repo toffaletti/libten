@@ -51,8 +51,6 @@ protected:
 
     void _hwrite(std::ostream &os) const;
 
-    struct parsing; // grants access
-
 public:
     http_headers() {}
 
@@ -111,6 +109,10 @@ public:
         }
 
 #endif // CHIP_UNSURE
+
+    //! parser entry points
+    int parse_header_field(const char *at, size_t length);
+    int parse_header_value(const char *at, size_t length);
 };
 
 //! base class for http request and response
@@ -134,7 +136,7 @@ struct http_base : http_headers {
     void set_body(std::string body_, const char *content_type) {
         set_body(std::move(body_), optional<std::string>(emplace, content_type));
     }
-    void set_body(std::string body_, optional<std::string> content_type = {}) {
+    void set_body(std::string body_, optional<std::string> content_type = nullopt) {
         body = std::move(body_);
         body_length = body.size();
         set(hs::Content_Length, body_length);
@@ -187,7 +189,7 @@ struct http_request : http_base {
                  std::string uri_,
                  http_headers headers_,
                  std::string body_,
-                 optional<std::string> content_type_ = {})
+                 optional<std::string> content_type_ = nullopt)
         : http_base(std::move(headers_)),
           method{std::move(method_)},
           uri{std::move(uri_)}

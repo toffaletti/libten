@@ -3,7 +3,8 @@
 
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
 #define MINIZ_HEADER_FILE_ONLY 1
-#include "miniz.c"
+#include "bits/miniz.c"
+#undef MINIZ_HEADER_FILE_ONLY
 
 #include "ten/logging.hh"
 #include "ten/error.hh"
