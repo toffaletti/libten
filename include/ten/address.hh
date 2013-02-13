@@ -37,6 +37,11 @@ struct address {
         clear();
     }
 
+    address(int fam) {
+        clear();
+        addr.sa.sa_family = fam;
+    }
+
     address(int fam, const void *a, socklen_t alen, uint16_t port_) {
         clear();
         switch (fam) {
