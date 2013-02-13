@@ -166,7 +166,7 @@ protected:
 class rpc_pool : public shared_pool<rpc_client> {
 public:
 
-    rpc_pool(const std::string &host_, uint16_t port_, ssize_t max_conn)
+    rpc_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = nullopt)
         : shared_pool<rpc_client>(
                 "rpc:" + host_ + ":" + boost::lexical_cast<std::string>(port_),
             std::bind(&rpc_pool::new_resource, this),
@@ -174,7 +174,7 @@ public:
         ),
         host(host_), port(port_) {}
 
-    rpc_pool(const std::string &host_, ssize_t max_conn)
+    rpc_pool(const std::string &host_, optional<size_t> max_conn = nullopt)
         : shared_pool<rpc_client>("rpc:" + host_,
             std::bind(&rpc_pool::new_resource, this),
             max_conn

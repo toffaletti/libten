@@ -147,7 +147,7 @@ private:
 public:
     shared_pool(const std::string &name_,
                 const creator_type &alloc_,
-                decltype((_im->max_resources)) max_ = {})
+                optional<size_t> max_ = nullopt)
     {
         auto m = std::make_shared<pool_impl>();
         m->name = name_;
