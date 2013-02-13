@@ -93,9 +93,9 @@ struct io_scheduler {
             ev.events = pollfds[fd].events;
 
             if (saved_events == 0) {
-                THROW_ON_ERROR(efd.add(fd, ev));
+                throw_if(efd.add(fd, ev) == -1);
             } else if (saved_events != pollfds[fd].events) {
-                THROW_ON_ERROR(efd.modify(fd, ev));
+                throw_if(efd.modify(fd, ev) == -1);
             }
             ++npollfds;
         }
@@ -126,7 +126,7 @@ struct io_scheduler {
                 memset(&ev, 0, sizeof(ev));
                 ev.data.fd = fd;
                 ev.events = pollfds[fd].events;
-                THROW_ON_ERROR(efd.modify(fd, ev));
+                throw_if(efd.modify(fd, ev) == -1);
             }
             --npollfds;
         }

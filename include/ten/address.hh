@@ -143,7 +143,7 @@ struct address {
         case AF_INET6: p = inet_ntop(family(), &addr.sa_in6.sin6_addr, dst, size); break;
         default:       return nullptr;
         }
-        THROW_ON_NULL(p);
+        throw_if(p == nullptr);
         return p;
     }
 

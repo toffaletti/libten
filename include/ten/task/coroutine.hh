@@ -40,10 +40,10 @@ public:
         size_t real_size = stack_size_;
 #endif
         int r = posix_memalign((void **)&stack_end, pgs, real_size);
-        THROW_ON_NONZERO_ERRNO(r);
+        throw_if(r != 0);
 #ifndef NDEBUG
         // protect the guard page
-        THROW_ON_ERROR(mprotect(stack_end, pgs, PROT_NONE));
+        throw_if(mprotect(stack_end, pgs, PROT_NONE) == -1);
         stack_end += pgs;
 #endif
         // stack grows down on x86 & x86_64

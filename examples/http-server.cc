@@ -18,13 +18,16 @@ struct my_config : app_config {
 
 static my_config conf;
 
-struct state : boost::noncopyable {
+struct state {
     application &app;
     std::shared_ptr<http_server> http;
 
     state(application &app_) : app(app_) {
         http = std::make_shared<http_server>();
     }
+
+    state(const state &) = delete;
+    state &operator =(const state &) = delete;
 };
 
 static void log_request(http_exchange &ex) {

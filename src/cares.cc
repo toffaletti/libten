@@ -98,9 +98,7 @@ extern "C" void gethostbyname_callback(void *arg, int status, int /*timeouts*/, 
 
 } // anon
 
-void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms)
-    throw (errno_error, hostname_error, task_interrupted)
-{
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) {
     channel_destroyer cd;
     int status = ares_init(&cd.channel);
     if (status != ARES_SUCCESS) {
