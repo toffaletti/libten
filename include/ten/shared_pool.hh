@@ -36,7 +36,7 @@ protected:
         using queue_type = std::deque<res_ptr>;
         using set_type = std::unordered_set<res_ptr>;
 
-        qutex mut;
+        mutable qutex mut;
         rendez not_empty;
         queue_type avail;
         set_type set;
