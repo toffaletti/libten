@@ -67,6 +67,10 @@ add_library(ten
     )
 add_dependencies(ten libglog ragel_uri_parser boost_context)
 
+# TODO: compile miniz separately, so warnings remain high for ten-specific code in zip.cc
+set_source_files_properties(src/zip.cc PROPERTIES
+  COMPILE_FLAGS "-fno-strict-aliasing -Wno-strict-aliasing -Wno-attributes -Wno-extra")
+
 target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
 if (CMAKE_PROJECT_NAME STREQUAL "ten")

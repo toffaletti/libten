@@ -1,9 +1,7 @@
-#define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
-extern "C" {
-#include "ten/miniz.c"
-}
-
 #include "ten/zip.hh"
+
+#define MINIZ_NO_ZLIB_COMPATIBLE_NAMES 1
+#include "ten/bits/miniz.c"
 
 namespace ten {
 

@@ -235,11 +235,9 @@ static void procmain_init() {
     ss.ss_flags = 0;
     THROW_ON_ERROR(sigaltstack(&ss, NULL));
 
-    // allow log files and message queues to be created group writable
-    umask(0);
+    umask(02); // allow group-readable logs
     InitGoogleLogging(program_invocation_short_name);
     InstallFailureSignalHandler();
-    FLAGS_logtostderr = true;
 
     struct sigaction act;
 

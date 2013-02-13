@@ -171,10 +171,10 @@ typedef unsigned __int64 uint64;
 // Outputs log messages for the first 20 times it is executed.
 //
 // Analogous SYSLOG, SYSLOG_IF, and SYSLOG_EVERY_N macros are available.
-// These log to syslog as well as to the normal logs.  If you use these at
-// all, you need to be aware that syslog can drastically reduce performance,
-// especially if it is configured for remote logging!  Don't use these
-// unless you fully understand this and have a concrete need to use them.
+// These always log to syslog as well as to the normal logs.  If you use these
+// at all, you need to be aware that syslog can drastically reduce performance,
+// especially if it is configured for remote logging!  Don't use these unless
+// you fully understand this and have a concrete need to use them.
 // Even then, try to minimize your use of them.
 //
 // There are also "debug mode" logging macros like the ones above:
@@ -318,6 +318,10 @@ DECLARE_bool(alsologtostderr);
 // Log messages at a level >= this flag are automatically sent to
 // stderr in addition to log files.
 DECLARE_int32(stderrthreshold);
+
+// Log messages at a level >= this flag are automatically sent to
+// syslog in addition to log files.
+DECLARE_int32(syslogthreshold);
 
 // Set whether the log prefix should be prepended to each line of output.
 DECLARE_bool(log_prefix);
@@ -1110,8 +1114,8 @@ public:
 
   // Theses should not be called directly outside of logging.*,
   // only passed as SendMethod arguments to other LogMessage methods:
-  void SendToLog();  // Actually dispatch to the logs
-  void SendToSyslogAndLog();  // Actually dispatch to syslog and the logs
+  void SendToLog();  // Actually dispatch to syslog (by threshold) and to the logs
+  void SendToSyslogAndLog();  // Actually dispatch to syslog (always) and the logs
 
   // Call abort() or similar to perform LOG(FATAL) crash.
   static void Fail() __attribute__ ((noreturn));
@@ -1145,14 +1149,13 @@ private:
   // We keep the data in a separate struct so that each instance of
   // LogMessage uses less stack space.
   struct GOOGLE_GLOG_DLL_DECL LogMessageData {
-    LogMessageData() {};
-
     int preserved_errno_;      // preserved errno
     char* buf_;
     char* message_text_;  // Complete message text (points to selected buffer)
     LogStream* stream_alloc_;
     LogStream* stream_;
     char severity_;      // What level is this LogMessage logged at?
+    bool to_syslog_;     // will this message go to syslog (plus others perhaps)
     int line_;                 // line number where logging call is.
     void (LogMessage::*send_method_)();  // Call this in destructor to send
     union {  // At most one of these is used: union to keep the size low.
@@ -1170,6 +1173,7 @@ private:
     bool has_been_flushed_;       // false => data has not been flushed
     bool first_fatal_;            // true => this was first fatal msg
 
+    LogMessageData();
     ~LogMessageData();
    private:
     LogMessageData(const LogMessageData&);
@@ -1265,6 +1269,11 @@ GOOGLE_GLOG_DLL_DECL void FlushLogFiles(LogSeverity min_severity);
 GOOGLE_GLOG_DLL_DECL void FlushLogFilesUnsafe(LogSeverity min_severity);
 
 //
+// Set the minimum severity for doing any logging at all.  Thread-safe.
+//
+GOOGLE_GLOG_DLL_DECL void SetLogMinimum(LogSeverity severity);
+
+//
 // Set the destination to which a particular severity level of log
 // messages is sent.  If base_filename is "", it means "don't log this
 // severity".  Thread-safe.
@@ -1335,10 +1344,17 @@ GOOGLE_GLOG_DLL_DECL void SetLogFilenameExtension(
 
 //
 // Make it so that all log messages of at least a particular severity
-// are logged to stderr (in addition to logging to the usual log
-// file(s)).  Thread-safe.
+// are logged to stderr (in addition to logging to any other target(s)).
+// Thread-safe.
 //
 GOOGLE_GLOG_DLL_DECL void SetStderrLogging(LogSeverity min_severity);
+
+//
+// Make it so that all log messages of at least a particular severity
+// are logged to the given syslog facility (in addition to any other
+// target(s)).  Thread-safe.
+//
+GOOGLE_GLOG_DLL_DECL void SetSyslogLogging(LogSeverity min_severity, int facility);
 
 //
 // Make it so that all log messages go only to stderr.  Thread-safe.
@@ -1359,6 +1375,7 @@ GOOGLE_GLOG_DLL_DECL void SetEmailLogging(LogSeverity min_severity,
 GOOGLE_GLOG_DLL_DECL bool SendEmail(const char *dest,
                                     const char *subject, const char *body);
 
+// Returns the list of logfile directories
 GOOGLE_GLOG_DLL_DECL const std::vector<std::string>& GetLoggingDirectories();
 
 // For tests only:  Clear the internal [cached] list of logging directories to

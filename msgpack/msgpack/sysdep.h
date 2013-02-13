@@ -62,7 +62,7 @@ typedef unsigned int _msgpack_atomic_counter_t;
 #endif
 
 #else
-#include <arpa/inet.h>  /* __BYTE_ORDER */
+#include <arpa/inet.h>  /* __BYTE_ORDER maybe */
 #endif
 
 #if !defined(__LITTLE_ENDIAN__) && !defined(__BIG_ENDIAN__)
@@ -70,8 +70,10 @@ typedef unsigned int _msgpack_atomic_counter_t;
 #define __LITTLE_ENDIAN__
 #elif __BYTE_ORDER == __BIG_ENDIAN
 #define __BIG_ENDIAN__
-#elif _WIN32
+#elif defined(_WIN32)
 #define __LITTLE_ENDIAN__
+#else
+#error unknown endianness
 #endif
 #endif
 
