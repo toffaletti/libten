@@ -1,5 +1,5 @@
-#ifndef APPLY_HH
-#define APPLY_HH
+#ifndef LIBTEN_APPLY_HH
+#define LIBTEN_APPLY_HH
 
 // Copyright (c) 2011 Paul Preney. All Rights Reserved.
 // see http://preney.ca/paul/archives/574
@@ -88,5 +88,5 @@ auto apply_tuple(Op op, T<OpArgs...>&& t)
 
 } // end namespace ten
 
-#endif // APPLY_HH
+#endif // LIBTEN_APPLY_HH
 

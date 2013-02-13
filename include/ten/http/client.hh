@@ -7,18 +7,27 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
+#include "ten/task.hh"
+#include <atomic>
 #include <netinet/tcp.h>
-#include <boost/algorithm/string/compare.hpp>
 
 namespace ten {
 
+//! possibly recycle connections after a while
+//  TODO: move down to common base with other clients
+
 //! basic http client
 class http_client {
+public:
+    using lifetime_t = optional<std::chrono::seconds>;
+    using retire_t = optional<proc_time_t>;
+    static constexpr double pretire_factor = 0.8;
 private:
     netsock _sock;
     buffer _buf;
     std::string _host;
     uint16_t _port;
+    retire_t _pretire, _retire;
 
     void ensure_connection() {
         if (!_sock.valid()) {
@@ -32,26 +41,51 @@ private:
             catch (const std::exception &e) {
                 throw http_dial_error{e.what()};
             }
-            _sock.s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+            _sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
         }
     }
 
 public:
-    size_t max_content_length;
+    size_t max_content_length = ~(size_t)0;
 
-    http_client(const std::string &host_, uint16_t port_=80)
-        : _buf(4*1024), _host(host_), _port(port_), max_content_length(~(size_t)0)
+    http_client(const std::string &host_, uint16_t port_ = 80, lifetime_t lifetime = {})
+        : _buf(4*1024), _host(host_), _port(port_)
     {
         parse_host_port(_host, _port);
+
+        if (lifetime) {
+            _retire = procnow() + *lifetime;
+            const auto pre_elig = (intmax_t)(lifetime->count() * pretire_factor);
+            if (pre_elig >= 1)
+                _pretire = procnow() + lifetime_t::value_type(pre_elig);
+        }
     }
 
     std::string host() const { return _host; }
-    uint16_t port() const { return _port; }
+    uint16_t port() const    { return _port; }
+    retire_t pretire() const { return _pretire; }
+    retire_t retire() const  { return _retire; }
+    bool pretire_by(proc_time_t when) { return _pretire && when >= *_pretire; }
+    bool retire_by(proc_time_t when)  { return _retire  && when >= *_retire; }
+
+    http_response get(const std::string &path, optional_timeout timeout = {}) {
+        return perform(hs::GET, path, {}, {}, timeout);
+    }
+    http_response delete_(const std::string &path, optional_timeout timeout = {}) {
+        return perform(hs::DELETE, path, {}, {}, timeout);
+    }
+    http_response post(const std::string &path, std::string data, optional_timeout timeout = {}) {
+        return perform(hs::POST, path, {}, std::move(data), timeout);
+    }
+    http_response put(const std::string &path, std::string data, optional_timeout timeout = {}) {
+        return perform(hs::PUT, path, {}, std::move(data), timeout);
+    }
 
     http_response perform(const std::string &method, const std::string &path,
-                          const http_headers &hdrs = {}, const std::string &data = {},
+                          http_headers hdrs = {}, std::string data = {},
                           optional_timeout timeout = {})
     {
+        // Calculate canonical path
         uri u;
         u.scheme = "http";
         u.host = _host;
@@ -59,12 +93,11 @@ public:
         u.path = path;
         u.normalize();
 
-        http_request r(method, u.compose_path(), hdrs);
-        // HTTP/1.1 requires host header
-        if (r.find("Host") == r.headers.end())
-            r.set("Host", u.host); 
-        r.body = data;
+        // HTTP/1.1 requires host header; include it always, why not
+        if (!hdrs.contains(hs::Host))
+            hdrs.set(hs::Host, u.host);
 
+        http_request r{method, u.compose_path(), std::move(hdrs), std::move(data)};
         return perform(r, timeout);
     }
 
@@ -72,7 +105,7 @@ public:
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
         if (r.body.size()) {
-            r.set("Content-Length", r.body.size());
+            r.set(hs::Content_Length, r.body.size());
         }
 
         try {
@@ -116,15 +149,9 @@ public:
             // should not be any data left over in _buf
             CHECK(_buf.size() == 0);
 
-            const auto conn = resp.get("Connection");
-            if (
-                    (conn && boost::iequals(*conn, "close")) ||
-                    (resp.version <= http_1_0 && conn && !boost::iequals(*conn, "Keep-Alive")) ||
-                    (resp.version <= http_1_0 && !conn)
-               )
-            {
+            // if response requests closing socket, do it
+            if (resp.close_after())
                 _sock.close();
-            }
 
             VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
@@ -133,35 +160,157 @@ public:
             throw;
         }
     }
-
-    http_response get(const std::string &path, optional_timeout timeout = {}) {
-        return perform("GET", path, {}, {}, timeout);
-    }
-
-    http_response post(const std::string &path, const std::string &data, optional_timeout timeout = {}) {
-        return perform("POST", path, {}, data, timeout);
-    }
-
 };
 
+namespace detail {
+class http_scoped_resource;
+}
+
 class http_pool : public shared_pool<http_client> {
+    friend class detail::http_scoped_resource;
+
 public:
-    http_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = {})
-        : shared_pool<http_client>("http://" + host_ + ":" + std::to_string(port_),
+    using scoped_resource = detail::http_scoped_resource;
+
+    http_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = {}, http_client::lifetime_t lifetime_ = {})
+        : shared_pool<http_client>(
+            "http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
             max_conn
-        ),
-        _host(host_), _port(port_) {}
+          ),
+          _host(host_),
+          _port(port_),
+          _lifetime(lifetime_)
+    {
+        if (_lifetime && _lifetime->count() <= 0)
+            throw errorx("%s: invalid client lifetime %jd", name().c_str(), (intmax_t)_lifetime->count());
+        _lt_start();
+    }
+    ~http_pool() {
+        _lt_stop();
+    }
 
 protected:
     std::string _host;
     uint16_t _port;
+    http_client::lifetime_t _lifetime;
 
-    std::shared_ptr<http_client> new_resource() {
-        VLOG(3) << "new http_client resource " << _host << ":" << _port;
-        return std::make_shared<http_client>(_host, _port);
+    struct lt_state {
+        uint64_t id{};
+        std::atomic<size_t> retired{};
+        rendez worker;
+    };
+    std::shared_ptr<lt_state> _lt;
+
+    res_ptr new_resource() {
+        VLOG(3) << name() << ": new http_client resource " << _host << ":" << _port;
+        return std::make_shared<http_client>(_host, _port, _lifetime);
+    }
+
+    void _lt_start() {
+        if (!_lt && _lifetime) {
+            _lt = std::make_shared<lt_state>();
+            _lt->id = taskspawn(std::bind(_lt_run, _impl(), _lt, _lifetime));
+        }
+    }
+    void _lt_stop() {
+        if (_lt) {
+            taskcancel(_lt->id);
+            _lt.reset();
+        }
+    }
+
+    // periodically check the items at the front of the avail queue.
+    // if they're 2x the max age, then they're excess and stale; toss 'em.
+    // (but defer actual destruction until the pool_impl is unlocked.)
+    // somewhat less stale connections are handled by the custom scoped_resource.
+    static void _lt_run(std::shared_ptr<pool_impl> im,
+                        std::shared_ptr<lt_state> lt,
+                        http_client::lifetime_t lifetime)
+    {
+        const std::chrono::milliseconds interval{500 * std::min(20L, lifetime->count())};
+        VLOG(3) << im->name << ": LT interval=" << interval.count();
+        for (;;) {
+            std::vector<res_ptr> doomed; // declared first, destroyed last
+            std::unique_lock<qutex> lk(im->mut);
+
+            VLOG(4) << im->name << ": LT asleep";
+            try {
+                deadline dl{interval};
+                lt->worker.sleep(lk);
+            }
+            catch (deadline_reached &) {
+                // that's ok.  time to check the donuts
+            }
+            VLOG(4) << im->name << ": LT awake"
+                    << "; retired=" << lt->retired.load()
+                    << ", set=" << im->set.size()
+                    << ", avail=" << im->avail.size();
+
+            // perform requested replacements
+
+            for (; lt->retired.load(); lt->retired--) {
+                res_ptr c;
+                try {
+                    c = im->new_with_lock(lk);
+                }
+                catch (task_interrupted &) {
+                    // let the task die
+                    throw;
+                }
+                catch (std::exception &) {
+                    // any other exception has been logged; skip this replacement
+                    continue;
+                }
+                VLOG(4) << "LT: created " << c;
+                im->avail.push_front(c);
+                im->not_empty.wakeup();
+            }
+
+            // move deeply stale items into destructobucket, which then... destructs
+
+            while (!im->avail.empty()) {
+                auto c = im->avail.back();
+                if (!c->retire_by(procnow()))
+                    break;
+                VLOG(3) << im->name << ": LT dropping stale " << c;
+                im->avail.pop_back();
+                im->set.erase(c);
+                doomed.push_back(std::move(c));
+            }
+            if (!doomed.empty())
+                im->not_empty.wakeup();  // in theory, this should never matter
+        }
     }
 };
+
+namespace detail {
+
+class http_scoped_resource : public scoped_resource<http_client> {
+    std::shared_ptr<http_pool::lt_state> _lt;
+    bool _mustdie;
+
+public:
+    //! RAII
+    explicit http_scoped_resource(http_pool &p)
+        : scoped_resource{p},
+          _lt{p._lt},
+          _mustdie{_c->pretire_by(procnow())}
+    {
+        if (_mustdie) {
+            _lt->retired++;
+            VLOG(4) << "LT: waking task, retired=" << _lt->retired.load();
+            _lt->worker.wakeup();
+        }
+    }
+
+    ~http_scoped_resource() {
+        if (_mustdie)
+            _success = false;
+    }
+};
+
+} // end namespace detail
 
 } // end namespace ten
 

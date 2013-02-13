@@ -41,7 +41,7 @@ static void start_http_server(address &addr) {
 }
 
 static void start_http_test() {
-    address http_addr;
+    address http_addr("0.0.0.0");
     uint64_t server_tid = taskspawn(
             std::bind(start_http_server, std::ref(http_addr))
             ); 

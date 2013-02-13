@@ -18,11 +18,11 @@ void qlocker(std::shared_ptr<state> st) {
     taskname("qlocker");
     taskstate("looping");
     for (int i=0; i<1000; ++i) {
-        std::unique_lock<qutex> lk(st->q);
+        std::lock_guard<qutex> lk(st->q);
         ++(st->x);
     }
     taskstate("done");
-    std::unique_lock<qutex> lk(st->q);
+    std::lock_guard<qutex> lk(st->q);
     taskname("qlocker %d", st->x);
     st->r.wakeup();
 }
@@ -39,7 +39,7 @@ void qutex_task_spawn() {
         taskstate("spawning %d", i);
         procspawn(std::bind(qlocker, st));
     }
-    std::unique_lock<qutex> lk(st->q);
+    std::lock_guard<qutex> lk(st->q);
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
     CHECK(st->x == 20*1000);
 }

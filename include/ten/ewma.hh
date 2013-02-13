@@ -11,16 +11,15 @@ namespace ten {
 template <class TimeUnit>
 class ewma {
 private:
-    std::atomic<uint64_t> _pending;
-    double _alpha;
-    double _rate = 0.0;
     TimeUnit _decay_interval;
+    double _alpha;
+    std::atomic<uint64_t> _pending {};
+    double _rate {};
 public:
     ewma(TimeUnit decay_interval, TimeUnit tick_interval = TimeUnit{1})
-        : _decay_interval(decay_interval)
-    {
-        _alpha = exp(-(double)tick_interval.count() / decay_interval.count());
-    }
+        : _decay_interval{decay_interval},
+          _alpha{exp(-(double)tick_interval.count() / decay_interval.count())}
+    {}
 
     void update(uint64_t n) {
         _pending.fetch_add(n);
@@ -36,8 +35,8 @@ public:
 
     template <class RateUnit=std::chrono::seconds>
     double rate() {
-        using std::chrono::duration_cast;
-        return _rate * duration_cast<TimeUnit>(RateUnit{1}).count();
+        using cvt = std::ratio_divide< typename RateUnit::period, typename TimeUnit::period >;
+        return (_rate * cvt::num) / cvt::den;
     }
 };
 
