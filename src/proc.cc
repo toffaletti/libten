@@ -226,6 +226,13 @@ static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
     taskdumpf();
 }
 
+namespace {
+    static bool glog_inited;
+    struct stoplog_t {
+        ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
+    } stoplog;
+}
+
 static void procmain_init() {
     CHECK(getpid() == syscall(SYS_gettid)) << "must call procmain in main thread before anything else";
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
@@ -237,6 +244,7 @@ static void procmain_init() {
 
     umask(02); // allow group-readable logs
     InitGoogleLogging(program_invocation_short_name);
+    glog_inited = true;
     InstallFailureSignalHandler();
 
     struct sigaction act;
