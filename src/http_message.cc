@@ -86,6 +86,10 @@ header_list::const_iterator http_headers::_hfind(const std::string &field) const
     return std::find_if(begin(_hlist), end(_hlist), is_header{field});
 }
 
+void http_headers::append(const std::string &field, const std::string &value) {
+    _hlist.emplace_back(field, value);
+}
+
 void http_headers::set(const std::string &field, const std::string &value) {
     const auto i = _hfind(field);
     if (i != end(_hlist)) {
@@ -93,10 +97,6 @@ void http_headers::set(const std::string &field, const std::string &value) {
     } else {
         _hlist.emplace_back(field, value);
     }
-}
-
-void http_headers::append(const std::string &field, const std::string &value) {
-    _hlist.emplace_back(field, value);
 }
 
 bool http_headers::empty() const {
@@ -153,30 +153,33 @@ static bool set_version(http_version &ver, http_parser *p) {
     return true;
 }
 
-int http_headers::parse_header_field(const char *at, size_t length) {
-    // TODO: see if this test fails when a header value is entirely empty
-    if (_hlist.empty() || !_hlist.back().second.empty())
-        _hlist.emplace_back();
-    _hlist.back().first.append(at, length);
-    return 0;
-}
-
-int http_headers::parse_header_value(const char *at, size_t length) {
-    assert(!_hlist.empty());
-    _hlist.back().second.append(at, length);
-    return 0;
+//! parser entry points
+struct http_header_parse {
+    static int field(http_headers *h, const char *at, size_t length) {
+        if (!h->_got_header_field)
+            h->_hlist.emplace_back();
+        h->_hlist.back().first.append(at, length);
+        h->_got_header_field = true;
+        return 0;
+    }
+    static int value(http_headers *h, const char *at, size_t length) {
+        assert(!h->_hlist.empty());
+        h->_hlist.back().second.append(at, length);
+        h->_got_header_field = false;
+        return 0;
+    }
 };
 
 extern "C" {
 
 static int _on_header_field(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
-    return m->parse_header_field(at, length);
+    return http_header_parse::field(m, at, length);
 }
 
 static int _on_header_value(http_parser *p, const char *at, size_t length) {
     http_base *m = reinterpret_cast<http_base *>(p->data);
-    return m->parse_header_value(at, length);
+    return http_header_parse::value(m, at, length);
 }
 
 static int _on_body(http_parser *p, const char *at, size_t length) {

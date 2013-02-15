@@ -45,6 +45,8 @@ extern const std::string
 struct http_headers {
 protected:
     header_list _hlist;
+    bool _got_header_field {}; // for reliable parsing
+    friend struct http_header_parse; // visibility loophole for parsing
 
     header_list::iterator       _hfind(const std::string &field);
     header_list::const_iterator _hfind(const std::string &field) const;
@@ -58,15 +60,23 @@ public:
         http_headers(Args&& ...args) {
             static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
             _hlist.reserve(sizeof...(args) / 2);
-            init(std::forward<Args>(args)...);
+            append(std::forward<Args>(args)...);
         }
 
-    void init() {}
+    void append() {}
 
     template <typename ValueT, typename ...Args>
-        void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
+        void append(const std::string &field, ValueT &&header_value,
+                    const std::string &field2, Args&& ...args) {
             append(field, std::forward<ValueT>(header_value));
-            init(std::forward<Args>(args)...);
+            append(field2, std::forward<Args>(args)...);
+        }
+
+    void append(const std::string &field, const std::string &value);
+
+    template <typename ValueT>
+        void append(const std::string &field, const ValueT &value) {
+            append(field, boost::lexical_cast<std::string>(value));
         }
 
     void set(const std::string &field, const std::string &value);
@@ -76,12 +86,10 @@ public:
             set(field, boost::lexical_cast<std::string>(value));
         }
 
-    void append(const std::string &field, const std::string &value);
-
-    template <typename ValueT>
-        void append(const std::string &field, const ValueT &value) {
-            append(field, boost::lexical_cast<std::string>(value));
-        }
+    void clear() {
+        _hlist.clear();
+        _got_header_field = {};
+    }
 
     bool empty() const;
 
@@ -109,14 +117,12 @@ public:
         }
 
 #endif // CHIP_UNSURE
-
-    //! parser entry points
-    int parse_header_field(const char *at, size_t length);
-    int parse_header_value(const char *at, size_t length);
 };
 
 //! base class for http request and response
 struct http_base : http_headers {
+    using super = http_headers;
+
     http_version version {default_http_version};
     std::string body;
     size_t body_length {};
@@ -126,7 +132,7 @@ struct http_base : http_headers {
         : http_headers(std::move(headers_)), version{version_} {}
 
     void clear() {
-        _hlist.clear();
+        super::clear();
         version = default_http_version;
         body.clear();
         body_length = {};
@@ -160,7 +166,7 @@ struct http_base : http_headers {
         time_t now = std::chrono::system_clock::to_time_t(procnow());
         std::lock_guard<std::mutex> lk(last_mut);
         if (last_time != now) {
-            char buf[128];
+            char buf[64];
             struct tm tm;
             strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
             last_time = now;
@@ -172,6 +178,8 @@ struct http_base : http_headers {
 
 //! http request
 struct http_request : http_base {
+    using super = http_base;
+
     std::string method;
     std::string uri;
 
@@ -208,7 +216,7 @@ struct http_request : http_base {
     {}
 
     void clear() {
-        http_base::clear();
+        super::clear();
         method.clear();
         uri.clear();
     }
@@ -229,7 +237,9 @@ struct http_request : http_base {
 
 //! http response
 struct http_response : http_base {
+    using super = http_base;
     using status_t = uint16_t;
+
     status_t status_code {};
     bool guillotine {};  // return only the head
 
@@ -254,7 +264,7 @@ struct http_response : http_base {
         {}
 
     void clear() {
-        http_base::clear();
+        super::clear();
         status_code = {};
         guillotine = {};
     }
