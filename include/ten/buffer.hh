@@ -1,5 +1,5 @@
-#ifndef BUFFER_HH
-#define BUFFER_HH
+#ifndef LIBTEN_BUFFER_HH
+#define LIBTEN_BUFFER_HH
 
 #include <stdexcept>
 #include <memory>
@@ -121,5 +121,4 @@ public:
 
 } // end namespace ten
 
-#endif // BUFFER_HH
-
+#endif // LIBTEN_BUFFER_HH

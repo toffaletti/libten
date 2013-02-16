@@ -1,5 +1,5 @@
-#ifndef TASK_IO_HH
-#define TASK_IO_HH
+#ifndef LIBTEN_IO_HH
+#define LIBTEN_IO_HH
 
 #include "proc.hh"
 #include "alarm.hh"
@@ -7,7 +7,7 @@
 namespace ten {
 
 struct io_scheduler {
-    typedef ten::alarm_clock<task *, proc::clock> alarm_clock;
+    typedef ten::alarm_clock<task *, proc_clock_t> alarm_clock;
 
     struct task_poll_state {
         task *t_in; // POLLIN task
@@ -93,9 +93,9 @@ struct io_scheduler {
             ev.events = pollfds[fd].events;
 
             if (saved_events == 0) {
-                THROW_ON_ERROR(efd.add(fd, ev));
+                throw_if(efd.add(fd, ev) == -1);
             } else if (saved_events != pollfds[fd].events) {
-                THROW_ON_ERROR(efd.modify(fd, ev));
+                throw_if(efd.modify(fd, ev) == -1);
             }
             ++npollfds;
         }
@@ -126,7 +126,7 @@ struct io_scheduler {
                 memset(&ev, 0, sizeof(ev));
                 ev.data.fd = fd;
                 ev.events = pollfds[fd].events;
-                THROW_ON_ERROR(efd.modify(fd, ev));
+                throw_if(efd.modify(fd, ev) == -1);
             }
             --npollfds;
         }
@@ -205,7 +205,7 @@ struct io_scheduler {
             // lock must be held while determining whether or not we'll be
             // asleep in epoll, so wakeupandunlock will work from another
             // thread
-            optional<proc::clock::time_point> timeout_when = alarms.when();
+            optional<proc_time_t> timeout_when = alarms.when();
             if (timeout_when) {
                 auto now = p->cached_time();
                 if (*timeout_when <= now) {
@@ -306,5 +306,4 @@ struct io_scheduler {
 
 } // end namespace ten
 
-#endif // TASK_IO_HH
-
+#endif // LIBTEN_IO_HH

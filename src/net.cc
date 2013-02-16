@@ -70,9 +70,7 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, optional_timeout
     return total_sent;
 }
 
-void netsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms)
-    throw(errno_error, hostname_error, task_interrupted) 
-{
+void netsock::dial(const char *addr, uint16_t port, optional_timeout timeout_ms) {
     netdial(s.fd, addr, port, timeout_ms);
 }
 

@@ -218,8 +218,8 @@ struct chain {
         : _mg(mg), _lock(mg->_mtx) {}
 
     chain(const chain &) = delete;
-    chain(chain &&other)
-        : _mg(other._mg), _lock(std::move(other._lock)) {}
+
+    chain(chain &&) = default;
 
     template <typename ...Args>
         metrics::counter &counter(Args ...args) {

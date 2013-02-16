@@ -65,8 +65,8 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
         m60.update(10);
         m60.tick();
     }
-    LOG(INFO) << "rate1: " << m1.rate();
-    LOG(INFO) << "rate5: " << m5.rate();
-    LOG(INFO) << "rate60: " << m60.rate();
+    LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
 }
 

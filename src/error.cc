@@ -77,6 +77,11 @@ void errorx::initf(const char *fmt, ...) {
 }
 
 void errno_error::_add_strerror() {
+    // sometimes errno_error is a base when system errors are only possible,
+    //   so append nothing if there is no error
+    if (!_error)
+        return;
+
     // requires GNU specific strerror_r
     // pointer might be ebuf or an internal static string
     char ebuf[64];

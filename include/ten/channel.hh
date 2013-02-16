@@ -1,5 +1,5 @@
-#ifndef CHANNEL_HH
-#define CHANNEL_HH
+#ifndef LIBTEN_CHANNEL_HH
+#define LIBTEN_CHANNEL_HH
 
 #include "ten/task/task.hh"
 #include "ten/task/qutex.hh"
@@ -187,5 +187,4 @@ public:
 
 } // end namespace ten
 
-#endif // CHANNEL_HH
-
+#endif // LIBTEN_CHANNEL_HH

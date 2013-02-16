@@ -91,10 +91,10 @@ void proxy_task(int sock) {
             if (u.port == 0) u.port = 80;
             cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
 
-            http_request r{req.method, u.compose_path()};
+            http_request r{req};
+            r.uri = u.compose_path();
             // HTTP/1.1 requires host header
-            r.append("Host", u.host);
-            r.headers = req.headers;
+            r.set("Host", u.host);
             std::string data = r.data();
             ssize_t nw = cs.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
             if (nw <= 0) { goto request_send_error; }

@@ -6,18 +6,22 @@
 
 namespace ten {
 
-template <typename Lock>
+// almost surely, Mutex = qutex
+template <typename Mutex>
 class safe_lock {
-    private:
-        Lock &_lock;
-    public:
-        safe_lock(Lock &lock) noexcept : _lock(lock) {
-            _lock.safe_lock();
-        }
+    Mutex &_mut;
 
-        ~safe_lock() noexcept {
-            _lock.unlock();
-        }
+public:
+    safe_lock(Mutex &mut) noexcept : _mut(mut) {
+        _mut.safe_lock();
+    }
+    ~safe_lock() noexcept {
+        _mut.unlock();
+    }
+
+    //! no copy (and no move)
+    safe_lock(const safe_lock &) = delete;
+    safe_lock & operator = (const safe_lock &) = delete;
 };
 
 //! task aware mutex

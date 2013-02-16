@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(socketpair_test) {
 BOOST_AUTO_TEST_CASE(pipe_test) {
     char a = 1;
     pipe_fd pipe;
-    pipe.write(&a, 1);
+    BOOST_CHECK_EQUAL(pipe.write(&a, 1), 1);
     BOOST_CHECK_EQUAL(pipe.read(&a, 1), 1);
     BOOST_CHECK_EQUAL(a, 1);
 }

@@ -61,7 +61,6 @@ add_library(ten
     src/net.cc
     src/zip.cc
     src/json.cc
-    src/jsonstream.cc
     src/term.cc
     #src/chrono_fix.cc
     ${ASM}
@@ -71,6 +70,10 @@ add_library(ten
     ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
     )
 add_dependencies(ten libglog ragel_uri_parser boost_context)
+
+# TODO: compile miniz separately, so warnings remain high for ten-specific code in zip.cc
+set_source_files_properties(src/zip.cc PROPERTIES
+  COMPILE_FLAGS "-fno-strict-aliasing -Wno-strict-aliasing -Wno-attributes -Wno-extra")
 
 target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 

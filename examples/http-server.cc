@@ -18,20 +18,23 @@ struct my_config : app_config {
 
 static my_config conf;
 
-struct state : boost::noncopyable {
+struct state {
     application &app;
     std::shared_ptr<http_server> http;
 
     state(application &app_) : app(app_) {
         http = std::make_shared<http_server>();
     }
+
+    state(const state &) = delete;
+    state &operator =(const state &) = delete;
 };
 
 static void log_request(http_exchange &ex) {
     using namespace std::chrono;
     const auto stop = steady_clock::now();
     auto cl_hdr = ex.resp.get("Content-Length");
-    VLOG(1) << ex.agent_ip() << " " <<
+    VLOG(1) << get_value_or(ex.agent_ip(), "noaddr") << ": " <<
         ex.req.method << " " <<
         ex.req.uri << " " <<
         ex.resp.status_code << " " <<
