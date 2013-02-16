@@ -1,4 +1,5 @@
 #include "ten/http/http_message.hh"
+#include "ten/logging.hh"
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>

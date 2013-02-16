@@ -10,7 +10,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "http_parser.h"
-#include "ten/task.hh"
 #include "ten/error.hh"
 #include "ten/optional.hh"
 
@@ -163,7 +162,7 @@ struct http_base : http_headers {
         static time_t last_time = -1;
         static std::string last_date;
 
-        time_t now = std::chrono::system_clock::to_time_t(procnow());
+        time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::lock_guard<std::mutex> lk(last_mut);
         if (last_time != now) {
             char buf[64];

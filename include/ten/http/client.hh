@@ -7,7 +7,7 @@
 #include "ten/buffer.hh"
 #include "ten/net.hh"
 #include "ten/uri.hh"
-#include "ten/task.hh"
+#include "ten/task/compat.hh"
 #include <atomic>
 #include <netinet/tcp.h>
 
@@ -20,7 +20,7 @@ namespace ten {
 class http_client {
 public:
     using lifetime_t = optional<std::chrono::seconds>;
-    using retire_t = optional<proc_time_t>;
+    using retire_t = optional<compat::proc_time_t>;
     static constexpr double pretire_factor = 0.8;
 private:
     netsock _sock;
@@ -54,10 +54,10 @@ public:
         parse_host_port(_host, _port);
 
         if (lifetime) {
-            _retire = procnow() + *lifetime;
+            _retire = compat::procnow() + *lifetime;
             const auto pre_elig = (intmax_t)(lifetime->count() * pretire_factor);
             if (pre_elig >= 1)
-                _pretire = procnow() + lifetime_t::value_type(pre_elig);
+                _pretire = compat::procnow() + lifetime_t::value_type(pre_elig);
         }
     }
 
@@ -65,8 +65,8 @@ public:
     uint16_t port() const    { return _port; }
     retire_t pretire() const { return _pretire; }
     retire_t retire() const  { return _retire; }
-    bool pretire_by(proc_time_t when) { return _pretire && when >= *_pretire; }
-    bool retire_by(proc_time_t when)  { return _retire  && when >= *_retire; }
+    bool pretire_by(compat::proc_time_t when) { return _pretire && when >= *_pretire; }
+    bool retire_by(compat::proc_time_t when)  { return _retire  && when >= *_retire; }
 
     http_response get(const std::string &path, optional_timeout timeout = {}) {
         return perform(hs::GET, path, {}, {}, timeout);
@@ -210,12 +210,12 @@ protected:
     void _lt_start() {
         if (!_lt && _lifetime) {
             _lt = std::make_shared<lt_state>();
-            _lt->id = taskspawn(std::bind(_lt_run, _impl(), _lt, _lifetime));
+            _lt->id = compat::taskspawn(std::bind(_lt_run, _impl(), _lt, _lifetime));
         }
     }
     void _lt_stop() {
         if (_lt) {
-            taskcancel(_lt->id);
+            compat::taskcancel(_lt->id);
             _lt.reset();
         }
     }
@@ -271,7 +271,7 @@ protected:
 
             while (!im->avail.empty()) {
                 auto c = im->avail.back();
-                if (!c->retire_by(procnow()))
+                if (!c->retire_by(compat::procnow()))
                     break;
                 VLOG(3) << im->name << ": LT dropping stale " << c;
                 im->avail.pop_back();
@@ -295,7 +295,7 @@ public:
     explicit http_scoped_resource(http_pool &p)
         : scoped_resource{p},
           _lt{p._lt},
-          _mustdie{_c->pretire_by(procnow())}
+          _mustdie{_c->pretire_by(compat::procnow())}
     {
         if (_mustdie) {
             _lt->retired++;

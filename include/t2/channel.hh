@@ -14,7 +14,7 @@
 
 namespace t2 {
 
-#if 0
+#if 1
 
 template <typename T>
 class channel {

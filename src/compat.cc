@@ -76,7 +76,7 @@ void procshutdown() {
 }
 
 //! return cached time from event loop, not precise
-std::chrono::time_point<std::chrono::steady_clock> procnow() {
+proc_time_t procnow() {
     return runtime::now();
 }
 

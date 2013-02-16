@@ -44,7 +44,7 @@ static void runtime_init() {
     ss.ss_sp = calloc(1, SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
-    THROW_ON_ERROR(sigaltstack(&ss, NULL));
+    throw_if(sigaltstack(&ss, NULL) == -1);
 
     // allow log files and message queues to be created group writable
     umask(0);
@@ -56,10 +56,10 @@ static void runtime_init() {
 
     // ignore SIGPIPE
     memset(&act, 0, sizeof(act));
-    THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
+    throw_if(sigaction(SIGPIPE, NULL, &act) == -1);
     if (act.sa_handler == SIG_DFL) {
         act.sa_handler = SIG_IGN;
-        THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
+        throw_if(sigaction(SIGPIPE, &act, NULL) == -1);
     }
 
     netinit();
@@ -474,9 +474,9 @@ void io::add_pollfds(task_pimpl *t, pollfd *fds, nfds_t nfds) {
         DVLOG(5) << "fd: " << fd << " events: " << pollfds[fd].events;
 
         if (saved_events == 0) {
-            THROW_ON_ERROR(_efd.add(fd, ev));
+            throw_if(_efd.add(fd, ev) == -1);
         } else if (saved_events != pollfds[fd].events) {
-            THROW_ON_ERROR(_efd.modify(fd, ev));
+            throw_if(_efd.modify(fd, ev) == -1);
         }
         ++npollfds;
     }
@@ -521,7 +521,7 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
             memset(&ev, 0, sizeof(ev));
             ev.data.fd = fd;
             ev.events = pollfds[fd].events;
-            THROW_ON_ERROR(_efd.modify(fd, ev));
+            throw_if(_efd.modify(fd, ev) == -1);
         }
         --npollfds;
     }
