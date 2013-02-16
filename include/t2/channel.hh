@@ -10,92 +10,7 @@
 #include <thread>
 #include <vector>
 
-#include "t2/double_lock_queue.hh"
-
 namespace t2 {
-
-#if 1
-
-template <typename T>
-class channel {
-private:
-    struct pimpl;
-    std::shared_ptr<pimpl> _pimpl;
-    bool _autoclose;
-public:
-    channel(bool autoclose=false);
-    ~channel();
-    void close() noexcept;
-
-#if 0
-    bool send(const T &t) {
-        std::lock_guard<std::mutex> lock(_pimpl->mutex);
-        if (_pimpl->closed) return false;
-        _pimpl->queue.push(std::forward<T>(t));
-        _pimpl->not_empty.notify_one();
-        return true;
-    }
-#endif
-
-    bool send(T &&t) {
-        if (_pimpl->closed) return false;
-        _pimpl->queue.push(std::forward<T>(t));
-        _pimpl->not_empty.notify_one();
-        return true;
-    }
-
-    ten::optional<T> recv() {
-        T value;
-        uint64_t spin_count = 0;
-        while (!_pimpl->queue.pop(value)) {
-            ++spin_count;
-            if (_pimpl->closed) return {};
-            if (spin_count > 4000) {
-                std::unique_lock<std::mutex> lock(_pimpl->mutex);
-                _pimpl->not_empty.wait(lock);
-            }
-        }
-        return value;
-    }
-
-    std::vector<T> recv_all() {
-        std::vector<T> all;
-        T value;
-        while (_pimpl->queue.pop(value)) {
-            all.push_back(std::move(value));
-        }
-        return all;
-    }
-};
-
-template <typename T>
-struct channel<T>::pimpl {
-    double_lock_queue<T> queue;
-    std::condition_variable not_empty;
-    std::mutex mutex;
-    std::atomic<bool> closed;
-};
-
-template <typename T>
-channel<T>::channel(bool autoclose)
-    : _autoclose(autoclose)
-{
-    _pimpl = std::make_shared<pimpl>();
-}
-
-template <typename T>
-channel<T>::~channel() {
-    if (_autoclose) close();
-}
-
-template <typename T>
-void channel<T>::close() noexcept {
-    if (_pimpl->closed.exchange(true) == false) {
-        _pimpl->not_empty.notify_all();
-    }
-}
-
-#else
 
 template <typename T>
 class channel {
@@ -182,7 +97,6 @@ void channel<T>::close() noexcept {
         _pimpl->not_empty.notify_all();
     }
 }
-#endif
 
 } // t2
 

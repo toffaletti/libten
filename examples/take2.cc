@@ -3,6 +3,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include "t2/scheduler.hh"
+#include "t2/channel.hh"
 
 #include <netinet/tcp.h> // TCP_DEFER_ACCEPT
 
