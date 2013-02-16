@@ -156,9 +156,7 @@ public:
     application(const application &) = delete;
     application &operator = (const application &) = delete;
 
-    ~application() {
-        ShutdownGoogleLogging();
-    }
+    ~application() {}
 
     void showhelp(std::ostream &os = std::cerr) {
         if (!usage.empty())
