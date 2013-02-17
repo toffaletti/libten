@@ -1,9 +1,13 @@
 #ifndef TEN_SCHEDULER_HH
 #define TEN_SCHEDULER_HH
 
-#include "t2/channel.hh"
+#include "ten/optional.hh"
 #include "t2/task.hh"
 #include "t2/kernel.hh"
+#include "t2/double_lock_queue.hh"
+#include <condition_variable>
+#include <atomic>
+#include <thread>
 
 namespace t2 {
 
@@ -21,8 +25,33 @@ extern scheduler *the_scheduler;
 
 class scheduler {
 private:
-    channel<std::shared_ptr<tasklet>> chan;
+    double_lock_queue<std::shared_ptr<tasklet>> queue;
+    std::mutex mutex;
+    std::condition_variable not_empty;
+    std::atomic<bool> done;
     std::vector<std::thread> threads;
+
+    ten::optional<std::shared_ptr<tasklet>> next_task() {
+        std::shared_ptr<tasklet> value;
+        uint64_t spin_count = 0;
+        while (!queue.pop(value)) {
+            ++spin_count;
+            if (done) return ten::nullopt;
+            if (spin_count > 4000) {
+                std::unique_lock<std::mutex> lock(mutex);
+                not_empty.wait(lock);
+            }
+        }
+        return value;
+    }
+
+    bool enqueue(std::shared_ptr<tasklet> &&t) {
+        if (done) return false;
+        queue.push(t);
+        not_empty.notify_one();
+        return true;
+    }
+
 
     void loop() {
         boost::context::fcontext_t fctx;
@@ -30,7 +59,7 @@ private:
         tld = &td;
         while (the_kernel->taskcount > 0 || !the_kernel->shutdown) {
             DVLOG(5) << "waiting for task to schedule";
-            auto t = chan.recv();
+            auto t = next_task();
             if (!t) break;
             DVLOG(5) << "got task to schedule: " << (*t).get();
             CHECK((*t)->_ready);
@@ -48,7 +77,7 @@ private:
                 if (tld->self) {
                     DVLOG(5) << "scheduling " << tld->self;
                     if (tld->self->_ready.exchange(true) == false) {
-                        chan.send(std::move(tld->self));
+                        enqueue(std::move(tld->self));
                     }
                 }
             } else {
@@ -56,11 +85,11 @@ private:
             }
         }
         DVLOG(5) << "exiting scheduler";
-        chan.close();
+        done = true;
     }
 
 public:
-    scheduler() {
+    scheduler() : done(false) {
         CHECK(the_scheduler == nullptr);
         the_scheduler = this;
         for (int i=0; i<4; ++i) {
@@ -69,7 +98,7 @@ public:
     }
 
     ~scheduler() {
-        chan.close();
+        done = true;
         LOG(INFO) << "joining";
         for (auto &thread : threads) {
             thread.join();
@@ -79,8 +108,8 @@ public:
     void add(std::shared_ptr<tasklet> task) {
         CHECK(task);
         CHECK(task->_ready);
-        DVLOG(5) << task << " added to scheduler chan";
-        chan.send(std::move(task));
+        DVLOG(5) << task << " added to scheduler";
+        enqueue(std::move(task));
     }
 };
 

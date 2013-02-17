@@ -26,6 +26,8 @@ public:
         shutdown{false},
         taskcount{0}
     {
+        CHECK(the_kernel == nullptr);
+        the_kernel = this;
         _init();
     }
 
