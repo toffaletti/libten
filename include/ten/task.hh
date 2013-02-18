@@ -9,6 +9,7 @@
 #include <poll.h>
 #include "ten/logging.hh"
 #include "ten/optional.hh"
+#include "ten/ptr.hh"
 
 //! user must define
 extern const size_t default_stacksize;
@@ -22,10 +23,10 @@ struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
 
-struct task;
-struct proc;
-typedef std::deque<task *> tasklist;
-typedef std::deque<proc *> proclist;
+class task;
+class proc;
+typedef std::deque<ptr<task>> tasklist;
+typedef std::deque<ptr<proc>> proclist;
 
 //! spawn a new task in the current thread
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
@@ -59,9 +60,9 @@ const proc_time_t &procnow();
 //! main entry point for tasks
 struct procmain {
 private:
-    proc *p;
+    ptr<proc> p;
 public:
-    explicit procmain(task *t = nullptr);
+    explicit procmain(ptr<task> t = nullptr);
     ~procmain();
 
     int main(int argc=0, char *argv[]=nullptr);

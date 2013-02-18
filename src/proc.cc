@@ -20,20 +20,20 @@ static std::mutex procsmutex;
 static proclist procs;
 static std::once_flag init_flag;
 
-static void set_this_proc(proc *p) {
-    _this_proc = p;
+static void set_this_proc(ptr<proc> p) {
+    _this_proc = p.get();
 }
 
-proc *this_proc() {
-    return _this_proc;
+ptr<proc> this_proc() {
+    return ptr<proc>{_this_proc};
 }
 
-task *this_task() {
+ptr<task> this_task() {
     return _this_proc->ctask;
 }
 
 void proc_waker::wait() {
-    proc *p = this_proc();
+    ptr<proc> p = this_proc();
     std::unique_lock<std::mutex> lk{mutex};
     while (!p->is_ready() && !p->is_canceled() && !p->is_dirty()) {
         asleep = true;
@@ -42,25 +42,25 @@ void proc_waker::wait() {
     asleep = false;
 }
 
-void proc::thread_entry(task *t) {
+void proc::thread_entry(ptr<task> t) {
     procmain scope{t};
     t->ready();
     scope.main();
 }
 
-void proc::add(proc *p) {
+void proc::add(ptr<proc> p) {
     std::lock_guard<std::mutex> lk{procsmutex};
     procs.push_back(p);
 }
 
-void proc::del(proc *p) {
+void proc::del(ptr<proc> p) {
     std::lock_guard<std::mutex> lk{procsmutex};
     auto i = std::find(procs.begin(), procs.end(), p);
     procs.erase(i);
 }
 
-void proc::deltaskinproc(task *t) {
-    if (!t->systask) {
+void proc::deltaskinproc(ptr<task> t) {
+    if (!t->_pimpl->systask) {
         --taskcount;
     }
     DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
@@ -91,7 +91,7 @@ void proc::schedule() {
             if (taskcount == 0) break;
             // check dirty queue
             {
-                task *t = nullptr;
+                ptr<task> t = nullptr;
                 while (dirtyq.pop(t)) {
                     DVLOG(5) << "dirty readying " << t;
                     runqueue.push_front(t);
@@ -111,10 +111,10 @@ void proc::schedule() {
                 procshutdown();
                 if (runqueue.empty()) continue;
             }
-            task *t = runqueue.front();
+            ptr<task> t{runqueue.front()};
             runqueue.pop_front();
             ctask = t;
-            if (!t->systask) {
+            if (!t->_pimpl->systask) {
                 // dont increment for system tasks so
                 // while(taskyield()) {} can be used to
                 // wait for all other tasks to exit
@@ -122,11 +122,11 @@ void proc::schedule() {
                 ++nswitch;
             }
             DVLOG(5) << "p: " << this << " swapping to: " << t;
-            t->_ready = false;
-            ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t));
+            t->_pimpl->ready = false;
+            ctx.swap(t->_pimpl->ctx, reinterpret_cast<intptr_t>(t.get()));
             ctask = nullptr;
             
-            if (!t->fn) {
+            if (!t->_pimpl->fn) {
                 deltaskinproc(t);
             }
         }
@@ -156,7 +156,7 @@ proc::~proc() {
             {
                 std::lock_guard<std::mutex> plk{procsmutex};
                 for (auto i=procs.begin(); i!= procs.end(); ++i) {
-                    if (*i == this) continue;
+                    if (i->get() == this) continue;
                     (*i)->cancel();
                 }
             }
@@ -192,11 +192,11 @@ proc::~proc() {
         runqueue.clear();
         // clean up system tasks
         while (!alltasks.empty()) {
-            deltaskinproc(alltasks.front());
+            deltaskinproc(ptr<task>{alltasks.front()});
         }
         // free tasks in taskpool
         for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
-            delete (*i);
+            delete i->get();
         }
         // must delete _sched *after* tasks because
         // they might try to remove themselves from timeouts set
@@ -207,8 +207,8 @@ proc::~proc() {
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
-    task *t = new task(f, stacksize);
-    uint64_t tid = t->id;
+    ptr<task> t{new task(f, stacksize)};
+    uint64_t tid = t->id();
     auto ctx = std::make_shared<proc_context>();
     ctx->t = t;
     ctx->thread = std::move(std::thread(proc::thread_entry, t));
@@ -218,7 +218,7 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 void procshutdown() {
-    proc *p = this_proc();
+    ptr<proc> p = this_proc();
     p->shutdown();
 }
 
@@ -268,11 +268,11 @@ static void procmain_init() {
     netinit();
 }
 
-procmain::procmain(task *t) {
+procmain::procmain(ptr<task> t) {
     // only way i know of detecting the main thread
     bool is_main_thread = getpid() == syscall(SYS_gettid);
     std::call_once(init_flag, procmain_init);
-    p = new proc(is_main_thread);
+    p.reset(new proc(is_main_thread));
     set_this_proc(p);
     proc::add(p);
     if (t) {
@@ -283,13 +283,13 @@ procmain::procmain(task *t) {
 procmain::~procmain() {
     proc::del(p);
     set_this_proc(nullptr);
-    delete p;
+    delete p.get();
 }
 
 int procmain::main(int argc, char *argv[]) {
-    DVLOG(5) << "proc: " << p << " thread id: " << std::this_thread::get_id();
+    DVLOG(5) << "proc: " << p.get() << " thread id: " << std::this_thread::get_id();
     p->schedule();
-    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p;
+    DVLOG(5) << "proc done: " << std::this_thread::get_id() << " " << p.get();
     return EXIT_SUCCESS;
 }
 

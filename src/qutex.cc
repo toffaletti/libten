@@ -6,8 +6,8 @@ namespace ten {
 void qutex::safe_lock() noexcept {
     // NOTE: copy-pasted logic from lock() but calls safe_swap which doesn't throw
     // this is useful if you need to lock inside a destructor
-    task *t = this_task();
-    DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
+    ptr<task> t = this_task();
+    DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::lock_guard<std::timed_mutex> lk{_m};
@@ -23,7 +23,7 @@ void qutex::safe_lock() noexcept {
 
     // loop to handle spurious wakeups from other threads
     for (;;) {
-        DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
+        DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
         t->safe_swap(); // don't allow swap to throw on deadline timeout
         std::lock_guard<std::timed_mutex> lk{_m};
         if (_owner == t) {
@@ -33,8 +33,8 @@ void qutex::safe_lock() noexcept {
 }
 
 void qutex::lock() {
-    task *t = this_task();
-    DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
+    ptr<task> t = this_task();
+    DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
         std::lock_guard<std::timed_mutex> lk{_m};
@@ -51,7 +51,7 @@ void qutex::lock() {
     // loop to handle spurious wakeups from other threads
     try {
         for (;;) {
-            DCHECK(t->cancel_points == 0) << "BUG: cannot cancel a lock";
+            DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
             t->swap();
             std::lock_guard<std::timed_mutex> lk{_m};
             if (_owner == t) {
@@ -67,7 +67,7 @@ void qutex::lock() {
 }
 
 bool qutex::try_lock() {
-    task *t = this_task();
+    ptr<task> t = this_task();
     DCHECK(t) << "BUG: qutex::try_lock called outside of task";
     std::unique_lock<std::timed_mutex> lk{_m, std::try_to_lock};
     if (lk.owns_lock()) {
@@ -80,7 +80,7 @@ bool qutex::try_lock() {
 }
 
 inline void qutex::unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk) {
-    task *t = this_task();
+    ptr<task> t = this_task();
     DCHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
     DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
     if (t == _owner) {

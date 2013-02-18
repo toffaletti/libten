@@ -7,7 +7,7 @@
 namespace ten {
 
 struct io_scheduler {
-    typedef ten::alarm_clock<task *, proc_clock_t> alarm_clock;
+    typedef ten::alarm_clock<ptr<task>, proc_clock_t> alarm_clock;
 
     struct task_poll_state {
         task *t_in; // POLLIN task
@@ -63,7 +63,7 @@ struct io_scheduler {
         taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
-    void add_pollfds(task *t, pollfd *fds, nfds_t nfds) {
+    void add_pollfds(ptr<task> t, pollfd *fds, nfds_t nfds) {
         for (nfds_t i=0; i<nfds; ++i) {
             epoll_event ev;
             memset(&ev, 0, sizeof(ev));
@@ -78,14 +78,14 @@ struct io_scheduler {
 
             if (fds[i].events & EPOLLIN) {
                 DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
-                pollfds[fd].t_in = t;
+                pollfds[fd].t_in = t.get();
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
                 DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
-                pollfds[fd].t_out = t;
+                pollfds[fd].t_out = t.get();
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
             }
@@ -135,7 +135,7 @@ struct io_scheduler {
 
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
-        task *t = this_task();
+        ptr<task> t = this_task();
         auto now = this_proc()->cached_time();
         alarm_clock::scoped_alarm sleep_alarm(alarms, t, now+dura);
         t->swap();
@@ -162,7 +162,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-        task *t = this_task();
+        ptr<task> t = this_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd,
@@ -193,7 +193,7 @@ struct io_scheduler {
     void fdtask() {
         taskname("fdtask");
         tasksystem();
-        proc *p = this_proc();
+        ptr<proc> p = this_proc();
         for (;;) {
             p->update_cached_time();
             // let everyone else run
@@ -291,10 +291,10 @@ struct io_scheduler {
 
             auto now = p->update_cached_time();
             // wake up sleeping tasks
-            alarms.tick(now, [this](task *t, std::exception_ptr exception) {
-                if (exception != nullptr && t->exception == nullptr) {
+            alarms.tick(now, [this](ptr<task> t, std::exception_ptr exception) {
+                if (exception != nullptr && t->_pimpl->exception == nullptr) {
                     DVLOG(5) << "alarm with exception fired: " << t;
-                    t->exception = exception;
+                    t->_pimpl->exception = exception;
                 }
                 DVLOG(5) << "TIMEOUT on task: " << t;
                 t->ready();

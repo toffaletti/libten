@@ -11,8 +11,8 @@ namespace ten {
 
 struct io_scheduler;
 
-extern proc *this_proc();
-extern task *this_task();
+extern ptr<proc> this_proc();
+extern ptr<task> this_task();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc
@@ -55,12 +55,12 @@ public:
 
 struct proc_context {
     std::thread thread;
-    task *t;
+    ptr<task> t;
 };
 
-struct proc {
+class proc {
 protected:
-    friend task *this_task();
+    friend ptr<task> this_task();
     friend int64_t taskyield();
 
     // TODO: might be able to use std::atomic_ specializations for shared_ptr
@@ -69,13 +69,13 @@ protected:
     std::shared_ptr<proc_waker> _waker;
     io_scheduler *_sched;
     uint64_t nswitch;
-    task *ctask;
+    ptr<task> ctask;
     tasklist taskpool;
     tasklist runqueue;
     tasklist alltasks;
     context ctx;
     //! other threads use this to add tasks to runqueue
-    llqueue<task *> dirtyq;
+    llqueue<ptr<task>> dirtyq;
     //! true when canceled
     std::atomic<bool> canceled;
     //! tasks in this proc
@@ -111,8 +111,8 @@ public:
     }
 
     void dump_tasks(std::ostream &out) const {
-        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-            out << *i << "\n";
+        for (auto &t : alltasks) {
+            out << t << "\n";
         }
     }
 
@@ -141,17 +141,17 @@ public:
     //! cancel all tasks in this proc
     void shutdown() {
         for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-            task *t = *i;
+            ptr<task> t{*i};
             if (t == ctask) continue; // don't add ourself to the runqueue
-            if (!t->systask) {
+            if (!t->_pimpl->systask) {
                 t->cancel();
             }
         }
     }
 
-    void ready(task *t, bool front=false) {
+    void ready(ptr<task> t, bool front=false) {
         DVLOG(5) << "readying: " << t;
-        if (this != this_proc()) {
+        if (this != this_proc().get()) {
             dirtyq.push(t);
             wakeup();
         } else {
@@ -164,9 +164,9 @@ public:
     }
 
     bool cancel_task_by_id(uint64_t id) {
-        task *t = nullptr;
+        ptr<task> t = nullptr;
         for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-            if ((*i)->id == id) {
+            if ((*i)->_pimpl->id == id) {
                 t = *i;
                 break;
             }
@@ -180,41 +180,43 @@ public:
 
     //! mark current task as system task
     void mark_system_task() {
-        if (!ctask->systask) {
-            ctask->systask = true;
+        if (!ctask->_pimpl->systask) {
+            ctask->_pimpl->systask = true;
             --taskcount;
         }
     }
 
     void wakeup();
 
-    task *newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
-        auto i = std::find_if(taskpool.begin(), taskpool.end(), task_has_size(stacksize));
-        task *t = nullptr;
+    ptr<task> newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
+        auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task> t) -> bool {
+            return t->_pimpl->ctx.stack_size() == stacksize;
+        });
+        ptr<task> t = nullptr;
         if (i != taskpool.end()) {
             t = *i;
             taskpool.erase(i);
             DVLOG(5) << "initing from pool: " << t;
             t->init(f);
         } else {
-            t = new task(f, stacksize);
+            t.reset(new task(f, stacksize));
         }
         addtaskinproc(t);
         return t;
     }
 
-    void addtaskinproc(task *t) {
+    void addtaskinproc(ptr<task> t) {
         ++taskcount;
         alltasks.push_back(t);
-        t->cproc = this;
+        t->_pimpl->cproc.reset(this);
     }
 
-    void deltaskinproc(task *t);
+    void deltaskinproc(ptr<task> t);
 
-    static void add(proc *p);
-    static void del(proc *p);
+    static void add(ptr<proc> p);
+    static void del(ptr<proc> p);
 
-    static void thread_entry(task *t);
+    static void thread_entry(ptr<task> t);
 
 };
 

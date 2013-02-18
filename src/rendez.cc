@@ -6,7 +6,7 @@ namespace ten {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     DCHECK(lk.owns_lock()) << "must own lock before calling rendez::sleep";
-    task *t = this_task();
+    ptr<task> t = this_task();
 
     {
         std::lock_guard<std::timed_mutex> ll(_m);
@@ -40,7 +40,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
 }
 
 void rendez::wakeup() {
-    task *t = nullptr;
+    ptr<task> t = nullptr;
     {
         std::lock_guard<std::timed_mutex> lk(_m);
         if (!_waiting.empty()) {
@@ -65,23 +65,6 @@ void rendez::wakeupall() {
         t->ready();
     }
 }
-
-#if 0
-bool rendez::sleep_for(unique_lock<qutex> &lk, unsigned int ms) {
-    task *t = this_proc()->ctask;
-    if (find(waiting.begin(), waiting.end(), t) == waiting.end()) {
-        DVLOG(5) << "RENDEZ SLEEP PUSH BACK: " << t;
-        waiting.push_back(t);
-    }
-    lk.unlock();
-    this_proc()->sched().add_timeout(t, ms);
-    t->swap();
-    lk.lock();
-    this_proc()->sched().del_timeout(t);
-    // if we're not in the waiting list then we were signaled to wakeup
-    return find(waiting.begin(), waiting.end(), t) == waiting.end();
-}
-#endif
 
 rendez::~rendez() {
     using ::operator<<;
