@@ -231,7 +231,6 @@ struct io_scheduler {
 
             if (ms != 0 || npollfds > 0) {
                 taskstate("epoll %d ms", ms);
-                // only process 1000 events each iteration to keep it fair
                 if (ms > 0) {
                     struct itimerspec tspec{};
                     struct itimerspec oldspec{};
@@ -243,7 +242,8 @@ struct io_scheduler {
                     // -1 means no timeout.
                     ms = -1;
                 }
-                events.resize(1000);
+                // only process 100 events each iteration to keep it fair
+                events.resize(100);
                 _waker->polling = true;
                 if (p->is_dirty()) {
                     // another thread(s) changed the dirtyq before we started
