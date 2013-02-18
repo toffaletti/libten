@@ -73,7 +73,7 @@ protected:
     tasklist taskpool;
     tasklist runqueue;
     tasklist alltasks;
-    coroutine co;
+    context ctx;
     //! other threads use this to add tasks to runqueue
     llqueue<task *> dirtyq;
     //! true when canceled
@@ -94,7 +94,7 @@ public:
 
     void schedule();
 
-    coroutine &sched_coro() { return co; }
+    context &sched_context() { return ctx; }
 
     io_scheduler &sched();
 

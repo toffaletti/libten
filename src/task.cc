@@ -96,7 +96,7 @@ void taskdumpf(FILE *of) {
 }
 
 task::task(const std::function<void ()> &f, size_t stacksize)
-    : co(task::start, this, stacksize)
+    : ctx{task::start, stacksize}
 {
     clear();
     fn = f;
@@ -104,8 +104,28 @@ task::task(const std::function<void ()> &f, size_t stacksize)
 
 void task::init(const std::function<void ()> &f) {
     fn = f;
-    co.restart(task::start, this);
+    ctx.init(task::start, ctx.stack_size());
 }
+
+void task::start(intptr_t arg) {
+    task *t = reinterpret_cast<task *>(arg);
+    try {
+        if (!t->canceled) {
+            t->fn();
+        }
+    } catch (task_interrupted &e) {
+        DVLOG(5) << t << " interrupted ";
+    } catch (backtrace_exception &e) {
+        LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
+        std::exit(2);
+    } catch (std::exception &e) {
+        LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
+        std::exit(2);
+    }
+    t->exit();
+}
+
+
 
 void task::ready(bool front) {
     proc *p = cproc;
@@ -136,12 +156,12 @@ void task::clear(bool newid) {
 
 void task::safe_swap() noexcept {
     // swap to scheduler coroutine
-    co.swap(&this_proc()->sched_coro());
+    ctx.swap(this_proc()->sched_context(), 0);
 }
 
 void task::swap() {
     // swap to scheduler coroutine
-    co.swap(&this_proc()->sched_coro());
+    ctx.swap(this_proc()->sched_context(), 0);
 
     if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();

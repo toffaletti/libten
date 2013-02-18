@@ -7,7 +7,7 @@
 
 #include "ten/task.hh"
 #include "ten/logging.hh"
-#include "ten/task/coroutine.hh"
+#include "context.hh"
 
 using namespace std::chrono;
 
@@ -24,7 +24,7 @@ public:
     char name[16];
     char state[32];
     std::function<void ()> fn;
-    coroutine co;
+    context ctx;
     uint64_t id;
     proc *cproc;
     uint64_t cancel_points;
@@ -77,23 +77,7 @@ public:
         vsnprintf(state, sizeof(state), fmt, arg);
     }
 
-    static void start(void *arg) {
-        task *t = (task *)arg;
-        try {
-            if (!t->canceled) {
-                t->fn();
-            }
-        } catch (task_interrupted &e) {
-            DVLOG(5) << t << " interrupted ";
-        } catch (backtrace_exception &e) {
-            LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
-            std::exit(2);
-        } catch (std::exception &e) {
-            LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
-            std::exit(2);
-        }
-        t->exit();
-    }
+    static void start(intptr_t arg);
 
     friend std::ostream &operator << (std::ostream &o, task *t) {
         if (t) {
@@ -115,7 +99,7 @@ struct task_has_size {
     task_has_size(size_t stack_size_) : stack_size(stack_size_) {}
 
     bool operator()(const task *t) const {
-        return t->co.stack_size() == stack_size;
+        return t->ctx.stack_size() == stack_size;
     }
 };
 

@@ -123,7 +123,7 @@ void proc::schedule() {
             }
             DVLOG(5) << "p: " << this << " swapping to: " << t;
             t->_ready = false;
-            co.swap(&t->co);
+            ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t));
             ctask = nullptr;
             
             if (!t->fn) {
