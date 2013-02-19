@@ -53,11 +53,6 @@ public:
 
 };
 
-struct proc_context {
-    std::thread thread;
-    ptr<task> t;
-};
-
 class proc {
 private:
     friend ptr<task> this_task();

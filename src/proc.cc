@@ -271,10 +271,8 @@ proc::~proc() {
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
     ptr<task> t{new task(f, stacksize)};
     uint64_t tid = t->id();
-    auto ctx = std::make_shared<proc_context>();
-    ctx->t = t;
-    ctx->thread = std::move(std::thread(proc::thread_entry, t));
-    ctx->thread.detach();
+    std::thread procthread{proc::thread_entry, t};
+    procthread.detach();
     // XXX: task could be freed at this point
     return tid;
 }
