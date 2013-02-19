@@ -61,7 +61,7 @@ void proc::del(ptr<proc> p) {
 
 io_scheduler &proc::sched() {
     if (_sched == nullptr) {
-        _sched = new io_scheduler();
+        _sched.reset(new io_scheduler());
     }
     return *_sched;
 }
@@ -262,7 +262,7 @@ proc::~proc() {
         }
         // must delete _sched *after* tasks because
         // they might try to remove themselves from timeouts set
-        delete _sched;
+        delete _sched.get();
     }
     // unlock before del()
     DVLOG(5) << "proc freed: " << this;

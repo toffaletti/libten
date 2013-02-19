@@ -66,7 +66,7 @@ private:
     // to allow waker to change from normal scheduler to io scheduler waker
     // perhaps there is a better pattern...
     std::shared_ptr<proc_waker> _waker;
-    io_scheduler *_sched;
+    ptr<io_scheduler> _sched;
     ptr<task> ctask;
     tasklist taskpool;
     tasklist runqueue;
