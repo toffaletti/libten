@@ -59,24 +59,6 @@ void proc::del(ptr<proc> p) {
     procs.erase(i);
 }
 
-void proc::deltaskinproc(ptr<task> t) {
-    if (!t->_pimpl->systask) {
-        --taskcount;
-    }
-    DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
-        << " found in runqueue while being deleted";
-    auto i = std::find(alltasks.begin(), alltasks.end(), t);
-    DCHECK(i != alltasks.end());
-    alltasks.erase(i);
-    DVLOG(5) << "POOLING task: " << t;
-    t->clear();
-    taskpool.push_back(t);
-}
-
-void proc::wakeup() {
-    _waker->wake();
-}
-
 io_scheduler &proc::sched() {
     if (_sched == nullptr) {
         _sched = new io_scheduler();
@@ -145,6 +127,93 @@ proc::proc(bool main_)
 {
     _waker = std::make_shared<proc_waker>();
     update_cached_time();
+}
+
+void proc::shutdown() {
+    for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
+        ptr<task> t{*i};
+        if (t == ctask) continue; // don't add ourself to the runqueue
+        if (!t->_pimpl->systask) {
+            t->cancel();
+        }
+    }
+}
+
+void proc::ready(ptr<task> t, bool front) {
+    DVLOG(5) << "readying: " << t;
+    if (this != this_proc().get()) {
+        dirtyq.push(t);
+        wakeup();
+    } else {
+        if (front) {
+            runqueue.push_front(t);
+        } else {
+            runqueue.push_back(t);
+        }
+    }
+}
+
+bool proc::cancel_task_by_id(uint64_t id) {
+    ptr<task> t = nullptr;
+    for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
+        if ((*i)->_pimpl->id == id) {
+            t = *i;
+            break;
+        }
+    }
+
+    if (t) {
+        t->cancel();
+    }
+    return (bool)t;
+}
+
+void proc::mark_system_task() {
+    if (!ctask->_pimpl->systask) {
+        ctask->_pimpl->systask = true;
+        --taskcount;
+    }
+}
+
+void proc::wakeup() {
+    _waker->wake();
+}
+
+ptr<task> proc::newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
+    auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task> t) -> bool {
+            return t->_pimpl->ctx.stack_size() == stacksize;
+            });
+    ptr<task> t = nullptr;
+    if (i != taskpool.end()) {
+        t = *i;
+        taskpool.erase(i);
+        DVLOG(5) << "initing from pool: " << t;
+        t->init(f);
+    } else {
+        t.reset(new task(f, stacksize));
+    }
+    addtaskinproc(t);
+    return t;
+}
+
+void proc::addtaskinproc(ptr<task> t) {
+    ++taskcount;
+    alltasks.push_back(t);
+    t->_pimpl->cproc.reset(this);
+}
+
+void proc::deltaskinproc(ptr<task> t) {
+    if (!t->_pimpl->systask) {
+        --taskcount;
+    }
+    DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
+        << " found in runqueue while being deleted";
+    auto i = std::find(alltasks.begin(), alltasks.end(), t);
+    DCHECK(i != alltasks.end());
+    alltasks.erase(i);
+    DVLOG(5) << "POOLING task: " << t;
+    t->clear();
+    taskpool.push_back(t);
 }
 
 proc::~proc() {

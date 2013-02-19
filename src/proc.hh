@@ -139,78 +139,15 @@ public:
     }
 
     //! cancel all tasks in this proc
-    void shutdown() {
-        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-            ptr<task> t{*i};
-            if (t == ctask) continue; // don't add ourself to the runqueue
-            if (!t->_pimpl->systask) {
-                t->cancel();
-            }
-        }
-    }
-
-    void ready(ptr<task> t, bool front=false) {
-        DVLOG(5) << "readying: " << t;
-        if (this != this_proc().get()) {
-            dirtyq.push(t);
-            wakeup();
-        } else {
-            if (front) {
-                runqueue.push_front(t);
-            } else {
-                runqueue.push_back(t);
-            }
-        }
-    }
-
-    bool cancel_task_by_id(uint64_t id) {
-        ptr<task> t = nullptr;
-        for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-            if ((*i)->_pimpl->id == id) {
-                t = *i;
-                break;
-            }
-        }
-
-        if (t) {
-            t->cancel();
-        }
-        return (bool)t;
-    }
-
+    void shutdown();
+    void ready(ptr<task> t, bool front=false);
+    bool cancel_task_by_id(uint64_t id);
     //! mark current task as system task
-    void mark_system_task() {
-        if (!ctask->_pimpl->systask) {
-            ctask->_pimpl->systask = true;
-            --taskcount;
-        }
-    }
-
+    void mark_system_task();
     void wakeup();
 
-    ptr<task> newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
-        auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task> t) -> bool {
-            return t->_pimpl->ctx.stack_size() == stacksize;
-        });
-        ptr<task> t = nullptr;
-        if (i != taskpool.end()) {
-            t = *i;
-            taskpool.erase(i);
-            DVLOG(5) << "initing from pool: " << t;
-            t->init(f);
-        } else {
-            t.reset(new task(f, stacksize));
-        }
-        addtaskinproc(t);
-        return t;
-    }
-
-    void addtaskinproc(ptr<task> t) {
-        ++taskcount;
-        alltasks.push_back(t);
-        t->_pimpl->cproc.reset(this);
-    }
-
+    ptr<task> newtaskinproc(const std::function<void ()> &f, size_t stacksize);
+    void addtaskinproc(ptr<task> t);
     void deltaskinproc(ptr<task> t);
 
     static void add(ptr<proc> p);
