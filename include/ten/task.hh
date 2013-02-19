@@ -58,8 +58,8 @@ public:
     task() {}
     task(const task &) = delete;
     task &operator=(const task &) = delete;
-    task(task &&);
-    task &operator=(task &&) noexcept;
+    task(task &&) = default;
+    task &operator=(task &&) = default;
 
     //! spawn a new task in the current thread
     template<class Function, class... Args> 
