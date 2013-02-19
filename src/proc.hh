@@ -12,7 +12,7 @@ namespace ten {
 struct io_scheduler;
 
 extern ptr<proc> this_proc();
-extern ptr<task> this_task();
+extern ptr<task::pimpl> this_task();
 
 // TODO: api to register at-proc-exit cleanup functions
 // this can be used to free io_scheduler, or other per-proc
@@ -55,20 +55,20 @@ public:
 
 class proc {
 private:
-    friend ptr<task> this_task();
+    friend ptr<task::pimpl> this_task();
 
     // TODO: might be able to use std::atomic_ specializations for shared_ptr
     // to allow waker to change from normal scheduler to io scheduler waker
     // perhaps there is a better pattern...
     std::shared_ptr<proc_waker> _waker;
     ptr<io_scheduler> _sched;
-    ptr<task> ctask;
-    tasklist taskpool;
-    tasklist runqueue;
-    tasklist alltasks;
+    ptr<task::pimpl> ctask;
+    std::deque<ptr<task::pimpl>> taskpool;
+    std::deque<ptr<task::pimpl>> runqueue;
+    std::deque<ptr<task::pimpl>> alltasks;
     context ctx;
     //! other threads use this to add tasks to runqueue
-    llqueue<ptr<task>> dirtyq;
+    llqueue<ptr<task::pimpl>> dirtyq;
     //! true when canceled
     std::atomic<bool> canceled;
     //! tasks in this proc
@@ -133,20 +133,20 @@ public:
 
     //! cancel all tasks in this proc
     void shutdown();
-    void ready(ptr<task> t, bool front=false);
+    void ready(ptr<task::pimpl> t, bool front=false);
     bool cancel_task_by_id(uint64_t id);
     //! mark current task as system task
     void mark_system_task();
     void wakeup();
 
-    ptr<task> newtaskinproc(const std::function<void ()> &f, size_t stacksize);
-    void addtaskinproc(ptr<task> t);
-    void deltaskinproc(ptr<task> t);
+    ptr<task::pimpl> newtaskinproc(const std::function<void ()> &f, size_t stacksize);
+    void addtaskinproc(ptr<task::pimpl> t);
+    void deltaskinproc(ptr<task::pimpl> t);
 
     static void add(ptr<proc> p);
     static void del(ptr<proc> p);
 
-    static void thread_entry(ptr<task> t);
+    static void thread_entry(ptr<task::pimpl> t);
 
 };
 

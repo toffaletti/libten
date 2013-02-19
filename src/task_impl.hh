@@ -13,24 +13,42 @@ using namespace std::chrono;
 
 namespace ten {
 
-class task {
-private:
-    struct pimpl;
-    std::shared_ptr<pimpl> _pimpl;
-public:
+struct task::pimpl {
+    static constexpr size_t namesize = 16;
+    static constexpr size_t statesize = 32;
     struct cancellation_point {
         cancellation_point();
         ~cancellation_point();
     };
 
-    bool cancelable() const;
-public:
-    task(const std::function<void ()> &f, size_t stacksize);
-    ~task();
+    context ctx;
+    ptr<proc> cproc;
+    std::exception_ptr exception;
+    uint64_t cancel_points;
+    std::unique_ptr<char[]> name;
+    std::unique_ptr<char[]> state;
+    uint64_t id;
+    std::function<void ()> fn;
+    std::atomic<bool> is_ready;
+    bool systask;
+    bool canceled;
 
-    uint64_t id() const;
+    pimpl(const std::function<void ()> &f, size_t stacksize)
+        : ctx{task::pimpl::start, stacksize},
+        name{new char[namesize]},
+        state{new char[statesize]}
+    {
+        clear();
+        fn = f;
+    }
 
-private:
+    ~pimpl();
+
+    void setname(const char *fmt, ...);
+    void vsetname(const char *fmt, va_list arg);
+    void setstate(const char *fmt, ...);
+    void vsetstate(const char *fmt, va_list arg);
+
     void ready(bool front=false);
     void safe_swap() noexcept;
     void swap();
@@ -40,48 +58,12 @@ private:
 
     void exit();
     void cancel();
+    bool cancelable() const;
 
     static void start(intptr_t arg);
-
-    friend std::ostream &operator << (std::ostream &o, ptr<task> t);
-    friend class proc;
-    friend struct io_scheduler;
-    friend uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize);
-    friend uint64_t taskid();
-    friend const char *taskname(const char *fmt, ...);
-    friend const char *taskstate(const char *fmt, ...);
-    friend void taskyield();
-    friend class rendez;
-    friend class qutex;
 };
 
-struct task::pimpl {
-    std::exception_ptr exception;
-    char name[16];
-    char state[32];
-    std::function<void ()> fn;
-    context ctx;
-    uint64_t id;
-    ptr<proc> cproc;
-    uint64_t cancel_points;
-    std::atomic<bool> ready;
-    bool systask;
-    bool canceled;
-
-    pimpl(const std::function<void ()> &f, size_t stacksize)
-        : ctx{task::start, stacksize}
-    {
-        clear();
-        fn = f;
-    }
-
-    void setname(const char *fmt, ...);
-    void vsetname(const char *fmt, va_list arg);
-    void setstate(const char *fmt, ...);
-    void vsetstate(const char *fmt, va_list arg);
-
-    void clear(bool newid=true);
-};
+std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
 
 } // end namespace ten
 

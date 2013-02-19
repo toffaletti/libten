@@ -23,10 +23,19 @@ struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
 
-class task;
+class task {
+public:
+    struct pimpl;
+private:
+    std::shared_ptr<pimpl> _pimpl;
+public:
+    task(const std::function<void ()> &f, size_t stacksize);
+    ~task();
+
+    uint64_t id() const;
+};
+
 class proc;
-typedef std::deque<ptr<task>> tasklist;
-typedef std::deque<ptr<proc>> proclist;
 
 //! spawn a new task in the current thread
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
@@ -62,7 +71,7 @@ struct procmain {
 private:
     ptr<proc> p;
 public:
-    explicit procmain(ptr<task> t = nullptr);
+    explicit procmain(ptr<task::pimpl> t = nullptr);
     ~procmain();
 
     int main(int argc=0, char *argv[]=nullptr);

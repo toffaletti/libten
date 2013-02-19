@@ -17,7 +17,7 @@ namespace hack {
 
 __thread proc *_this_proc = nullptr;
 static std::mutex procsmutex;
-static proclist procs;
+static std::deque<ptr<proc>> procs;
 static std::once_flag init_flag;
 
 static void set_this_proc(ptr<proc> p) {
@@ -28,7 +28,7 @@ ptr<proc> this_proc() {
     return ptr<proc>{_this_proc};
 }
 
-ptr<task> this_task() {
+ptr<task::pimpl> this_task() {
     return _this_proc->ctask;
 }
 
@@ -42,7 +42,7 @@ void proc_waker::wait() {
     asleep = false;
 }
 
-void proc::thread_entry(ptr<task> t) {
+void proc::thread_entry(ptr<task::pimpl> t) {
     procmain scope{t};
     t->ready();
     scope.main();
@@ -72,7 +72,7 @@ void proc::schedule() {
         while (taskcount > 0) {
             // check dirty queue
             {
-                ptr<task> t = nullptr;
+                ptr<task::pimpl> t = nullptr;
                 while (dirtyq.pop(t)) {
                     DVLOG(5) << "dirty readying " << t;
                     runqueue.push_front(t);
@@ -92,15 +92,15 @@ void proc::schedule() {
                 procshutdown();
                 if (runqueue.empty()) continue;
             }
-            ptr<task> t{runqueue.front()};
+            ptr<task::pimpl> t{runqueue.front()};
             runqueue.pop_front();
             ctask = t;
             DVLOG(5) << "p: " << this << " swapping to: " << t;
-            t->_pimpl->ready = false;
-            ctx.swap(t->_pimpl->ctx, reinterpret_cast<intptr_t>(t.get()));
+            t->is_ready = false;
+            ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t.get()));
             ctask = nullptr;
             
-            if (!t->_pimpl->fn) {
+            if (!t->fn) {
                 deltaskinproc(t);
             }
         }
@@ -123,15 +123,15 @@ proc::proc(bool main_)
 
 void proc::shutdown() {
     for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-        ptr<task> t{*i};
+        ptr<task::pimpl> t{*i};
         if (t == ctask) continue; // don't add ourself to the runqueue
-        if (!t->_pimpl->systask) {
+        if (!t->systask) {
             t->cancel();
         }
     }
 }
 
-void proc::ready(ptr<task> t, bool front) {
+void proc::ready(ptr<task::pimpl> t, bool front) {
     DVLOG(5) << "readying: " << t;
     if (this != this_proc().get()) {
         dirtyq.push(t);
@@ -146,9 +146,9 @@ void proc::ready(ptr<task> t, bool front) {
 }
 
 bool proc::cancel_task_by_id(uint64_t id) {
-    ptr<task> t = nullptr;
+    ptr<task::pimpl> t = nullptr;
     for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-        if ((*i)->_pimpl->id == id) {
+        if ((*i)->id == id) {
             t = *i;
             break;
         }
@@ -161,8 +161,8 @@ bool proc::cancel_task_by_id(uint64_t id) {
 }
 
 void proc::mark_system_task() {
-    if (!ctask->_pimpl->systask) {
-        ctask->_pimpl->systask = true;
+    if (!ctask->systask) {
+        ctask->systask = true;
         --taskcount;
     }
 }
@@ -171,31 +171,31 @@ void proc::wakeup() {
     _waker->wake();
 }
 
-ptr<task> proc::newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
-    auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task> t) -> bool {
-            return t->_pimpl->ctx.stack_size() == stacksize;
+ptr<task::pimpl> proc::newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
+    auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task::pimpl> t) -> bool {
+            return t->ctx.stack_size() == stacksize;
             });
-    ptr<task> t = nullptr;
+    ptr<task::pimpl> t = nullptr;
     if (i != taskpool.end()) {
         t = *i;
         taskpool.erase(i);
         DVLOG(5) << "initing from pool: " << t;
         t->init(f);
     } else {
-        t.reset(new task(f, stacksize));
+        t.reset(new task::pimpl{f, stacksize});
     }
     addtaskinproc(t);
     return t;
 }
 
-void proc::addtaskinproc(ptr<task> t) {
+void proc::addtaskinproc(ptr<task::pimpl> t) {
     ++taskcount;
     alltasks.push_back(t);
-    t->_pimpl->cproc.reset(this);
+    t->cproc.reset(this);
 }
 
-void proc::deltaskinproc(ptr<task> t) {
-    if (!t->_pimpl->systask) {
+void proc::deltaskinproc(ptr<task::pimpl> t) {
+    if (!t->systask) {
         --taskcount;
     }
     DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
@@ -253,7 +253,7 @@ proc::~proc() {
         runqueue.clear();
         // clean up system tasks
         while (!alltasks.empty()) {
-            deltaskinproc(ptr<task>{alltasks.front()});
+            deltaskinproc(ptr<task::pimpl>{alltasks.front()});
         }
         // free tasks in taskpool
         for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
@@ -268,8 +268,8 @@ proc::~proc() {
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
-    ptr<task> t{new task(f, stacksize)};
-    uint64_t tid = t->id();
+    ptr<task::pimpl> t{new task::pimpl{f, stacksize}};
+    uint64_t tid = t->id;
     std::thread procthread{proc::thread_entry, t};
     procthread.detach();
     // XXX: task could be freed at this point
@@ -323,11 +323,10 @@ static void procmain_init() {
         act.sa_flags = SA_RESTART | SA_SIGINFO;
         throw_if(sigaction(SIGUSR1, &act, NULL) == -1);
     }
-
     netinit();
 }
 
-procmain::procmain(ptr<task> t) {
+procmain::procmain(ptr<task::pimpl> t) {
     // only way i know of detecting the main thread
     bool is_main_thread = getpid() == syscall(SYS_gettid);
     std::call_once(init_flag, procmain_init);

@@ -7,12 +7,12 @@
 namespace ten {
 
 struct io_scheduler {
-    typedef ten::alarm_clock<ptr<task>, proc_clock_t> alarm_clock;
+    typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
 
     struct task_poll_state {
-        task *t_in; // POLLIN task
+        task::pimpl *t_in; // POLLIN task
         pollfd *p_in; // pointer to pollfd structure that is on the task's stack
-        task *t_out; // POLLOUT task
+        task::pimpl *t_out; // POLLOUT task
         pollfd *p_out; // pointer to pollfd structure that is on the task's stack
         uint32_t events; // events this fd is registered for
         task_poll_state() : t_in(nullptr), p_in(nullptr), t_out(nullptr), p_out(nullptr), events(0) {}
@@ -63,7 +63,7 @@ struct io_scheduler {
         taskspawn(std::bind(&io_scheduler::fdtask, this));
     }
 
-    void add_pollfds(ptr<task> t, pollfd *fds, nfds_t nfds) {
+    void add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
         for (nfds_t i=0; i<nfds; ++i) {
             epoll_event ev;
             memset(&ev, 0, sizeof(ev));
@@ -135,7 +135,7 @@ struct io_scheduler {
 
     template<typename Rep,typename Period>
     void sleep(const duration<Rep, Period> &dura) {
-        ptr<task> t = this_task();
+        ptr<task::pimpl> t = this_task();
         auto now = this_proc()->cached_time();
         alarm_clock::scoped_alarm sleep_alarm(alarms, t, now+dura);
         t->swap();
@@ -162,7 +162,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-        ptr<task> t = this_task();
+        ptr<task::pimpl> t = this_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd,
@@ -199,7 +199,7 @@ struct io_scheduler {
             // let everyone else run
             taskyield();
             p->update_cached_time();
-            task *t = nullptr;
+            task::pimpl *t = nullptr;
 
             int ms = -1;
             // lock must be held while determining whether or not we'll be
@@ -291,10 +291,10 @@ struct io_scheduler {
 
             auto now = p->update_cached_time();
             // wake up sleeping tasks
-            alarms.tick(now, [this](ptr<task> t, std::exception_ptr exception) {
-                if (exception != nullptr && t->_pimpl->exception == nullptr) {
+            alarms.tick(now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
+                if (exception != nullptr && t->exception == nullptr) {
                     DVLOG(5) << "alarm with exception fired: " << t;
-                    t->_pimpl->exception = exception;
+                    t->exception = exception;
                 }
                 DVLOG(5) << "TIMEOUT on task: " << t;
                 t->ready();

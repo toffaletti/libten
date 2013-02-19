@@ -7,13 +7,12 @@ namespace ten {
 
 static std::atomic<uint64_t> taskidgen(0);
 
-std::ostream &operator << (std::ostream &o, ptr<task> t) {
-    if (t && t->_pimpl) {
-        task::pimpl *p = t->_pimpl.get();
-        o << "[" << (void*)p << " " << p->id << " "
-            << p->name << " |" << p->state
-            << "| sys: " << p->systask
-            << " canceled: " << p->canceled << "]";
+std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
+    if (t) {
+        o << "[" << (void*)t.get() << " " << t->id << " "
+            << t->name.get() << " |" << t->state.get()
+            << "| sys: " << t->systask
+            << " canceled: " << t->canceled << "]";
     } else {
         o << "nulltask";
     }
@@ -21,35 +20,35 @@ std::ostream &operator << (std::ostream &o, ptr<task> t) {
 }
 
 void tasksleep(uint64_t ms) {
-    task::cancellation_point cancellable;
+    task::pimpl::cancellation_point cancellable;
     this_proc()->sched().sleep(milliseconds{ms});
 }
 
 bool fdwait(int fd, int rw, optional_timeout ms) {
-    task::cancellation_point cancellable;
+    task::pimpl::cancellation_point cancellable;
     return this_proc()->sched().fdwait(fd, rw, ms);
 }
 
 int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    task::cancellation_point cancellable;
+    task::pimpl::cancellation_point cancellable;
     return this_proc()->sched().poll(fds, nfds, ms);
 }
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
-    ptr<task> t = this_proc()->newtaskinproc(f, stacksize);
+    ptr<task::pimpl> t = this_proc()->newtaskinproc(f, stacksize);
     t->ready(true); // add new tasks to front of runqueue
-    return t->_pimpl->id;
+    return t->id;
 }
 
 uint64_t taskid() {
     DCHECK(this_proc());
     DCHECK(this_task());
-    return this_task()->id();
+    return this_task()->id;
 }
 
 void taskyield() {
-    task::cancellation_point cancellable;
-    ptr<task> t = this_task();
+    task::pimpl::cancellation_point cancellable;
+    ptr<task::pimpl> t = this_task();
     t->ready();
     taskstate("yield");
     t->swap();
@@ -68,26 +67,26 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    ptr<task> t = this_task();
+    ptr<task::pimpl> t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
-        t->_pimpl->vsetname(fmt, arg);
+        t->vsetname(fmt, arg);
         va_end(arg);
     }
-    return t->_pimpl->name;
+    return t->name.get();
 }
 
 const char *taskstate(const char *fmt, ...)
 {
-	ptr<task> t = this_task();
+	ptr<task::pimpl> t = this_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
-        t->_pimpl->vsetstate(fmt, arg);
+        t->vsetstate(fmt, arg);
         va_end(arg);
     }
-    return t->_pimpl->state;
+    return t->state.get();
 }
 
 std::string taskdump() {
@@ -109,16 +108,20 @@ task::task(const std::function<void ()> &f, size_t stacksize)
 {
 }
 
-void task::init(const std::function<void ()> &f) {
-    _pimpl->fn = f;
-    _pimpl->ctx.init(task::start, _pimpl->ctx.stack_size());
+uint64_t task::id() const {
+    return _pimpl->id;
 }
 
-void task::start(intptr_t arg) {
-    task *t = reinterpret_cast<task *>(arg);
+void task::pimpl::init(const std::function<void ()> &f) {
+    fn = f;
+    ctx.init(task::pimpl::start, ctx.stack_size());
+}
+
+void task::pimpl::start(intptr_t arg) {
+    task::pimpl *t = reinterpret_cast<task::pimpl *>(arg);
     try {
-        if (!t->_pimpl->canceled) {
-            t->_pimpl->fn();
+        if (!t->canceled) {
+            t->fn();
         }
     } catch (task_interrupted &e) {
         DVLOG(5) << t << " interrupted ";
@@ -132,19 +135,11 @@ void task::start(intptr_t arg) {
     t->exit();
 }
 
-void task::ready(bool front) {
-    ptr<proc> p = _pimpl->cproc;
-    if (!_pimpl->ready.exchange(true)) {
-        p->ready(ptr<task>{this}, front);
+void task::pimpl::ready(bool front) {
+    ptr<proc> p = cproc;
+    if (!is_ready.exchange(true)) {
+        p->ready(ptr<task::pimpl>{this}, front);
     }
-}
-
-void task::clear(bool newid) {
-    _pimpl->clear(newid);
-}
-
-uint64_t task::id() const {
-    return _pimpl->id;
 }
 
 void task::pimpl::setname(const char *fmt, ...) {
@@ -155,7 +150,7 @@ void task::pimpl::setname(const char *fmt, ...) {
 }
 
 void task::pimpl::vsetname(const char *fmt, va_list arg) {
-    vsnprintf(name, sizeof(name), fmt, arg);
+    vsnprintf(name.get(), namesize, fmt, arg);
 }
 
 void task::pimpl::setstate(const char *fmt, ...) {
@@ -166,13 +161,13 @@ void task::pimpl::setstate(const char *fmt, ...) {
 }
 
 void task::pimpl::vsetstate(const char *fmt, va_list arg) {
-    vsnprintf(state, sizeof(state), fmt, arg);
+    vsnprintf(state.get(), statesize, fmt, arg);
 }
 
 void task::pimpl::clear(bool newid) {
     fn = nullptr;
     cancel_points = 0;
-    ready = false;
+    is_ready = false;
     systask = false;
     canceled = false;
     if (newid) {
@@ -184,45 +179,45 @@ void task::pimpl::clear(bool newid) {
     cproc = nullptr;
 }
 
-void task::safe_swap() noexcept {
+void task::pimpl::safe_swap() noexcept {
     // swap to scheduler coroutine
-    _pimpl->ctx.swap(this_proc()->sched_context(), 0);
+    ctx.swap(this_proc()->sched_context(), 0);
 }
 
-void task::swap() {
+void task::pimpl::swap() {
     // swap to scheduler coroutine
-    _pimpl->ctx.swap(this_proc()->sched_context(), 0);
+    ctx.swap(this_proc()->sched_context(), 0);
 
-    if (_pimpl->canceled && _pimpl->cancel_points > 0) {
+    if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
 
-    if (_pimpl->exception && _pimpl->cancel_points > 0) {
+    if (exception && cancel_points > 0) {
         DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
         std::exception_ptr tmp = nullptr;
-        std::swap(tmp, _pimpl->exception);
+        std::swap(tmp, exception);
         std::rethrow_exception(tmp);
     }
 }
 
-void task::exit() {
-    _pimpl->fn = nullptr;
+void task::pimpl::exit() {
+    fn = nullptr;
     swap();
 }
 
-bool task::cancelable() const {
-    return _pimpl->cancel_points > 0;
+bool task::pimpl::cancelable() const {
+    return cancel_points > 0;
 }
 
-void task::cancel() {
+void task::pimpl::cancel() {
     // don't cancel systasks
-    if (_pimpl->systask) return;
-    _pimpl->canceled = true;
+    if (systask) return;
+    canceled = true;
     ready();
 }
 
-task::~task() {
+task::pimpl::~pimpl() {
     clear(false);
 }
 
@@ -247,7 +242,7 @@ void deadline::_set_deadline(milliseconds ms) {
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         ptr<proc> p = this_proc();
-        ptr<task> t = this_task();
+        ptr<task::pimpl> t = this_task();
         auto now = p->cached_time();
         _pimpl.reset(new deadline_pimpl{});
         _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
@@ -274,14 +269,14 @@ milliseconds deadline::remaining() const {
     return {};
 }
 
-task::cancellation_point::cancellation_point() {
-    ptr<task> t = this_task();
-    ++t->_pimpl->cancel_points;
+task::pimpl::cancellation_point::cancellation_point() {
+    ptr<task::pimpl> t = this_task();
+    ++t->cancel_points;
 }
 
-task::cancellation_point::~cancellation_point() {
-    ptr<task> t = this_task();
-    --t->_pimpl->cancel_points;
+task::pimpl::cancellation_point::~cancellation_point() {
+    ptr<task::pimpl> t = this_task();
+    --t->cancel_points;
 }
 
 
