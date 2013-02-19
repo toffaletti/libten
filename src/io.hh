@@ -10,12 +10,11 @@ struct io_scheduler {
     typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
 
     struct task_poll_state {
-        task::pimpl *t_in; // POLLIN task
-        pollfd *p_in; // pointer to pollfd structure that is on the task's stack
-        task::pimpl *t_out; // POLLOUT task
-        pollfd *p_out; // pointer to pollfd structure that is on the task's stack
-        uint32_t events; // events this fd is registered for
-        task_poll_state() : t_in(nullptr), p_in(nullptr), t_out(nullptr), p_out(nullptr), events(0) {}
+        ptr<task::pimpl> t_in = nullptr; // POLLIN task
+        pollfd *p_in = nullptr; // pointer to pollfd structure that is on the task's stack
+        ptr<task::pimpl> t_out = nullptr; // POLLOUT task
+        pollfd *p_out = nullptr; // pointer to pollfd structure that is on the task's stack
+        uint32_t events = 0; // events this fd is registered for
     };
     typedef std::vector<task_poll_state> poll_task_array;
     typedef std::vector<epoll_event> event_vector;
@@ -78,14 +77,14 @@ struct io_scheduler {
 
             if (fds[i].events & EPOLLIN) {
                 DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
-                pollfds[fd].t_in = t.get();
+                pollfds[fd].t_in = t;
                 pollfds[fd].p_in = &fds[i];
                 pollfds[fd].events |= EPOLLIN;
             }
 
             if (fds[i].events & EPOLLOUT) {
                 DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
-                pollfds[fd].t_out = t.get();
+                pollfds[fd].t_out = t;
                 pollfds[fd].p_out = &fds[i];
                 pollfds[fd].events |= EPOLLOUT;
             }
@@ -108,13 +107,13 @@ struct io_scheduler {
             if (fds[i].revents) rvalue++;
 
             if (pollfds[fd].p_in == &fds[i]) {
-                pollfds[fd].t_in = nullptr;
+                pollfds[fd].t_in.reset();
                 pollfds[fd].p_in = nullptr;
                 pollfds[fd].events ^= EPOLLIN;
             }
 
             if (pollfds[fd].p_out == &fds[i]) {
-                pollfds[fd].t_out = nullptr;
+                pollfds[fd].t_out.reset();
                 pollfds[fd].p_out = nullptr;
                 pollfds[fd].events ^= EPOLLOUT;
             }
@@ -191,7 +190,7 @@ struct io_scheduler {
             // let everyone else run
             taskyield();
             p->update_cached_time();
-            task::pimpl *t = nullptr;
+            ptr<task::pimpl> t = nullptr;
 
             int ms = -1;
             // lock must be held while determining whether or not we'll be
@@ -256,7 +255,7 @@ struct io_scheduler {
                         pollfds[fd].p_in->revents = i->events;
                         t = pollfds[fd].t_in;
                         DVLOG(5) << "IN EVENT on task: " << t;
-                        t->ready();
+                        t->ready_for_io();
                     }
 
                     // check to see if pollout is a different task than pollin
@@ -264,7 +263,7 @@ struct io_scheduler {
                         pollfds[fd].p_out->revents = i->events;
                         t = pollfds[fd].t_out;
                         DVLOG(5) << "OUT EVENT on task: " << t;
-                        t->ready();
+                        t->ready_for_io();
                     }
 
                     if (i->data.fd == e_fd) {
@@ -289,7 +288,7 @@ struct io_scheduler {
                     t->exception = exception;
                 }
                 DVLOG(5) << "TIMEOUT on task: " << t;
-                t->ready();
+                t->ready_for_io();
             });
         }
         DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";

@@ -42,9 +42,12 @@ uint64_t get_id() {
 
 void yield() {
     task::pimpl::cancellation_point cancellable;
-    ptr<task::pimpl> t = this_proc()->ctask;
-    t->ready();
-    taskstate("yield");
+    ptr<proc> p = this_proc();
+    ptr<task::pimpl> t = p->ctask;
+    if (t->is_ready.exchange(true) == false) {
+        t->setstate("yield");
+        p->unsafe_ready(t);
+    }
     t->swap();
 }
 
@@ -143,7 +146,8 @@ task::task(const std::function<void ()> &f)
     : _pimpl{std::make_shared<task::pimpl>(f, current_stacksize)}
 {
     this_proc()->addtaskinproc(_pimpl);
-    _pimpl->ready(true); // add new tasks to front of runqueue
+    // add new tasks to front of runqueue
+    _pimpl->ready(true);
 }
 
 uint64_t task::get_id() const {
@@ -181,13 +185,6 @@ void task::pimpl::start(intptr_t arg) {
         std::exit(2);
     }
     t->exit();
-}
-
-void task::pimpl::ready(bool front) {
-    ptr<proc> p = cproc;
-    if (!is_ready.exchange(true)) {
-        p->ready(ptr<task::pimpl>{this}, front);
-    }
 }
 
 void task::pimpl::setname(const char *fmt, ...) {
@@ -247,7 +244,18 @@ void task::pimpl::cancel() {
     // don't cancel systasks
     if (systask) return;
     canceled = true;
-    ready();
+    if (is_ready.exchange(true) == false) {
+        this_proc()->unsafe_ready(ptr<task::pimpl>{this});
+    }
+}
+
+void task::pimpl::ready(bool front) {
+    cproc->ready(ptr<task::pimpl>{this}, front);
+}
+
+
+void task::pimpl::ready_for_io() {
+    cproc->ready_for_io(ptr<task::pimpl>{this});
 }
 
 struct deadline_pimpl {

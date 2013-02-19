@@ -43,6 +43,8 @@ struct task::pimpl {
     void vsetstate(const char *fmt, va_list arg);
 
     void ready(bool front=false);
+    void ready_for_io();
+
     void safe_swap() noexcept;
     void swap();
 

@@ -40,7 +40,7 @@ void proc_waker::wait() {
 
 void proc::thread_entry(std::shared_ptr<task::pimpl> t) {
     procmain scope{t};
-    t->ready();
+    t->ready(true);
     scope.main();
 }
 
@@ -131,16 +131,30 @@ void proc::shutdown() {
 
 void proc::ready(ptr<task::pimpl> t, bool front) {
     DVLOG(5) << "readying: " << t;
-    if (this != this_proc().get()) {
-        dirtyq.push(t);
-        wakeup();
-    } else {
-        if (front) {
-            runqueue.push_front(t);
+    if (t->is_ready.exchange(true) == false) {
+        if (this != this_proc().get()) {
+            dirtyq.push(t);
+            wakeup();
         } else {
-            runqueue.push_back(t);
+            if (front) {
+                runqueue.push_front(t);
+            } else {
+                runqueue.push_back(t);
+            }
         }
     }
+}
+
+void proc::ready_for_io(ptr<task::pimpl> t) {
+    DVLOG(5) << "readying for io: " << t;
+    if (t->is_ready.exchange(true) == false) {
+        runqueue.push_back(t);
+    }
+}
+
+void proc::unsafe_ready(ptr<task::pimpl> t) {
+    DVLOG(5) << "readying: " << t;
+    runqueue.push_back(t);
 }
 
 bool proc::cancel_task_by_id(uint64_t id) {
@@ -232,9 +246,6 @@ proc::~proc() {
         while (!alltasks.empty()) {
             deltaskinproc(ptr<task::pimpl>{alltasks.front().get()});
         }
-        // must delete _sched *after* tasks because
-        // they might try to remove themselves from timeouts set
-        delete _sched.get();
     }
     // unlock before del()
     DVLOG(5) << "proc freed: " << this;

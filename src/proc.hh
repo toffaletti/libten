@@ -62,7 +62,7 @@ private:
     // perhaps there is a better pattern...
     context ctx;
     std::deque<ptr<task::pimpl>> runqueue;
-    ptr<io_scheduler> _sched;
+    std::unique_ptr<io_scheduler> _sched;
     std::deque<std::shared_ptr<task::pimpl>> alltasks;
     std::shared_ptr<proc_waker> _waker;
     //! other threads use this to add tasks to runqueue
@@ -75,6 +75,12 @@ private:
     proc_time_t now;
     bool _main;
 
+private:
+    friend class task;
+    friend void this_task::yield();
+    void ready(ptr<task::pimpl> t, bool front=false);
+    void ready_for_io(ptr<task::pimpl> t);
+    void unsafe_ready(ptr<task::pimpl> t);
 public:
     explicit proc(bool main_);
 
@@ -131,7 +137,7 @@ public:
 
     //! cancel all tasks in this proc
     void shutdown();
-    void ready(ptr<task::pimpl> t, bool front=false);
+
     bool cancel_task_by_id(uint64_t id);
     //! mark current task as system task
     void mark_system_task();
