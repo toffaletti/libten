@@ -90,10 +90,6 @@ void tasksystem();
 const char *taskstate(const char *fmt=nullptr, ...);
 //! set/get current task name
 const char * taskname(const char *fmt=nullptr, ...);
-//! get a dump of all task names and state for the current proc
-std::string taskdump();
-//! write task dump to FILE stream
-void taskdumpf(FILE *of = stderr);
 
 //! spawn a new thread with a task scheduler
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);

@@ -13,6 +13,8 @@ using namespace std::chrono;
 
 namespace ten {
 
+void taskdumpf(FILE *of = stderr);
+
 struct task::pimpl {
     static constexpr size_t namesize = 16;
     static constexpr size_t statesize = 32;
