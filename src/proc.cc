@@ -96,13 +96,6 @@ void proc::schedule() {
             ptr<task> t{runqueue.front()};
             runqueue.pop_front();
             ctask = t;
-            if (!t->_pimpl->systask) {
-                // dont increment for system tasks so
-                // while(taskyield()) {} can be used to
-                // wait for all other tasks to exit
-                // really only useful for unit tests.
-                ++nswitch;
-            }
             DVLOG(5) << "p: " << this << " swapping to: " << t;
             t->_pimpl->ready = false;
             ctx.swap(t->_pimpl->ctx, reinterpret_cast<intptr_t>(t.get()));
@@ -122,7 +115,7 @@ void proc::schedule() {
 }
 
 proc::proc(bool main_)
-  : _sched(nullptr), nswitch(0), ctask(nullptr),
+  : _sched(nullptr), ctask(nullptr),
     canceled(false), taskcount(0), _main(main_)
 {
     _waker = std::make_shared<proc_waker>();

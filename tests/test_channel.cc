@@ -7,24 +7,29 @@
 using namespace ten;
 const size_t default_stacksize=245*1024;
 
-static void channel_recv(channel<intptr_t> c) {
+static void channel_recv(channel<intptr_t> c, channel<int> done_chan) {
     intptr_t d = c.recv();
-    BOOST_CHECK_EQUAL(d, 1875309);
+    BOOST_CHECK_EQUAL(d, 8675309);
     char *str = reinterpret_cast<char *>(c.recv());
     BOOST_CHECK_EQUAL(str, "hi");
+    done_chan.send(1);
 }
 
-static void channel_send(channel<intptr_t> c) {
+static void channel_send(channel<intptr_t> c, channel<int> done_chan) {
     static char str[] = "hi";
-    c.send(1875309);
+    c.send(8675309);
     c.send(reinterpret_cast<intptr_t>(str));
+    done_chan.send(1);
 }
 
 void channel_test_task() {
+    channel<int> done_chan;
     channel<intptr_t> c{10};
-    taskspawn(std::bind(channel_recv, c));
-    taskspawn(std::bind(channel_send, c));
-    while (taskyield()) {}
+    taskspawn(std::bind(channel_recv, c, done_chan));
+    taskspawn(std::bind(channel_send, c, done_chan));
+    for (int i=0; i<2; ++i) {
+        done_chan.recv();
+    }
     BOOST_CHECK(c.empty());
 }
 
@@ -35,10 +40,13 @@ BOOST_AUTO_TEST_CASE(channel_test) {
 }
 
 void unbuffered_test_task() {
+    channel<int> done_chan;
     channel<intptr_t> c;
-    taskspawn(std::bind(channel_recv, c));
-    taskspawn(std::bind(channel_send, c));
-    while (taskyield()) {}
+    taskspawn(std::bind(channel_recv, c, done_chan));
+    taskspawn(std::bind(channel_send, c, done_chan));
+    for (int i=0; i<2; ++i) {
+        done_chan.recv();
+    }
     BOOST_CHECK(c.empty());
 }
 
@@ -50,7 +58,7 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
 
 static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
     intptr_t d = c.recv();
-    assert(d == 1875309);
+    assert(d == 8675309);
     char *str = reinterpret_cast<char *>(c.recv());
     assert(strcmp(str, "hi") == 0);
     s.post();
@@ -59,8 +67,9 @@ static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
 void mt_test_task() {
     semaphore s;
     channel<intptr_t> c;
+    channel<int> done_chan;
     procspawn(std::bind(channel_recv_mt, c, std::ref(s)));
-    procspawn(std::bind(channel_send, c));
+    procspawn(std::bind(channel_send, c, done_chan));
     s.wait();
     BOOST_CHECK(c.empty());
 }
@@ -71,26 +80,31 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
     p.main();
 }
 
-static void channel_multi_send(channel<intptr_t> c) {
+static void channel_multi_send(channel<intptr_t> c, channel<int> done_chan) {
     c.send(1234);
     c.send(1234);
+    done_chan.send(1);
 }
 
-static void channel_multi_recv(channel<intptr_t> c) {
+static void channel_multi_recv(channel<intptr_t> c, channel<int> done_chan) {
     for (int i=0; i<5; ++i) {
         intptr_t d = c.recv();
         BOOST_CHECK_EQUAL(d, 1234);
     }
     BOOST_CHECK(c.empty());
+    done_chan.send(1);
 }
 
 void multiple_senders_task() {
+    channel<int> done_chan;
     channel<intptr_t> c{4};
     c.send(1234);
-    taskspawn(std::bind(channel_multi_recv, c));
-    taskspawn(std::bind(channel_multi_send, c));
-    taskspawn(std::bind(channel_multi_send, c));
-    while (taskyield()) {}
+    taskspawn(std::bind(channel_multi_recv, c, done_chan));
+    taskspawn(std::bind(channel_multi_send, c, done_chan));
+    taskspawn(std::bind(channel_multi_send, c, done_chan));
+    for (int i=0; i<3; ++i) {
+        done_chan.recv();
+    }
     BOOST_CHECK(c.empty());
 }
 

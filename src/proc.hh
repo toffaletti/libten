@@ -59,16 +59,14 @@ struct proc_context {
 };
 
 class proc {
-protected:
+private:
     friend ptr<task> this_task();
-    friend int64_t taskyield();
 
     // TODO: might be able to use std::atomic_ specializations for shared_ptr
     // to allow waker to change from normal scheduler to io scheduler waker
     // perhaps there is a better pattern...
     std::shared_ptr<proc_waker> _waker;
     io_scheduler *_sched;
-    uint64_t nswitch;
     ptr<task> ctask;
     tasklist taskpool;
     tasklist runqueue;

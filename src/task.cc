@@ -47,16 +47,12 @@ uint64_t taskid() {
     return this_task()->id();
 }
 
-int64_t taskyield() {
+void taskyield() {
     task::cancellation_point cancellable;
-    ptr<proc> p = this_proc();
-    uint64_t n = p->nswitch;
-    ptr<task> t{p->ctask};
+    ptr<task> t = this_task();
     t->ready();
     taskstate("yield");
     t->swap();
-    DVLOG(5) << "yield: " << (int64_t)(p->nswitch - n - 1);
-    return p->nswitch - n - 1;
 }
 
 void tasksystem() {

@@ -33,7 +33,7 @@ uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 //! current task id
 uint64_t taskid();
 //! allow other tasks to run
-int64_t taskyield();
+void taskyield();
 //! cancel a task
 bool taskcancel(uint64_t id);
 //! mark the current task as a system task

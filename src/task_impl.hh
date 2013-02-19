@@ -50,7 +50,7 @@ private:
     friend uint64_t taskid();
     friend const char *taskname(const char *fmt, ...);
     friend const char *taskstate(const char *fmt, ...);
-    friend int64_t taskyield();
+    friend void taskyield();
     friend class rendez;
     friend class qutex;
 };
