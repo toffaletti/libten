@@ -11,10 +11,10 @@
 
 namespace ten {
 
-inline void parse_host_port(std::string &host, unsigned short &port) {
+inline void parse_host_port(std::string &host, uint16_t &port) {
     size_t pos = host.rfind(':');
     if (pos != std::string::npos) {
-        port = boost::lexical_cast<unsigned short>(host.substr(pos+1, -1));
+        port = boost::lexical_cast<uint16_t>(host.substr(pos+1, -1));
         host = host.substr(0, pos);
     }
 }
