@@ -28,10 +28,6 @@ ptr<proc> this_proc() {
     return ptr<proc>{_this_proc};
 }
 
-ptr<task::pimpl> this_task() {
-    return _this_proc->ctask;
-}
-
 void proc_waker::wait() {
     ptr<proc> p = this_proc();
     std::unique_lock<std::mutex> lk{mutex};
@@ -42,7 +38,7 @@ void proc_waker::wait() {
     asleep = false;
 }
 
-void proc::thread_entry(ptr<task::pimpl> t) {
+void proc::thread_entry(std::shared_ptr<task::pimpl> t) {
     procmain scope{t};
     t->ready();
     scope.main();
@@ -114,17 +110,19 @@ void proc::schedule() {
 }
 
 proc::proc(bool main_)
-  : _sched(nullptr), ctask(nullptr),
-    canceled(false), taskcount(0), _main(main_)
+  : ctask(nullptr),
+    _sched(nullptr), 
+    canceled(false),
+    taskcount(0),
+    _main(main_)
 {
     _waker = std::make_shared<proc_waker>();
     update_cached_time();
 }
 
 void proc::shutdown() {
-    for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-        ptr<task::pimpl> t{*i};
-        if (t == ctask) continue; // don't add ourself to the runqueue
+    for (auto &t : alltasks) {
+        if (t.get() == ctask.get()) continue; // don't add ourself to the runqueue
         if (!t->systask) {
             t->cancel();
         }
@@ -146,18 +144,15 @@ void proc::ready(ptr<task::pimpl> t, bool front) {
 }
 
 bool proc::cancel_task_by_id(uint64_t id) {
-    ptr<task::pimpl> t = nullptr;
-    for (auto i = alltasks.cbegin(); i != alltasks.cend(); ++i) {
-        if ((*i)->id == id) {
-            t = *i;
+    bool found = false;
+    for (auto &t : alltasks) {
+        if (t->id == id) {
+            found = true;
+            t->cancel();
             break;
         }
     }
-
-    if (t) {
-        t->cancel();
-    }
-    return (bool)t;
+    return found;
 }
 
 void proc::mark_system_task() {
@@ -171,27 +166,10 @@ void proc::wakeup() {
     _waker->wake();
 }
 
-ptr<task::pimpl> proc::newtaskinproc(const std::function<void ()> &f, size_t stacksize) {
-    auto i = std::find_if(taskpool.begin(), taskpool.end(), [=](const ptr<task::pimpl> t) -> bool {
-            return t->ctx.stack_size() == stacksize;
-            });
-    ptr<task::pimpl> t = nullptr;
-    if (i != taskpool.end()) {
-        t = *i;
-        taskpool.erase(i);
-        DVLOG(5) << "initing from pool: " << t;
-        t->init(f);
-    } else {
-        t.reset(new task::pimpl{f, stacksize});
-    }
-    addtaskinproc(t);
-    return t;
-}
-
-void proc::addtaskinproc(ptr<task::pimpl> t) {
+void proc::addtaskinproc(std::shared_ptr<task::pimpl> t) {
     ++taskcount;
-    alltasks.push_back(t);
     t->cproc.reset(this);
+    alltasks.push_back(std::move(t));
 }
 
 void proc::deltaskinproc(ptr<task::pimpl> t) {
@@ -200,12 +178,11 @@ void proc::deltaskinproc(ptr<task::pimpl> t) {
     }
     DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
         << " found in runqueue while being deleted";
-    auto i = std::find(alltasks.begin(), alltasks.end(), t);
+    auto i = std::find_if(alltasks.begin(), alltasks.end(), [=](std::shared_ptr<task::pimpl> &tt) -> bool {
+        return tt.get() == t.get();
+    });
     DCHECK(i != alltasks.end());
     alltasks.erase(i);
-    DVLOG(5) << "POOLING task: " << t;
-    t->clear();
-    taskpool.push_back(t);
 }
 
 proc::~proc() {
@@ -253,11 +230,7 @@ proc::~proc() {
         runqueue.clear();
         // clean up system tasks
         while (!alltasks.empty()) {
-            deltaskinproc(ptr<task::pimpl>{alltasks.front()});
-        }
-        // free tasks in taskpool
-        for (auto i=taskpool.begin(); i!=taskpool.end(); ++i) {
-            delete i->get();
+            deltaskinproc(ptr<task::pimpl>{alltasks.front().get()});
         }
         // must delete _sched *after* tasks because
         // they might try to remove themselves from timeouts set
@@ -268,9 +241,9 @@ proc::~proc() {
 }
 
 uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
-    ptr<task::pimpl> t{new task::pimpl{f, stacksize}};
+    std::shared_ptr<task::pimpl> t = std::make_shared<task::pimpl>(f, stacksize);
     uint64_t tid = t->id;
-    std::thread procthread{proc::thread_entry, t};
+    std::thread procthread{proc::thread_entry, std::move(t)};
     procthread.detach();
     // XXX: task could be freed at this point
     return tid;
@@ -301,6 +274,7 @@ static void procmain_init() {
     ss.ss_flags = 0;
     throw_if(sigaltstack(&ss, NULL) == -1);
 
+
     umask(02); // allow group-readable logs
     InitGoogleLogging(program_invocation_short_name);
     glog_inited = true;
@@ -326,8 +300,9 @@ static void procmain_init() {
     netinit();
 }
 
-procmain::procmain(ptr<task::pimpl> t) {
+procmain::procmain(std::shared_ptr<task::pimpl> t) {
     // only way i know of detecting the main thread
+    task::set_default_stacksize(default_stacksize);
     bool is_main_thread = getpid() == syscall(SYS_gettid);
     std::call_once(init_flag, procmain_init);
     p.reset(new proc(is_main_thread));

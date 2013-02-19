@@ -33,16 +33,7 @@ struct task::pimpl {
     bool systask;
     bool canceled;
 
-    pimpl(const std::function<void ()> &f, size_t stacksize)
-        : ctx{task::pimpl::start, stacksize},
-        name{new char[namesize]},
-        state{new char[statesize]}
-    {
-        clear();
-        fn = f;
-    }
-
-    ~pimpl();
+    pimpl(const std::function<void ()> &f, size_t stacksize);
 
     void setname(const char *fmt, ...);
     void vsetname(const char *fmt, va_list arg);
@@ -52,9 +43,6 @@ struct task::pimpl {
     void ready(bool front=false);
     void safe_swap() noexcept;
     void swap();
-
-    void clear(bool newid=true);
-    void init(const std::function<void ()> &f);
 
     void exit();
     void cancel();

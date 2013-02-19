@@ -232,7 +232,7 @@ public:
             act.sa_sigaction = application::signal_handler;
             act.sa_flags = SA_RESTART | SA_SIGINFO;
             throw_if(sigaction(SIGINT, &act, NULL) == -1);
-            taskspawn(std::bind(&application::signal_task, this), 4*1024);
+            taskspawn(std::bind(&application::signal_task, this));
         }
         return p.main();
     }

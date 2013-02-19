@@ -133,14 +133,6 @@ struct io_scheduler {
         return rvalue;
     }
 
-    template<typename Rep,typename Period>
-    void sleep(const duration<Rep, Period> &dura) {
-        ptr<task::pimpl> t = this_task();
-        auto now = this_proc()->cached_time();
-        alarm_clock::scoped_alarm sleep_alarm(alarms, t, now+dura);
-        t->swap();
-    }
-
     bool fdwait(int fd, int rw, optional_timeout ms) {
         short events_ = 0;
         switch (rw) {
@@ -162,7 +154,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-        ptr<task::pimpl> t = this_task();
+        ptr<task::pimpl> t = this_proc()->ctask;
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd,
@@ -300,7 +292,7 @@ struct io_scheduler {
                 t->ready();
             });
         }
-        DVLOG(5) << "BUG: " << this_task() << " is exiting";
+        DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";
     }
 };
 

@@ -18,21 +18,60 @@ namespace ten {
 
 extern void netinit();
 
+using proc_clock_t = std::chrono::steady_clock;
+using proc_time_t = std::chrono::time_point<proc_clock_t>;
+
+//! return cached time from event loop, not precise
+const proc_time_t &procnow();
+
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
 
+namespace this_task {
+
+//! id of the current task
+uint64_t get_id();
+
+//! allow other tasks to run
+void yield();
+
+void sleep_until(const proc_time_t& sleep_time);
+
+template <class Rep, class Period>
+    void sleep_for(std::chrono::duration<Rep, Period> sleep_duration) {
+        sleep_until(procnow() + sleep_duration);
+    }
+
+} // end namespace this_task
+
 class task {
 public:
     struct pimpl;
+    friend class proc;
 private:
     std::shared_ptr<pimpl> _pimpl;
-public:
-    task(const std::function<void ()> &f, size_t stacksize);
-    ~task();
 
-    uint64_t id() const;
+    explicit task(const std::function<void ()> &f);
+public:
+    task() {}
+    task(const task &) = delete;
+    task &operator=(const task &) = delete;
+    task(task &&);
+    task &operator=(task &&) noexcept;
+
+    //! spawn a new task in the current thread
+    template<class Function, class... Args> 
+        static task spawn(Function &&f, Args&&... args) {
+            return task{std::bind(f, args...)};
+        }
+
+    //! id of this task
+    uint64_t get_id() const;
+
+public:
+    static void set_default_stacksize(size_t stacksize);
 };
 
 class proc;
@@ -61,17 +100,12 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 //! cancel all non-system tasks and exit procmain
 void procshutdown();
 
-//! return cached time from event loop, not precise
-using proc_clock_t = std::chrono::steady_clock;
-using proc_time_t = std::chrono::time_point<proc_clock_t>;
-const proc_time_t &procnow();
-
 //! main entry point for tasks
 struct procmain {
 private:
     ptr<proc> p;
 public:
-    explicit procmain(ptr<task::pimpl> t = nullptr);
+    explicit procmain(std::shared_ptr<task::pimpl> t = nullptr);
     ~procmain();
 
     int main(int argc=0, char *argv[]=nullptr);
