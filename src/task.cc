@@ -36,14 +36,14 @@ namespace this_task {
 
 uint64_t get_id() {
     DCHECK(this_proc());
-    DCHECK(this_proc()->ctask);
-    return this_proc()->ctask->id;
+    DCHECK(this_proc()->current_task());
+    return this_proc()->current_task()->id;
 }
 
 void yield() {
     task::pimpl::cancellation_point cancellable;
     ptr<proc> p = this_proc();
-    ptr<task::pimpl> t = p->ctask;
+    ptr<task::pimpl> t = p->current_task();
     if (t->is_ready.exchange(true) == false) {
         t->setstate("yield");
         p->unsafe_ready(t);
@@ -54,7 +54,7 @@ void yield() {
 void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
     ptr<proc> p = this_proc();
-    ptr<task::pimpl> t = p->ctask;
+    ptr<task::pimpl> t = p->current_task();
     io_scheduler::alarm_clock::scoped_alarm sleep_alarm(p->sched().alarms, t, sleep_time);
     t->swap();
 }
@@ -106,7 +106,7 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    ptr<task::pimpl> t = this_proc()->ctask;
+    ptr<task::pimpl> t = this_proc()->current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -118,7 +118,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	ptr<task::pimpl> t = this_proc()->ctask;
+	ptr<task::pimpl> t = this_proc()->current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -250,12 +250,12 @@ void task::pimpl::cancel() {
 }
 
 void task::pimpl::ready(bool front) {
-    cproc->ready(ptr<task::pimpl>{this}, front);
+    _scheduler->ready(ptr<task::pimpl>{this}, front);
 }
 
 
 void task::pimpl::ready_for_io() {
-    cproc->ready_for_io(ptr<task::pimpl>{this});
+    _scheduler->ready_for_io(ptr<task::pimpl>{this});
 }
 
 struct deadline_pimpl {
@@ -279,7 +279,7 @@ void deadline::_set_deadline(milliseconds ms) {
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
         ptr<proc> p = this_proc();
-        ptr<task::pimpl> t = p->ctask;
+        ptr<task::pimpl> t = p->current_task();
         auto now = p->cached_time();
         _pimpl.reset(new deadline_pimpl{});
         _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
@@ -307,12 +307,12 @@ milliseconds deadline::remaining() const {
 }
 
 task::pimpl::cancellation_point::cancellation_point() {
-    ptr<task::pimpl> t = this_proc()->ctask;
+    ptr<task::pimpl> t = this_proc()->current_task();
     ++t->cancel_points;
 }
 
 task::pimpl::cancellation_point::~cancellation_point() {
-    ptr<task::pimpl> t = this_proc()->ctask;
+    ptr<task::pimpl> t = this_proc()->current_task();
     --t->cancel_points;
 }
 

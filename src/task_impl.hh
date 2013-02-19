@@ -13,6 +13,8 @@ using namespace std::chrono;
 
 namespace ten {
 
+class scheduler;
+
 void taskdumpf(FILE *of = stderr);
 
 struct task::pimpl {
@@ -24,7 +26,7 @@ struct task::pimpl {
     };
 
     context ctx;
-    ptr<proc> cproc;
+    ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
     std::unique_ptr<char[]> name;

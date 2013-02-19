@@ -52,6 +52,7 @@ add_library(ten
     src/rendez.cc
     src/qutex.cc
     src/task.cc
+    src/scheduler.cc
     src/proc.cc
     src/error.cc
     src/ioproc.cc

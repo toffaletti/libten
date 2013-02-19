@@ -153,7 +153,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-        ptr<task::pimpl> t = this_proc()->ctask;
+        ptr<task::pimpl> t = this_proc()->current_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd,
@@ -291,7 +291,7 @@ struct io_scheduler {
                 t->ready_for_io();
             });
         }
-        DVLOG(5) << "BUG: " << this_proc()->ctask << " is exiting";
+        DVLOG(5) << "BUG: " << this_proc()->current_task() << " is exiting";
     }
 };
 
