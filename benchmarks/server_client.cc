@@ -1,4 +1,3 @@
-#include "ten/task.hh"
 #include "ten/net.hh"
 #include "ten/channel.hh"
 #include <iostream>
@@ -9,10 +8,14 @@ using namespace ten;
 const size_t default_stacksize=256*1024;
 
 static void connecter(address &addr, channel<int> ch) {
-    netsock s(AF_INET, SOCK_STREAM);
-    if (s.connect(addr, std::chrono::milliseconds{100}) == 0) {
-        ch.send(0);
-    } else {
+    try {
+        netsock s(AF_INET, SOCK_STREAM);
+        if (s.connect(addr, std::chrono::milliseconds{100}) == 0) {
+            ch.send(0);
+        } else {
+            ch.send(std::move(errno));
+        }
+    } catch (errorx &e) {
         ch.send(std::move(errno));
     }
 }
@@ -38,20 +41,20 @@ static void listener(netsock &sock) {
 
 static void connecter_spawner(address &addr, channel<int> &ch) {
     for (int i=0; i<1000; ++i) {
-        taskspawn(std::bind(connecter, std::ref(addr), ch));
+        taskspawn(std::bind(connecter, addr, ch));
     }
 }
 
 static void startup() {
     channel<int> ch(1000);
-    address addr;
+    address addr{AF_INET};
     netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
     s.bind(addr);
     s.listen();
     s.getsockname(addr);
     int listen_task = taskspawn(std::bind(listener, std::ref(s)));
     taskyield(); // let listener get setup
-    procspawn(std::bind(connecter_spawner, std::ref(addr), ch));
+    procspawn(std::bind(connecter_spawner, addr, ch));
 
     std::unordered_map<int, unsigned int> results;
     for (unsigned i=0; i<1000; ++i) {

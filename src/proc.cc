@@ -69,8 +69,7 @@ io_scheduler &proc::sched() {
 void proc::schedule() {
     try {
         DVLOG(5) << "p: " << this << " entering proc::schedule";
-        for (;;) {
-            if (taskcount == 0) break;
+        while (taskcount > 0) {
             // check dirty queue
             {
                 ptr<task> t = nullptr;
