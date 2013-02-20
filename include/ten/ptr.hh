@@ -50,7 +50,7 @@ class ptr {
 
   private:
     template <class P>
-    constexpr bool is_compat() {
+    static constexpr bool is_compat() {
         return std::is_convertible< typename std::add_pointer<P>::type
                                     , pointer
                                   >::value;
