@@ -53,6 +53,7 @@ add_library(ten
     src/qutex.cc
     src/task.cc
     src/scheduler.cc
+    src/thread_context.cc
     src/proc.cc
     src/error.cc
     src/ioproc.cc

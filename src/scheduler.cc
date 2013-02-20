@@ -1,31 +1,31 @@
 #include "scheduler.hh"
 #include "io.hh"
+#include <sys/syscall.h>
 
 namespace ten {
 
 extern std::mutex procsmutex;
 extern std::deque<ptr<proc>> procs;
 
-scheduler::scheduler(bool main_)
+scheduler::scheduler()
   : ctask(nullptr),
     _sched(nullptr), 
     canceled(false),
-    taskcount(0),
-    _main(main_)
+    taskcount(0)
 {
     _waker = std::make_shared<proc_waker>();
     update_cached_time();
 }
 
 scheduler::~scheduler() {
-    if (_main) {
+    if (getpid() == syscall(SYS_gettid)) {
         // if the main proc is exiting we need to cancel
         // all other procs (threads) and wait for them
         size_t nprocs = procs.size();
         {
             std::lock_guard<std::mutex> plk{procsmutex};
             for (auto i=procs.begin(); i!= procs.end(); ++i) {
-                if (&(*i)->_scheduler == this) continue;
+                if ((*i)->_scheduler.get() == this) continue;
                 (*i)->cancel();
             }
         }
@@ -154,7 +154,7 @@ void scheduler::remove_task(ptr<task::pimpl> t) {
 void scheduler::ready(ptr<task::pimpl> t, bool front) {
     DVLOG(5) << "readying: " << t;
     if (t->is_ready.exchange(true) == false) {
-        if (this != &this_proc()->_scheduler) {
+        if (this != &this_ctx->scheduler) {
             dirtyq.push(t);
             wakeup();
         } else {

@@ -66,9 +66,8 @@ private:
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
     proc_time_t now;
-    bool _main;
 public:
-    scheduler(bool main_);
+    scheduler();
     ~scheduler();
 
     void shutdown();
@@ -77,6 +76,10 @@ public:
 
     const proc_time_t & update_cached_time() {
         now = proc_clock_t::now();
+        return now;
+    }
+
+    const proc_time_t &cached_time() const {
         return now;
     }
 
@@ -94,6 +97,33 @@ public:
     bool cancel_task_by_id(uint64_t id);
     //! mark current task as system task
     void mark_system_task();
+
+    std::shared_ptr<proc_waker> get_waker() {
+        return _waker;
+    }
+
+    ptr<task::pimpl> current_task() const {
+        return ctask;
+    }
+
+    bool is_canceled() const {
+        return canceled;
+    }
+
+    void cancel() {
+        canceled = true;
+        wakeup();
+    }
+
+    bool is_dirty() {
+        return !dirtyq.empty();
+    }
+
+    bool is_ready() const {
+        return !runqueue.empty();
+    }
+
+    context &sched_context() { return ctx; }
 
 private:
     friend class task;

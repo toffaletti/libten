@@ -35,27 +35,26 @@ std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
 namespace this_task {
 
 uint64_t get_id() {
-    DCHECK(this_proc());
-    DCHECK(this_proc()->current_task());
-    return this_proc()->current_task()->id;
+    DCHECK(this_ctx->scheduler.current_task());
+    return this_ctx->scheduler.current_task()->id;
 }
 
 void yield() {
     task::pimpl::cancellation_point cancellable;
-    ptr<proc> p = this_proc();
-    ptr<task::pimpl> t = p->current_task();
+    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     if (t->is_ready.exchange(true) == false) {
         t->setstate("yield");
-        p->unsafe_ready(t);
+        this_ctx->scheduler.unsafe_ready(t);
     }
     t->swap();
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
-    ptr<proc> p = this_proc();
-    ptr<task::pimpl> t = p->current_task();
-    io_scheduler::alarm_clock::scoped_alarm sleep_alarm(p->sched().alarms, t, sleep_time);
+    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    io_scheduler::alarm_clock::scoped_alarm sleep_alarm{
+        this_ctx->scheduler.sched().alarms,
+            t, sleep_time};
     t->swap();
 }
 
@@ -67,12 +66,12 @@ void tasksleep(uint64_t ms) {
 
 bool fdwait(int fd, int rw, optional_timeout ms) {
     task::pimpl::cancellation_point cancellable;
-    return this_proc()->sched().fdwait(fd, rw, ms);
+    return this_ctx->scheduler.sched().fdwait(fd, rw, ms);
 }
 
 int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     task::pimpl::cancellation_point cancellable;
-    return this_proc()->sched().poll(fds, nfds, ms);
+    return this_ctx->scheduler.sched().poll(fds, nfds, ms);
 }
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
@@ -94,19 +93,16 @@ void taskyield() {
 }
 
 void tasksystem() {
-    ptr<proc> p = this_proc();
-    p->mark_system_task();
+    this_ctx->scheduler.mark_system_task();
 }
 
 bool taskcancel(uint64_t id) {
-    ptr<proc> p = this_proc();
-    DCHECK(p) << "BUG: taskcancel called in null proc";
-    return p->cancel_task_by_id(id);
+    return this_ctx->scheduler.cancel_task_by_id(id);
 }
 
 const char *taskname(const char *fmt, ...)
 {
-    ptr<task::pimpl> t = this_proc()->current_task();
+    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -118,7 +114,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	ptr<task::pimpl> t = this_proc()->current_task();
+	ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -130,9 +126,7 @@ const char *taskstate(const char *fmt, ...)
 
 std::string taskdump() {
     std::stringstream ss;
-    ptr<proc> p = this_proc();
-    DCHECK(p) << "BUG: taskdump called in null proc";
-    p->dump_tasks(ss);
+    this_ctx->scheduler.dump_tasks(ss);
     return ss.str();
 }
 
@@ -145,7 +139,7 @@ void taskdumpf(FILE *of) {
 task::task(const std::function<void ()> &f)
     : _pimpl{std::make_shared<task::pimpl>(f, current_stacksize)}
 {
-    this_proc()->addtaskinproc(_pimpl);
+    this_ctx->scheduler.attach_task(_pimpl);
     // add new tasks to front of runqueue
     _pimpl->ready(true);
 }
@@ -211,12 +205,12 @@ void task::pimpl::vsetstate(const char *fmt, va_list arg) {
 
 void task::pimpl::safe_swap() noexcept {
     // swap to scheduler coroutine
-    ctx.swap(this_proc()->sched_context(), 0);
+    ctx.swap(this_ctx->scheduler.sched_context(), 0);
 }
 
 void task::pimpl::swap() {
     // swap to scheduler coroutine
-    ctx.swap(this_proc()->sched_context(), 0);
+    ctx.swap(this_ctx->scheduler.sched_context(), 0);
 
     if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
@@ -245,7 +239,7 @@ void task::pimpl::cancel() {
     if (systask) return;
     canceled = true;
     if (is_ready.exchange(true) == false) {
-        this_proc()->unsafe_ready(ptr<task::pimpl>{this});
+        this_ctx->scheduler.unsafe_ready(ptr<task::pimpl>{this});
     }
 }
 
@@ -278,12 +272,11 @@ void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
-        ptr<proc> p = this_proc();
-        ptr<task::pimpl> t = p->current_task();
-        auto now = p->cached_time();
+        ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+        auto now = this_ctx->scheduler.cached_time();
         _pimpl.reset(new deadline_pimpl{});
         _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
-                p->sched().alarms, t, ms+now, deadline_reached{}
+                this_ctx->scheduler.sched().alarms, t, ms+now, deadline_reached{}
                 });
         DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }
@@ -307,12 +300,12 @@ milliseconds deadline::remaining() const {
 }
 
 task::pimpl::cancellation_point::cancellation_point() {
-    ptr<task::pimpl> t = this_proc()->current_task();
+    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     ++t->cancel_points;
 }
 
 task::pimpl::cancellation_point::~cancellation_point() {
-    ptr<task::pimpl> t = this_proc()->current_task();
+    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     --t->cancel_points;
 }
 

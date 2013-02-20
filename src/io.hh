@@ -35,7 +35,7 @@ struct io_scheduler {
     std::shared_ptr<proc_waker> _waker;
 
     io_scheduler() : npollfds(0) {
-        _waker = this_proc()->get_waker();
+        _waker = this_ctx->scheduler.get_waker();
         events.reserve(1000);
         // add the eventfd used to wake up
         {
@@ -153,7 +153,7 @@ struct io_scheduler {
     }
 
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-        ptr<task::pimpl> t = this_proc()->current_task();
+        ptr<task::pimpl> t = this_ctx->scheduler.current_task();
         if (nfds == 1) {
             taskstate("poll fd %i r: %i w: %i %ul ms",
                     fds->fd,
@@ -169,7 +169,7 @@ struct io_scheduler {
         try {
             optional<alarm_clock::scoped_alarm> timeout_alarm;
             if (ms) {
-                auto now = this_proc()->cached_time();
+                auto now = this_ctx->scheduler.cached_time();
                 timeout_alarm.emplace(alarms, t, now + *ms);
             }
             t->swap();
@@ -184,12 +184,11 @@ struct io_scheduler {
     void fdtask() {
         taskname("fdtask");
         tasksystem();
-        ptr<proc> p = this_proc();
         for (;;) {
-            p->update_cached_time();
+            this_ctx->scheduler.update_cached_time();
             // let everyone else run
             taskyield();
-            p->update_cached_time();
+            this_ctx->scheduler.update_cached_time();
             ptr<task::pimpl> t = nullptr;
 
             int ms = -1;
@@ -198,7 +197,7 @@ struct io_scheduler {
             // thread
             optional<proc_time_t> timeout_when = alarms.when();
             if (timeout_when) {
-                auto now = p->cached_time();
+                auto now = this_ctx->scheduler.cached_time();
                 if (*timeout_when <= now) {
                     // epoll_wait must return asap
                     ms = 0;
@@ -214,7 +213,7 @@ struct io_scheduler {
             }
 
             if (ms != 0) {
-                if (p->is_ready()) {
+                if (this_ctx->scheduler.is_ready()) {
                     // don't block on epoll if tasks are ready to run
                     ms = 0;
                 }
@@ -236,7 +235,7 @@ struct io_scheduler {
                 // only process 100 events each iteration to keep it fair
                 events.resize(100);
                 _waker->polling = true;
-                if (p->is_dirty()) {
+                if (this_ctx->scheduler.is_dirty()) {
                     // another thread(s) changed the dirtyq before we started
                     // polling. so we should skip epoll and run that task
                     events.resize(0);
@@ -280,7 +279,7 @@ struct io_scheduler {
                 }
             }
 
-            auto now = p->update_cached_time();
+            auto now = this_ctx->scheduler.update_cached_time();
             // wake up sleeping tasks
             alarms.tick(now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
                 if (exception != nullptr && t->exception == nullptr) {
@@ -291,7 +290,7 @@ struct io_scheduler {
                 t->ready_for_io();
             });
         }
-        DVLOG(5) << "BUG: " << this_proc()->current_task() << " is exiting";
+        DVLOG(5) << "BUG: " << this_ctx->scheduler.current_task() << " is exiting";
     }
 };
 
