@@ -99,7 +99,7 @@ void procshutdown();
 //! main entry point for tasks
 struct procmain {
 public:
-    procmain() {}
+    procmain();
 
     int main(int argc=0, char *argv[]=nullptr);
 };

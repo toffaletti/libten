@@ -1,19 +1,13 @@
 #include "scheduler.hh"
-#include "io.hh"
+#include "thread_context.hh"
 #include <sys/syscall.h>
 
 namespace ten {
 
-extern std::mutex procsmutex;
-extern std::deque<ptr<proc>> procs;
-
 scheduler::scheduler()
-  : ctask(nullptr),
-    _sched(nullptr), 
-    canceled(false),
-    taskcount(0)
+  : taskcount(0),
+    canceled(false)
 {
-    _waker = std::make_shared<proc_waker>();
     update_cached_time();
 }
 
@@ -51,70 +45,107 @@ scheduler::~scheduler() {
     while (!alltasks.empty()) {
         remove_task(ptr<task::pimpl>{alltasks.front().get()});
     }
-    // unlock before del()
-    DVLOG(5) << "proc freed: " << this;
+    DVLOG(5) << "scheduler freed: " << this;
 }
 
 void scheduler::shutdown() {
-    for (auto &t : alltasks) {
-        if (t.get() == ctask.get()) continue; // don't add ourself to the runqueue
-        if (!t->systask) {
-            t->cancel();
+    if (!_shutdown_sequence_initiated) {
+        _shutdown_sequence_initiated = true;
+        for (auto &t : alltasks) {
+            if (t.get() == ctask.get()) continue; // don't add ourself to the runqueue
+            if (!t->systask) {
+                t->cancel();
+            }
         }
     }
 }
 
-io_scheduler &scheduler::sched() {
-    if (_sched == nullptr) {
-        _sched.reset(new io_scheduler());
+io& scheduler::get_io() {
+    if (!_io) {
+        _io.emplace();
     }
-    return *_sched;
+    return *_io;
+}
+
+void scheduler::loop() {
+    DVLOG(5) << "entering loop";
+    while (taskcount > 0) {
+        schedule();
+    }
+    DVLOG(5) << "exiting loop";
+}
+
+void scheduler::check_canceled() {
+    if (canceled) {
+        shutdown();
+    }
+}
+
+void scheduler::check_dirty_queue() {
+    ptr<task::pimpl> t = nullptr;
+    while (dirtyq.pop(t)) {
+        DVLOG(5) << "dirty readying " << t;
+        runqueue.push_front(t);
+    }
+}
+
+void scheduler::check_timeout_tasks() {
+    update_cached_time();
+    // wake up sleeping tasks
+    alarms.tick(now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
+        if (exception != nullptr && t->exception == nullptr) {
+            DVLOG(5) << "alarm with exception fired: " << t;
+            t->exception = exception;
+        }
+        DVLOG(5) << "TIMEOUT on task: " << t;
+        t->ready_for_io();
+    });
+}
+
+void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when) {
+    // do not wait if runqueue is not empty
+    check_dirty_queue();
+    if (!runqueue.empty()) return;
+    if (_io) {
+        lock.unlock();
+        _io->wait(when);
+        lock.lock();
+    } else {
+        if (when) {
+            _cv.wait_until(lock, *when);
+        } else {
+            _cv.wait(lock);
+        }
+    }
 }
 
 void scheduler::schedule() {
     try {
-        DVLOG(5) << "p: " << this << " entering proc::schedule";
-        while (taskcount > 0) {
-            // check dirty queue
-            {
-                ptr<task::pimpl> t = nullptr;
-                while (dirtyq.pop(t)) {
-                    DVLOG(5) << "dirty readying " << t;
-                    runqueue.push_front(t);
-                }
-            }
+        do {
+            check_canceled();
+            check_dirty_queue();
+            check_timeout_tasks();
             if (runqueue.empty()) {
-                _waker->wait();
-                // need to go through dirty loop again because
-                // runqueue could still be empty
-                if (!dirtyq.empty()) continue;
+                auto when = alarms.when();
+                std::unique_lock<std::mutex> lock{_mutex};
+                wait(lock, when);
             }
-            if (canceled) {
-                // set canceled to false so we don't
-                // execute this every time through the loop
-                // while the tasks are cleaning up
-                canceled = false;
-                procshutdown();
-                if (runqueue.empty()) continue;
-            }
-            ptr<task::pimpl> t{runqueue.front()};
-            runqueue.pop_front();
-            ctask = t;
-            DVLOG(5) << "p: " << this << " swapping to: " << t;
-            t->is_ready = false;
-            ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t.get()));
-            ctask = nullptr;
-            
-            if (!t->fn) {
-                remove_task(t);
-            }
+        } while (runqueue.empty());
+        ptr<task::pimpl> t{runqueue.front()};
+        runqueue.pop_front();
+        ctask = t;
+        DVLOG(5) << this << " swapping to: " << t;
+        t->is_ready = false;
+        ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t.get()));
+        ctask = nullptr;
+
+        if (!t->fn) {
+            remove_task(t);
         }
     } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what() << "\n" << e.backtrace_str();
-        std::exit(2);
+        LOG(FATAL) << e.what() << "\n" << e.backtrace_str();
     } catch (std::exception &e) {
-        LOG(ERROR) << "unhandled error in proc::schedule: " << e.what();
-        std::exit(2);
+        LOG(FATAL) << e.what();
     }
 }
 
@@ -187,9 +218,16 @@ void scheduler::mark_system_task() {
 }
 
 void scheduler::wakeup() {
-    _waker->wake();
+    // TODO: speed this up?
+    std::unique_lock<std::mutex> lock{_mutex};
+    if (_io) {
+        _io->wakeup();
+    } else {
+        _cv.notify_one();
+    }
 }
 
+#if 0
 void proc_waker::wait() {
     std::unique_lock<std::mutex> lk{mutex};
     while (!this_ctx->scheduler.is_ready()
@@ -201,6 +239,7 @@ void proc_waker::wait() {
     }
     asleep = false;
 }
+#endif
 
 } // ten
 

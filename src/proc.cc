@@ -24,9 +24,14 @@ void procshutdown() {
     this_ctx->scheduler.shutdown();
 }
 
+
+procmain::procmain() {
+    this_ctx->scheduler.current_task(); // cause runtime_init to be run
+}
+
 int procmain::main(int argc, char *argv[]) {
     DVLOG(5) << "thread id: " << std::this_thread::get_id();
-    this_ctx->scheduler.schedule();
+    this_ctx->scheduler.loop();
     DVLOG(5) << "thread done: " << std::this_thread::get_id();
     return EXIT_SUCCESS;
 }

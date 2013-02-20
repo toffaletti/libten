@@ -1,6 +1,6 @@
 #include <cassert>
 #include <algorithm>
-#include "io.hh"
+#include "thread_context.hh"
 
 namespace ten {
 
@@ -51,8 +51,8 @@ void yield() {
 void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
     ptr<task::pimpl> t = this_ctx->scheduler.current_task();
-    io_scheduler::alarm_clock::scoped_alarm sleep_alarm{
-        this_ctx->scheduler.sched().alarms,
+    scheduler::alarm_clock::scoped_alarm sleep_alarm{
+        this_ctx->scheduler.alarms,
             t, sleep_time};
     t->swap();
 }
@@ -65,12 +65,12 @@ void tasksleep(uint64_t ms) {
 
 bool fdwait(int fd, int rw, optional_timeout ms) {
     task::pimpl::cancellation_point cancellable;
-    return this_ctx->scheduler.sched().fdwait(fd, rw, ms);
+    return this_ctx->scheduler.get_io().fdwait(fd, rw, ms);
 }
 
 int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     task::pimpl::cancellation_point cancellable;
-    return this_ctx->scheduler.sched().poll(fds, nfds, ms);
+    return this_ctx->scheduler.get_io().poll(fds, nfds, ms);
 }
 
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
@@ -252,7 +252,7 @@ void task::pimpl::ready_for_io() {
 }
 
 struct deadline_pimpl {
-    io_scheduler::alarm_clock::scoped_alarm alarm;
+    scheduler::alarm_clock::scoped_alarm alarm;
 };
 
 deadline::deadline(optional_timeout timeout) {
@@ -274,8 +274,8 @@ void deadline::_set_deadline(milliseconds ms) {
         ptr<task::pimpl> t = this_ctx->scheduler.current_task();
         auto now = this_ctx->scheduler.cached_time();
         _pimpl.reset(new deadline_pimpl{});
-        _pimpl->alarm = std::move(io_scheduler::alarm_clock::scoped_alarm{
-                this_ctx->scheduler.sched().alarms, t, ms+now, deadline_reached{}
+        _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm{
+                this_ctx->scheduler.alarms, t, ms+now, deadline_reached{}
                 });
         DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }

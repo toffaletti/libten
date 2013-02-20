@@ -5,72 +5,59 @@
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
 #include "task_impl.hh"
+#include "alarm.hh"
+#include "io.hh"
 
 namespace ten {
 
-struct io_scheduler;
-
 // TODO: api to register at-proc-exit cleanup functions
-// this can be used to free io_scheduler, or other per-proc
+// this can be used to free io, or other per-proc
 // resources like dns resolving threads, etc.
 
-//! proc waker is the api for waking a proc from sleep
-// io_scheduler uses this
-class proc_waker {
-public:
-    //! used to wake up from epoll
-    event_fd event;
-    //! true when asleep in epoll_wait
-    std::atomic<bool> polling;
-
-public: // non-epoll data
-    std::mutex mutex;
-    //! cond used to wake up when runqueue is empty and no epoll
-    std::condition_variable cond;
-    //! true when asleep and runqueue is empty and no epoll
-    bool asleep;
-public:
-    proc_waker() : event(0, EFD_NONBLOCK), polling(false), asleep(false) {}
-
-    void wake() {
-        if (polling.exchange(false)) {
-            DVLOG(5) << "eventing " << this;
-            event.write(1);
-        } else {
-            std::lock_guard<std::mutex> lk{mutex};
-            if (asleep) {
-                DVLOG(5) << "notifying " << this;
-                cond.notify_one();
-            }
-        }
-    }
-
-    void wait();
-};
-
 class scheduler {
+    typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
     friend class proc;
+    friend struct io;
+    friend void this_task::sleep_until(const proc_time_t& sleep_time);
+    friend class deadline;
+    friend struct deadline_pimpl;
 private:
     ptr<task::pimpl> ctask;
     context ctx;
     std::deque<ptr<task::pimpl>> runqueue;
-    std::unique_ptr<io_scheduler> _sched;
+    optional<io> _io;
     std::deque<std::shared_ptr<task::pimpl>> alltasks;
-    std::shared_ptr<proc_waker> _waker;
     //! other threads use this to add tasks to runqueue
     llqueue<ptr<task::pimpl>> dirtyq;
-    //! true when canceled
-    std::atomic<bool> canceled;
+
     //! tasks in this proc
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
     proc_time_t now;
+    //! tasks with pending timeouts
+    alarm_clock alarms;
+
+    //! lock to protect condition
+    std::mutex _mutex;
+    //! cond used to wake up when runqueue is empty and no epoll
+    std::condition_variable _cv;
+
+    //! true when canceled
+    std::atomic<bool> canceled;
+    bool _shutdown_sequence_initiated = false;
+private:
+    void check_canceled();
+    void check_dirty_queue();
+    void check_timeout_tasks();
 public:
     scheduler();
     ~scheduler();
 
     void shutdown();
-    io_scheduler &sched();
+    io &get_io();
+
+    //! call schedule in a loop while taskcount > 0
+    void loop();
     void schedule();
 
     const proc_time_t & update_cached_time() {
@@ -92,14 +79,11 @@ public:
     }
 
     void wakeup();
+    void wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when);
 
     bool cancel_task_by_id(uint64_t id);
     //! mark current task as system task
     void mark_system_task();
-
-    std::shared_ptr<proc_waker> get_waker() {
-        return _waker;
-    }
 
     ptr<task::pimpl> current_task() const {
         return ctask;
