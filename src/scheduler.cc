@@ -227,19 +227,5 @@ void scheduler::wakeup() {
     }
 }
 
-#if 0
-void proc_waker::wait() {
-    std::unique_lock<std::mutex> lk{mutex};
-    while (!this_ctx->scheduler.is_ready()
-            && !this_ctx->scheduler.is_canceled()
-            && !this_ctx->scheduler.is_dirty())
-    {
-        asleep = true;
-        cond.wait(lk);
-    }
-    asleep = false;
-}
-#endif
-
 } // ten
 
