@@ -1,8 +1,8 @@
 #ifndef LIBTEN_IO_HH
 #define LIBTEN_IO_HH
 
-#include "proc.hh"
 #include "alarm.hh"
+#include "thread_context.hh"
 
 namespace ten {
 

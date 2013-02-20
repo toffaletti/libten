@@ -98,11 +98,8 @@ void procshutdown();
 
 //! main entry point for tasks
 struct procmain {
-private:
-    ptr<proc> p;
 public:
-    explicit procmain(std::shared_ptr<task::pimpl> t = nullptr);
-    ~procmain();
+    procmain() {}
 
     int main(int argc=0, char *argv[]=nullptr);
 };

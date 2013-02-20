@@ -4,6 +4,7 @@
 #include <boost/context/fcontext.hpp>
 #include <boost/context/stack_allocator.hpp>
 #include <boost/context/stack_utils.hpp>
+#include <algorithm>
 
 #include <sys/mman.h>
 

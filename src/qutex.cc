@@ -1,5 +1,5 @@
 #include "ten/task/qutex.hh"
-#include "proc.hh"
+#include "thread_context.hh"
 
 namespace ten {
 

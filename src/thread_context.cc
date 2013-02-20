@@ -9,6 +9,23 @@ namespace {
     struct stoplog_t {
         ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
     } stoplog;
+
+    static std::once_flag init_flag;
+    static std::mutex threads_mutex;
+    static std::vector<ptr<thread_context>> threads;
+} // namespace
+
+static void add_thread(ptr<thread_context> ctx) {
+    using namespace std;
+    lock_guard<mutex> lock{threads_mutex};
+    threads.push_back(ctx);
+}
+
+static void remove_thread(ptr<thread_context> ctx) {
+    using namespace std;
+    lock_guard<mutex> lock{threads_mutex};
+    auto i = find(begin(threads), end(threads), ctx);
+    threads.erase(i);
 }
 
 static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
@@ -53,9 +70,26 @@ static void runtime_init() {
 thread_context::thread_context() {
     task::set_default_stacksize(default_stacksize);
     std::call_once(init_flag, runtime_init);
+    add_thread(ptr<thread_context>{this});
 }
 
 thread_context::~thread_context() {
+    remove_thread(ptr<thread_context>{this});
+}
+
+size_t thread_context::count() {
+    using namespace std;
+    lock_guard<mutex> lock{threads_mutex};
+    return threads.size();
+}
+
+void thread_context::cancel_all() {
+    using namespace std;
+    lock_guard<mutex> lock{threads_mutex};
+    for (auto &ctx : threads) {
+        if (ptr<thread_context>{this} == ctx) continue;
+        ctx->scheduler.cancel();
+    }
 }
 
 } // ten

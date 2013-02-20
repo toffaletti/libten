@@ -21,23 +21,11 @@ scheduler::~scheduler() {
     if (getpid() == syscall(SYS_gettid)) {
         // if the main proc is exiting we need to cancel
         // all other procs (threads) and wait for them
-        size_t nprocs = procs.size();
-        {
-            std::lock_guard<std::mutex> plk{procsmutex};
-            for (auto i=procs.begin(); i!= procs.end(); ++i) {
-                if ((*i)->_scheduler.get() == this) continue;
-                (*i)->cancel();
-            }
-        }
-        for (;;) {
+        size_t nprocs = thread_context::count();
+        this_ctx->cancel_all();
+        while (thread_context::count()) {
             // TODO: remove this busy loop in favor of sleeping the proc
-            {
-                std::lock_guard<std::mutex> plk{procsmutex};
-                size_t np = procs.size();
-                if (np == 0)
-                    break;
-            }
-            std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds{100});
         }
 
         DVLOG(5) << "sleeping last proc to allow " << nprocs << " threads to exit and cleanup";
@@ -45,7 +33,7 @@ scheduler::~scheduler() {
             // nasty hack for mysql thread cleanup
             // because it happens *after* all of my code, i have no way of waiting
             // for it to finish with an event (unless i joined all threads)
-            usleep(100);
+            std::this_thread::sleep_for(std::chrono::milliseconds{100});
             std::this_thread::yield();
         }
     }
@@ -200,6 +188,18 @@ void scheduler::mark_system_task() {
 
 void scheduler::wakeup() {
     _waker->wake();
+}
+
+void proc_waker::wait() {
+    std::unique_lock<std::mutex> lk{mutex};
+    while (!this_ctx->scheduler.is_ready()
+            && !this_ctx->scheduler.is_canceled()
+            && !this_ctx->scheduler.is_dirty())
+    {
+        asleep = true;
+        cond.wait(lk);
+    }
+    asleep = false;
 }
 
 } // ten

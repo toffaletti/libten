@@ -46,7 +46,6 @@ public:
     }
 
     void wait();
-
 };
 
 class scheduler {

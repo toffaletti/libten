@@ -1,6 +1,5 @@
 #include <cassert>
 #include <algorithm>
-#include "proc.hh"
 #include "io.hh"
 
 namespace ten {

@@ -5,14 +5,16 @@
 
 namespace ten {
 
-static std::once_flag init_flag;
-
 //! per-thread context for runtime
 struct thread_context {
     ten::scheduler scheduler;
 
     thread_context();
     ~thread_context();
+
+    void cancel_all();
+
+    static size_t count();
 };
 
 struct runtime_tag {};
