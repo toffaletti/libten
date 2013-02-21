@@ -22,23 +22,24 @@ class scheduler {
     friend class deadline;
     friend struct deadline_pimpl;
 private:
+    //ptr<task::pimpl> _current_task;
     ptr<task::pimpl> ctask;
     context ctx;
-    std::deque<ptr<task::pimpl>> runqueue;
+    std::deque<ptr<task::pimpl>> _readyq;
+    //! other threads use this to add tasks to runqueue
+    llqueue<ptr<task::pimpl>> _dirtyq;
+    //! epoll io
     optional<io> _io;
     //! all tasks known to this scheduler
-    std::deque<std::shared_ptr<task::pimpl>> alltasks;
+    std::deque<std::shared_ptr<task::pimpl>> _alltasks;
     //! tasks to be garbage collected in the next scheduler iteration
     std::deque<std::shared_ptr<task::pimpl>> _gctasks;
-    //! other threads use this to add tasks to runqueue
-    llqueue<ptr<task::pimpl>> dirtyq;
-
     //! tasks in this proc
-    std::atomic<uint64_t> taskcount;
+    std::atomic<uint64_t> _taskcount;
     //! current time cached in a few places through the event loop
-    proc_time_t now;
+    proc_time_t _now;
     //! tasks with pending timeouts
-    alarm_clock alarms;
+    alarm_clock _alarms;
 
     //! lock to protect condition
     std::mutex _mutex;
@@ -46,7 +47,7 @@ private:
     std::condition_variable _cv;
 
     //! true when canceled
-    std::atomic<bool> canceled;
+    std::atomic<bool> _canceled;
     bool _shutdown_sequence_initiated = false;
 private:
     void check_canceled();
@@ -66,19 +67,19 @@ public:
     void schedule();
 
     const proc_time_t & update_cached_time() {
-        now = proc_clock_t::now();
-        return now;
+        _now = proc_clock_t::now();
+        return _now;
     }
 
     const proc_time_t &cached_time() const {
-        return now;
+        return _now;
     }
 
     void attach_task(std::shared_ptr<task::pimpl> t);
     void remove_task(ptr<task::pimpl> t);
 
     void dump_tasks(std::ostream &out) const {
-        for (auto &t : alltasks) {
+        for (auto &t : _alltasks) {
             out << ptr<task::pimpl>{t.get()} << "\n";
         }
     }
@@ -93,7 +94,7 @@ public:
     }
 
     void cancel() {
-        canceled = true;
+        _canceled = true;
         wakeup();
     }
 

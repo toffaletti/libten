@@ -132,7 +132,7 @@ int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
         optional<scheduler::alarm_clock::scoped_alarm> timeout_alarm;
         if (ms) {
             auto now = this_ctx->scheduler.cached_time();
-            timeout_alarm.emplace(this_ctx->scheduler.alarms, t, now + *ms);
+            timeout_alarm.emplace(this_ctx->scheduler._alarms, t, now + *ms);
         }
         t->swap();
     } catch (...) {

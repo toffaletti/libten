@@ -5,8 +5,8 @@
 namespace ten {
 
 scheduler::scheduler()
-  : taskcount(0),
-    canceled(false)
+  : _taskcount{0},
+    _canceled{false}
 {
     update_cached_time();
 }
@@ -40,10 +40,10 @@ scheduler::~scheduler() {
     // XXX: there is also a thing that will trigger a cond var
     // after thread has fully exited. that is another possiblity
     // once libstdc++ implements it
-    runqueue.clear();
+    _readyq.clear();
     // clean up system tasks
-    while (!alltasks.empty()) {
-        remove_task(ptr<task::pimpl>{alltasks.front().get()});
+    while (!_alltasks.empty()) {
+        remove_task(ptr<task::pimpl>{_alltasks.front().get()});
     }
     DVLOG(5) << "scheduler freed: " << this;
 }
@@ -51,8 +51,8 @@ scheduler::~scheduler() {
 void scheduler::shutdown() {
     if (!_shutdown_sequence_initiated) {
         _shutdown_sequence_initiated = true;
-        for (auto &t : alltasks) {
-            if (t.get() == ctask.get()) continue; // don't add ourself to the runqueue
+        for (auto &t : _alltasks) {
+            if (t.get() == ctask.get()) continue; // don't add ourself to the _readyq
             t->cancel();
         }
     }
@@ -67,30 +67,30 @@ io& scheduler::get_io() {
 
 void scheduler::loop() {
     DVLOG(5) << "entering loop";
-    while (taskcount > 0) {
+    while (_taskcount > 0) {
         schedule();
     }
     DVLOG(5) << "exiting loop";
 }
 
 void scheduler::check_canceled() {
-    if (canceled) {
+    if (_canceled) {
         shutdown();
     }
 }
 
 void scheduler::check_dirty_queue() {
     ptr<task::pimpl> t = nullptr;
-    while (dirtyq.pop(t)) {
+    while (_dirtyq.pop(t)) {
         DVLOG(5) << "dirty readying " << t;
-        runqueue.push_front(t);
+        _readyq.push_front(t);
     }
 }
 
 void scheduler::check_timeout_tasks() {
     update_cached_time();
     // wake up sleeping tasks
-    alarms.tick(now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
+    _alarms.tick(_now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
         if (exception != nullptr && t->exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
             t->exception = exception;
@@ -101,9 +101,9 @@ void scheduler::check_timeout_tasks() {
 }
 
 void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when) {
-    // do not wait if runqueue is not empty
+    // do not wait if _readyq is not empty
     check_dirty_queue();
-    if (!runqueue.empty()) return;
+    if (!_readyq.empty()) return;
     if (_io) {
         lock.unlock();
         _io->wait(when);
@@ -124,14 +124,14 @@ void scheduler::schedule() {
             check_canceled();
             check_dirty_queue();
             check_timeout_tasks();
-            if (runqueue.empty()) {
-                auto when = alarms.when();
+            if (_readyq.empty()) {
+                auto when = _alarms.when();
                 std::unique_lock<std::mutex> lock{_mutex};
                 wait(lock, when);
             }
-        } while (runqueue.empty());
-        ptr<task::pimpl> t{runqueue.front()};
-        runqueue.pop_front();
+        } while (_readyq.empty());
+        ptr<task::pimpl> t{_readyq.front()};
+        _readyq.pop_front();
         DCHECK(t->is_ready);
         t->is_ready.store(false);
         ctask = t;
@@ -147,24 +147,24 @@ void scheduler::schedule() {
 }
 
 void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
-    ++taskcount;
+    ++_taskcount;
     t->_scheduler.reset(this);
-    alltasks.push_back(std::move(t));
+    _alltasks.emplace_back(std::move(t));
 }
 
 void scheduler::remove_task(ptr<task::pimpl> t) {
     using namespace std;
-    --taskcount;
+    --_taskcount;
     DCHECK(t);
     DCHECK(t->_scheduler.get() == this);
-    DCHECK(find(begin(runqueue), end(runqueue), t) == end(runqueue))
-        << "BUG: " << t << " found in runqueue while being deleted";
-    auto i = find_if(begin(alltasks), end(alltasks), [=](shared_ptr<task::pimpl> &tt) -> bool {
+    DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))
+        << "BUG: " << t << " found in _readyq while being deleted";
+    auto i = find_if(begin(_alltasks), end(_alltasks), [=](shared_ptr<task::pimpl> &tt) -> bool {
         return tt.get() == t.get();
     });
-    DCHECK(i != end(alltasks));
+    DCHECK(i != end(_alltasks));
     _gctasks.emplace_back(*i);
-    alltasks.erase(i);
+    _alltasks.erase(i);
 }
 
 
@@ -173,13 +173,13 @@ void scheduler::ready(ptr<task::pimpl> t, bool front) {
     DVLOG(5) << "readying: " << t;
     if (t->is_ready.exchange(true) == false) {
         if (this != &this_ctx->scheduler) {
-            dirtyq.push(t);
+            _dirtyq.push(t);
             wakeup();
         } else {
             if (front) {
-                runqueue.push_front(t);
+                _readyq.push_front(t);
             } else {
-                runqueue.push_back(t);
+                _readyq.push_back(t);
             }
         }
     }
@@ -188,18 +188,18 @@ void scheduler::ready(ptr<task::pimpl> t, bool front) {
 void scheduler::ready_for_io(ptr<task::pimpl> t) {
     DVLOG(5) << "readying for io: " << t;
     if (t->is_ready.exchange(true) == false) {
-        runqueue.push_back(t);
+        _readyq.push_back(t);
     }
 }
 
 void scheduler::unsafe_ready(ptr<task::pimpl> t) {
     DVLOG(5) << "readying: " << t;
-    runqueue.push_back(t);
+    _readyq.push_back(t);
 }
 
 bool scheduler::cancel_task_by_id(uint64_t id) {
     bool found = false;
-    for (auto &t : alltasks) {
+    for (auto &t : _alltasks) {
         if (t->id == id) {
             found = true;
             t->cancel();

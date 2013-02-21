@@ -4,20 +4,18 @@
 
 namespace ten {
 
+// TODO: move to context.cc
+thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::cache;
+
 namespace {
 static __thread size_t current_stacksize = SIGSTKSZ;
+static std::atomic<uint64_t> taskidgen(0);
 }
-
 
 void task::set_default_stacksize(size_t stacksize) {
     CHECK(stacksize >= MINSIGSTKSZ);
     current_stacksize = stacksize;
 }
-
-// TODO: move to context.cc
-thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::cache;
-
-static std::atomic<uint64_t> taskidgen(0);
 
 std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
     if (t) {
@@ -31,7 +29,6 @@ std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
 }
 
 namespace this_task {
-
 uint64_t get_id() {
     DCHECK(this_ctx->scheduler.current_task());
     return this_ctx->scheduler.current_task()->id;
@@ -46,11 +43,10 @@ void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
     ptr<task::pimpl> t = this_ctx->scheduler.current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{
-        this_ctx->scheduler.alarms,
+        this_ctx->scheduler._alarms,
             t, sleep_time};
     t->swap();
 }
-
 } // this_task
 
 void tasksleep(uint64_t ms) {
@@ -194,11 +190,6 @@ void task::pimpl::vsetstate(const char *fmt, va_list arg) {
     vsnprintf(state.get(), statesize, fmt, arg);
 }
 
-void task::pimpl::safe_swap() noexcept {
-    // swap to scheduler coroutine
-    ctx.swap(this_ctx->scheduler.sched_context(), 0);
-}
-
 void task::pimpl::yield() {
     task::pimpl::cancellation_point cancellable;
     if (is_ready.exchange(true) == false) {
@@ -206,6 +197,11 @@ void task::pimpl::yield() {
         _scheduler->unsafe_ready(ptr<task::pimpl>{this});
     }
     swap();
+}
+
+void task::pimpl::safe_swap() noexcept {
+    // swap to scheduler coroutine
+    ctx.swap(this_ctx->scheduler.sched_context(), 0);
 }
 
 void task::pimpl::swap() {
@@ -269,7 +265,7 @@ void deadline::_set_deadline(milliseconds ms) {
         auto now = this_ctx->scheduler.cached_time();
         _pimpl.reset(new deadline_pimpl{});
         _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm{
-                this_ctx->scheduler.alarms, t, ms+now, deadline_reached{}
+                this_ctx->scheduler._alarms, t, ms+now, deadline_reached{}
                 });
         DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }
