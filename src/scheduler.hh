@@ -22,9 +22,9 @@ class scheduler {
     friend class deadline;
     friend struct deadline_pimpl;
 private:
+    std::shared_ptr<task::pimpl> _main_task;
     //ptr<task::pimpl> _current_task;
     ptr<task::pimpl> ctask;
-    context ctx;
     std::deque<ptr<task::pimpl>> _readyq;
     //! other threads use this to add tasks to runqueue
     llqueue<ptr<task::pimpl>> _dirtyq;
@@ -35,7 +35,7 @@ private:
     //! tasks to be garbage collected in the next scheduler iteration
     std::deque<std::shared_ptr<task::pimpl>> _gctasks;
     //! tasks in this proc
-    std::atomic<uint64_t> _taskcount;
+    uint64_t _taskcount; // TODO: can probably remove this and use _alltasks.size
     //! current time cached in a few places through the event loop
     proc_time_t _now;
     //! tasks with pending timeouts
@@ -49,6 +49,7 @@ private:
     //! true when canceled
     std::atomic<bool> _canceled;
     bool _shutdown_sequence_initiated = false;
+    bool _looping = false;
 private:
     void check_canceled();
     void check_dirty_queue();
@@ -61,8 +62,10 @@ public:
     void shutdown();
     io &get_io();
 
-    //! call schedule in a loop while taskcount > 0
-    void loop();
+    //! wait for all tasks to exit
+    // will only work if called from main task
+    // see hack in ::schedule()
+    void wait_for_all();
     //! run one iteration of the scheduler
     void schedule();
 
@@ -78,12 +81,6 @@ public:
     void attach_task(std::shared_ptr<task::pimpl> t);
     void remove_task(ptr<task::pimpl> t);
 
-    void dump_tasks(std::ostream &out) const {
-        for (auto &t : _alltasks) {
-            out << ptr<task::pimpl>{t.get()} << "\n";
-        }
-    }
-
     void wakeup();
     void wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when);
 
@@ -98,8 +95,7 @@ public:
         wakeup();
     }
 
-    context &sched_context() { return ctx; }
-
+    void dump() const;
 private:
     friend class task;
     friend void this_task::yield();

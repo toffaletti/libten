@@ -87,7 +87,7 @@ const char *taskstate(const char *fmt=nullptr, ...);
 const char * taskname(const char *fmt=nullptr, ...);
 
 //! spawn a new thread with a task scheduler
-uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
+void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
 //! cancel all non-system tasks and exit procmain
 void procshutdown();
 

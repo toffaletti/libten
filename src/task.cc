@@ -21,7 +21,8 @@ std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
     if (t) {
         o << "[" << (void*)t.get() << " " << t->id << " "
             << t->name.get() << " |" << t->state.get()
-            << "| canceled: " << t->canceled << "]";
+            << "| canceled: " << t->canceled
+            << " ready: " << t->is_ready << "]";
     } else {
         o << "nulltask";
     }
@@ -109,16 +110,8 @@ const char *taskstate(const char *fmt, ...)
     return t->getstate();
 }
 
-std::string taskdump() {
-    std::stringstream ss;
-    this_ctx->scheduler.dump_tasks(ss);
-    return ss.str();
-}
-
-void taskdumpf(FILE *of) {
-    std::string dump = taskdump();
-    fwrite(dump.c_str(), sizeof(char), dump.size(), of);
-    fflush(of);
+void taskdump() {
+    thread_context::dump_all();
 }
 
 task::task(const std::function<void ()> &f)
@@ -133,8 +126,22 @@ uint64_t task::get_id() const {
     return _pimpl->id;
 }
 
+task::pimpl::pimpl()
+    : _ctx{},
+    cancel_points{0},
+    name{new char[namesize]},
+    state{new char[statesize]},
+    id{++taskidgen},
+    fn{},
+    is_ready{false},
+    canceled{false}
+{
+    setname("main[%ju]", id);
+    setstate("new");
+}
+
 task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
-    : ctx{task::pimpl::trampoline, stacksize},
+    : _ctx{task::pimpl::trampoline, stacksize},
     cancel_points{0},
     name{new char[namesize]},
     state{new char[statesize]},
@@ -200,13 +207,12 @@ void task::pimpl::yield() {
 }
 
 void task::pimpl::safe_swap() noexcept {
-    // swap to scheduler coroutine
-    ctx.swap(this_ctx->scheduler.sched_context(), 0);
+    _scheduler->schedule();
 }
 
 void task::pimpl::swap() {
-    // swap to scheduler coroutine
-    ctx.swap(this_ctx->scheduler.sched_context(), 0);
+    _scheduler->schedule();
+    //ctx.swap(this_ctx->scheduler.sched_context(), 0);
 
     if (canceled && cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();

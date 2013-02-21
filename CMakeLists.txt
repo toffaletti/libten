@@ -43,6 +43,12 @@ if (OPENSSL_FOUND)
 endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
+if (TASK_TRACE)
+    message(STATUS "Task tracing: on")
+    add_definitions(-DTEN_TASK_TRACE)
+else (TASK_TRACE)
+    message(STATUS "Task tracing: off")
+endif (TASK_TRACE)
 
 add_subdirectory(msgpack)
 add_subdirectory(src)

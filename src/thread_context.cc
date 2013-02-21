@@ -81,4 +81,12 @@ void thread_context::cancel_all() {
     }
 }
 
+void thread_context::dump_all() {
+    using namespace std;
+    lock_guard<mutex> lock{threads_mutex};
+    for (auto &ctx : threads) {
+        ctx->scheduler.dump();
+    }
+}
+
 } // ten

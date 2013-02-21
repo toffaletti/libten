@@ -56,21 +56,23 @@ BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
     p.main();
 }
 
-static void channel_recv_mt(channel<intptr_t> c, semaphore &s) {
+static void channel_recv_mt(channel<intptr_t> c, channel<int> done_chan) {
     intptr_t d = c.recv();
     assert(d == 8675309);
     char *str = reinterpret_cast<char *>(c.recv());
     assert(strcmp(str, "hi") == 0);
-    s.post();
+    done_chan.send(1);
 }
 
 void mt_test_task() {
-    semaphore s;
     channel<intptr_t> c;
     channel<int> done_chan;
-    procspawn(std::bind(channel_recv_mt, c, std::ref(s)));
+    procspawn(std::bind(channel_recv_mt, c, done_chan));
     procspawn(std::bind(channel_send, c, done_chan));
-    s.wait();
+    for (int i=0; i<2; ++i) {
+        done_chan.recv();
+    }
+
     BOOST_CHECK(c.empty());
 }
 
@@ -148,6 +150,9 @@ static void wait_on_io() {
 
     taskspawn(std::bind(delayed_channel, addr));
     fdwait(s.fd, 'r');
+    // yield here, otherwise fdwait in delayed_channel
+    // could get the close event on our listening socket
+    taskyield();
 }
 
 BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {

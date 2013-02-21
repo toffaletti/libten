@@ -4,20 +4,14 @@
 
 namespace ten {
 
-static void thread_entry(std::shared_ptr<task::pimpl> t) {
-    procmain scope;
-    this_ctx->scheduler.attach_task(t);
-    t->ready(true);
-    scope.main();
-}
-
-uint64_t procspawn(const std::function<void ()> &f, size_t stacksize) {
-    std::shared_ptr<task::pimpl> t = std::make_shared<task::pimpl>(f, stacksize);
-    uint64_t tid = t->id;
-    std::thread procthread{thread_entry, std::move(t)};
+void procspawn(const std::function<void ()> &f, size_t stacksize) {
+    // XXX: stack size is ignored now
+    std::thread procthread{[=] {
+        try {
+            f();
+        } catch (task_interrupted &e) {}
+    }};
     procthread.detach();
-    // XXX: task could be freed at this point
-    return tid;
 }
 
 void procshutdown() {
@@ -31,7 +25,7 @@ procmain::procmain() {
 
 int procmain::main(int argc, char *argv[]) {
     DVLOG(5) << "thread id: " << std::this_thread::get_id();
-    this_ctx->scheduler.loop();
+    this_ctx->scheduler.wait_for_all();
     DVLOG(5) << "thread done: " << std::this_thread::get_id();
     return EXIT_SUCCESS;
 }

@@ -14,6 +14,7 @@ struct thread_context {
 
     void cancel_all();
 
+    static void dump_all();
     static size_t count();
 };
 

@@ -7,6 +7,7 @@
 
 #include "ten/task.hh"
 #include "ten/logging.hh"
+#include "ten/error.hh"
 #include "context.hh"
 
 using namespace std::chrono;
@@ -31,12 +32,15 @@ public:
 private:
     // order here is important
     // trying to get most used in the same cache line
-    context ctx;
+    context _ctx;
     ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
     std::unique_ptr<char[]> name;
     std::unique_ptr<char[]> state;
+#ifdef TEN_TASK_TRACE
+    saved_backtrace _trace;
+#endif
 public:
     const uint64_t id;
 private:
@@ -44,6 +48,7 @@ private:
     std::atomic<bool> is_ready;
     bool canceled;
 public:
+    pimpl();
     pimpl(const std::function<void ()> &f, size_t stacksize);
 
     void setname(const char *fmt, ...);

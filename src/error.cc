@@ -8,8 +8,8 @@
 
 namespace ten {
 
-saved_backtrace::saved_backtrace() {
-    size = backtrace(array, 50);
+void saved_backtrace::capture() {
+    size = backtrace(array, max_frames);
 }
 
 std::string saved_backtrace::str() {

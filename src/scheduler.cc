@@ -5,46 +5,20 @@
 namespace ten {
 
 scheduler::scheduler()
-  : _taskcount{0},
+  : _main_task{std::make_shared<task::pimpl>()}, 
+    ctask{_main_task.get()},
+    _taskcount{0},
     _canceled{false}
 {
+    _main_task->_scheduler.reset(this);
     update_cached_time();
 }
 
 scheduler::~scheduler() {
-    if (getpid() == syscall(SYS_gettid)) {
-        // if the main proc is exiting we need to cancel
-        // all other procs (threads) and wait for them
-        size_t nprocs = thread_context::count();
-        this_ctx->cancel_all();
-        while (thread_context::count()) {
-            // TODO: remove this busy loop in favor of sleeping the proc
-            std::this_thread::sleep_for(std::chrono::milliseconds{60});
-        }
-
-        // nasty hack for mysql thread cleanup
-        // because it happens *after* all of my code, i have no way of waiting
-        // for it to finish with an event (unless i joined all threads)
-        unsigned sleep_ms = std::min((size_t)1500, nprocs*100);
-        DVLOG(5) << "sleeping for " << sleep_ms << "ms to allow " << nprocs << " threads to cleanup";
-        std::this_thread::sleep_for(std::chrono::milliseconds{sleep_ms});
-        std::this_thread::yield();
-    }
-    // TODO: now that threads are remaining joinable
-    // maybe shutdown can be cleaner...look into this
-    // example: maybe if canceled we don't detatch
-    // and we can join in the above loop instead of sleep loop
-    //if (thread.joinable()) {
-    //    thread.detach();
-    //}
-    // XXX: there is also a thing that will trigger a cond var
-    // after thread has fully exited. that is another possiblity
-    // once libstdc++ implements it
-    _readyq.clear();
-    // clean up system tasks
-    while (!_alltasks.empty()) {
-        remove_task(ptr<task::pimpl>{_alltasks.front().get()});
-    }
+    // wait for all tasks to exit
+    // this is needed because main task could be canceled
+    // and exit before other tasks do.
+    wait_for_all();
     DVLOG(5) << "scheduler freed: " << this;
 }
 
@@ -52,9 +26,15 @@ void scheduler::shutdown() {
     if (!_shutdown_sequence_initiated) {
         _shutdown_sequence_initiated = true;
         for (auto &t : _alltasks) {
-            if (t.get() == ctask.get()) continue; // don't add ourself to the _readyq
+            // don't add ourself to the _readyq
+            // TODO: this assumes the task that called this will
+            // behave and exit itself. perhaps we should cancel it
+            // however if it does exit and it canceled itself
+            // it will be in the readyq and trigger the DCHECK in remove_task
+            if (t.get() == ctask.get()) continue;
             t->cancel();
         }
+        _main_task->cancel();
     }
 }
 
@@ -65,12 +45,25 @@ io& scheduler::get_io() {
     return *_io;
 }
 
-void scheduler::loop() {
+void scheduler::wait_for_all() {
     DVLOG(5) << "entering loop";
+    _looping = true;
     while (_taskcount > 0) {
         schedule();
     }
+    _looping = false;
     DVLOG(5) << "exiting loop";
+
+    if (getpid() == syscall(SYS_gettid)) {
+        // if the main proc is exiting we need to cancel
+        // all other procs (threads) and wait for them
+        this_ctx->cancel_all();
+        // wait for all threads besides this one to exit
+        while (thread_context::count() > 1) {
+            // TODO: remove this busy loop in favor of sleeping the proc
+            std::this_thread::sleep_for(std::chrono::milliseconds{60});
+        }
+    }
 }
 
 void scheduler::check_canceled() {
@@ -118,6 +111,15 @@ void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> 
 }
 
 void scheduler::schedule() {
+    if (_looping && _taskcount == 0) {
+        // XXX: ugly hack
+        // this should resume in ::wait_for_all()
+        // which should only be called from main task.
+        // the purpose of this is to allow other tasks to exit
+        // while the main task sticks around. then swap to
+        // the main task with will exit the thread/process
+        _main_task->ready();
+    }
     ptr<task::pimpl> saved_task = ctask;
     try {
         do {
@@ -136,7 +138,12 @@ void scheduler::schedule() {
         t->is_ready.store(false);
         ctask = t;
         DVLOG(5) << this << " swapping to: " << t;
-        ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t.get()));
+#ifdef TEN_TASK_TRACE
+        saved_task->_trace.capture();
+#endif
+        if (t != saved_task) {
+            saved_task->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t.get()));
+        }
         ctask = saved_task;
         _gctasks.clear();
     } catch (backtrace_exception &e) {
@@ -218,6 +225,23 @@ void scheduler::wakeup() {
         _cv.notify_one();
     }
 }
+
+void scheduler::dump() const {
+    LOG(INFO) << "scheduler: " << this;
+    LOG(INFO) << ptr<task::pimpl>{_main_task.get()};
+#ifdef TEN_TASK_TRACE
+    LOG(INFO) << _main_task->_trace.str();
+#endif
+    for (auto &t : _alltasks) {
+        LOG(INFO) << ptr<task::pimpl>{t.get()};
+#ifdef TEN_TASK_TRACE
+        LOG(INFO) << t->_trace.str();
+#endif
+    }
+    FlushLogFiles(INFO);
+}
+
+
 
 } // ten
 
