@@ -61,6 +61,8 @@ struct app_config {
     std::string glog_vmodule;
 
     void configure_glog(const char *name) const {
+        set_logname(name);
+
         FLAGS_minloglevel = glog_min_level;
         FLAGS_stderrthreshold = glog_stderr_level;
         FLAGS_log_dir = glog_dir;
@@ -72,8 +74,10 @@ struct app_config {
         if (glog_syslog_level >= 0 && glog_syslog_facility >= 0)
             SetSyslogLogging(glog_syslog_level, glog_syslog_facility);
 
-        if (glog_file_level >= 0)
-            SetLogDestination(glog_file_level, name);
+        // Log only at the requested level (if any).
+        // Other levels disabled by setting filename to "" (not null).
+        for (int i = 0; i < NUM_SEVERITIES; ++i)
+            SetLogDestination(i, (i == glog_file_level) ? name : "");
     }
 };
 

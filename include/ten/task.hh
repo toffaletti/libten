@@ -15,6 +15,9 @@ extern const size_t default_stacksize;
 
 namespace ten {
 
+//! user may provide; only effective before procmain_init
+extern void set_logname(const char *name);
+
 extern void netinit();
 
 //! exception to unwind stack on taskcancel
