@@ -13,11 +13,11 @@ namespace ten {
 //! per-thread context for runtime
 struct thread_context {
 #ifdef HAS_CARES
-    // XXX: the downside to having one channel per thread
+    // XXX: the downside to having one ares_channel per thread
     // is that if resolv.conf ever changes we won't see the changes
     // because c-ares only reads it when ares_init is called.
-    // TODO: fix this by setting a watch on /etc/resolv.conf
-    // and recreate the channel when no dns queries are pending
+    // we address this by using an inotify watch on /etc/resolv.conf
+    // and reset the shared_ptr on changes
 
     // ensure this is freed *after* scheduler
     // so all tasks will have exited
