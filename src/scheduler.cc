@@ -6,8 +6,7 @@ namespace ten {
 
 scheduler::scheduler()
   : _main_task{std::make_shared<task::pimpl>()}, 
-    ctask{_main_task.get()},
-    _taskcount{0},
+    _current_task{_main_task.get()},
     _canceled{false}
 {
     _main_task->_scheduler.reset(this);
@@ -31,7 +30,7 @@ void scheduler::shutdown() {
             // behave and exit itself. perhaps we should cancel it
             // however if it does exit and it canceled itself
             // it will be in the readyq and trigger the DCHECK in remove_task
-            if (t.get() == ctask.get()) continue;
+            if (t.get() == _current_task.get()) continue;
             t->cancel();
         }
         _main_task->cancel();
@@ -48,7 +47,7 @@ io& scheduler::get_io() {
 void scheduler::wait_for_all() {
     DVLOG(5) << "entering loop";
     _looping = true;
-    while (_taskcount > 0) {
+    while (_alltasks.size() > 0) {
         schedule();
     }
     _looping = false;
@@ -111,7 +110,7 @@ void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> 
 }
 
 void scheduler::schedule() {
-    if (_looping && _taskcount == 0) {
+    if (_looping && _alltasks.size() == 0) {
         // XXX: ugly hack
         // this should resume in ::wait_for_all()
         // which should only be called from main task.
@@ -120,7 +119,7 @@ void scheduler::schedule() {
         // the main task with will exit the thread/process
         _main_task->ready();
     }
-    ptr<task::pimpl> saved_task = ctask;
+    ptr<task::pimpl> saved_task = _current_task;
     try {
         do {
             check_canceled();
@@ -136,7 +135,7 @@ void scheduler::schedule() {
         _readyq.pop_front();
         DCHECK(t->is_ready);
         t->is_ready.store(false);
-        ctask = t;
+        _current_task = t;
         DVLOG(5) << this << " swapping to: " << t;
 #ifdef TEN_TASK_TRACE
         saved_task->_trace.capture();
@@ -144,7 +143,7 @@ void scheduler::schedule() {
         if (t != saved_task) {
             saved_task->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t.get()));
         }
-        ctask = saved_task;
+        _current_task = saved_task;
         _gctasks.clear();
     } catch (backtrace_exception &e) {
         LOG(FATAL) << e.what() << "\n" << e.backtrace_str();
@@ -154,14 +153,12 @@ void scheduler::schedule() {
 }
 
 void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
-    ++_taskcount;
     t->_scheduler.reset(this);
     _alltasks.emplace_back(std::move(t));
 }
 
 void scheduler::remove_task(ptr<task::pimpl> t) {
     using namespace std;
-    --_taskcount;
     DCHECK(t);
     DCHECK(t->_scheduler.get() == this);
     DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))

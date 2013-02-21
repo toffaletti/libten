@@ -15,16 +15,14 @@ namespace ten {
 // resources like dns resolving threads, etc.
 
 class scheduler {
-    typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
-    friend class proc;
     friend struct io;
     friend void this_task::sleep_until(const proc_time_t& sleep_time);
     friend class deadline;
-    friend struct deadline_pimpl;
+public:
+    typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
 private:
     std::shared_ptr<task::pimpl> _main_task;
-    //ptr<task::pimpl> _current_task;
-    ptr<task::pimpl> ctask;
+    ptr<task::pimpl> _current_task;
     std::deque<ptr<task::pimpl>> _readyq;
     //! other threads use this to add tasks to runqueue
     llqueue<ptr<task::pimpl>> _dirtyq;
@@ -34,8 +32,6 @@ private:
     std::deque<std::shared_ptr<task::pimpl>> _alltasks;
     //! tasks to be garbage collected in the next scheduler iteration
     std::deque<std::shared_ptr<task::pimpl>> _gctasks;
-    //! tasks in this proc
-    uint64_t _taskcount; // TODO: can probably remove this and use _alltasks.size
     //! current time cached in a few places through the event loop
     proc_time_t _now;
     //! tasks with pending timeouts
@@ -87,7 +83,7 @@ public:
     bool cancel_task_by_id(uint64_t id);
 
     ptr<task::pimpl> current_task() const {
-        return ctask;
+        return _current_task;
     }
 
     void cancel() {
