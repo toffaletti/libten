@@ -31,18 +31,18 @@ std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
 
 namespace this_task {
 uint64_t get_id() {
-    DCHECK(this_ctx->scheduler.current_task());
-    return this_ctx->scheduler.current_task()->id;
+    DCHECK(kernel::current_task());
+    return kernel::current_task()->id;
 }
 
 void yield() {
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     t->yield(); 
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{
         this_ctx->scheduler._alarms,
             t, sleep_time};
@@ -88,7 +88,7 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -100,7 +100,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+	ptr<task::pimpl> t = kernel::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -267,8 +267,8 @@ void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
-        ptr<task::pimpl> t = this_ctx->scheduler.current_task();
-        auto now = this_ctx->scheduler.cached_time();
+        ptr<task::pimpl> t = kernel::current_task();
+        auto now = kernel::now();
         _pimpl.reset(new deadline_pimpl{});
         _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm{
                 this_ctx->scheduler._alarms, t, ms+now, deadline_reached{}
@@ -295,12 +295,12 @@ milliseconds deadline::remaining() const {
 }
 
 task::pimpl::cancellation_point::cancellation_point() {
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     ++t->cancel_points;
 }
 
 task::pimpl::cancellation_point::~cancellation_point() {
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     --t->cancel_points;
 }
 

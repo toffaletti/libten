@@ -1,16 +1,11 @@
 #include "thread_context.hh"
+#include "kernel_private.hh"
 
 namespace ten {
 
 thread_cached<runtime_tag, thread_context> this_ctx;
 
 namespace {
-    static bool glog_inited;
-    struct stoplog_t {
-        ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
-    } stoplog;
-
-    static std::once_flag init_flag;
     static std::mutex threads_mutex;
     static std::vector<ptr<thread_context>> threads;
 } // namespace
@@ -28,37 +23,9 @@ static void remove_thread(ptr<thread_context> ctx) {
     threads.erase(i);
 }
 
-static void runtime_init() {
-    CHECK(getpid() == syscall(SYS_gettid)) << "must call in main thread before anything else";
-    //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
-    stack_t ss;
-    ss.ss_sp = calloc(1, SIGSTKSZ);
-    ss.ss_size = SIGSTKSZ;
-    ss.ss_flags = 0;
-    throw_if(sigaltstack(&ss, NULL) == -1);
-
-
-    umask(02); // allow group-readable logs
-    InitGoogleLogging(program_invocation_short_name);
-    glog_inited = true;
-    InstallFailureSignalHandler();
-
-    struct sigaction act;
-
-    // ignore SIGPIPE
-    memset(&act, 0, sizeof(act));
-    throw_if(sigaction(SIGPIPE, NULL, &act) == -1);
-    if (act.sa_handler == SIG_DFL) {
-        act.sa_handler = SIG_IGN;
-        throw_if(sigaction(SIGPIPE, &act, NULL) == -1);
-    }
-
-    netinit();
-}
-
 thread_context::thread_context() {
     task::set_default_stacksize(default_stacksize);
-    std::call_once(init_flag, runtime_init);
+    kernel::boot();
     add_thread(ptr<thread_context>{this});
 }
 

@@ -15,12 +15,12 @@ void procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 void procshutdown() {
-    this_ctx->scheduler.shutdown();
+    kernel::shutdown();
 }
 
 
 procmain::procmain() {
-    this_ctx->scheduler.current_task(); // cause runtime_init to be run
+    kernel::current_task(); // causes kernel::boot to be called
 }
 
 int procmain::main(int argc, char *argv[]) {
@@ -30,8 +30,8 @@ int procmain::main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
 }
 
-const time_point<steady_clock> &procnow() {
-    return this_ctx->scheduler.cached_time();
+time_point<steady_clock> procnow() {
+    return kernel::now();
 }
 
 } // end namespace ten

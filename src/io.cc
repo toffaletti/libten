@@ -115,7 +115,7 @@ bool io::fdwait(int fd, int rw, optional_timeout ms) {
 }
 
 int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
     if (nfds == 1) {
         taskstate("poll fd %i r: %i w: %i %ul ms",
                 fds->fd,
@@ -131,7 +131,7 @@ int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
     try {
         optional<scheduler::alarm_clock::scoped_alarm> timeout_alarm;
         if (ms) {
-            auto now = this_ctx->scheduler.cached_time();
+            auto now = kernel::now();
             timeout_alarm.emplace(this_ctx->scheduler._alarms, t, now + *ms);
         }
         t->swap();
@@ -151,7 +151,7 @@ void io::wait(optional<proc_time_t> when) {
     // only process 100 events each iteration to keep it fair
     _events.resize(100);
     int ms = -1;
-    auto now = this_ctx->scheduler.cached_time();
+    auto now = kernel::now();
     if (when && *when > now) {
         // TODO: allow more than millisecond resolution?
         ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();

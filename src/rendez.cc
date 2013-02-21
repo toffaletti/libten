@@ -1,12 +1,12 @@
 #include "ten/task/rendez.hh"
-#include "thread_context.hh"
+#include "kernel_private.hh"
 #include <mutex>
 
 namespace ten {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     DCHECK(lk.owns_lock()) << "must own lock before calling rendez::sleep";
-    ptr<task::pimpl> t = this_ctx->scheduler.current_task();
+    ptr<task::pimpl> t = kernel::current_task();
 
     {
         std::lock_guard<std::timed_mutex> ll(_m);
@@ -49,7 +49,7 @@ void rendez::wakeup() {
         }
     }
 
-    DVLOG(5) << "RENDEZ[" << this << "] " << this_ctx->scheduler.current_task() << " wakeup: " << t;
+    DVLOG(5) << "RENDEZ[" << this << "] " << kernel::current_task() << " wakeup: " << t;
     if (t) t->ready();
 }
 
@@ -61,7 +61,7 @@ void rendez::wakeupall() {
     }
 
     for (auto t : waiting) {
-        DVLOG(5) << "RENDEZ[" << this << "] " << this_ctx->scheduler.current_task() << " wakeupall: " << t;
+        DVLOG(5) << "RENDEZ[" << this << "] " << kernel::current_task() << " wakeupall: " << t;
         t->ready();
     }
 }

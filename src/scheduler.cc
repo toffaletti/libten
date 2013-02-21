@@ -1,6 +1,5 @@
 #include "scheduler.hh"
 #include "thread_context.hh"
-#include <sys/syscall.h>
 
 namespace ten {
 
@@ -45,6 +44,7 @@ io& scheduler::get_io() {
 }
 
 void scheduler::wait_for_all() {
+    DCHECK(_current_task.get() == _main_task.get());
     DVLOG(5) << "entering loop";
     _looping = true;
     while (_alltasks.size() > 0) {
@@ -53,7 +53,7 @@ void scheduler::wait_for_all() {
     _looping = false;
     DVLOG(5) << "exiting loop";
 
-    if (getpid() == syscall(SYS_gettid)) {
+    if (kernel::is_main_thread()) {
         // if the main proc is exiting we need to cancel
         // all other procs (threads) and wait for them
         this_ctx->cancel_all();

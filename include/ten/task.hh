@@ -10,6 +10,7 @@
 #include "ten/logging.hh"
 #include "ten/optional.hh"
 #include "ten/ptr.hh"
+#include "ten/task/kernel.hh"
 
 //! user must define
 extern const size_t default_stacksize;
@@ -18,11 +19,11 @@ namespace ten {
 
 extern void netinit();
 
-using proc_clock_t = std::chrono::steady_clock;
-using proc_time_t = std::chrono::time_point<proc_clock_t>;
+using proc_clock_t = kernel::clock;
+using proc_time_t = kernel::time_point;
 
 //! return cached time from event loop, not precise
-const proc_time_t &procnow();
+proc_time_t procnow();
 
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};

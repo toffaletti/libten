@@ -4,7 +4,7 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
-#include "task_impl.hh"
+#include "kernel_private.hh"
 #include "alarm.hh"
 #include "io.hh"
 
@@ -16,10 +16,12 @@ namespace ten {
 
 class scheduler {
     friend struct io;
-    friend void this_task::sleep_until(const proc_time_t& sleep_time);
+    friend void this_task::sleep_until(const kernel::time_point& sleep_time);
     friend class deadline;
+    friend kernel::time_point kernel::now();
+    friend ptr<task::pimpl> kernel::current_task();
 public:
-    typedef ten::alarm_clock<ptr<task::pimpl>, proc_clock_t> alarm_clock;
+    typedef ten::alarm_clock<ptr<task::pimpl>, kernel::clock> alarm_clock;
 private:
     std::shared_ptr<task::pimpl> _main_task;
     ptr<task::pimpl> _current_task;
@@ -33,7 +35,7 @@ private:
     //! tasks to be garbage collected in the next scheduler iteration
     std::deque<std::shared_ptr<task::pimpl>> _gctasks;
     //! current time cached in a few places through the event loop
-    proc_time_t _now;
+    kernel::time_point _now;
     //! tasks with pending timeouts
     alarm_clock _alarms;
 
@@ -50,6 +52,12 @@ private:
     void check_canceled();
     void check_dirty_queue();
     void check_timeout_tasks();
+
+    const kernel::time_point & update_cached_time() {
+        _now = kernel::clock::now();
+        return _now;
+    }
+
 public:
     scheduler();
     ~scheduler();
@@ -65,26 +73,13 @@ public:
     //! run one iteration of the scheduler
     void schedule();
 
-    const proc_time_t & update_cached_time() {
-        _now = proc_clock_t::now();
-        return _now;
-    }
-
-    const proc_time_t &cached_time() const {
-        return _now;
-    }
-
     void attach_task(std::shared_ptr<task::pimpl> t);
     void remove_task(ptr<task::pimpl> t);
 
     void wakeup();
-    void wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when);
+    void wait(std::unique_lock <std::mutex> &lock, optional<kernel::time_point> when);
 
     bool cancel_task_by_id(uint64_t id);
-
-    ptr<task::pimpl> current_task() const {
-        return _current_task;
-    }
 
     void cancel() {
         _canceled = true;

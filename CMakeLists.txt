@@ -55,6 +55,7 @@ add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
 add_library(ten
+    src/kernel.cc
     src/rendez.cc
     src/qutex.cc
     src/task.cc
