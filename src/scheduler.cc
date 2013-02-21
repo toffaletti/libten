@@ -53,9 +53,7 @@ void scheduler::shutdown() {
         _shutdown_sequence_initiated = true;
         for (auto &t : alltasks) {
             if (t.get() == ctask.get()) continue; // don't add ourself to the runqueue
-            if (!t->systask) {
-                t->cancel();
-            }
+            t->cancel();
         }
     }
 }
@@ -156,15 +154,14 @@ void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
 }
 
 void scheduler::remove_task(ptr<task::pimpl> t) {
-    if (!t->systask) {
-        --taskcount;
-    }
-    DCHECK(std::find(runqueue.begin(), runqueue.end(), t) == runqueue.end()) << "BUG: " << t
+    using namespace std;
+    --taskcount;
+    DCHECK(find(begin(runqueue), end(runqueue), t) == end(runqueue)) << "BUG: " << t
         << " found in runqueue while being deleted";
-    auto i = std::find_if(alltasks.begin(), alltasks.end(), [=](std::shared_ptr<task::pimpl> &tt) -> bool {
+    auto i = find_if(begin(alltasks), end(alltasks), [=](shared_ptr<task::pimpl> &tt) -> bool {
         return tt.get() == t.get();
     });
-    DCHECK(i != alltasks.end());
+    DCHECK(i != end(alltasks));
     alltasks.erase(i);
 }
 
@@ -208,13 +205,6 @@ bool scheduler::cancel_task_by_id(uint64_t id) {
         }
     }
     return found;
-}
-
-void scheduler::mark_system_task() {
-    if (!ctask->systask) {
-        ctask->systask = true;
-        --taskcount;
-    }
 }
 
 void scheduler::wakeup() {

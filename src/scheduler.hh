@@ -84,8 +84,6 @@ public:
     void wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when);
 
     bool cancel_task_by_id(uint64_t id);
-    //! mark current task as system task
-    void mark_system_task();
 
     ptr<task::pimpl> current_task() const {
         return ctask;

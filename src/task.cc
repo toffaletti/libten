@@ -23,8 +23,7 @@ std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
     if (t) {
         o << "[" << (void*)t.get() << " " << t->id << " "
             << t->name.get() << " |" << t->state.get()
-            << "| sys: " << t->systask
-            << " canceled: " << t->canceled << "]";
+            << "| canceled: " << t->canceled << "]";
     } else {
         o << "nulltask";
     }
@@ -91,10 +90,6 @@ void taskyield() {
     this_task::yield();
 }
 
-void tasksystem() {
-    this_ctx->scheduler.mark_system_task();
-}
-
 bool taskcancel(uint64_t id) {
     return this_ctx->scheduler.cancel_task_by_id(id);
 }
@@ -155,7 +150,6 @@ task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
     id{++taskidgen},
     fn{f},
     is_ready{false},
-    systask{false},
     canceled{false}
 {
     setname("task[%ju]", id);
@@ -234,8 +228,6 @@ bool task::pimpl::cancelable() const {
 }
 
 void task::pimpl::cancel() {
-    // don't cancel systasks
-    if (systask) return;
     canceled = true;
     if (is_ready.exchange(true) == false) {
         this_ctx->scheduler.unsafe_ready(ptr<task::pimpl>{this});

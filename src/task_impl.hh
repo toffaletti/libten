@@ -34,7 +34,6 @@ struct task::pimpl {
     uint64_t id;
     std::function<void ()> fn;
     std::atomic<bool> is_ready;
-    bool systask;
     bool canceled;
 
     pimpl(const std::function<void ()> &f, size_t stacksize);

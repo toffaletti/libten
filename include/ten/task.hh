@@ -84,8 +84,6 @@ uint64_t taskid();
 void taskyield();
 //! cancel a task
 bool taskcancel(uint64_t id);
-//! mark the current task as a system task
-void tasksystem();
 //! set/get current task state
 const char *taskstate(const char *fmt=nullptr, ...);
 //! set/get current task name
