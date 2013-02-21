@@ -76,7 +76,7 @@ public:
 
     void dump_tasks(std::ostream &out) const {
         for (auto &t : alltasks) {
-            out << t << "\n";
+            out << ptr<task::pimpl>{t.get()} << "\n";
         }
     }
 
