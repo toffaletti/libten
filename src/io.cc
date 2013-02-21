@@ -3,6 +3,10 @@
 
 namespace ten {
 
+#ifdef HAS_CARES
+extern inotify_fd resolv_conf_watch_fd;
+#endif // HAS_CARES
+
 io::io() {
     _events.reserve(100);
     // add the eventfd used to wake up
@@ -22,6 +26,17 @@ io::io() {
         ev.data.fd = e_fd;
         throw_if(_efd.add(e_fd, ev) == -1);
     }
+
+#ifdef HAS_CARES
+    // add inotify_fd used to watch /etc/resolv.conf
+    {
+        epoll_event ev{};
+        ev.events = EPOLLIN | EPOLLET;
+        int e_fd = resolv_conf_watch_fd.fd;
+        ev.data.fd = e_fd;
+        throw_if(_efd.add(e_fd, ev) == -1);
+    }
+#endif // HAS_CARES
 }
 
 void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
@@ -151,21 +166,24 @@ void io::wait(optional<proc_time_t> when) {
     // only process 100 events each iteration to keep it fair
     _events.resize(100);
     int ms = -1;
-    auto now = kernel::now();
-    if (when && *when > now) {
-        // TODO: allow more than millisecond resolution?
-        ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();
-        if (ms) {
-            struct itimerspec tspec{};
-            tspec.it_value.tv_sec = ms / 1000;
-            tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
-            _tfd.settime(tspec);
-            // we use timer_fd to break from epoll_wait
-            // because its timeout isn't very accurate
-            ms = -1;
+    if (when) {
+        auto now = kernel::now();
+        if (*when > now) {
+            // TODO: allow more than millisecond resolution?
+            ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();
+            if (ms) {
+                struct itimerspec tspec{};
+                tspec.it_value.tv_sec = ms / 1000;
+                tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
+                _tfd.settime(tspec);
+                // we use timer_fd to break from epoll_wait
+                // because its timeout isn't very accurate
+                ms = -1;
+            }
+        } else {
+            // don't wait at all
+            ms = 0;
         }
-    } else {
-        ms = 0;
     }
 
     _efd.wait(_events, ms);
@@ -181,6 +199,15 @@ void io::wait(optional<proc_time_t> when) {
             _evfd.read();
         } else if (fd == _tfd.fd) {
             // timerfd fired for sleeping/timeout tasks
+#ifdef HAS_CARES
+        } else if (fd == resolv_conf_watch_fd.fd) {
+            inotify_event event;
+            // this read should only succeed in one thread
+            // but all threads should get the event
+            resolv_conf_watch_fd.read(event);
+            // force next dns query to re-ares_init
+            this_ctx->dns_channel.reset();
+#endif // HAS_CARES
         } else if ((size_t)fd < _pollfds.size()) {
             if (_pollfds[fd].t_in) {
                 _pollfds[fd].p_in->revents = event.events;

@@ -16,6 +16,7 @@
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
 #include <sys/eventfd.h>
+#include <sys/inotify.h>
 #include <signal.h>
 #include <vector>
 
@@ -410,6 +411,26 @@ struct signal_fd : fd_base {
     void read(struct signalfd_siginfo &siginfo) {
         ssize_t r = fd_base::read(&siginfo, sizeof(siginfo));
         throw_if(r == -1);
+    }
+};
+
+//! wrapper around inotify
+struct inotify_fd : fd_base {
+    inotify_fd(int flags = 0) {
+        fd = ::inotify_init1(flags | IN_CLOEXEC);
+        throw_if(fd == -1);
+    }
+
+    int add_watch(const char *pathname, uint32_t mask) {
+        return ::inotify_add_watch(fd, pathname, mask);
+    }
+
+    int rm_watch(int wd) {
+        return ::inotify_rm_watch(fd, wd);
+    }
+
+    ssize_t read(inotify_event &event) {
+        return fd_base::read(&event, sizeof(event));
     }
 };
 

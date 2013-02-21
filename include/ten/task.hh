@@ -103,9 +103,9 @@ public:
 //! sleep current task for milliseconds
 void tasksleep(uint64_t ms);
 //! suspend task waiting for io on pollfds
-int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms={});
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms=nullopt);
 //! suspend task waiting for io on fd
-bool fdwait(int fd, int rw, optional_timeout ms={});
+bool fdwait(int fd, int rw, optional_timeout ms=nullopt);
 
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated

@@ -32,6 +32,7 @@ endif()
 add_subdirectory(glog)
 
 if (CARES_LIB AND CARES_INCLUDE)
+    add_definitions(-DHAS_CARES)
     set(RESOLVER_SRC src/cares.cc)
 else()
     set(CARES_LIB "")
