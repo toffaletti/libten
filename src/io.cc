@@ -3,67 +3,63 @@
 
 namespace ten {
 
-io::io() : _evfd(0, EFD_NONBLOCK), npollfds(0) {
-    events.reserve(100);
+io::io() {
+    _events.reserve(100);
     // add the eventfd used to wake up
     {
         epoll_event ev{};
         ev.events = EPOLLIN | EPOLLET;
         int e_fd = _evfd.fd;
         ev.data.fd = e_fd;
-        if (pollfds.size() <= (size_t)e_fd) {
-            pollfds.resize(e_fd+1);
-        }
-        efd.add(e_fd, ev);
+        throw_if(_efd.add(e_fd, ev) == -1);
     }
 
+    // add timerfd used for timeouts
     {
         epoll_event ev{};
         ev.events = EPOLLIN | EPOLLET;
-        int e_fd = tfd.fd;
+        int e_fd = _tfd.fd;
         ev.data.fd = e_fd;
-        if (pollfds.size() <= (size_t)e_fd) {
-            pollfds.resize(e_fd+1);
-        }
-        efd.add(e_fd, ev);
+        throw_if(_efd.add(e_fd, ev) == -1);
     }
 }
 
 void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
     for (nfds_t i=0; i<nfds; ++i) {
-        epoll_event ev;
-        memset(&ev, 0, sizeof(ev));
+        epoll_event ev{};
         int fd = fds[i].fd;
         fds[i].revents = 0;
         // make room for the highest fd number
-        if (pollfds.size() <= (size_t)fd) {
-            pollfds.resize(fd+1);
+        if (_pollfds.size() <= (size_t)fd) {
+            _pollfds.resize(fd+1);
         }
         ev.data.fd = fd;
-        uint32_t saved_events = pollfds[fd].events;
+        uint32_t saved_events = _pollfds[fd].events;
 
         if (fds[i].events & EPOLLIN) {
-            DCHECK(pollfds[fd].t_in == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_in;
-            pollfds[fd].t_in = t;
-            pollfds[fd].p_in = &fds[i];
-            pollfds[fd].events |= EPOLLIN;
+            DCHECK(_pollfds[fd].t_in == nullptr)
+                << "BUG: fd: " << fd << " from " << t << " but " << _pollfds[fd].t_in;
+            _pollfds[fd].t_in = t;
+            _pollfds[fd].p_in = &fds[i];
+            _pollfds[fd].events |= EPOLLIN;
         }
 
         if (fds[i].events & EPOLLOUT) {
-            DCHECK(pollfds[fd].t_out == nullptr) << "BUG: fd: " << fd << " from " << t << " but " << pollfds[fd].t_out;
-            pollfds[fd].t_out = t;
-            pollfds[fd].p_out = &fds[i];
-            pollfds[fd].events |= EPOLLOUT;
+            DCHECK(_pollfds[fd].t_out == nullptr)
+                << "BUG: fd: " << fd << " from " << t << " but " << _pollfds[fd].t_out;
+            _pollfds[fd].t_out = t;
+            _pollfds[fd].p_out = &fds[i];
+            _pollfds[fd].events |= EPOLLOUT;
         }
 
-        ev.events = pollfds[fd].events;
+        ev.events = _pollfds[fd].events;
 
         if (saved_events == 0) {
-            throw_if(efd.add(fd, ev) == -1);
-        } else if (saved_events != pollfds[fd].events) {
-            throw_if(efd.modify(fd, ev) == -1);
+            throw_if(_efd.add(fd, ev) == -1);
+        } else if (saved_events != _pollfds[fd].events) {
+            throw_if(_efd.modify(fd, ev) == -1);
         }
-        ++npollfds;
+        ++_npollfds;
     }
 }
 
@@ -73,28 +69,27 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
         int fd = fds[i].fd;
         if (fds[i].revents) rvalue++;
 
-        if (pollfds[fd].p_in == &fds[i]) {
-            pollfds[fd].t_in.reset();
-            pollfds[fd].p_in = nullptr;
-            pollfds[fd].events ^= EPOLLIN;
+        if (_pollfds[fd].p_in == &fds[i]) {
+            _pollfds[fd].t_in.reset();
+            _pollfds[fd].p_in = nullptr;
+            _pollfds[fd].events ^= EPOLLIN;
         }
 
-        if (pollfds[fd].p_out == &fds[i]) {
-            pollfds[fd].t_out.reset();
-            pollfds[fd].p_out = nullptr;
-            pollfds[fd].events ^= EPOLLOUT;
+        if (_pollfds[fd].p_out == &fds[i]) {
+            _pollfds[fd].t_out.reset();
+            _pollfds[fd].p_out = nullptr;
+            _pollfds[fd].events ^= EPOLLOUT;
         }
 
-        if (pollfds[fd].events == 0) {
-            efd.remove(fd);
+        if (_pollfds[fd].events == 0) {
+            _efd.remove(fd);
         } else {
-            epoll_event ev;
-            memset(&ev, 0, sizeof(ev));
+            epoll_event ev{};
             ev.data.fd = fd;
-            ev.events = pollfds[fd].events;
-            throw_if(efd.modify(fd, ev) == -1);
+            ev.events = _pollfds[fd].events;
+            throw_if(_efd.modify(fd, ev) == -1);
         }
-        --npollfds;
+        --_npollfds;
     }
     return rvalue;
 }
@@ -153,90 +148,62 @@ void io::wakeup() {
 }
 
 void io::wait(optional<proc_time_t> when) {
-    this_ctx->scheduler.update_cached_time();
-    ptr<task::pimpl> t = nullptr;
-
+    // only process 100 events each iteration to keep it fair
+    _events.resize(100);
     int ms = -1;
-    if (when) {
-        auto now = this_ctx->scheduler.cached_time();
-        if (*when <= now) {
-            // epoll_wait must return asap
-            ms = 0;
-        } else {
-            uint64_t usec = duration_cast<microseconds>(*when - now).count();
-            // TODO: round millisecond timeout up for now
-            // in the future we can provide higher resolution thanks to
-            // timerfd supporting nanosecond resolution
-            ms = (usec + (1000/2)) / 1000;
-            // avoid spinning on timeouts smaller than 1ms
-            if (ms <= 0) ms = 1;
-        }
-    }
-
-    if (ms != 0) {
-        if (this_ctx->scheduler.is_ready()) {
-            // don't block on epoll if tasks are ready to run
-            ms = 0;
-        }
-    }
-
-    if (ms != 0 || npollfds > 0) {
-        //taskstate("epoll %d ms", ms);
-        if (ms > 0) {
+    auto now = this_ctx->scheduler.cached_time();
+    if (when && *when > now) {
+        // TODO: allow more than millisecond resolution?
+        ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();
+        if (ms) {
             struct itimerspec tspec{};
-            struct itimerspec oldspec{};
             tspec.it_value.tv_sec = ms / 1000;
             tspec.it_value.tv_nsec = (ms % 1000) * 1000000;
-            tfd.settime(0, tspec, oldspec);
-            // epoll_wait timeout is not accurate so we use timerfd
-            // to break from epoll_wait instead of the timeout value
-            // -1 means no timeout.
+            _tfd.settime(tspec);
+            // we use timer_fd to break from epoll_wait
+            // because its timeout isn't very accurate
             ms = -1;
         }
-        // only process 100 events each iteration to keep it fair
-        events.resize(100);
-        if (this_ctx->scheduler.is_dirty()) {
-            // another thread(s) changed the dirtyq before we started
-            // polling. so we should skip epoll and run that task
-            events.resize(0);
-        } else {
-            efd.wait(events, ms);
-        }
-        for (auto i=events.cbegin(); i!=events.cend(); ++i) {
-            // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
-            // even if they arent asked for, so we must wake up the tasks on any event
-            // to avoid just spinning in epoll.
-            int fd = i->data.fd;
-            if (fd == _evfd.fd) {
-                // our wake up eventfd was written to
-                // clear events by reading value
-                _evfd.read();
-            } else if (fd == tfd.fd) {
-                // timerfd fired for sleeping/timeout tasks
-            } else if ((size_t)fd < pollfds.size()) {
-                if (pollfds[fd].t_in) {
-                    pollfds[fd].p_in->revents = i->events;
-                    t = pollfds[fd].t_in;
-                    DVLOG(5) << "IN EVENT on task: " << t;
-                    t->ready_for_io();
-                }
+    } else {
+        ms = 0;
+    }
 
-                // check to see if pollout is a different task than pollin
-                if (pollfds[fd].t_out && pollfds[fd].t_out != pollfds[fd].t_in) {
-                    pollfds[fd].p_out->revents = i->events;
-                    t = pollfds[fd].t_out;
-                    DVLOG(5) << "OUT EVENT on task: " << t;
-                    t->ready_for_io();
-                }
-
-                if (pollfds[fd].t_in == nullptr && pollfds[fd].t_out == nullptr) {
-                    // TODO: otherwise we might want to remove fd from epoll
-                    LOG(ERROR) << "event " << i->events << " for fd: "
-                        << i->data.fd << " but has no task";
-                }
-            } else {
-                LOG(ERROR) << "BUG: mystery fd " << fd;
+    _efd.wait(_events, ms);
+    ptr<task::pimpl> t;
+    for (auto &event : _events) {
+        // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
+        // even if they arent asked for, so we must wake up the tasks on any event
+        // to avoid just spinning in epoll.
+        int fd = event.data.fd;
+        if (fd == _evfd.fd) {
+            // our wake up eventfd was written to
+            // clear events by reading value
+            _evfd.read();
+        } else if (fd == _tfd.fd) {
+            // timerfd fired for sleeping/timeout tasks
+        } else if ((size_t)fd < _pollfds.size()) {
+            if (_pollfds[fd].t_in) {
+                _pollfds[fd].p_in->revents = event.events;
+                t = _pollfds[fd].t_in;
+                DVLOG(5) << "IN EVENT on task: " << t;
+                t->ready_for_io();
             }
+
+            // check to see if pollout is a different task than pollin
+            if (_pollfds[fd].t_out && _pollfds[fd].t_out != _pollfds[fd].t_in) {
+                _pollfds[fd].p_out->revents = event.events;
+                t = _pollfds[fd].t_out;
+                DVLOG(5) << "OUT EVENT on task: " << t;
+                t->ready_for_io();
+            }
+
+            if (_pollfds[fd].t_in == nullptr && _pollfds[fd].t_out == nullptr) {
+                // TODO: otherwise we might want to remove fd from epoll
+                LOG(ERROR) << "event " << event.events << " for fd: "
+                    << event.data.fd << " but has no task";
+            }
+        } else {
+            LOG(ERROR) << "BUG: mystery fd " << fd;
         }
     }
 }

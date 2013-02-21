@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(timer_fd_test) {
     memset(&ts, 0, sizeof(ts));
     ts.it_value.tv_sec = 1;
     ts.it_value.tv_nsec = 50;
-    t.settime(0, ts, prev);
+    t.settime(ts, prev);
 }
 
 BOOST_AUTO_TEST_CASE(socket_listen_test) {

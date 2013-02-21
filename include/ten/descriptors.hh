@@ -371,16 +371,29 @@ struct timer_fd : fd_base {
     }
 
     //! arms or disarms the timer referred to by fd
-    void settime(int flags, const struct itimerspec &new_value,
-      struct itimerspec &old_value)
+    void settime(const struct itimerspec &new_value,
+            struct itimerspec &old_value, int flags = 0)
     {
         throw_if(timerfd_settime(fd, flags, &new_value, &old_value) == -1);
+    }
+
+    //! arms or disarms the timer referred to by fd
+    void settime(const struct itimerspec &new_value, int flags = 0) {
+        throw_if(timerfd_settime(fd, flags, &new_value, nullptr) == -1);
     }
 
     //! \param curr_value will contain the current value of the timer
     void gettime(struct itimerspec &curr_value) {
         throw_if(timerfd_gettime(fd, &curr_value) == -1);
     }
+
+    //! return the number of times the timer has fired
+    uint64_t read() {
+        uint64_t val;
+        throw_if(fd_base::read(&val, sizeof(val)) == -1);
+        return val;
+    }
+
 };
 
 //! wrapper around signalfd

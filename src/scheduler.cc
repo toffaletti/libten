@@ -19,17 +19,16 @@ scheduler::~scheduler() {
         this_ctx->cancel_all();
         while (thread_context::count()) {
             // TODO: remove this busy loop in favor of sleeping the proc
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+            std::this_thread::sleep_for(std::chrono::milliseconds{60});
         }
 
-        DVLOG(5) << "sleeping last proc to allow " << nprocs << " threads to exit and cleanup";
-        for (size_t i=0; i<nprocs*2; ++i) {
-            // nasty hack for mysql thread cleanup
-            // because it happens *after* all of my code, i have no way of waiting
-            // for it to finish with an event (unless i joined all threads)
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
-            std::this_thread::yield();
-        }
+        // nasty hack for mysql thread cleanup
+        // because it happens *after* all of my code, i have no way of waiting
+        // for it to finish with an event (unless i joined all threads)
+        unsigned sleep_ms = std::min((size_t)1500, nprocs*100);
+        DVLOG(5) << "sleeping for " << sleep_ms << "ms to allow " << nprocs << " threads to cleanup";
+        std::this_thread::sleep_for(std::chrono::milliseconds{sleep_ms});
+        std::this_thread::yield();
     }
     // TODO: now that threads are remaining joinable
     // maybe shutdown can be cleaner...look into this
@@ -40,6 +39,7 @@ scheduler::~scheduler() {
     //}
     // XXX: there is also a thing that will trigger a cond var
     // after thread has fully exited. that is another possiblity
+    // once libstdc++ implements it
     runqueue.clear();
     // clean up system tasks
     while (!alltasks.empty()) {

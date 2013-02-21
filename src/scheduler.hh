@@ -53,11 +53,13 @@ public:
     scheduler();
     ~scheduler();
 
+    //! cancel all tasks in this scheduler
     void shutdown();
     io &get_io();
 
     //! call schedule in a loop while taskcount > 0
     void loop();
+    //! run one iteration of the scheduler
     void schedule();
 
     const proc_time_t & update_cached_time() {
@@ -89,21 +91,9 @@ public:
         return ctask;
     }
 
-    bool is_canceled() const {
-        return canceled;
-    }
-
     void cancel() {
         canceled = true;
         wakeup();
-    }
-
-    bool is_dirty() {
-        return !dirtyq.empty();
-    }
-
-    bool is_ready() const {
-        return !runqueue.empty();
     }
 
     context &sched_context() { return ctx; }

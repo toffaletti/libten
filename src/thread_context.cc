@@ -28,10 +28,6 @@ static void remove_thread(ptr<thread_context> ctx) {
     threads.erase(i);
 }
 
-static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
-    taskdumpf();
-}
-
 static void runtime_init() {
     CHECK(getpid() == syscall(SYS_gettid)) << "must call in main thread before anything else";
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
@@ -57,13 +53,6 @@ static void runtime_init() {
         throw_if(sigaction(SIGPIPE, &act, NULL) == -1);
     }
 
-    // install INFO handler
-    throw_if(sigaction(SIGUSR1, NULL, &act) == -1);
-    if (act.sa_handler == SIG_DFL) {
-        act.sa_sigaction = info_handler;
-        act.sa_flags = SA_RESTART | SA_SIGINFO;
-        throw_if(sigaction(SIGUSR1, &act, NULL) == -1);
-    }
     netinit();
 }
 
