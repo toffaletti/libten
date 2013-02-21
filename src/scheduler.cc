@@ -72,7 +72,7 @@ void scheduler::check_canceled() {
 }
 
 void scheduler::check_dirty_queue() {
-    ptr<task::pimpl> t = nullptr;
+    ptr<task::pimpl> t;
     while (_dirtyq.pop(t)) {
         DVLOG(5) << "dirty readying " << t;
         _readyq.push_front(t);

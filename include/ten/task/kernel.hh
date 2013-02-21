@@ -9,6 +9,9 @@ namespace kernel {
 using clock = std::chrono::steady_clock;
 using time_point = std::chrono::time_point<clock>;
 
+//! user may provide; only effective before boot
+void set_logname(const char *name);
+
 //! return cached time from event loop, not precise
 time_point now();
 

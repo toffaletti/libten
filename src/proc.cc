@@ -18,7 +18,6 @@ void procshutdown() {
     kernel::shutdown();
 }
 
-
 procmain::procmain() {
     kernel::current_task(); // causes kernel::boot to be called
 }

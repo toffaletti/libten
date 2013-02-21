@@ -10,6 +10,8 @@ namespace {
         ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
     } stoplog;
 
+    const char *glog_name = nullptr;
+
     static std::once_flag boot_flag;
 }
 
@@ -18,16 +20,19 @@ namespace kernel {
 static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
     task::set_default_stacksize(default_stacksize);
+
+    umask(02); // allow group-readable logs
+
+    static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
+    InitGoogleLogging(perm_glog_name);
+    glog_inited = true;
+
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
     throw_if(sigaltstack(&ss, NULL) == -1);
 
-
-    umask(02); // allow group-readable logs
-    InitGoogleLogging(program_invocation_short_name);
-    glog_inited = true;
     InstallFailureSignalHandler();
 
     struct sigaction act;
@@ -41,6 +46,10 @@ static void kernel_boot() {
     }
 
     netinit();
+}
+
+void set_logname(const char *name) {
+    glog_name = name;
 }
 
 time_point now() {
