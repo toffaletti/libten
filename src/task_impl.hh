@@ -49,11 +49,11 @@ struct task::pimpl {
     void safe_swap() noexcept;
     void swap();
 
-    void exit();
     void cancel();
     bool cancelable() const;
 
-    static void start(intptr_t arg);
+private:
+    static void trampoline(intptr_t arg);
 };
 
 std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);

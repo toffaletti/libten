@@ -118,6 +118,7 @@ void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> 
 }
 
 void scheduler::schedule() {
+    ptr<task::pimpl> saved_task = ctask;
     try {
         do {
             check_canceled();
@@ -131,15 +132,13 @@ void scheduler::schedule() {
         } while (runqueue.empty());
         ptr<task::pimpl> t{runqueue.front()};
         runqueue.pop_front();
+        DCHECK(t->is_ready);
+        t->is_ready.store(false);
         ctask = t;
         DVLOG(5) << this << " swapping to: " << t;
-        t->is_ready = false;
         ctx.swap(t->ctx, reinterpret_cast<intptr_t>(t.get()));
-        ctask = nullptr;
-
-        if (!t->fn) {
-            remove_task(t);
-        }
+        ctask = saved_task;
+        _gctasks.clear();
     } catch (backtrace_exception &e) {
         LOG(FATAL) << e.what() << "\n" << e.backtrace_str();
     } catch (std::exception &e) {
@@ -156,12 +155,15 @@ void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
 void scheduler::remove_task(ptr<task::pimpl> t) {
     using namespace std;
     --taskcount;
-    DCHECK(find(begin(runqueue), end(runqueue), t) == end(runqueue)) << "BUG: " << t
-        << " found in runqueue while being deleted";
+    DCHECK(t);
+    DCHECK(t->_scheduler.get() == this);
+    DCHECK(find(begin(runqueue), end(runqueue), t) == end(runqueue))
+        << "BUG: " << t << " found in runqueue while being deleted";
     auto i = find_if(begin(alltasks), end(alltasks), [=](shared_ptr<task::pimpl> &tt) -> bool {
         return tt.get() == t.get();
     });
     DCHECK(i != end(alltasks));
+    _gctasks.emplace_back(*i);
     alltasks.erase(i);
 }
 

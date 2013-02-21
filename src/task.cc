@@ -143,7 +143,7 @@ uint64_t task::get_id() const {
 }
 
 task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
-    : ctx{task::pimpl::start, stacksize},
+    : ctx{task::pimpl::trampoline, stacksize},
     cancel_points{0},
     name{new char[namesize]},
     state{new char[statesize]},
@@ -156,22 +156,25 @@ task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
     setstate("new");
 }
 
-void task::pimpl::start(intptr_t arg) {
-    task::pimpl *t = reinterpret_cast<task::pimpl *>(arg);
+void task::pimpl::trampoline(intptr_t arg) {
+    ptr<task::pimpl> self{reinterpret_cast<task::pimpl *>(arg)};
     try {
-        if (!t->canceled) {
-            t->fn();
+        if (!self->canceled) {
+            self->fn();
         }
     } catch (task_interrupted &e) {
-        DVLOG(5) << t << " interrupted ";
+        DVLOG(5) << self << " interrupted ";
     } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
-        std::exit(2);
+        LOG(ERROR) << "unhandled error in " << self << ": " << e.what() << "\n" << e.backtrace_str();
     } catch (std::exception &e) {
-        LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
-        std::exit(2);
+        LOG(ERROR) << "unhandled error in " << self << ": " << e.what();
     }
-    t->exit();
+    self->fn = nullptr;
+    ptr<scheduler> sched = self->_scheduler;
+    sched->remove_task(self);
+    self->swap();
+    // never get here
+    LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
 }
 
 void task::pimpl::setname(const char *fmt, ...) {
@@ -216,11 +219,6 @@ void task::pimpl::swap() {
         std::swap(tmp, exception);
         std::rethrow_exception(tmp);
     }
-}
-
-void task::pimpl::exit() {
-    fn = nullptr;
-    swap();
 }
 
 bool task::pimpl::cancelable() const {

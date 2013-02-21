@@ -26,7 +26,10 @@ private:
     context ctx;
     std::deque<ptr<task::pimpl>> runqueue;
     optional<io> _io;
+    //! all tasks known to this scheduler
     std::deque<std::shared_ptr<task::pimpl>> alltasks;
+    //! tasks to be garbage collected in the next scheduler iteration
+    std::deque<std::shared_ptr<task::pimpl>> _gctasks;
     //! other threads use this to add tasks to runqueue
     llqueue<ptr<task::pimpl>> dirtyq;
 
