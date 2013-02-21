@@ -48,8 +48,7 @@ template <class Rep, class Period>
 
 class task {
 public:
-    struct pimpl;
-    friend class proc;
+    class pimpl;
 private:
     std::shared_ptr<pimpl> _pimpl;
 
@@ -73,8 +72,6 @@ public:
 public:
     static void set_default_stacksize(size_t stacksize);
 };
-
-class proc;
 
 //! spawn a new task in the current thread
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);

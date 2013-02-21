@@ -38,13 +38,8 @@ uint64_t get_id() {
 }
 
 void yield() {
-    task::pimpl::cancellation_point cancellable;
     ptr<task::pimpl> t = this_ctx->scheduler.current_task();
-    if (t->is_ready.exchange(true) == false) {
-        t->setstate("yield");
-        this_ctx->scheduler.unsafe_ready(t);
-    }
-    t->swap();
+    t->yield(); 
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
@@ -103,7 +98,7 @@ const char *taskname(const char *fmt, ...)
         t->vsetname(fmt, arg);
         va_end(arg);
     }
-    return t->name.get();
+    return t->getname();
 }
 
 const char *taskstate(const char *fmt, ...)
@@ -115,7 +110,7 @@ const char *taskstate(const char *fmt, ...)
         t->vsetstate(fmt, arg);
         va_end(arg);
     }
-    return t->state.get();
+    return t->getstate();
 }
 
 std::string taskdump() {
@@ -202,6 +197,15 @@ void task::pimpl::vsetstate(const char *fmt, va_list arg) {
 void task::pimpl::safe_swap() noexcept {
     // swap to scheduler coroutine
     ctx.swap(this_ctx->scheduler.sched_context(), 0);
+}
+
+void task::pimpl::yield() {
+    task::pimpl::cancellation_point cancellable;
+    if (is_ready.exchange(true) == false) {
+        setstate("yield");
+        _scheduler->unsafe_ready(ptr<task::pimpl>{this});
+    }
+    swap();
 }
 
 void task::pimpl::swap() {

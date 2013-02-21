@@ -17,25 +17,33 @@ class scheduler;
 
 void taskdumpf(FILE *of = stderr);
 
-struct task::pimpl {
+class task::pimpl {
+    friend class scheduler;
+    friend std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
+private:
     static constexpr size_t namesize = 16;
     static constexpr size_t statesize = 32;
+public:
     struct cancellation_point {
         cancellation_point();
         ~cancellation_point();
     };
-
+private:
+    // order here is important
+    // trying to get most used in the same cache line
     context ctx;
     ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
     std::unique_ptr<char[]> name;
     std::unique_ptr<char[]> state;
-    uint64_t id;
+public:
+    const uint64_t id;
+private:
     std::function<void ()> fn;
     std::atomic<bool> is_ready;
     bool canceled;
-
+public:
     pimpl(const std::function<void ()> &f, size_t stacksize);
 
     void setname(const char *fmt, ...);
@@ -43,11 +51,16 @@ struct task::pimpl {
     void setstate(const char *fmt, ...);
     void vsetstate(const char *fmt, va_list arg);
 
+    const char *getname() const { return name.get(); }
+    const char *getstate() const { return state.get(); }
+
     void ready(bool front=false);
     void ready_for_io();
 
     void safe_swap() noexcept;
     void swap();
+
+    void yield();
 
     void cancel();
     bool cancelable() const;
