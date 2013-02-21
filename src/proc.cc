@@ -231,10 +231,23 @@ namespace {
     struct stoplog_t {
         ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
     } stoplog;
+
+    const char *glog_name = nullptr;
+}
+
+void set_logname(const char *name) {
+    glog_name = name;
 }
 
 static void procmain_init() {
     CHECK(getpid() == syscall(SYS_gettid)) << "must call procmain in main thread before anything else";
+
+    umask(02); // allow group-readable logs
+
+    static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
+    InitGoogleLogging(perm_glog_name);
+    glog_inited = true;
+
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
@@ -242,9 +255,6 @@ static void procmain_init() {
     ss.ss_flags = 0;
     throw_if(sigaltstack(&ss, NULL) == -1);
 
-    umask(02); // allow group-readable logs
-    InitGoogleLogging(program_invocation_short_name);
-    glog_inited = true;
     InstallFailureSignalHandler();
 
     struct sigaction act;
