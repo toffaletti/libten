@@ -61,7 +61,7 @@ struct app_config {
     std::string glog_vmodule;
 
     void configure_glog(const char *name) const {
-        set_logname(name);
+        FLAGS_logtostderr = false; // turn master switch back off (cf procmain_init)
 
         FLAGS_minloglevel = glog_min_level;
         FLAGS_stderrthreshold = glog_stderr_level;
