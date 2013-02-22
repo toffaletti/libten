@@ -31,12 +31,15 @@ private:
     epoll_fd _efd;
     //! number of fds we've been asked to wait on
     size_t _npollfds = 0;
-public:
-    io();
+private:
     void add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds);
     int remove_pollfds(pollfd *fds, nfds_t nfds);
+public:
+    io();
+
     bool fdwait(int fd, int rw, optional_timeout ms);
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms);
+
     void wakeup();
     void wait(optional<proc_time_t> when);
 };

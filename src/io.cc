@@ -67,10 +67,15 @@ void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
             _pollfds[fd].events |= EPOLLOUT;
         }
 
-        ev.events = _pollfds[fd].events;
+        ev.events = _pollfds[fd].events | EPOLLONESHOT;
 
         if (saved_events == 0) {
-            throw_if(_efd.add(fd, ev) == -1);
+            int status = _efd.modify(fd, ev);
+            if (status == -1 && errno == ENOENT) {
+                throw_if(_efd.add(fd, ev) == -1);
+            } else {
+                throw_if(status == -1);
+            }
         } else if (saved_events != _pollfds[fd].events) {
             throw_if(_efd.modify(fd, ev) == -1);
         }
@@ -79,10 +84,9 @@ void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
 }
 
 int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
-    int rvalue = 0;
+    int evented_fds = 0;
     for (nfds_t i=0; i<nfds; ++i) {
         int fd = fds[i].fd;
-        if (fds[i].revents) rvalue++;
 
         if (_pollfds[fd].p_in == &fds[i]) {
             _pollfds[fd].t_in.reset();
@@ -96,17 +100,21 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
             _pollfds[fd].events ^= EPOLLOUT;
         }
 
-        if (_pollfds[fd].events == 0) {
-            _efd.remove(fd);
+        if (fds[i].revents) {
+            ++evented_fds;
         } else {
-            epoll_event ev{};
-            ev.data.fd = fd;
-            ev.events = _pollfds[fd].events;
-            throw_if(_efd.modify(fd, ev) == -1);
+            if (_pollfds[fd].events == 0) {
+                _efd.remove(fd);
+            } else {
+                epoll_event ev{};
+                ev.data.fd = fd;
+                ev.events = _pollfds[fd].events;
+                throw_if(_efd.modify(fd, ev) == -1);
+            }
         }
         --_npollfds;
     }
-    return rvalue;
+    return evented_fds;
 }
 
 bool io::fdwait(int fd, int rw, optional_timeout ms) {
