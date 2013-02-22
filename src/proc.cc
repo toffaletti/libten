@@ -248,6 +248,10 @@ static void procmain_init() {
     InitGoogleLogging(perm_glog_name);
     glog_inited = true;
 
+    // default to logging everything to stderr only.
+    // ten::application turns this off again in favor of finer control.
+    FLAGS_logtostderr = true;
+
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
