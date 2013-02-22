@@ -9,17 +9,23 @@ namespace ten {
 class io {
 private:
     struct task_poll_state {
-        ptr<task::pimpl> t_in = nullptr; // POLLIN task
-        pollfd *p_in = nullptr; // pointer to pollfd structure that is on the task's stack
-        ptr<task::pimpl> t_out = nullptr; // POLLOUT task
-        pollfd *p_out = nullptr; // pointer to pollfd structure that is on the task's stack
+        ptr<task::pimpl> t;
+        pollfd *pfd;
+
+        task_poll_state(ptr<task::pimpl> t_, pollfd *pfd_)
+            : t{t_}, pfd{pfd_} {}
+    };
+
+    struct fd_poll_state {
+        std::vector<task_poll_state> tasks;
         uint32_t events = 0; // events this fd is registered for
     };
-    typedef std::vector<task_poll_state> poll_task_array;
+
+    typedef std::vector<fd_poll_state> fd_array;
     typedef std::vector<epoll_event> event_vector;
 private:
     //! array of tasks waiting on fds, indexed by the fd for speedy lookup
-    poll_task_array _pollfds;
+    fd_array _pollfds;
     //! epoll events
     event_vector _events;
     //! using for breaking out of epoll

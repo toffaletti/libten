@@ -51,21 +51,8 @@ void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
         ev.data.fd = fd;
         uint32_t saved_events = _pollfds[fd].events;
 
-        if (fds[i].events & EPOLLIN) {
-            DCHECK(_pollfds[fd].t_in == nullptr)
-                << "BUG: fd: " << fd << " from " << t << " but " << _pollfds[fd].t_in;
-            _pollfds[fd].t_in = t;
-            _pollfds[fd].p_in = &fds[i];
-            _pollfds[fd].events |= EPOLLIN;
-        }
-
-        if (fds[i].events & EPOLLOUT) {
-            DCHECK(_pollfds[fd].t_out == nullptr)
-                << "BUG: fd: " << fd << " from " << t << " but " << _pollfds[fd].t_out;
-            _pollfds[fd].t_out = t;
-            _pollfds[fd].p_out = &fds[i];
-            _pollfds[fd].events |= EPOLLOUT;
-        }
+        _pollfds[fd].tasks.emplace_back(t, &fds[i]);
+        _pollfds[fd].events |= fds[i].events;
 
         ev.events = _pollfds[fd].events | EPOLLONESHOT;
 
@@ -84,20 +71,23 @@ void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
 }
 
 int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
+    using namespace std;
     int evented_fds = 0;
     for (nfds_t i=0; i<nfds; ++i) {
         int fd = fds[i].fd;
 
-        if (_pollfds[fd].p_in == &fds[i]) {
-            _pollfds[fd].t_in.reset();
-            _pollfds[fd].p_in = nullptr;
-            _pollfds[fd].events ^= EPOLLIN;
-        }
+        uint32_t saved_events = _pollfds[fd].events;
 
-        if (_pollfds[fd].p_out == &fds[i]) {
-            _pollfds[fd].t_out.reset();
-            _pollfds[fd].p_out = nullptr;
-            _pollfds[fd].events ^= EPOLLOUT;
+        auto it = find_if(begin(_pollfds[fd].tasks), end(_pollfds[fd].tasks),
+                [&](const task_poll_state &st) { return st.pfd == &fds[i]; });
+        if (it != end(_pollfds[fd].tasks)) {
+            _pollfds[fd].tasks.erase(it);
+            // calculate new event mask
+            uint32_t events = 0;
+            for (auto &st : _pollfds[fd].tasks) {
+                events |= st.pfd->events;
+            }
+            _pollfds[fd].events = events;
         }
 
         if (fds[i].revents) {
@@ -105,7 +95,7 @@ int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
         } else {
             if (_pollfds[fd].events == 0) {
                 _efd.remove(fd);
-            } else {
+            } else if (saved_events != _pollfds[fd].events) {
                 epoll_event ev{};
                 ev.data.fd = fd;
                 ev.events = _pollfds[fd].events;
@@ -217,22 +207,17 @@ void io::wait(optional<proc_time_t> when) {
             this_ctx->dns_channel.reset();
 #endif // HAS_CARES
         } else if ((size_t)fd < _pollfds.size()) {
-            if (_pollfds[fd].t_in) {
-                _pollfds[fd].p_in->revents = event.events;
-                t = _pollfds[fd].t_in;
-                DVLOG(5) << "IN EVENT on task: " << t;
-                t->ready_for_io();
+            for (auto &st : _pollfds[fd].tasks) {
+                if ((st.pfd->events & event.events) ||
+                        event.events & (EPOLLERR | EPOLLHUP))
+                {
+                    st.pfd->revents = event.events;
+                    DVLOG(5) << "fd " << fd << " EVENTS: " << event.events << " on task: " << st.t;
+                    st.t->ready_for_io();
+                }
             }
 
-            // check to see if pollout is a different task than pollin
-            if (_pollfds[fd].t_out && _pollfds[fd].t_out != _pollfds[fd].t_in) {
-                _pollfds[fd].p_out->revents = event.events;
-                t = _pollfds[fd].t_out;
-                DVLOG(5) << "OUT EVENT on task: " << t;
-                t->ready_for_io();
-            }
-
-            if (_pollfds[fd].t_in == nullptr && _pollfds[fd].t_out == nullptr) {
+            if (_pollfds[fd].tasks.empty()) {
                 // TODO: otherwise we might want to remove fd from epoll
                 LOG(ERROR) << "event " << event.events << " for fd: "
                     << event.data.fd << " but has no task";
