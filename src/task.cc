@@ -1,4 +1,3 @@
-#include <cassert>
 #include <algorithm>
 #include "thread_context.hh"
 
@@ -49,70 +48,6 @@ void sleep_until(const proc_time_t& sleep_time) {
     t->swap();
 }
 } // this_task
-
-void tasksleep(uint64_t ms) {
-    this_task::sleep_for(std::chrono::milliseconds{ms});
-}
-
-bool fdwait(int fd, int rw, optional_timeout ms) {
-    task::pimpl::cancellation_point cancellable;
-    return this_ctx->scheduler.get_io().fdwait(fd, rw, ms);
-}
-
-int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    task::pimpl::cancellation_point cancellable;
-    return this_ctx->scheduler.get_io().poll(fds, nfds, ms);
-}
-
-uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
-    size_t ss = current_stacksize;
-    if (ss != stacksize) {
-        current_stacksize = stacksize;
-    }
-    task t = task::spawn(f);
-    current_stacksize = ss;
-    return t.get_id();
-}
-
-uint64_t taskid() {
-    return this_task::get_id();
-}
-
-void taskyield() {
-    this_task::yield();
-}
-
-bool taskcancel(uint64_t id) {
-    return this_ctx->scheduler.cancel_task_by_id(id);
-}
-
-const char *taskname(const char *fmt, ...)
-{
-    ptr<task::pimpl> t = kernel::current_task();
-    if (fmt && strlen(fmt)) {
-        va_list arg;
-        va_start(arg, fmt);
-        t->vsetname(fmt, arg);
-        va_end(arg);
-    }
-    return t->getname();
-}
-
-const char *taskstate(const char *fmt, ...)
-{
-	ptr<task::pimpl> t = kernel::current_task();
-    if (fmt && strlen(fmt)) {
-        va_list arg;
-        va_start(arg, fmt);
-        t->vsetstate(fmt, arg);
-        va_end(arg);
-    }
-    return t->getstate();
-}
-
-void taskdump() {
-    thread_context::dump_all();
-}
 
 task::task(const std::function<void ()> &f)
     : _pimpl{std::make_shared<task::pimpl>(f, current_stacksize)}
@@ -247,53 +182,6 @@ void task::pimpl::ready_for_io() {
     _scheduler->ready_for_io(ptr<task::pimpl>{this});
 }
 
-struct deadline_pimpl {
-    scheduler::alarm_clock::scoped_alarm alarm;
-};
-
-deadline::deadline(optional_timeout timeout) {
-    if (timeout) {
-        if (timeout->count() == 0)
-            throw errorx("zero optional_deadline - misuse of optional");
-        _set_deadline(*timeout);
-    }
-}
-
-deadline::deadline(milliseconds ms) {
-    _set_deadline(ms);
-}
-
-void deadline::_set_deadline(milliseconds ms) {
-    if (ms.count() < 0)
-        throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
-    if (ms.count() > 0) {
-        ptr<task::pimpl> t = kernel::current_task();
-        auto now = kernel::now();
-        _pimpl.reset(new deadline_pimpl{});
-        _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm{
-                this_ctx->scheduler._alarms, t, ms+now, deadline_reached{}
-                });
-        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
-    }
-}
-
-void deadline::cancel() {
-    if (_pimpl) {
-        _pimpl->alarm.cancel();
-    }
-}
-
-deadline::~deadline() {
-    cancel();
-}
-
-milliseconds deadline::remaining() const {
-    if (_pimpl) {
-        return _pimpl->alarm.remaining();
-    }
-    return {};
-}
-
 task::pimpl::cancellation_point::cancellation_point() {
     ptr<task::pimpl> t = kernel::current_task();
     ++t->cancel_points;
@@ -303,6 +191,18 @@ task::pimpl::cancellation_point::~cancellation_point() {
     ptr<task::pimpl> t = kernel::current_task();
     --t->cancel_points;
 }
+
+// should be in compat.cc but here because of current_stacksize mess
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
+    size_t ss = current_stacksize;
+    if (ss != stacksize) {
+        current_stacksize = stacksize;
+    }
+    task t = task::spawn(f);
+    current_stacksize = ss;
+    return t.get_id();
+}
+
 
 
 } // end namespace ten

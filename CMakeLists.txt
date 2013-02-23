@@ -60,6 +60,8 @@ add_library(ten
     src/rendez.cc
     src/qutex.cc
     src/task.cc
+    src/compat.cc
+    src/deadline.cc
     src/scheduler.cc
     src/io.cc
     src/thread_context.cc
