@@ -43,8 +43,7 @@ void sleep_until(const proc_time_t& sleep_time) {
     task::pimpl::cancellation_point cancellable;
     ptr<task::pimpl> t = kernel::current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{
-        this_ctx->scheduler._alarms,
-            t, sleep_time};
+        this_ctx->scheduler.arm_alarm(t, sleep_time)};
     t->swap();
 }
 } // this_task

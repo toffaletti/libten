@@ -15,18 +15,24 @@ namespace ten {
 // resources like dns resolving threads, etc.
 
 class scheduler {
-    friend struct io;
-    friend void this_task::sleep_until(const kernel::time_point& sleep_time);
-    friend class deadline;
     friend kernel::time_point kernel::now();
     friend ptr<task::pimpl> kernel::current_task();
 public:
     typedef ten::alarm_clock<ptr<task::pimpl>, kernel::clock> alarm_clock;
+
+    //! return an armed alarm, used by sleep_until, deadline, and io timeouts
+    template <class ...Args>
+        alarm_clock::scoped_alarm arm_alarm(Args&& ...args) {
+            return std::move(alarm_clock::scoped_alarm{_alarms, std::forward<Args>(args)...});
+        }
 private:
+    //! task representing OS allocated stack for this thread
     std::shared_ptr<task::pimpl> _main_task;
+    //! ptr to the currently running task
     ptr<task::pimpl> _current_task;
+    //! queue of tasks ready to run
     std::deque<ptr<task::pimpl>> _readyq;
-    //! other threads use this to add tasks to runqueue
+    //! other threads use this to add tasks to ready queue
     llqueue<ptr<task::pimpl>> _dirtyq;
     //! epoll io
     optional<io> _io;
@@ -46,7 +52,9 @@ private:
 
     //! true when canceled
     std::atomic<bool> _canceled;
+    //! scheduler is trying to shutdown
     bool _shutdown_sequence_initiated = false;
+    //! main task is looping in wait_for_all
     bool _looping = false;
 private:
     void check_canceled();
@@ -64,6 +72,8 @@ public:
 
     //! cancel all tasks in this scheduler
     void shutdown();
+
+    //! get io manager for this scheduler
     io &get_io();
 
     //! wait for all tasks to exit

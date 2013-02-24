@@ -25,9 +25,8 @@ void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() > 0) {
         ptr<task::pimpl> t = kernel::current_task();
         auto now = kernel::now();
-        _pimpl.reset(new deadline_pimpl{});
-        _pimpl->alarm = std::move(scheduler::alarm_clock::scoped_alarm{
-                this_ctx->scheduler._alarms, t, ms+now, deadline_reached{}
+        _pimpl.reset(new deadline_pimpl{
+                this_ctx->scheduler.arm_alarm(t, ms+now, deadline_reached{})
                 });
         DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
     }

@@ -145,7 +145,7 @@ int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
         optional<scheduler::alarm_clock::scoped_alarm> timeout_alarm;
         if (ms) {
             auto now = kernel::now();
-            timeout_alarm.emplace(this_ctx->scheduler._alarms, t, now + *ms);
+            timeout_alarm.emplace(this_ctx->scheduler.arm_alarm(t, now+*ms));
         }
         t->swap();
     } catch (...) {

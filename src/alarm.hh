@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include "ten/optional.hh"
+#include "ten/ptr.hh"
 
 namespace ten {
 
@@ -19,10 +20,11 @@ private:
         std::exception_ptr exception;
 
         bool operator == (const data &other) {
-            if (value == other.value) {
-                if (when == other.when) {
-                    return true;
-                }
+            if (value == other.value
+                    && when == other.when
+                    && exception == other.exception)
+            {
+                return true;
             }
             return false;
         }
@@ -97,15 +99,20 @@ public:
 public:
     struct scoped_alarm {
 
-        alarm_clock<T, Clock> *_set;
+        ptr<alarm_clock<T, Clock>> _set;
         typename alarm_clock<T, Clock>::data _data;
-        bool _armed;
+        bool _armed = false;
 
-        scoped_alarm() : _set(nullptr), _armed(false) {
-        }
+        scoped_alarm() {}
 
         scoped_alarm(const scoped_alarm &) = delete;
-        scoped_alarm(scoped_alarm &&other) = delete;
+        scoped_alarm &operator = (const scoped_alarm &) = delete;
+
+        scoped_alarm(scoped_alarm &&other) : _set{other._set} {
+            other._set.reset();
+            std::swap(_data, other._data);
+            std::swap(_armed, other._armed);
+        }
 
         scoped_alarm &operator = (scoped_alarm &&other) {
             if (this != &other) {
