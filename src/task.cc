@@ -1,10 +1,6 @@
-#include <algorithm>
 #include "thread_context.hh"
 
 namespace ten {
-
-// TODO: move to context.cc
-thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::cache;
 
 namespace {
 static __thread size_t current_stacksize = SIGSTKSZ;

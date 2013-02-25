@@ -57,21 +57,22 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPER
 
 add_library(ten
     src/kernel.cc
-    src/rendez.cc
-    src/qutex.cc
+    src/thread_context.cc
+    src/stack_alloc.cc
     src/task.cc
-    src/compat.cc
     src/deadline.cc
     src/scheduler.cc
     src/io.cc
-    src/thread_context.cc
-    src/proc.cc
+    src/rendez.cc
+    src/qutex.cc
     src/error.cc
     src/ioproc.cc
     src/net.cc
     src/zip.cc
     src/json.cc
     src/term.cc
+    src/compat.cc
+    src/proc.cc
     ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}
