@@ -16,8 +16,8 @@ namespace ten {
 using anyfunc = std::function<boost::any ()>;
 
 namespace anyfunc_impl {
-template <typename F> anyfunc make(const F &f, std::true_type) { return [f]() -> boost::any { f(); return {}; }; }
-template <typename F> anyfunc make(F &&f, std::false_type)     { return anyfunc(std::forward<F>(f)); }
+template <typename F> anyfunc make(F f,   std::true_type)   { return [f]() mutable -> boost::any { f(); return {}; }; }
+template <typename F> anyfunc make(F &&f, std::false_type)  { return anyfunc(std::forward<F>(f)); }
 }
 
 template <typename F, typename R = typename std::result_of<F()>::type>

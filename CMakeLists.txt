@@ -70,6 +70,7 @@ add_library(ten
     src/net.cc
     src/zip.cc
     src/json.cc
+    src/metrics.cc
     src/term.cc
     src/compat.cc
     src/proc.cc
