@@ -21,12 +21,12 @@ namespace metrics {
 
 namespace impl {
 template <typename Arg>
-inline void path_shift(std::stringstream &ss, Arg arg) {
+inline void path_shift(std::stringstream &ss, Arg&& arg) {
     ss << std::forward<Arg>(arg);
 }
 
 template <typename Arg, typename ...Args>
-inline void path_shift(std::stringstream &ss, Arg arg, Args... args) {
+inline void path_shift(std::stringstream &ss, Arg&& arg, Args&& ...args) {
     ss << arg << ".";
     path_shift(ss, std::forward<Args>(args)...);
 }
@@ -36,7 +36,7 @@ inline std::string metric_path(const std::string &arg) { return arg; }
 inline std::string metric_path(std::string &&arg)      { return arg; }
 
 template <typename Arg, typename ...Args>
-inline std::string metric_path(Arg arg, Args... args) {
+inline std::string metric_path(Arg&& arg, Args&& ...args) {
     std::stringstream ss;
     impl::path_shift(ss, std::forward<Arg>(arg), std::forward<Args>(args)...);
     return ss.str();
@@ -253,17 +253,17 @@ public:
     chain & operator = (chain &&) = default;
 
     template <typename ...Args>
-        metrics::counter &counter(Args ...args) {
+        metrics::counter &counter(Args&& ...args) {
             return _mg->get<metrics::counter>(metric_path(std::forward<Args>(args)...));
         }
 
     template <typename ...Args>
-        metrics::gauge &gauge(Args ...args) {
+        metrics::gauge &gauge(Args&& ...args) {
             return _mg->get<metrics::gauge>(metric_path(std::forward<Args>(args)...));
         }
 
     template <typename ...Args>
-        metrics::timer &timer(Args ...args) {
+        metrics::timer &timer(Args&& ...args) {
             return _mg->get<metrics::timer>(metric_path(std::forward<Args>(args)...));
         }
 
@@ -352,7 +352,7 @@ protected:
     bool _stopped = false;
 
     template <typename ...Args>
-        time_op_base(MG &mg, Args ...args)
+        time_op_base(MG &mg, Args&& ...args)
             : _mg(mg),
               _name(metric_path(std::forward<Args>(args)...)),
               _start(clock_type::now()) {}
@@ -367,11 +367,11 @@ protected:
 class time_op : public time_op_base<metric_group> {
 public:
     template <typename ...Args>
-        time_op(metric_group &mg, Args ...args)
+        time_op(metric_group &mg, Args&& ...args)
             : time_op_base(mg, std::forward<Args>(args)...) {}
 
     template <typename ...Args>
-        time_op(Args ...args)
+        time_op(Args&& ...args)
             : time_op_base(*tls_metric_group.get(), std::forward<Args>(args)...) {}
 
     ~time_op() {
@@ -391,7 +391,7 @@ public:
 class map_time_op : public time_op_base<metric_map> {
 public:
     template <typename ...Args>
-        map_time_op(metric_map &mm, Args ...args)
+        map_time_op(metric_map &mm, Args&& ...args)
             : time_op_base(mm, std::forward<Args>(args)...) {}
 
     ~map_time_op() {
