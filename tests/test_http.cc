@@ -1,5 +1,6 @@
 #define BOOST_TEST_MODULE http_message test
 #include <boost/test/unit_test.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "ten/http/http_message.hh"
 
@@ -549,4 +550,29 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     BOOST_CHECK_EQUAL("text/plain", *resp.get("Content-Type"));
     BOOST_CHECK_EQUAL("chunked", *resp.get("Transfer-Encoding"));
     BOOST_CHECK_EQUAL(resp.body_length, 76);
+}
+
+BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
+    using namespace std::chrono;
+    using clock = std::chrono::high_resolution_clock;
+    std::string ahdr = "Content-Length";
+    std::string bhdr = "content-length";
+    {
+        auto start = clock::now();
+        for (auto i=0; i<100000; ++i) {
+            boost::iequals(ahdr, bhdr);
+        }
+        auto elapsed = clock::now() - start;
+        BOOST_MESSAGE("boost::iequals: " << duration_cast<microseconds>(elapsed).count());
+    }
+
+    {
+        auto start = clock::now();
+        for (auto i=0; i<100000; ++i) {
+            ascii_iequals(ahdr, bhdr);
+        }
+        auto elapsed = clock::now() - start;
+        BOOST_MESSAGE("ascii_iequals: " << duration_cast<microseconds>(elapsed).count());
+    }
+
 }

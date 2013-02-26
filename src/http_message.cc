@@ -68,7 +68,19 @@ const std::string &version_string(http_version ver) {
     }
 }
 
-static void toupper_copy(char* dest, const char* str, size_t len)
+static inline uint32_t toupper(uint32_t eax)
+{
+    /*
+     * This is based on the algorithm by Paul Hsieh
+     * http://www.azillionmonkeys.com/qed/asmexample.html
+     */
+    uint32_t ebx = (0x7f7f7f7ful & eax) + 0x05050505ul;
+    ebx = (0x7f7f7f7ful & ebx) + 0x1a1a1a1aul;
+    ebx = ((ebx & ~eax) >> 2 ) & 0x20202020ul;
+    return eax - ebx;
+}
+
+static bool toupper_cmp(const uint8_t *a, const uint8_t *b, size_t len)
 {
     static uint8_t toupper_map[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
         17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,
@@ -84,44 +96,36 @@ static void toupper_copy(char* dest, const char* str, size_t len)
         220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,
         238,239,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255};
     size_t i;
-    uint32_t eax, ebx;
-    const uint8_t* ustr = (const uint8_t*) str;
     const size_t leftover = len % 4;
     const size_t imax = len / 4;
-    const uint32_t* s = (const uint32_t*) str;
-    uint32_t* d = (uint32_t*) dest;
+    const uint32_t* a4 = (const uint32_t*) a;
+    const uint32_t* b4 = (const uint32_t*) b;
     for (i = 0; i != imax; ++i) {
-        eax = s[i];
-        /*
-         * This is based on the algorithm by Paul Hsieh
-         * http://www.azillionmonkeys.com/qed/asmexample.html
-         */
-        ebx = (0x7f7f7f7fu & eax) + 0x05050505u;
-        ebx = (0x7f7f7f7fu & ebx) + 0x1a1a1a1au;
-        ebx = ((ebx & ~eax) >> 2)  & 0x20202020u;
-        *d++ = eax - ebx;
+        if (toupper(a4[i]) != toupper(b4[i])) return false;
     }
 
     i = imax*4;
-    dest = (char*) d;
+    a = (const uint8_t *)a4;
+    b = (const uint8_t *)b4;
     switch (leftover) {
-    case 3: *dest++ = (char) toupper_map[ustr[i++]];
-    case 2: *dest++ = (char) toupper_map[ustr[i++]];
-    case 1: *dest++ = (char) toupper_map[ustr[i]];
-    case 0: *dest = '\0';
+    case 3:
+        if (toupper_map[a[i]] != toupper_map[b[i]]) return false; else i++;
+    case 2:
+        if (toupper_map[a[i]] != toupper_map[b[i]]) return false; else i++;
+    case 1:
+        if (toupper_map[a[i]] != toupper_map[b[i]]) return false; else i++;
+    default:
+        break;
     }
+    return true;
 }
+
+
 
 bool ascii_iequals(const std::string &a, const std::string &b) {
     size_t len = a.size();
     if (len != b.size()) return false;
-    // TODO: rewrite this to not allocate any memory
-    std::unique_ptr<char[]> buf{new char[(len*2)+2]};
-    char *aupper = buf.get();
-    char *bupper = &buf.get()[len+1];
-    toupper_copy(aupper, a.c_str(), len);
-    toupper_copy(bupper, b.c_str(), len);
-    return memcmp(aupper, bupper, len) == 0;
+    return toupper_cmp((const uint8_t *)a.c_str(), (const uint8_t *)b.c_str(), len);
 }
 
 namespace {
