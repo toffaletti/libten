@@ -556,7 +556,7 @@ BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
     using namespace std::chrono;
     using clock = std::chrono::high_resolution_clock;
     std::string ahdr = "Content-Length";
-    std::string bhdr = "content-length";
+    std::string bhdr = "Content-length";
     {
         auto start = clock::now();
         for (auto i=0; i<100000; ++i) {
