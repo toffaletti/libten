@@ -1,6 +1,9 @@
 #ifndef LIBTEN_TASK_COMPAT_HH
 #define LIBTEN_TASK_COMPAT_HH
 
+// XXX: old task api has been moved here to be deprecated
+// all of these apis will eventially be replaced
+
 //! user must define
 extern const size_t default_stacksize;
 
@@ -20,7 +23,7 @@ uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 uint64_t taskid();
 //! allow other tasks to run
 void taskyield();
-//! cancel a task
+//! cancel a task (only works for tasks in current thread)
 bool taskcancel(uint64_t id);
 //! set/get current task state
 const char *taskstate(const char *fmt=nullptr, ...);

@@ -16,8 +16,10 @@ uint64_t get_id();
 //! allow other tasks to run
 void yield();
 
+//! sleep current task until time is reached
 void sleep_until(const kernel::time_point & sleep_time);
 
+//! sleep current task until duration has passed
 template <class Rep, class Period>
     void sleep_for(std::chrono::duration<Rep, Period> sleep_duration) {
         sleep_until(kernel::now() + sleep_duration);
@@ -25,6 +27,7 @@ template <class Rep, class Period>
 
 } // end namespace this_task
 
+//! cooperatively scheduled light-weight threads of execution
 class task {
 public:
     class pimpl;
@@ -49,6 +52,7 @@ public:
     uint64_t get_id() const;
 
 public:
+    //! set stack size that tasks will use when spawning
     static void set_default_stacksize(size_t stacksize);
 };
 

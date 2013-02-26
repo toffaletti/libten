@@ -27,6 +27,7 @@ void boot();
 //! perform clean shutdown
 void shutdown();
 
+//! this is only a tribute
 bool is_computer_on();
 bool is_computer_on_fire();
 

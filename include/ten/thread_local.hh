@@ -9,10 +9,12 @@
 
 namespace ten {
 
+// TODO: use kernel::is_main_thread after default_stacksize is gone
 inline bool is_main_thread() noexcept {
     return getpid() == syscall(SYS_gettid);
 }
 
+//! thread local storage because thread_local keyword isn't well supported yet
 template <class Unique, class T>
 class thread_cached {
 private:

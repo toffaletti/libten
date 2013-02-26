@@ -11,7 +11,7 @@ struct deadline_reached : task_interrupted {};
 struct deadline_pimpl;
 
 //! schedule a deadline to interrupt task with
-//! deadline_reached after milliseconds
+//! deadline_reached exception after N milliseconds
 class deadline {
 private:
     std::unique_ptr<deadline_pimpl> _pimpl;
