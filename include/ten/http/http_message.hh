@@ -7,7 +7,6 @@
 #include <mutex>
 #include <stdarg.h>
 #include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 
 #include "http_parser.h"
 #include "ten/task.hh"
@@ -15,6 +14,8 @@
 #include "ten/optional.hh"
 
 namespace ten {
+
+bool ascii_iequals(const std::string &a, const std::string &b);
 
 // TODO: define exceptions
 
@@ -153,8 +154,8 @@ struct http_base : http_headers {
     bool close_after() const {
         const auto conn = get(hs::Connection);
         return version <= http_1_0
-                 ? (!conn || !boost::iequals(*conn, hs::keep_alive))
-                 : (conn && boost::iequals(*conn, hs::close));
+                 ? (!conn || !ascii_iequals(*conn, hs::keep_alive))
+                 : (conn && ascii_iequals(*conn, hs::close));
     }
 
     // strftime can be quite expensive, so don't do it more than once per second
