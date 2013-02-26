@@ -390,3 +390,18 @@ BOOST_AUTO_TEST_CASE(task_deadline_yield) {
     p.main();
 }
 
+BOOST_AUTO_TEST_CASE(task_new_api) {
+    int i = 1;
+    task t = task::spawn([&] {
+        ++i;
+    });
+    this_task::yield();
+    BOOST_CHECK_EQUAL(2, i);
+    std::thread th([&] {
+        // yield to nothing
+        this_task::yield();
+        ++i;
+    });
+    th.join();
+    BOOST_CHECK_EQUAL(3, i);
+}
