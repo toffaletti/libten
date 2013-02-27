@@ -85,7 +85,7 @@ public:
     //! wait for all tasks to exit
     // will only work if called from main task
     // see hack in ::schedule()
-    void wait_for_all();
+    void wait_for_all(size_t thread_count);
     //! run one iteration of the scheduler
     void schedule();
 

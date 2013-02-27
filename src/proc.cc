@@ -15,7 +15,7 @@ void procspawn(const std::function<void ()> &f, size_t stacksize) {
 }
 
 void procshutdown() {
-    kernel::shutdown();
+    this_ctx->cancel_all();
 }
 
 procmain::procmain() {
@@ -24,7 +24,7 @@ procmain::procmain() {
 
 int procmain::main(int argc, char *argv[]) {
     DVLOG(5) << "thread id: " << std::this_thread::get_id();
-    this_ctx->scheduler.wait_for_all();
+    this_ctx->scheduler.wait_for_all(1);
     DVLOG(5) << "thread done: " << std::this_thread::get_id();
     return EXIT_SUCCESS;
 }

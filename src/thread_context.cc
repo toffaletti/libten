@@ -49,7 +49,6 @@ void thread_context::cancel_all() {
     using namespace std;
     lock_guard<mutex> lock{threads_mutex};
     for (auto &ctx : threads) {
-        if (ptr<thread_context>{this} == ctx) continue;
         ctx->scheduler.cancel();
     }
 }
