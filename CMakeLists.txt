@@ -58,7 +58,6 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPER
 add_library(ten
     src/kernel.cc
     src/thread_context.cc
-    src/stack_alloc.cc
     src/task.cc
     src/deadline.cc
     src/scheduler.cc

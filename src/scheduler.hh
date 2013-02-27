@@ -70,6 +70,12 @@ public:
     scheduler();
     ~scheduler();
 
+    // not movable or copyable
+    scheduler(const scheduler &) = delete;
+    scheduler(scheduler &&) = delete;
+    scheduler &operator= (const scheduler &) = delete;
+    scheduler &operator= (scheduler &&) = delete;
+
     //! cancel all tasks in this scheduler
     void shutdown();
 

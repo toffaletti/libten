@@ -1,6 +1,12 @@
 #ifndef LIBTEN_TASK_TASK_HH
 #define LIBTEN_TASK_TASK_HH
 
+#include "ten/task/kernel.hh"
+#include "ten/optional.hh"
+#include <memory>
+#include <chrono>
+#include <functional>
+
 namespace ten {
 
 //! exception to unwind stack on taskcancel

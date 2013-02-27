@@ -60,7 +60,7 @@ void qutex::lock() {
         }
     } catch (...) {
         // deadline timeouts can trigger this
-        std::unique_lock<std::timed_mutex> lk{_m};
+        std::lock_guard<std::timed_mutex> lk{_m};
         unlock_or_giveup(lk);
         throw;
     }
@@ -79,29 +79,25 @@ bool qutex::try_lock() {
     return false;
 }
 
-inline void qutex::unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk) {
-    ptr<task::pimpl> t = kernel::current_task();
-    DCHECK(lk.owns_lock()) << "BUG: lock not owned " << t;
-    DVLOG(5) << "QUTEX[" << this << "] unlock: " << t;
-    if (t == _owner) {
+inline void qutex::unlock_or_giveup(std::lock_guard<std::timed_mutex> &lk) {
+    ptr<task::pimpl> current_task = kernel::current_task();
+    DVLOG(5) << "QUTEX[" << this << "] unlock: " << current_task;
+    if (current_task == _owner) {
         if (!_waiting.empty()) {
-            t = _owner = _waiting.front();
+            _owner = _waiting.front();
             _waiting.pop_front();
         } else {
-            t = _owner = nullptr;
+            _owner = nullptr;
         }
         DVLOG(5) << "UNLOCK qutex: " << this
             << " new owner: " << _owner
             << " waiting: " << _waiting.size();
-        lk.unlock();
-        // must use t here, not owner because
-        // lock has been released
-        if (t) t->ready();
+        if (_owner) _owner->ready();
     } else {
         // this branch is taken when exception is thrown inside
         // a task that is currently waiting inside qutex::lock
         // give up trying to acquire the lock
-        auto i = std::find(_waiting.begin(), _waiting.end(), t);
+        auto i = std::find(_waiting.begin(), _waiting.end(), current_task);
         if (i != _waiting.end()) {
             _waiting.erase(i);
         }
@@ -109,7 +105,7 @@ inline void qutex::unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk) {
 }
 
 void qutex::unlock() {
-    std::unique_lock<std::timed_mutex> lk{_m};
+    std::lock_guard<std::timed_mutex> lk{_m};
     unlock_or_giveup(lk);
 }
 

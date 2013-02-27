@@ -153,6 +153,7 @@ void scheduler::schedule() {
 }
 
 void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
+    DCHECK(t->_scheduler.get() == nullptr);
     t->_scheduler.reset(this);
     _alltasks.emplace_back(std::move(t));
 }
@@ -170,8 +171,6 @@ void scheduler::remove_task(ptr<task::pimpl> t) {
     _gctasks.emplace_back(*i);
     _alltasks.erase(i);
 }
-
-
 
 void scheduler::ready(ptr<task::pimpl> t, bool front) {
     DVLOG(5) << "readying: " << t;
@@ -237,8 +236,6 @@ void scheduler::dump() const {
     }
     FlushLogFiles(INFO);
 }
-
-
 
 } // ten
 

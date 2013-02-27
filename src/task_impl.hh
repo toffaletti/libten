@@ -8,6 +8,7 @@
 #include "ten/task.hh"
 #include "ten/logging.hh"
 #include "ten/error.hh"
+#include "ten/ptr.hh"
 #include "context.hh"
 
 using namespace std::chrono;

@@ -1,6 +1,8 @@
 #ifndef LIBTEN_TASK_COMPAT_HH
 #define LIBTEN_TASK_COMPAT_HH
 
+#include <poll.h>
+
 // XXX: old task api has been moved here to be deprecated
 // all of these apis will eventially be replaced
 

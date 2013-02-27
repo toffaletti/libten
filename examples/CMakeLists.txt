@@ -46,6 +46,9 @@ target_link_libraries(memg ten boost_program_options)
 add_executable(synch EXCLUDE_FROM_ALL synch.cc)
 target_link_libraries(synch ten)
 
+add_executable(new-api EXCLUDE_FROM_ALL new-api.cc)
+target_link_libraries(new-api ten)
+
 if (OPENSSL_FOUND)
     add_executable(https-get EXCLUDE_FROM_ALL https-get.cc)
     target_link_libraries(https-get ten)
@@ -67,5 +70,6 @@ add_custom_target(examples DEPENDS
     json-path
     memg
     synch
+    new-api
     ${HTTPS_GET}
     )

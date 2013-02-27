@@ -2,7 +2,7 @@
 #define LIBTEN_THREAD_LOCAL_HH
 
 #include <type_traits>
-#include <cstdlib>
+#include <memory>
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -18,32 +18,49 @@ inline bool is_main_thread() noexcept {
 template <class Unique, class T>
 class thread_cached {
 private:
+    struct holder {
+        bool *allocated;
+        void *ptr;
+    };
+
     typedef typename std::aligned_storage<sizeof(T),
             std::alignment_of<T>::value>::type storage_type;
 
-    static __thread storage_type storage;
-    static __thread bool allocated;
-
-    static void atexit() {
-        placement_delete(&storage);
+    static void thread_cleanup(void *v) {
+        std::unique_ptr<holder> h{static_cast<holder *>(v)};
+        placement_delete(h.get()); 
     }
 
-    static void placement_delete(void *v) {
-        static_cast<T*>(v)->~T();
-        allocated = false;
+    static void placement_delete(holder *h) {
+        static_cast<T*>(h->ptr)->~T();
+        *(h->allocated) = false;
     }
 
+    // only used by main thread
+    // other threads will use heap allocated holder
+    // and do cleanup in thread_cleanup
+    struct holder _main_holder = {};
 public:
+    ~thread_cached() {
+        if (_main_holder.allocated && *_main_holder.allocated) {
+            placement_delete(&_main_holder); 
+        }
+    }
+
     T *get() {
+        static __thread bool allocated = false;
+        static __thread storage_type storage;
         if (!allocated) {
             new (&storage) T();
             allocated = true;
             if (is_main_thread()) {
-                std::atexit(thread_cached::atexit);
+                _main_holder.allocated = &allocated;
+                _main_holder.ptr = &storage;
             } else {
                 static pthread_key_t key;
-                pthread_key_create(&key, thread_cached::placement_delete);
-                pthread_setspecific(key, &storage);
+                pthread_key_create(&key, thread_cached::thread_cleanup);
+                std::unique_ptr<holder> hp{new holder{&allocated, &storage}};
+                pthread_setspecific(key, hp.release());
             }
         }
         return reinterpret_cast<T*>(&storage);
@@ -53,11 +70,6 @@ public:
         return get();
     }
 };
-
-template <class Unique, class T>
-__thread typename thread_cached<Unique, T>::storage_type thread_cached<Unique, T>::storage;
-template <class Unique, class T>
-__thread bool thread_cached<Unique, T>::allocated = false;
 
 } // ten
 
