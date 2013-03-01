@@ -1,7 +1,8 @@
 #ifndef LIBTEN_SEMAPHORE_HH
 #define LIBTEN_SEMAPHORE_HH
 
-#include "error.hh"
+#include "ten/logging.hh"
+#include "ten/error.hh"
 #include <semaphore.h>
 
 namespace ten {
@@ -12,7 +13,7 @@ private:
     sem_t _s;
 public:
     explicit semaphore(unsigned int value = 0) {
-        THROW_ON_ERROR(sem_init(&_s, 0, value));
+        throw_if(sem_init(&_s, 0, value) == -1);
     }
 
     semaphore(const semaphore &) = delete;
@@ -20,20 +21,20 @@ public:
 
     //! increment (unlock) the semaphore
     void post() {
-        THROW_ON_ERROR(sem_post(&_s));
+        throw_if(sem_post(&_s) == -1);
     }
 
     //! decrement (lock) the semaphore
     //
     //! blocks if the value drops below 0
     void wait() {
-        THROW_ON_ERROR(sem_wait(&_s));
+        throw_if(sem_wait(&_s) == -1);
     }
 
     // TODO: sem_trywait and sem_timedwait
 
     ~semaphore() {
-        THROW_ON_ERROR(sem_destroy(&_s));
+        PCHECK(sem_destroy(&_s) == 0);
     }
 };
 

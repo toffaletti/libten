@@ -226,37 +226,57 @@ static void info_handler(int sig_num, siginfo_t *info, void *ctxt) {
     taskdumpf();
 }
 
+namespace {
+    static bool glog_inited;
+    struct stoplog_t {
+        ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
+    } stoplog;
+
+    const char *glog_name = nullptr;
+}
+
+void set_logname(const char *name) {
+    glog_name = name;
+}
+
 static void procmain_init() {
     CHECK(getpid() == syscall(SYS_gettid)) << "must call procmain in main thread before anything else";
+
+    umask(02); // allow group-readable logs
+
+    static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
+    InitGoogleLogging(perm_glog_name);
+    glog_inited = true;
+
+    // default to logging everything to stderr only.
+    // ten::application turns this off again in favor of finer control.
+    FLAGS_logtostderr = true;
+
     //ncpu_ = sysconf(_SC_NPROCESSORS_ONLN);
     stack_t ss;
     ss.ss_sp = calloc(1, SIGSTKSZ);
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
-    THROW_ON_ERROR(sigaltstack(&ss, NULL));
+    throw_if(sigaltstack(&ss, NULL) == -1);
 
-    // allow log files and message queues to be created group writable
-    umask(0);
-    InitGoogleLogging(program_invocation_short_name);
     InstallFailureSignalHandler();
-    FLAGS_logtostderr = true;
 
     struct sigaction act;
 
     // ignore SIGPIPE
     memset(&act, 0, sizeof(act));
-    THROW_ON_ERROR(sigaction(SIGPIPE, NULL, &act));
+    throw_if(sigaction(SIGPIPE, NULL, &act) == -1);
     if (act.sa_handler == SIG_DFL) {
         act.sa_handler = SIG_IGN;
-        THROW_ON_ERROR(sigaction(SIGPIPE, &act, NULL));
+        throw_if(sigaction(SIGPIPE, &act, NULL) == -1);
     }
 
     // install INFO handler
-    THROW_ON_ERROR(sigaction(SIGUSR1, NULL, &act));
+    throw_if(sigaction(SIGUSR1, NULL, &act) == -1);
     if (act.sa_handler == SIG_DFL) {
         act.sa_sigaction = info_handler;
         act.sa_flags = SA_RESTART | SA_SIGINFO;
-        THROW_ON_ERROR(sigaction(SIGUSR1, &act, NULL));
+        throw_if(sigaction(SIGUSR1, &act, NULL) == -1);
     }
 
     netinit();

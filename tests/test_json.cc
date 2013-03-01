@@ -10,6 +10,10 @@
 #endif
 #include <array>
 
+#include "ten/logging.hh"
+#include "ten/jsonstream.hh"
+#include <map>
+
 using namespace std;
 using namespace ten;
 
@@ -290,3 +294,34 @@ BOOST_AUTO_TEST_CASE(json_serial) {
 }
 
 #endif // TEN_JSON_CXX11
+
+BOOST_AUTO_TEST_CASE(json_stream) {
+    // TODO: improve these tests or don't. this is a hack anyway
+    using namespace jsonstream_manip;
+    std::stringstream ss;
+    jsonstream s(ss);
+    int8_t c = 'C'; // printable
+    s << jsobject
+        << "key1" << 1234
+        << "key2" << "value"
+        << "list" << jsarray << "1" << 2.0f << 3.14e-20 << 4 << 5 << jsend
+        << "list2" << jsarray << jsobject << jsend << jsend
+        << "max_dbl" << std::numeric_limits<double>::max()
+        << "inf" << std::numeric_limits<float>::infinity()
+        << "nan" << (1.0 / 0.0)
+        << "vec" << std::vector<int>({0, 1, 2, 3})
+        << "char" << c
+        << "bool" << false
+        << jsescape
+        << "escape" << "\n\t\""
+        << "noescape" << "blahblah"
+        << "raw" << jsraw
+            << "[]"
+        << jsnoraw
+        << "lahalha" << 666
+        //<< "map" << std::map<const char *, int>({{"key", 1}})
+    << jsend;
+    LOG(INFO) << ss.str();
+    BOOST_CHECK(json::load(ss.str()));
+}
+

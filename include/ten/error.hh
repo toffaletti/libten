@@ -84,24 +84,20 @@ private:
     void _add_strerror();
 };
 
-//! macro to throw errno_error if exp returns -1
-#define THROW_ON_ERROR(exp) \
-    if ((exp) == -1) { \
-        throw errno_error(); \
+// TODO: maybe make this generic for any exception type?
+//! convenience wrapper for throwing errno_error
+template <class ...Args>
+void throw_if(bool condition, Args ...args) {
+    if (condition) {
+        throw errno_error(args...);
     }
+}
 
-//! macro to throw errno_error if exp returns NULL
-#define THROW_ON_NULL(exp) \
-    if ((exp) == NULL) { \
-        throw errno_error(); \
-    }
-
-//! macro to throw errno_error if exp != 0
-#define THROW_ON_NONZERO_ERRNO(exp) \
-    do { \
-        int _rv = (exp); \
-        if (_rv != 0) throw errno_error(_rv); \
-    } while (0)
+//! prevent conversion to bool
+template <class NotBool, class ...Args>
+void throw_if(NotBool, Args ...args) {
+    static_assert(std::is_same<NotBool, bool>::value, "using throw_if without a boolean");
+}
 
 } // end namespace ten
 

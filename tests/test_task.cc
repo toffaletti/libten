@@ -157,7 +157,7 @@ static void listen_timeout_co(semaphore &sm) {
     s.getsockname(addr);
     s.listen();
 
-    bool timeout = !fdwait(s.fd, 'r', 5);
+    bool timeout = !fdwait(s.fd, 'r', std::chrono::milliseconds{5});
     BOOST_CHECK(timeout);
     sm.post();
 }

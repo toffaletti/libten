@@ -7,17 +7,18 @@ namespace ten {
 
 template <typename T, typename Mutex = std::mutex> class synchronized {
 protected:
-    Mutex _m;
-    T _v;
+    mutable Mutex _m;
+    mutable T _v;
 public:
     typedef Mutex mutex_type;
-    synchronized() {}
+    synchronized() : _v{} {}
     template <typename ...Args> synchronized(Args... args) : _v(args...) {}
 
-    template <typename Func, typename Sync> friend void synchronize(Sync &sync, Func &&f) {
-        std::lock_guard<typename Sync::mutex_type> lock(sync._m);
-        f(sync._v);
-    }
+    template <typename Func, typename Sync>
+        friend auto synchronize(const Sync &sync, Func &&f) -> decltype(f(sync._v)) {
+            std::lock_guard<typename Sync::mutex_type> lock(sync._m);
+            return f(sync._v);
+        }
 };
 
 }

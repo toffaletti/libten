@@ -10,8 +10,15 @@ const size_t default_stacksize=256*1024;
 
 static void dial_google() {
     socket_fd s{AF_INET, SOCK_STREAM};
-    int status = netdial(s.fd, "www.google.com", 80);
-    BOOST_CHECK_EQUAL(status, 0);
+    bool ok = false;
+    try {
+        netdial(s.fd, "www.google.com", 80, {});
+        ok = true;
+    }
+    catch (errorx &e) {
+        BOOST_MESSAGE("dial exception: " << e.what() << "\n" << e.backtrace_str());
+    }
+    BOOST_CHECK(ok);
 }
 
 
@@ -34,7 +41,7 @@ static void start_http_server(address &addr) {
 }
 
 static void start_http_test() {
-    address http_addr;
+    address http_addr("0.0.0.0");
     uint64_t server_tid = taskspawn(
             std::bind(start_http_server, std::ref(http_addr))
             ); 

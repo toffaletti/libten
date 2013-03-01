@@ -1,5 +1,5 @@
-#ifndef TASK_PROC_HH
-#define TASK_PROC_HH
+#ifndef LIBTEN_PROC_HH
+#define LIBTEN_PROC_HH
 
 #include <condition_variable>
 #include "ten/descriptors.hh"
@@ -81,7 +81,7 @@ protected:
     //! tasks in this proc
     std::atomic<uint64_t> taskcount;
     //! current time cached in a few places through the event loop
-    time_point<steady_clock> now;
+    proc_time_t now;
     bool _main;
 
 public:
@@ -129,12 +129,12 @@ public:
         wakeup();
     }
 
-    const time_point<steady_clock> & update_cached_time() {
-        now = steady_clock::now();
+    const proc_time_t & update_cached_time() {
+        now = proc_clock_t::now();
         return now;
     }
 
-    const time_point<steady_clock> &cached_time() {
+    const proc_time_t &cached_time() {
         return now;
     }
 
@@ -149,13 +149,17 @@ public:
         }
     }
 
-    void ready(task *t) {
+    void ready(task *t, bool front=false) {
         DVLOG(5) << "readying: " << t;
         if (this != this_proc()) {
             dirtyq.push(t);
             wakeup();
         } else {
-            runqueue.push_back(t);
+            if (front) {
+                runqueue.push_front(t);
+            } else {
+                runqueue.push_back(t);
+            }
         }
     }
 
@@ -216,4 +220,4 @@ public:
 
 } // end namespace ten
 
-#endif // TASK_PROC_HH
+#endif // LIBTEN_PROC_HH

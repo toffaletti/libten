@@ -1,10 +1,14 @@
 #define BOOST_TEST_MODULE metrics test
 #include <boost/test/unit_test.hpp>
 #include "ten/metrics.hh"
+#include "ten/task.hh"
 #include <thread>
 #include <atomic>
 
+#include "ten/ewma.hh"
+
 using namespace ten;
+const size_t default_stacksize=64*1024;
 
 void my_thread() {
 #if 1
@@ -21,16 +25,22 @@ void my_thread() {
 
 static const int nthreads = 100;
 
+BOOST_AUTO_TEST_CASE(ten_init) {
+    procmain p; // init logging etc
+}
+
 BOOST_AUTO_TEST_CASE(thread_local_test) {
+    using namespace metrics;
+
     std::vector<std::thread> threads(nthreads);
     for (auto &i : threads) {
-        i = std::move(std::thread(my_thread));
+        i = std::thread(my_thread);
     }
 
     {
-        auto mg = metrics::global.aggregate();
+        auto mg = global.aggregate();
         for (auto kv : mg) {
-            DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(metrics::json_visitor(), kv.second);
+            DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
         }
     }
 
@@ -38,20 +48,43 @@ BOOST_AUTO_TEST_CASE(thread_local_test) {
         i.join();
     }
 
-    auto mg = metrics::global.aggregate();
+    auto mg = global.aggregate();
 
-    BOOST_CHECK_EQUAL(nthreads, metrics::value<metrics::counter>(mg, "thing"));
+    BOOST_CHECK_EQUAL(nthreads, value<counter>(mg, "thing"));
     for (auto kv : mg) {
-        DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(metrics::json_visitor(), kv.second);
+        DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
     }
 }
 
 BOOST_AUTO_TEST_CASE(timer_test) {
     using namespace metrics;
+    using namespace std::chrono;
     time_op to("timer1");
     usleep(5*1000); 
     to.stop();
-    auto mg = metrics::global.aggregate();
-    BOOST_CHECK(value<timer>(mg, "timer1").count() >= 5);
+    auto mg = global.aggregate();
+    auto v = value<timer>(mg, "timer1");
+    // value type is a duration of unspecified resolution
+    BOOST_CHECK(duration_cast<seconds     >(v).count() == 0);
+    BOOST_CHECK(duration_cast<milliseconds>(v).count() >= 5);
+    BOOST_CHECK(duration_cast<microseconds>(v).count() >= 5000);
+}
+
+BOOST_AUTO_TEST_CASE(ewma_test) {
+    using namespace std::chrono;
+    ewma<seconds> m1(seconds{1});
+    ewma<seconds> m5(seconds{5});
+    ewma<seconds> m60(seconds{60});
+    for (unsigned i=0; i<60*5; ++i) {
+        m1.update(10);
+        m1.tick();
+        m5.update(10);
+        m5.tick();
+        m60.update(10);
+        m60.tick();
+    }
+    LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
 }
 

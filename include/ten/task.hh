@@ -7,19 +7,23 @@
 #include <deque>
 #include <memory>
 #include <poll.h>
-#include "logging.hh"
+#include "ten/logging.hh"
+#include "ten/optional.hh"
 
 //! user must define
 extern const size_t default_stacksize;
 
 namespace ten {
 
+//! user may provide; only effective before procmain_init
+extern void set_logname(const char *name);
+
 extern void netinit();
 
 //! exception to unwind stack on taskcancel
 struct task_interrupted {};
 
-#define SEC2MS(s) (s*1000)
+typedef optional<std::chrono::milliseconds> optional_timeout;
 
 struct task;
 struct proc;
@@ -51,7 +55,9 @@ uint64_t procspawn(const std::function<void ()> &f, size_t stacksize=default_sta
 void procshutdown();
 
 //! return cached time from event loop, not precise
-const std::chrono::time_point<std::chrono::steady_clock> &procnow();
+using proc_clock_t = std::chrono::steady_clock;
+using proc_time_t = std::chrono::time_point<proc_clock_t>;
+const proc_time_t &procnow();
 
 //! main entry point for tasks
 struct procmain {
@@ -67,21 +73,26 @@ public:
 //! sleep current task for milliseconds
 void tasksleep(uint64_t ms);
 //! suspend task waiting for io on pollfds
-int taskpoll(pollfd *fds, nfds_t nfds, uint64_t ms=0);
+int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms={});
 //! suspend task waiting for io on fd
-bool fdwait(int fd, int rw, uint64_t ms=0);
+bool fdwait(int fd, int rw, optional_timeout ms={});
 
 // inherit from task_interrupted so lock/rendez/poll canceling
 // doesn't need to be duplicated
 struct deadline_reached : task_interrupted {};
 
+// forward decl
+struct deadline_pimpl;
+
 //! schedule a deadline to interrupt task with
 //! deadline_reached after milliseconds
 class deadline {
 private:
-    void *timeout_id;
+    std::unique_ptr<deadline_pimpl> _pimpl;
+    void _set_deadline(std::chrono::milliseconds ms);
 public:
-    deadline(std::chrono::milliseconds ms);
+    deadline(optional_timeout timeout);
+    deadline(std::chrono::milliseconds ms); // deprecated
 
     deadline(const deadline &) = delete;
     deadline &operator =(const deadline &) = delete;

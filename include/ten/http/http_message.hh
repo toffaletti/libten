@@ -4,14 +4,18 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <mutex>
 #include <stdarg.h>
 #include <boost/lexical_cast.hpp>
 
 #include "http_parser.h"
+#include "ten/task.hh"
 #include "ten/error.hh"
-#include "ten/maybe.hh"
+#include "ten/optional.hh"
 
 namespace ten {
+
+bool ascii_iequals(const std::string &a, const std::string &b);
 
 // TODO: define exceptions
 
@@ -27,32 +31,46 @@ enum http_version {
 };
 const std::string &version_string(http_version ver);
 
+namespace hs {
+//! common strings for HTTP
+extern const std::string
+    GET, HEAD, POST, PUT, DELETE,
+    Connection, close, keep_alive,
+    Host,
+    Date,
+    Content_Length,
+    Content_Type, text_plain, app_octet_stream;
+}
+
 //! http headers
 struct http_headers {
-    header_list headers;
+protected:
+    header_list _hlist;
+    bool _got_header_field {}; // for reliable parsing
+    friend struct http_header_parse; // visibility loophole for parsing
 
+    header_list::iterator       _hfind(const std::string &field);
+    header_list::const_iterator _hfind(const std::string &field) const;
+
+    void _hwrite(std::ostream &os) const;
+
+public:
     http_headers() {}
 
     template <typename ...Args>
         http_headers(Args&& ...args) {
             static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-            headers.reserve(sizeof...(args) / 2);
-            init(std::forward<Args>(args)...);
+            _hlist.reserve(sizeof...(args) / 2);
+            append(std::forward<Args>(args)...);
         }
 
-    void init() {}
+    void append() {}
 
     template <typename ValueT, typename ...Args>
-        void init(const std::string &field, ValueT &&header_value, Args&& ...args) {
+        void append(const std::string &field, ValueT &&header_value,
+                    const std::string &field2, Args&& ...args) {
             append(field, std::forward<ValueT>(header_value));
-            init(std::forward<Args>(args)...);
-        }
-
-    void set(const std::string &field, const std::string &value);
-
-    template <typename ValueT>
-        void set(const std::string &field, const ValueT &value) {
-            set(field, boost::lexical_cast<std::string>(value));
+            append(field2, std::forward<Args>(args)...);
         }
 
     void append(const std::string &field, const std::string &value);
@@ -62,23 +80,30 @@ struct http_headers {
             append(field, boost::lexical_cast<std::string>(value));
         }
 
-    header_list::iterator       find(const std::string &field);
-    header_list::const_iterator find(const std::string &field) const;
+    void set(const std::string &field, const std::string &value);
+
+    template <typename ValueT>
+        void set(const std::string &field, const ValueT &value) {
+            set(field, boost::lexical_cast<std::string>(value));
+        }
+
+    void clear() {
+        _hlist.clear();
+        _got_header_field = {};
+    }
+
+    bool empty() const;
+
+    bool contains(const std::string &field) const;
 
     bool remove(const std::string &field);
 
-    std::string get(const std::string &field) const;
-    maybe<std::string> mget(const std::string &field) const;
+    optional<std::string> get(const std::string &field) const;
 
     template <typename ValueT>
-        ValueT get(const std::string &field) const {
-            auto i = find(field);
-            return (i == headers.end()) ? ValueT() : boost::lexical_cast<ValueT>(i->second);
-        }
-    template <typename ValueT>
-        maybe<ValueT> mget(const std::string &field) const {
-            auto i = find(field);
-            return (i == headers.end()) ? nothing : boost::lexical_cast<ValueT>(i->second);
+        optional<ValueT> get(const std::string &field) const {
+            const auto i = _hfind(field);
+            return (i == end(_hlist)) ? nullopt : optional<ValueT>{boost::lexical_cast<ValueT>(i->second)};
         }
 
 #ifdef CHIP_UNSURE
@@ -88,15 +113,17 @@ struct http_headers {
 
     template <typename ValueT>
         bool is(const std::string &field, const ValueT &value) const {
-            auto i = headers.find(field);
-            return (i != headers.end()) && (boost::lexical_cast<ValueT>(i->second) == value);
+            const auto i = _hfind(field);
+            return (i != end(_hlist)) && (boost::lexical_cast<ValueT>(i->second) == value);
         }
 
-#endif
+#endif // CHIP_UNSURE
 };
 
 //! base class for http request and response
 struct http_base : http_headers {
+    using super = http_headers;
+
     http_version version {default_http_version};
     std::string body;
     size_t body_length {};
@@ -106,28 +133,54 @@ struct http_base : http_headers {
         : http_headers(std::move(headers_)), version{version_} {}
 
     void clear() {
-        headers.clear();
+        super::clear();
         version = default_http_version;
         body.clear();
         body_length = {};
         complete = {};
     }
 
-    void set_body(const std::string &body_,
-                  const std::string &content_type_ = std::string())
-    {
-        body = body_;
+    void set_body(std::string body_, const char *content_type) {
+        set_body(std::move(body_), optional<std::string>(emplace, content_type));
+    }
+    void set_body(std::string body_, optional<std::string> content_type = nullopt) {
+        body = std::move(body_);
         body_length = body.size();
-        set("Content-Length", body_length);
-        remove("Content-Type");
-        if (!content_type_.empty()) {
-            append("Content-Type", content_type_);
+        set(hs::Content_Length, body_length);
+        if (content_type)
+            set(hs::Content_Type, *content_type);
+    }
+
+    bool close_after() const {
+        const auto conn = get(hs::Connection);
+        return version <= http_1_0
+                 ? (!conn || !ascii_iequals(*conn, hs::keep_alive))
+                 : (conn && ascii_iequals(*conn, hs::close));
+    }
+
+    // strftime can be quite expensive, so don't do it more than once per second
+    static std::string rfc822_date() {
+        static std::mutex last_mut;
+        static time_t last_time = -1;
+        static std::string last_date;
+
+        time_t now = std::chrono::system_clock::to_time_t(procnow());
+        std::lock_guard<std::mutex> lk(last_mut);
+        if (last_time != now) {
+            char buf[64];
+            struct tm tm;
+            strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&now, &tm));
+            last_time = now;
+            last_date = buf;
         }
+        return last_date;
     }
 };
 
 //! http request
 struct http_request : http_base {
+    using super = http_base;
+
     std::string method;
     std::string uri;
 
@@ -140,18 +193,31 @@ struct http_request : http_base {
           method{std::move(method_)},
           uri{std::move(uri_)}
     {}
+
     http_request(std::string method_,
                  std::string uri_,
                  http_headers headers_,
                  std::string body_,
-                 std::string content_type_ = std::string())
+                 optional<std::string> content_type_ = nullopt)
         : http_base(std::move(headers_)),
           method{std::move(method_)},
           uri{std::move(uri_)}
     { set_body(std::move(body_), std::move(content_type_)); }
 
+    http_request(std::string method_,
+                 std::string uri_,
+                 http_headers headers_,
+                 std::string body_,
+                 const char *content_type_)
+        : http_request(std::move(method_),
+                       std::move(uri_),
+                       std::move(headers_),
+                       std::move(body_),
+                       std::string(content_type_))
+    {}
+
     void clear() {
-        http_base::clear();
+        super::clear();
         method.clear();
         uri.clear();
     }
@@ -163,17 +229,18 @@ struct http_request : http_base {
 
     std::string path() const {
         std::string p = uri;
-        size_t pos = p.find_first_of("?#");
-        if (pos != std::string::npos) {
-            p = p.substr(0, pos);
-        }
+        const size_t pos = p.find_first_of("?#");
+        if (pos != std::string::npos)
+            p.erase(pos, std::string::npos);
         return p;
     }
 };
 
 //! http response
 struct http_response : http_base {
+    using super = http_base;
     using status_t = uint16_t;
+
     status_t status_code {};
     bool guillotine {};  // return only the head
 
@@ -192,10 +259,13 @@ struct http_response : http_base {
         { set_body(std::move(body_), std::move(content_type_)); }
 
     // TODO: remove this special case
-    http_response(http_request *req_) : http_base(), guillotine{req_ && req_->method == "HEAD"} {}
+    http_response(http_request *req_)
+        : http_base(),
+          guillotine{req_ && req_->method == hs::HEAD}
+        {}
 
     void clear() {
-        http_base::clear();
+        super::clear();
         status_code = {};
         guillotine = {};
     }

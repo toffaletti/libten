@@ -1,5 +1,6 @@
 #define BOOST_TEST_MODULE http_message test
 #include <boost/test/unit_test.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "ten/http/http_message.hh"
 
@@ -14,11 +15,14 @@ BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
     http_request req{"GET", "/foo",
         http_headers{"This", 4, "That", "that"}
     };
-    BOOST_CHECK_EQUAL(4, req.get<int>("this"));
-    BOOST_CHECK_EQUAL("that", req.get("that"));
+    BOOST_CHECK(req.get<int>("this"));
+    BOOST_CHECK_EQUAL(4, *req.get<int>("this"));
+    BOOST_CHECK(req.get("that"));
+    BOOST_CHECK_EQUAL("that", *req.get("that"));
 
     http_response resp{200, http_headers{"Thing", "stuff"}};
-    BOOST_CHECK_EQUAL("stuff", resp.get("thing"));
+    BOOST_CHECK(resp.get("thing"));
+    BOOST_CHECK_EQUAL("stuff", *resp.get("thing"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_constructor) {
@@ -29,8 +33,8 @@ BOOST_AUTO_TEST_CASE(http_request_constructor) {
     BOOST_CHECK_EQUAL("POST", req2.method);
     BOOST_CHECK_EQUAL("/corge", req2.uri);
     BOOST_CHECK_EQUAL(default_http_version, req2.version);
-    BOOST_CHECK_EQUAL("text/json", req2.get("Content-Type"));
-    BOOST_CHECK_EQUAL(3, req2.get<uint64_t>("Content-Length"));
+    BOOST_CHECK_EQUAL("text/json", *req2.get("Content-Type"));
+    BOOST_CHECK_EQUAL(3, *req2.get<uint64_t>("Content-Length"));
     BOOST_CHECK_EQUAL("[1]", req2.body);
 }
 
@@ -97,7 +101,7 @@ BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
     }
 
     BOOST_CHECK(req.complete);
-    BOOST_MESSAGE("Request: \n" << req.data());
+    BOOST_MESSAGE("Request:\n" << req.data());
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
@@ -120,9 +124,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_headers) {
@@ -149,9 +153,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_headers) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_unicode_escape) {
@@ -173,9 +177,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_unicode_escape) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_percents) {
@@ -197,9 +201,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_percents) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_bad_percents) {
@@ -223,9 +227,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_bad_percents) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
@@ -248,9 +252,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("Accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("Accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_parser_no_headers) {
@@ -301,9 +305,9 @@ BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_clear) {
@@ -326,9 +330,9 @@ BOOST_AUTO_TEST_CASE(http_request_clear) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 
     req.clear();
 
@@ -349,9 +353,9 @@ BOOST_AUTO_TEST_CASE(http_request_clear) {
     BOOST_CHECK(req.body.empty());
     BOOST_CHECK_EQUAL(0, req.body_length);
     BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
-        req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", req.get("accept"));
+        *req.get("User-Agent"));
+    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
+    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
 }
 
 BOOST_AUTO_TEST_CASE(http_request_header_manipulation) {
@@ -361,9 +365,9 @@ BOOST_AUTO_TEST_CASE(http_request_header_manipulation) {
     req.append("test-c", "test-c");
     req.append("test-a", "test-a");
 
-    BOOST_CHECK_EQUAL("test-a", req.get("test-a"));
-    BOOST_CHECK_EQUAL("test-b", req.get("Test-B"));
-    BOOST_CHECK_EQUAL("test-c", req.get("TesT-c"));
+    BOOST_CHECK_EQUAL("test-a", *req.get("test-a"));
+    BOOST_CHECK_EQUAL("test-b", *req.get("Test-B"));
+    BOOST_CHECK_EQUAL("test-c", *req.get("TesT-c"));
 
     BOOST_CHECK(req.remove("Test-A"));
     BOOST_CHECK(req.remove("Test-B"));
@@ -395,8 +399,8 @@ BOOST_AUTO_TEST_CASE(http_response_constructor) {
     BOOST_CHECK_EQUAL(200, resp2.status_code);
     BOOST_CHECK_EQUAL("OK", resp2.reason());
     BOOST_CHECK_EQUAL(default_http_version, resp2.version);
-    BOOST_CHECK_EQUAL("text/json", resp2.get("Content-Type"));
-    BOOST_CHECK_EQUAL(3, resp2.get<uint64_t>("Content-Length"));
+    BOOST_CHECK_EQUAL("text/json", *resp2.get("Content-Type"));
+    BOOST_CHECK_EQUAL(3, *resp2.get<uint64_t>("Content-Length"));
     BOOST_CHECK_EQUAL("[1]", resp2.body);
 }
 
@@ -408,7 +412,7 @@ BOOST_AUTO_TEST_CASE(http_response_data) {
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
     BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("0", resp.get("content-length"));
+    BOOST_CHECK_EQUAL("0", *resp.get("content-length"));
 
     static const char *expected_data =
     "HTTP/1.1 200 OK\r\n"
@@ -431,8 +435,8 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
     BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, resp.get<int>("content-length"));
+    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
+    BOOST_CHECK_EQUAL(37, *resp.get<int>("content-length"));
     BOOST_CHECK_EQUAL(body, resp.body);
 
     static const char *expected_data =
@@ -476,13 +480,14 @@ BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
     }
 
     BOOST_CHECK(resp.complete);
+    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
     BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, resp.get<uint64_t>("content-length"));
-    BOOST_CHECK_EQUAL("text/plain", resp.get("content-type"));
+    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
+    BOOST_CHECK_EQUAL(37, *resp.get<uint64_t>("content-length"));
+    BOOST_CHECK_EQUAL("text/plain", *resp.get("content-type"));
     BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
     BOOST_CHECK_EQUAL(37, resp.body_length);
 }
@@ -506,9 +511,9 @@ BOOST_AUTO_TEST_CASE(http_response_parser_normalize_header_names) {
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
     BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, resp.get<uint64_t>("content-length"));
-    BOOST_CHECK_EQUAL("text/plain", resp.get("content-type"));
+    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
+    BOOST_CHECK_EQUAL(37, *resp.get<uint64_t>("content-length"));
+    BOOST_CHECK_EQUAL("text/plain", *resp.get("content-type"));
     BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
     BOOST_CHECK_EQUAL(37, resp.body_length);
 }
@@ -537,13 +542,37 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     size_t len = strlen(sdata);
     resp.parse(&parser, sdata, len);
     BOOST_CHECK(resp.complete);
+    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
 
     BOOST_CHECK_EQUAL(200, resp.status_code);
     BOOST_CHECK_EQUAL("OK", resp.reason());
     BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("text/plain", resp.get("Content-Type"));
-    BOOST_CHECK_EQUAL("chunked", resp.get("Transfer-Encoding"));
+    BOOST_CHECK_EQUAL("text/plain", *resp.get("Content-Type"));
+    BOOST_CHECK_EQUAL("chunked", *resp.get("Transfer-Encoding"));
     BOOST_CHECK_EQUAL(resp.body_length, 76);
+}
 
-    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
+BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
+    using namespace std::chrono;
+    using clock = std::chrono::high_resolution_clock;
+    std::string ahdr = "Content-Length";
+    std::string bhdr = "Content-length";
+    {
+        auto start = clock::now();
+        for (auto i=0; i<100000; ++i) {
+            boost::iequals(ahdr, bhdr);
+        }
+        auto elapsed = clock::now() - start;
+        BOOST_MESSAGE("boost::iequals: " << duration_cast<microseconds>(elapsed).count());
+    }
+
+    {
+        auto start = clock::now();
+        for (auto i=0; i<100000; ++i) {
+            ascii_iequals(ahdr, bhdr);
+        }
+        auto elapsed = clock::now() - start;
+        BOOST_MESSAGE("ascii_iequals: " << duration_cast<microseconds>(elapsed).count());
+    }
+
 }

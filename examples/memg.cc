@@ -76,13 +76,16 @@ done:
     }
 };
 
-struct state : boost::noncopyable {
+struct state {
     application &app;
     std::shared_ptr<memg_server> server;
 
     state(application &app_) : app(app_) {
         server = std::make_shared<memg_server>();
     }
+
+    state(const state &) = delete;
+    state &operator =(const state &) = delete;
 };
 
 static void startup(application &app) {

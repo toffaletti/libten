@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include "ten/error.hh"
 #include "ten/task/context.hh"
+#include "ten/logging.hh"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
@@ -39,10 +40,10 @@ public:
         size_t real_size = stack_size_;
 #endif
         int r = posix_memalign((void **)&stack_end, pgs, real_size);
-        THROW_ON_NONZERO_ERRNO(r);
+        throw_if(r != 0);
 #ifndef NDEBUG
         // protect the guard page
-        THROW_ON_ERROR(mprotect(stack_end, pgs, PROT_NONE));
+        throw_if(mprotect(stack_end, pgs, PROT_NONE) == -1);
         stack_end += pgs;
 #endif
         // stack grows down on x86 & x86_64
@@ -70,7 +71,7 @@ public:
 
 #ifndef NDEBUG
             size_t pgs = getpagesize();
-            THROW_ON_ERROR(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE));
+            PCHECK(mprotect(stack_end-pgs, pgs, PROT_READ|PROT_WRITE) == 0);
             free(stack_end-pgs);
 #else
             free(stack_end);
