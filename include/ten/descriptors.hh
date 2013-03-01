@@ -63,9 +63,19 @@ struct fd_base {
     friend bool operator == (const fd_base &fb, int fd_) { return fb.fd == fd_; }
     friend bool operator == (int fd_, const fd_base &fb) { return fb.fd == fd_; }
 
-    //protect against accidental boolean comparison
-    friend bool operator == (const fd_base &fb, bool) __attribute__((error("fd == bool")));
-    friend bool operator == (bool, const fd_base &fb) __attribute__((error("fd == bool")));
+    //! protect against accidental boolean comparison
+    template <class T>
+    friend typename std::enable_if<std::is_same<T, bool>::value, bool>::type
+    operator == (const fd_base &fb, T t) {
+        static_assert(!std::is_same<T, bool>::value, "fd == bool");
+    }
+
+    //! protect against accidental boolean comparison
+    template <class T>
+    friend typename std::enable_if<std::is_same<T, bool>::value, bool>::type
+    operator == (T t, const fd_base &fb) {
+        static_assert(!std::is_same<T, bool>::value, "fd == bool");
+    }
 
     int fcntl(int cmd) { return ::fcntl(fd, cmd); }
     int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
