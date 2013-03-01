@@ -2,6 +2,9 @@
 #define LIBTEN_TASK_QUTEX_HH
 
 #include "ten/task.hh"
+#include "ten/ptr.hh"
+#include <mutex>
+#include <deque>
 
 namespace ten {
 
@@ -27,10 +30,10 @@ public:
 class qutex {
 private:
     std::timed_mutex _m;
-    tasklist _waiting;
-    task *_owner;
+    std::deque<ptr<task::pimpl>> _waiting;
+    ptr<task::pimpl> _owner;
 
-    void unlock_or_giveup(std::unique_lock<std::timed_mutex> &lk);
+    void unlock_or_giveup(std::lock_guard<std::timed_mutex> &lk);
 public:
     qutex() : _owner(nullptr) {
         // a simple memory barrier would be sufficient here

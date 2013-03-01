@@ -13,10 +13,13 @@ namespace ten {
 
 //! capture the current stack trace
 struct saved_backtrace {
-    void *array[50];
+    static constexpr size_t max_frames = 50;
+    void *array[max_frames];
     int size;
 
-    saved_backtrace();
+    saved_backtrace() { capture(); }
+
+    void capture();
     std::string str();
 };
 

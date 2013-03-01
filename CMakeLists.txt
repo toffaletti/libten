@@ -39,6 +39,7 @@ endif()
 add_subdirectory(glog)
 
 if (CARES_LIB AND CARES_INCLUDE)
+    add_definitions(-DHAS_CARES)
     set(RESOLVER_SRC src/cares.cc)
 else()
     set(CARES_LIB "")
@@ -50,16 +51,26 @@ if (OPENSSL_FOUND)
 endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
+if (TASK_TRACE)
+    message(STATUS "Task tracing: on")
+    add_definitions(-DTEN_TASK_TRACE)
+else (TASK_TRACE)
+    message(STATUS "Task tracing: off")
+endif (TASK_TRACE)
 
 add_subdirectory(msgpack)
 add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
 add_library(ten
+    src/kernel.cc
+    src/thread_context.cc
+    src/task.cc
+    src/deadline.cc
+    src/scheduler.cc
+    src/io.cc
     src/rendez.cc
     src/qutex.cc
-    src/task.cc
-    src/proc.cc
     src/error.cc
     src/ioproc.cc
     src/net.cc
@@ -67,6 +78,8 @@ add_library(ten
     src/json.cc
     src/metrics.cc
     src/term.cc
+    src/compat.cc
+    src/proc.cc
     ${ASM}
     ${RESOLVER_SRC}
     ${SSL_SRC}

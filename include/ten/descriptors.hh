@@ -16,6 +16,7 @@
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
 #include <sys/eventfd.h>
+#include <sys/inotify.h>
 #include <signal.h>
 #include <vector>
 
@@ -371,16 +372,29 @@ struct timer_fd : fd_base {
     }
 
     //! arms or disarms the timer referred to by fd
-    void settime(int flags, const struct itimerspec &new_value,
-      struct itimerspec &old_value)
+    void settime(const struct itimerspec &new_value,
+            struct itimerspec &old_value, int flags = 0)
     {
         throw_if(timerfd_settime(fd, flags, &new_value, &old_value) == -1);
+    }
+
+    //! arms or disarms the timer referred to by fd
+    void settime(const struct itimerspec &new_value, int flags = 0) {
+        throw_if(timerfd_settime(fd, flags, &new_value, nullptr) == -1);
     }
 
     //! \param curr_value will contain the current value of the timer
     void gettime(struct itimerspec &curr_value) {
         throw_if(timerfd_gettime(fd, &curr_value) == -1);
     }
+
+    //! return the number of times the timer has fired
+    uint64_t read() {
+        uint64_t val;
+        throw_if(fd_base::read(&val, sizeof(val)) == -1);
+        return val;
+    }
+
 };
 
 //! wrapper around signalfd
@@ -397,6 +411,26 @@ struct signal_fd : fd_base {
     void read(struct signalfd_siginfo &siginfo) {
         ssize_t r = fd_base::read(&siginfo, sizeof(siginfo));
         throw_if(r == -1);
+    }
+};
+
+//! wrapper around inotify
+struct inotify_fd : fd_base {
+    inotify_fd(int flags = 0) {
+        fd = ::inotify_init1(flags | IN_CLOEXEC);
+        throw_if(fd == -1);
+    }
+
+    int add_watch(const char *pathname, uint32_t mask) {
+        return ::inotify_add_watch(fd, pathname, mask);
+    }
+
+    int rm_watch(int wd) {
+        return ::inotify_rm_watch(fd, wd);
+    }
+
+    ssize_t read(inotify_event &event) {
+        return fd_base::read(&event, sizeof(event));
     }
 };
 

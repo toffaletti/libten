@@ -7,117 +7,75 @@
 
 #include "ten/task.hh"
 #include "ten/logging.hh"
-#include "ten/task/coroutine.hh"
+#include "ten/error.hh"
+#include "ten/ptr.hh"
+#include "context.hh"
 
 using namespace std::chrono;
 
 namespace ten {
 
-struct task {
+class scheduler;
+
+void taskdumpf(FILE *of = stderr);
+
+class task::pimpl {
+    friend class scheduler;
+    friend std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
+private:
+    static constexpr size_t namesize = 16;
+    static constexpr size_t statesize = 32;
+public:
     struct cancellation_point {
         cancellation_point();
         ~cancellation_point();
     };
-
-public:
+private:
+    // order here is important
+    // trying to get most used in the same cache line
+    context _ctx;
+    ptr<scheduler> _scheduler;
     std::exception_ptr exception;
-    char name[16];
-    char state[32];
-    std::function<void ()> fn;
-    coroutine co;
-    uint64_t id;
-    proc *cproc;
     uint64_t cancel_points;
-
-    std::atomic<bool> _ready;
-    bool systask;
-    bool canceled;
-    
+    std::unique_ptr<char[]> name;
+    std::unique_ptr<char[]> state;
+#ifdef TEN_TASK_TRACE
+    saved_backtrace _trace;
+#endif
 public:
-    task(const std::function<void ()> &f, size_t stacksize);
-    void clear(bool newid=true);
-    void init(const std::function<void ()> &f);
-    ~task();
+    const uint64_t id;
+private:
+    std::function<void ()> fn;
+    std::atomic<bool> is_ready;
+    bool canceled;
+public:
+    pimpl();
+    pimpl(const std::function<void ()> &f, size_t stacksize);
+
+    void setname(const char *fmt, ...);
+    void vsetname(const char *fmt, va_list arg);
+    void setstate(const char *fmt, ...);
+    void vsetstate(const char *fmt, va_list arg);
+
+    const char *getname() const { return name.get(); }
+    const char *getstate() const { return state.get(); }
 
     void ready(bool front=false);
+    void ready_for_io();
+
     void safe_swap() noexcept;
     void swap();
 
-    void exit() {
-        fn = nullptr;
-        swap();
-    }
+    void yield();
 
-    void cancel() {
-        // don't cancel systasks
-        if (systask) return;
-        canceled = true;
-        ready();
-    }
+    void cancel();
+    bool cancelable() const;
 
-    void setname(const char *fmt, ...) {
-        va_list arg;
-        va_start(arg, fmt);
-        vsetname(fmt, arg);
-        va_end(arg);
-    }
-
-    void vsetname(const char *fmt, va_list arg) {
-        vsnprintf(name, sizeof(name), fmt, arg);
-    }
-
-    void setstate(const char *fmt, ...) {
-        va_list arg;
-        va_start(arg, fmt);
-        vsetstate(fmt, arg);
-        va_end(arg);
-    }
-
-    void vsetstate(const char *fmt, va_list arg) {
-        vsnprintf(state, sizeof(state), fmt, arg);
-    }
-
-    static void start(void *arg) {
-        task *t = (task *)arg;
-        try {
-            if (!t->canceled) {
-                t->fn();
-            }
-        } catch (task_interrupted &e) {
-            DVLOG(5) << t << " interrupted ";
-        } catch (backtrace_exception &e) {
-            LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
-            std::exit(2);
-        } catch (std::exception &e) {
-            LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
-            std::exit(2);
-        }
-        t->exit();
-    }
-
-    friend std::ostream &operator << (std::ostream &o, task *t) {
-        if (t) {
-            o << "[" << (void*)t << " " << t->id << " "
-                << t->name << " |" << t->state
-                << "| sys: " << t->systask
-                << " canceled: " << t->canceled << "]";
-        } else {
-            o << "nulltask";
-        }
-        return o;
-    }
-
+private:
+    static void trampoline(intptr_t arg);
 };
 
-struct task_has_size {
-    size_t stack_size;
-
-    task_has_size(size_t stack_size_) : stack_size(stack_size_) {}
-
-    bool operator()(const task *t) const {
-        return t->co.stack_size() == stack_size;
-    }
-};
+std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
 
 } // end namespace ten
 

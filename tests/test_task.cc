@@ -128,7 +128,6 @@ BOOST_AUTO_TEST_CASE(socket_io_mt) {
 }
 
 static void sleeper(semaphore &s) {
-    using namespace std::chrono;
     auto start = steady_clock::now();
     tasksleep(10);
     auto end = steady_clock::now();
@@ -136,8 +135,7 @@ static void sleeper(semaphore &s) {
     // check that at least 10 milliseconds passed
     // annoyingly have to compare count here because duration doesn't have an
     // ostream << operator
-    BOOST_CHECK_GE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
-    BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(12).count());
+    BOOST_CHECK_CLOSE(duration_cast<milliseconds>(end-start).count(), 10.0, 20.0);
     s.post();
 }
 
@@ -294,7 +292,7 @@ BOOST_AUTO_TEST_CASE(task_yield_timer) {
 
 static void deadline_timer() {
     try {
-        deadline dl{milliseconds(100)};
+        deadline dl{milliseconds{100}};
         tasksleep(200);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
@@ -304,7 +302,7 @@ static void deadline_timer() {
 
 static void deadline_not_reached() {
     try {
-        deadline dl{milliseconds(100)};
+        deadline dl{milliseconds{100}};
         tasksleep(50);
         BOOST_CHECK(true);
     } catch (deadline_reached &e) {
@@ -322,19 +320,19 @@ BOOST_AUTO_TEST_CASE(task_deadline_timer) {
 }
 
 static void deadline_cleared() {
+    auto start = steady_clock::now();
     try {
-        deadline dl{milliseconds(10)};
+        deadline dl{milliseconds{10}};
         tasksleep(20000);
         BOOST_CHECK(false);
     } catch (deadline_reached &e) {
         BOOST_CHECK(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
-        auto start = steady_clock::now();
         taskyield();
         auto end = steady_clock::now();
         BOOST_CHECK(true);
-        BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), seconds(1).count());
+        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(end-start).count(), 10.0, 20.0);
     }
 }
 
@@ -347,7 +345,7 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
 static void deadline_cleared_not_reached() {
     try {
         if (true) {
-            deadline dl{milliseconds(100)};
+            deadline dl{milliseconds{100}};
             tasksleep(20);
             // deadline should be removed at this point
             BOOST_CHECK(true);
@@ -366,8 +364,9 @@ BOOST_AUTO_TEST_CASE(task_deadline_cleared_not_reached) {
 }
 
 static void deadline_yield() {
+    auto start = steady_clock::now();
     try {
-        deadline dl{milliseconds(5)};
+        deadline dl{milliseconds{5}};
         for (;;) {
             taskyield();
         }
@@ -376,11 +375,10 @@ static void deadline_yield() {
         BOOST_CHECK(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
-        auto start = steady_clock::now();
         taskyield();
         auto end = steady_clock::now();
         BOOST_CHECK(true);
-        BOOST_CHECK_LE(duration_cast<milliseconds>(end-start).count(), milliseconds(10).count());
+        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(end-start).count(), 5.0, 10.0);
     }
 }
 
@@ -388,5 +386,28 @@ BOOST_AUTO_TEST_CASE(task_deadline_yield) {
     procmain p;
     taskspawn(deadline_yield);
     p.main();
+}
+
+BOOST_AUTO_TEST_CASE(task_new_api) {
+    int i = 1;
+    task t = task::spawn([&] {
+        ++i;
+    });
+    this_task::yield();
+    BOOST_CHECK_EQUAL(2, i);
+
+    auto start = kernel::now();
+    std::thread th([&] {
+        // yield to nothing
+        this_task::yield();
+        ++i;
+        this_task::sleep_for(milliseconds{20});
+        std::this_thread::sleep_for(milliseconds{20});
+    });
+    th.join();
+    this_task::yield(); // allow cached time to update
+    auto stop = kernel::now();
+    BOOST_CHECK_EQUAL(3, i);
+    BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(stop-start).count(), 40.0, 10.0);
 }
 

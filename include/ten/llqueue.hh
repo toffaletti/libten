@@ -70,7 +70,7 @@ public:
         if (next != nullptr) { // if queue is nonempty
             if (next->value) {
                 result = *(next->value);
-                next->value = optional<T>();
+                next->value = nullopt;
             }
             _first = next;
             _consumer_lock.clear(std::memory_order_release); // release exclusivity

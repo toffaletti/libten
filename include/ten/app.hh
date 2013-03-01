@@ -61,7 +61,7 @@ struct app_config {
     std::string glog_vmodule;
 
     void configure_glog(const char *name) const {
-        FLAGS_logtostderr = false; // turn master switch back off (cf procmain_init)
+        FLAGS_logtostderr = false; // turn master switch back off
 
         FLAGS_minloglevel = glog_min_level;
         FLAGS_stderrthreshold = glog_stderr_level;
@@ -236,7 +236,7 @@ public:
             act.sa_sigaction = application::signal_handler;
             act.sa_flags = SA_RESTART | SA_SIGINFO;
             throw_if(sigaction(SIGINT, &act, NULL) == -1);
-            taskspawn(std::bind(&application::signal_task, this), 4*1024);
+            taskspawn(std::bind(&application::signal_task, this));
         }
         return p.main();
     }
@@ -299,17 +299,19 @@ private:
 
     void signal_task() {
         taskname("app::signal_task");
-        tasksystem();
         int sig_num = 0;
         for (;;) {
             fdwait(sigpi.r.fd, 'r');
             ssize_t nr = sigpi.read(&sig_num, sizeof(sig_num));
-            if (nr != sizeof(sig_num)) abort();
+            CHECK(nr == sizeof(sig_num)) << "short read on signal pipe";
             LOG(WARNING) << strsignal(sig_num) << " received";
             switch (sig_num) {
                 case SIGINT:
                     quit();
-                    break;
+                    return;
+                default:
+                    LOG(ERROR) << "BUG: unhandled sig num: " << sig_num;
+                    return;
             }
         }
     }
