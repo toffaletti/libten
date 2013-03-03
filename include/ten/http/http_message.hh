@@ -164,7 +164,9 @@ struct http_base : http_headers {
         static time_t last_time = -1;
         static std::string last_date;
 
-        time_t now = std::chrono::system_clock::to_time_t(procnow());
+        // not using procnow() here because it isn't system_clock and only
+        // system_clock can be converted to time_t
+        time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::lock_guard<std::mutex> lk(last_mut);
         if (last_time != now) {
             char buf[64];
