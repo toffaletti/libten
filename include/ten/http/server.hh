@@ -20,22 +20,29 @@ namespace ten {
 // (the term "exchange" appears in the standard)
 
 struct http_exchange {
+    typedef std::function<void (http_exchange &)> log_func_t;
+
     http_request &req;
     netsock &sock;
     http_response resp {404};
     bool resp_sent {false};
     std::chrono::high_resolution_clock::time_point start;
+    log_func_t log_func;
 
-    http_exchange(http_request &req_, netsock &sock_)
+    http_exchange(http_request &req_, netsock &sock_, const log_func_t &log_func_)
         : req(req_),
           sock(sock_),
-          start(std::chrono::steady_clock::now())
+          start(std::chrono::steady_clock::now()),
+          log_func(log_func_)
         {}
 
     http_exchange(const http_exchange &) = delete;
     http_exchange &operator=(const http_exchange &) = delete;
 
     ~http_exchange() {
+        if (log_func) {
+            log_func(*this);
+        }
         if (!resp_sent) {
             // ensure a response is sent
             send_response();
@@ -134,12 +141,13 @@ struct http_exchange {
 //! basic http server
 class http_server : public netsock_server {
 public:
+    using log_func_t = http_exchange::log_func_t;
     typedef std::function<void (http_exchange &)> callback_type;
 
     std::function<void ()> connect_watch;
     std::function<void ()> disconnect_watch;
 
-protected:
+private:
     struct route {
         std::string pattern;
         callback_type callback;
@@ -152,7 +160,7 @@ protected:
     };
 
     std::vector<route> _routes;
-    callback_type _log_func;
+    log_func_t _log_func;
 
 public:
     http_server(size_t stacksize_=default_stacksize, optional_timeout recv_timeout_ms_={})
@@ -169,7 +177,7 @@ public:
     }
 
     //! set logging function, called after every exchange
-    void set_log_callback(const callback_type &f) {
+    void set_log_callback(const log_func_t &f) {
         _log_func = f;
     }
 
@@ -208,7 +216,7 @@ private:
                 if (req.complete) {
                     DVLOG(4) << req.data();
                     // handle http exchange (request -> response)
-                    http_exchange ex(req, s);
+                    http_exchange ex(req, s, _log_func);
                     if (!nodelay_set && !req.close_after()) {
                         // this is likely a persistent connection, so low-latency sending is worth the overh
                         s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
@@ -257,9 +265,6 @@ done:
                 }
                 break;
             }
-        }
-        if (_log_func) {
-            _log_func(ex);
         }
     }
 };
