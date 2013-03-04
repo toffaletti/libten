@@ -48,7 +48,7 @@ private:
 public:
     size_t max_content_length = ~(size_t)0;
 
-    http_client(const std::string &host_, uint16_t port_ = 80, lifetime_t lifetime = {})
+    http_client(const std::string &host_, uint16_t port_ = 80, lifetime_t lifetime = nullopt)
         : _buf(4*1024), _host(host_), _port(port_)
     {
         parse_host_port(_host, _port);
@@ -68,22 +68,22 @@ public:
     bool pretire_by(proc_time_t when) { return _pretire && when >= *_pretire; }
     bool retire_by(proc_time_t when)  { return _retire  && when >= *_retire; }
 
-    http_response get(const std::string &path, optional_timeout timeout = {}) {
+    http_response get(const std::string &path, optional_timeout timeout = nullopt) {
         return perform(hs::GET, path, {}, {}, timeout);
     }
-    http_response delete_(const std::string &path, optional_timeout timeout = {}) {
+    http_response delete_(const std::string &path, optional_timeout timeout = nullopt) {
         return perform(hs::DELETE, path, {}, {}, timeout);
     }
-    http_response post(const std::string &path, std::string data, optional_timeout timeout = {}) {
+    http_response post(const std::string &path, std::string data, optional_timeout timeout = nullopt) {
         return perform(hs::POST, path, {}, std::move(data), timeout);
     }
-    http_response put(const std::string &path, std::string data, optional_timeout timeout = {}) {
+    http_response put(const std::string &path, std::string data, optional_timeout timeout = nullopt) {
         return perform(hs::PUT, path, {}, std::move(data), timeout);
     }
 
     http_response perform(const std::string &method, const std::string &path,
                           http_headers hdrs = {}, std::string data = {},
-                          optional_timeout timeout = {})
+                          optional_timeout timeout = nullopt)
     {
         // Calculate canonical path
         uri u;
@@ -101,7 +101,7 @@ public:
         return perform(r, timeout);
     }
 
-    http_response perform(http_request &r, optional_timeout timeout = {}) {
+    http_response perform(http_request &r, optional_timeout timeout = nullopt) {
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
         if (r.body.size()) {
@@ -172,7 +172,10 @@ class http_pool : public shared_pool<http_client> {
 public:
     using scoped_resource = detail::http_scoped_resource;
 
-    http_pool(const std::string &host_, uint16_t port_, optional<size_t> max_conn = {}, http_client::lifetime_t lifetime_ = {})
+    http_pool(const std::string &host_,
+            uint16_t port_,
+            optional<size_t> max_conn = nullopt,
+            http_client::lifetime_t lifetime_ = nullopt)
         : shared_pool<http_client>(
             "http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
