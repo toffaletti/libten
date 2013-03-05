@@ -24,11 +24,13 @@ template <typename ProcT> int iodial(ProcT &io, int fd, const char *addr, uint64
     return iocall(io, std::bind(_dial, fd, addr, port));
 }
 
-// TODO: maybe use a single ioproc per thread (proc)
-int netdial(int fd, const char *addr, uint16_t port) {
+void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_ms) {
     // need large stack size for getaddrinfo (see _dial)
-    ioproc io(8*1024*1024);
-    return iodial(io, fd, addr, port);
+    static ioproc io(8*1024*1024);
+    if (iodial(io, fd, addr, port) != 0) {
+        // TODO: better error handling
+        throw hostname_error("dns error"); 
+    }
 }
 
 void netinit() {
