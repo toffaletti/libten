@@ -228,7 +228,7 @@ protected:
                         std::shared_ptr<lt_state> lt,
                         http_client::lifetime_t lifetime)
     {
-        const std::chrono::milliseconds interval{500 * std::min(20L, lifetime->count())};
+        const std::chrono::milliseconds interval{500 * std::min((std::chrono::milliseconds::rep)20L, lifetime->count())};
         VLOG(3) << im->name << ": LT interval=" << interval.count();
         for (;;) {
             std::vector<res_ptr> doomed; // declared first, destroyed last

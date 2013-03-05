@@ -14,10 +14,11 @@ else ()
     add_definitions(-DBOOST_TEST_DYN_LINK)
 endif ()
 
-set(Boost_FIND_REQUIRED 1)
+set(Boost_FIND_REQUIRED ON)
+set(Boost_USE_MULTITHREADED OFF) # Linux doesn't need this
 if (BOOST_ROOT)
   # Prevent falling back to system paths when using a custom Boost prefix.
-  set(Boost_NO_SYSTEM_PATHS true)
+  set(Boost_NO_SYSTEM_PATHS ON)
 endif ()
 
 find_package(Boost 1.51.0 COMPONENTS
@@ -25,6 +26,8 @@ find_package(Boost 1.51.0 COMPONENTS
 if (NOT Boost_FOUND)
     message(FATAL_ERROR, "Boost >= 1.51 not found")
 else()
+    message(STATUS "boost includes: ${Boost_INCLUDE_DIRS}")
+    message(STATUS "boost libs: ${Boost_LIBRARY_DIRS}")
     include_directories(${Boost_INCLUDE_DIRS})
     link_directories(${Boost_LIBRARY_DIRS})
 endif()
