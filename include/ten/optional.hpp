@@ -21,6 +21,13 @@
 
 namespace std{
 
+#if (__GNUC__ == 4 && __GNUC_MINOR__ <= 7)
+
+template <class _Tp> struct is_trivially_destructible
+     : public integral_constant<bool, __has_trivial_destructor(_Tp)> {};
+
+#endif
+
 
 namespace experimental{
 
@@ -177,7 +184,7 @@ struct constexpr_optional_base
 
 template <class T> 
 using OptionalBase = typename std::conditional<
-    std::has_trivial_destructor<T>::value, 
+    std::is_trivially_destructible<T>::value, 
     constexpr_optional_base<T>,
     optional_base<T>
 >::type;
