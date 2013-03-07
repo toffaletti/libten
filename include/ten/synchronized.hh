@@ -42,24 +42,10 @@ public:
     template <typename ...Args>
         synchronized(Args&&... args) : _v(std::forward<Args>(args)...) {}
 
-    synchronized(const synchronized &other) = delete;
-    synchronized(synchronized &&other)      = delete;
-
-    // Watch out for snakes... er, deadlocks.  Lock in consistent order.
-    synchronized & operator = (const synchronized &other) {
-        if (&other != this) {
-            guard_type g1(other._m), g2(_m);
-            _v = other.v;
-        }
-        return *this;
-    }
-    synchronized & operator = (synchronized &&other) {
-        if (&other != this) {
-            guard_type g1(other._m), g2(_m);
-            _v = std::move(other.v);
-        }
-        return *this;
-    }
+    synchronized(const synchronized &) = delete;
+    synchronized(synchronized &&)      = delete;
+    synchronized & operator = (const synchronized &) = delete;
+    synchronized & operator = (synchronized &&) = delete;
 
     template <typename Func, typename Ret = typename std::result_of<Func(T&)>::type>
         auto operator () (Func &&f)       -> Ret
