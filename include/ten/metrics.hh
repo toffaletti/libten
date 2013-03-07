@@ -58,7 +58,7 @@ private:
     value_type _count = 0;
 
 public:
-    ~counter() override {};
+    ~counter() override {}
 
     json to_json() const override {
         return ten::to_json(value());
@@ -67,7 +67,6 @@ public:
     value_type value() const {
         return _count;
     }
-
 
     void incr(value_type n = 1) {
         _count+=n;
@@ -136,12 +135,9 @@ public:
     json to_json() const override {
         // value units: microseconds
         // display units: milliseconds
-        // resolution: centiseconds
-        auto cents = value().count() / 100;
-        return ten::to_json((double)cents / 10.0);
+        return ten::to_json(static_cast<double>(value().count()) / 1000.0);
     }
 
-    // caller specifies desired duration type to avoid misinterpreting .count()
     value_type value() const {
         return std::chrono::duration_cast<value_type>(_elapsed);
     }
@@ -155,133 +151,97 @@ public:
     }
 };
 
-// variant of all possible metrics
-typedef boost::variant<counter, gauge, timer> any_metric;
+//----------------------------------------------------------------
+// metric groups
+//   any_metric - variant<*>
+//   group_map - maps string -> any_metric
+//   group - has a lock and is automatically aggregated on destruction
+//
 
-struct merge_visitor : boost::static_visitor<> {
-    any_metric &_lhs;
+using any_metric = boost::variant<counter, gauge, timer>;
 
-    merge_visitor(any_metric &lhs) : _lhs(lhs){}
+// derive rather than alias to trigger ADL
 
-    template <typename M>
-        void operator()(const M &rhs) const {
-            boost::get<M>(_lhs).merge(rhs);
-        }
-};
+struct group_map : std::unordered_map<std::string, any_metric> {};
 
-// collection of arbitrary metrics with arbitrary names
+// group_map accessors:
+//   get() allows update, adds keys as needed
+//   value() does neither
 
-typedef std::unordered_map<std::string, any_metric> metric_map;
-
-template <typename M>
-    inline M &get(metric_map &mm, const std::string &name) {
-        auto i = mm.find(name);
-        if (i == end(mm)) {
-            auto ii = mm.emplace(name, M());
+template <typename M, typename ...Args>
+    inline M &get(group_map &gm, Args&&... args) {
+        const std::string name = metric_path(std::forward<Args>(args)...);
+        auto i = gm.find(name);
+        if (i == end(gm)) {
+            auto ii = gm.emplace(name, M());
             i = ii.first;
         }
         return boost::get<M>(i->second);
     }
 
-template <typename M>
-    inline typename M::value_type value(const metric_map &mm, const std::string &name) {
-        auto i = mm.find(name);
-        return (i == end(mm))
+template <typename ...Args>
+    counter &get_counter(group_map &gm, Args&& ...args) { return get<counter>(gm, std::forward<Args>(args)...); }
+template <typename ...Args>
+    gauge   &get_gauge(  group_map &gm, Args&& ...args) { return get<gauge  >(gm, std::forward<Args>(args)...); }
+template <typename ...Args>
+    timer   &get_timer(  group_map &gm, Args&& ...args) { return get<timer  >(gm, std::forward<Args>(args)...); }
+
+template <typename M, typename ...Args>
+    inline auto value(const group_map &gm, Args&&... args) -> typename M::value_type {
+        const std::string name = metric_path(std::forward<Args>(args)...);
+        auto i = gm.find(name);
+        return (i == end(gm))
             ? typename M::value_type()
             : boost::get<M>(i->second).value();
     }
 
-// a lockable wrapper around metric_map
-// TODO: replace with synchronized<metric_map>
+// group - locked, automatically aggregated
+// don't put anything in here you don't want summed
 
-class metric_group {
-    metric_map _map;
-    mutable std::mutex _mtx;
+struct group : public synchronized<group_map> {
+    group();
+    ~group();
 
-public:
-    struct mg_lock : std::unique_lock<std::mutex> {
-        mg_lock(const metric_group &g) : unique_lock(g._mtx) {}
-    };
-
-    metric_group();
-    ~metric_group();
-
-    metric_group(const metric_group &) = delete;
-    metric_group & operator = (const metric_group &) = delete;
-
-    metric_group(metric_group &&) = default;
-    metric_group & operator = (metric_group &&) = default;
-
-    // unsafe accessors; typically should be used via chain
-
-    template <typename M>
-        M &get(const std::string &name)
-            { return metrics::get<M>(_map, name); }
-
-    template <typename M>
-        typename M::value_type value(const std::string &name) const
-            { return metrics::value<M>(_map, name); }
-
-    // safe mass merge
-
-    void safe_merge_to(metric_map &ag) const {
-        mg_lock(*this);
-        for (const auto &kv : _map) {
-            // try to insert into merged map
-            const auto i = ag.insert(kv);
-            if (!i.second) {
-                // merge with existing
-                boost::apply_visitor(merge_visitor(i.first->second), kv.second);
-            }
-        }
-    }
+    group(const group &) = delete;
+    group(group &&other);
+    group & operator = (const group &) = delete;
+    group & operator = (group &&other) = delete;
 };
 
-// a chain is a move-semantic locked accessor for a metric_group
+// group accessors
+//   accessor that grabs lock for access
+//   no use now; kept here in case the pattern is useful later.
 
-class chain {
-    metric_group * const _mg;
-    metric_group::mg_lock _lock;
+template <typename M, typename ...Args>
+    inline auto value(const group &g, Args&&... args) -> typename M::value_type {
+        return value<M>(*sync_view(g), std::forward<Args>(args)...);
+    }
+
+// locked_group - convenience wrapper to hold a group lock and make multiple changes
+
+class locked_group {
+    group::view _gview;
 
 public:
-    chain(metric_group *mg) : _mg(mg), _lock(*mg) {}
+    locked_group(group &g) : _gview(sync_view(g)) {}
 
-    chain(const chain &) = delete;
-    chain & operator = (const chain &) = delete;
-
-    chain(chain &&) = default;
-    chain & operator = (chain &&) = default;
+    group_map &map() { return *_gview; }
 
     template <typename ...Args>
         metrics::counter &counter(Args&& ...args) {
-            return _mg->get<metrics::counter>(metric_path(std::forward<Args>(args)...));
+            return get<metrics::counter>(*_gview, std::forward<Args>(args)...);
         }
-
     template <typename ...Args>
         metrics::gauge &gauge(Args&& ...args) {
-            return _mg->get<metrics::gauge>(metric_path(std::forward<Args>(args)...));
+            return get<metrics::gauge>(*_gview, std::forward<Args>(args)...);
         }
-
     template <typename ...Args>
         metrics::timer &timer(Args&& ...args) {
-            return _mg->get<metrics::timer>(metric_path(std::forward<Args>(args)...));
+            return get<metrics::timer>(*_gview, std::forward<Args>(args)...);
         }
-
 };
 
-struct metric_tag {};
-extern thread_cached<metric_tag, metric_group> tls_metric_group;
-
-inline chain record() {
-    return chain(tls_metric_group.get());
-}
-
-template <typename Func>
-inline void record(Func &&f) {
-    metric_group *mg = tls_metric_group.get();
-    metric_group::mg_lock lk(*mg);
-    f(std::ref(*mg));
-}
+// how to make json from all the metrics in a group
 
 struct json_visitor : boost::static_visitor<json> {
     template <typename Met>
@@ -290,24 +250,75 @@ struct json_visitor : boost::static_visitor<json> {
         }
 };
 
-// singleton global metrics, accumulated from individual activities
+// merge
 
-class metric_global;
-extern metric_global global;
+struct merge_visitor : boost::static_visitor<> {
+    any_metric &lhs;
 
-class metric_global {
-public:
+    merge_visitor(any_metric &lhs_) : lhs(lhs_) {}
+
+    template <typename M>
+        void operator()(const M &rhs) const {
+            boost::get<M>(lhs).merge(rhs);
+        }
+};
+
+// base case, no locks
+inline void merge_to(group_map &to, const group_map &from) {
+    for (const auto &fkv : from) {
+        // try to insert into merged map
+        const auto i = to.insert(fkv);
+        if (!i.second) {
+            // merge with existing
+            boost::apply_visitor(merge_visitor{i.first->second}, fkv.second);
+        }
+    }
+}
+
+// when one or the other needs a lock
+template <class T, class F>
+inline void merge_to(T &to, const F &from) {
+    maybe_sync(from, [&](const group_map &m_from) mutable {
+        maybe_sync(to, [&](group_map &m_to) mutable {
+            merge_to(m_to, m_from);
+        });
+    });
+}
+
+//----------------------------------------------------------------
+// thread-local metric group
+
+struct metric_tag {};
+extern thread_cached<metric_tag, group> tls_group;
+
+inline locked_group record() {
+    return locked_group(*tls_group.get());
+}
+
+template <typename Func>
+inline void record(Func &&f) {
+    synchronize(*tls_group.get(), f);
+}
+
+// singleton global metrics, accumulated from individual activities,
+//   which are not themselves synchronized
+
+class global_group;
+extern global_group global;
+
+class global_group {
     struct data {
-        std::vector<metric_group *> groups;
-        metric_map removed;
+        std::vector<const group *> groups;
+        group_map removed;
     };
     synchronized<data> _data;
 
-    metric_global() {}
-    ~metric_global() {}
+public:
+    global_group() {}
+    ~global_group() {}
 
-    void push_back(metric_group *g) {
-        synchronize(_data, [&](data &d) {
+    void push_back(const group *g) {
+        _data([g](data &d) {
             d.groups.push_back(g);
         });
     }
@@ -315,95 +326,74 @@ public:
     // TODO: dont actually want to remove the group until the stats have been merged
     // otherwise a thread could spawn and exit before an aggregation and the metrics
     // would be lost.  this suggests that groups should be on the heap
-    void remove(metric_group *g) {
-        synchronize(_data, [&](data &d) {
+    void remove(const group *g) {
+        _data([&](data &d) {
             const auto i = std::find(std::begin(d.groups), std::end(d.groups), g);
             CHECK(i != std::end(d.groups));
-            (*i)->safe_merge_to(d.removed); // keep stats for removed threads around
+            merge_to(d.removed, *g); // keep around total stats for removed threads
             d.groups.erase(i);
         });
     }
 
-    metric_map aggregate() {
-        metric_map ag;
-        synchronize(_data, [&](data &d) {
-            ag = d.removed; // copy all the removed stats into aggregate
-            for (auto g : d.groups) {
-                g->safe_merge_to(ag);
-            }
+    group_map aggregate() {
+        group_map ag;
+        _data([&](data &d) {
+            merge_to(ag, d.removed);  // from removed threads
+            for (auto g : d.groups)
+                merge_to(ag, *g);  // from live threads
         });
         return ag;
     }
 };
 
-inline metric_group::metric_group()   { global.push_back(this); }
-inline metric_group::~metric_group()  { global.remove(this); }
+inline group::group()   { global.push_back(this); }
+inline group::~group()  { global.remove(this); }
 
 // scoped timer convenience
 
-template <class MG>
-class time_op_base {
+class time_op {
 protected:
     using clock_type = timer::clock_type;
 
-    MG &_mg;
-    std::string _name;
+    group &_g;
+    const std::string _name;
     clock_type::time_point _start;
+    timer::value_type _elapsed;
     bool _stopped = false;
 
-    template <typename ...Args>
-        time_op_base(MG &mg, Args&& ...args)
-            : _mg(mg),
-              _name(metric_path(std::forward<Args>(args)...)),
-              _start(clock_type::now()) {}
-
-    time_op_base(const time_op_base &) = delete;
-    time_op_base & operator = (const time_op_base &) = delete;
-
-    time_op_base(time_op_base &&) = default;
-    time_op_base & operator = (time_op_base &&) = default;
-};
-
-class time_op : public time_op_base<metric_group> {
 public:
     template <typename ...Args>
-        time_op(metric_group &mg, Args&& ...args)
-            : time_op_base(mg, std::forward<Args>(args)...) {}
+        time_op(group &g, Args&& ...args)
+            : _g(g),
+              _name(metric_path(std::forward<Args>(args)...)),
+              _start(clock_type::now()),
+              _elapsed() {}
 
     template <typename ...Args>
         time_op(Args&& ...args)
-            : time_op_base(*tls_metric_group.get(), std::forward<Args>(args)...) {}
+            : time_op(*tls_group.get(), std::forward<Args>(args)...) {}
 
     ~time_op() {
         stop();
     }
+
+    time_op(const time_op &) = delete;
+    time_op & operator = (const time_op &) = delete;
+
+    time_op(time_op &&) = default;
+    time_op & operator = (time_op &&) = default;
+
     void stop() {
         // can't stop more than once
         if (_stopped) return;
         _stopped = true;
-        const auto dur = clock_type::now() - _start;
-        metric_group::mg_lock lk(_mg);
-        _mg.get<timer>(_name).update(dur);
+        _elapsed = std::chrono::duration_cast<timer::value_type>(clock_type::now() - _start);
+        _g([this](group_map &m){ 
+            get<timer>(m, _name).update(_elapsed);
+        });
     }
-};
 
-// use only when you are safe from multithreading
-class map_time_op : public time_op_base<metric_map> {
-public:
-    template <typename ...Args>
-        map_time_op(metric_map &mm, Args&& ...args)
-            : time_op_base(mm, std::forward<Args>(args)...) {}
-
-    ~map_time_op() {
-        stop();
-    }
-    void stop() {
-        // can't stop more than once
-        if (_stopped) return;
-        _stopped = true;
-        const auto dur = clock_type::now() - _start;
-        get<timer>(_mg, _name).update(dur);
-    }
+    timer::value_type elapsed() const { return _elapsed; }
 };
 
 } // end namespace metrics

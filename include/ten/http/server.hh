@@ -26,7 +26,7 @@ struct http_exchange {
     netsock &sock;
     http_response resp {404};
     bool resp_sent {false};
-    std::chrono::high_resolution_clock::time_point start;
+    std::chrono::steady_clock::time_point start;
     log_func_t log_func;
 
     http_exchange(http_request &req_, netsock &sock_, const log_func_t &log_func_)
