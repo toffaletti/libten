@@ -3,9 +3,9 @@
 namespace ten {
 namespace metrics {
 
-metric_global global;
+global_group global;
 
-thread_cached<metric_tag, metric_group> tls_metric_group;
+thread_cached<metric_tag, group> tls_group;
 
 } // metrics
 } // ten

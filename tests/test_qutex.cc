@@ -47,12 +47,15 @@ BOOST_AUTO_TEST_CASE(qutex_test) {
 BOOST_AUTO_TEST_CASE(sync_test) {
     synchronized<std::string> s("empty");
 
-    synchronize(s, [](std::string &str) {
-            BOOST_CHECK_EQUAL("empty", str);
-            str = "test";
+    s([](std::string &str) {
+        BOOST_CHECK_EQUAL("empty", str);
+        str = "test";
     });
 
-    synchronize(s, [](std::string &str) {
-            BOOST_CHECK_EQUAL("test", str);
+    sync(s, [](std::string &str) {
+        BOOST_CHECK_EQUAL("test", str);
+        str = "test2";
     });
+
+    BOOST_CHECK_EQUAL(*sync_view(s), "test2");
 }

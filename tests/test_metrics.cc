@@ -17,8 +17,8 @@ void my_thread() {
         .counter("thing").incr();
         ;
 #else
-    metrics::record([](metrics::metric_group &g) {
-        g.get<metrics::counter>("thing").incr();
+    metrics::record([](metrics::group &g) {
+        get<metrics::counter>(g, "thing").incr();
     });
 #endif
 }
@@ -39,9 +39,8 @@ BOOST_AUTO_TEST_CASE(thread_local_test) {
 
     {
         auto mg = global.aggregate();
-        for (auto kv : mg) {
+        for (auto kv : mg)
             DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
-        }
     }
 
     for (auto &i : threads) {
