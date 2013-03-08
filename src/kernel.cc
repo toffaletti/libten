@@ -12,7 +12,7 @@ namespace {
 
     const char *glog_name = nullptr;
 
-    static std::once_flag boot_flag;
+    std::once_flag boot_flag;
 }
 
 namespace kernel {
