@@ -243,7 +243,9 @@ protected:
         for (;;) {
             address client_addr;
             int fd;
-            while ((fd = _sock.accept(client_addr, 0)) > 0) {
+            while ((fd = _sock.accept(client_addr, 0)) >= 0) {
+                if (fd <= 2)
+                    throw errorx("somebody closed stdin/stdout/stderr");
                 auto self = shared_from_this();
                 taskspawn(std::bind(&netsock_server::client_task, std::move(self), fd), _stacksize);
                 taskyield(); // yield to new client task
