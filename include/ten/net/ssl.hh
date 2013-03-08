@@ -58,31 +58,31 @@ public:
     //! dial requires a large 8MB stack size for getaddrinfo
     void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={}) override;
+            optional_timeout timeout_ms=nullopt) override;
 
     int connect(const address &addr,
-            optional_timeout ms={}) override
+            optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
-        return netconnect(s.fd, addr, ms);
+        return netconnect(s.fd, addr, timeout_ms);
     }
 
     int accept(address &addr,
-            int flags=0, optional_timeout timeout_ms={}) override
+            int flags=0, optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
     }
 
     ssize_t recv(void *buf,
-            size_t len, int flags=0, optional_timeout timeout_ms={}) override
+            size_t len, int flags=0, optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return BIO_read(bio, buf, len);
     }
 
     ssize_t send(const void *buf,
-            size_t len, int flags=0, optional_timeout timeout_ms={}) override
+            size_t len, int flags=0, optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return BIO_write(bio, buf, len);
