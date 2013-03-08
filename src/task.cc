@@ -66,7 +66,7 @@ task::pimpl::pimpl()
     is_ready{false},
     canceled{false}
 {
-    setname("main[" PRId64 "]", id);
+    setname("main[%" PRId64 "]", id);
     setstate("new");
 }
 
@@ -78,7 +78,7 @@ task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
     is_ready{false},
     canceled{false}
 {
-    setname("task[" PRId64 "]", id);
+    setname("task[%" PRId64 "]", id);
     setstate("new");
 }
 
