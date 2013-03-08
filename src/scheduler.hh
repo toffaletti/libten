@@ -56,7 +56,7 @@ private:
     bool _shutdown_sequence_initiated = false;
     //! main task is looping in wait_for_all
     bool _looping = false;
-private:
+
     void check_canceled();
     void check_dirty_queue();
     void check_timeout_tasks();
