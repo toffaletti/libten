@@ -37,8 +37,8 @@ private:
     ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
-    std::unique_ptr<char[]> name;
-    std::unique_ptr<char[]> state;
+    char name[namesize];
+    char state[statesize];
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -52,13 +52,13 @@ public:
     pimpl();
     pimpl(const std::function<void ()> &f, size_t stacksize);
 
-    void setname(const char *fmt, ...);
+    void setname(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetname(const char *fmt, va_list arg);
-    void setstate(const char *fmt, ...);
+    void setstate(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetstate(const char *fmt, va_list arg);
 
-    const char *getname() const { return name.get(); }
-    const char *getstate() const { return state.get(); }
+    const char *getname() const { return name; }
+    const char *getstate() const { return state; }
 
     void ready(bool front=false);
     void ready_for_io();
