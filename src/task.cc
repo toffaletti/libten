@@ -1,4 +1,5 @@
 #include "thread_context.hh"
+#include <inttypes.h>
 
 namespace ten {
 
@@ -15,7 +16,7 @@ void task::set_default_stacksize(size_t stacksize) {
 std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
     if (t) {
         o << "[" << (void*)t.get() << " " << t->id << " "
-            << t->name.get() << " |" << t->state.get()
+            << t->name << " |" << t->state
             << "| canceled: " << t->canceled
             << " ready: " << t->is_ready << "]";
     } else {
@@ -60,28 +61,24 @@ uint64_t task::get_id() const {
 task::pimpl::pimpl()
     : _ctx{},
     cancel_points{0},
-    name{new char[namesize]},
-    state{new char[statesize]},
     id{++taskidgen},
     fn{},
     is_ready{false},
     canceled{false}
 {
-    setname("main[%ju]", id);
+    setname("main[" PRId64 "]", id);
     setstate("new");
 }
 
 task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
     : _ctx{task::pimpl::trampoline, stacksize},
     cancel_points{0},
-    name{new char[namesize]},
-    state{new char[statesize]},
     id{++taskidgen},
     fn{f},
     is_ready{false},
     canceled{false}
 {
-    setname("task[%ju]", id);
+    setname("task[" PRId64 "]", id);
     setstate("new");
 }
 
@@ -114,7 +111,7 @@ void task::pimpl::setname(const char *fmt, ...) {
 }
 
 void task::pimpl::vsetname(const char *fmt, va_list arg) {
-    vsnprintf(name.get(), namesize, fmt, arg);
+    vsnprintf(name, namesize, fmt, arg);
 }
 
 void task::pimpl::setstate(const char *fmt, ...) {
@@ -125,7 +122,7 @@ void task::pimpl::setstate(const char *fmt, ...) {
 }
 
 void task::pimpl::vsetstate(const char *fmt, va_list arg) {
-    vsnprintf(state.get(), statesize, fmt, arg);
+    vsnprintf(state, statesize, fmt, arg);
 }
 
 void task::pimpl::yield() {
