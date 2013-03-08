@@ -63,28 +63,28 @@ add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
 add_library(ten
+    src/deadline.cc
+    src/http_message.cc
+    src/ioproc.cc
+    src/json.cc
+    src/metrics.cc
+    src/proc.cc
+    ${SSL_SRC}
+    src/term.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
+    src/zip.cc
+    src/http_parser.c
+    src/rendez.cc
+    src/qutex.cc
+    ${RESOLVER_SRC}
+    src/net.cc
+    src/compat.cc
     src/kernel.cc
     src/thread_context.cc
     src/task.cc
-    src/deadline.cc
     src/scheduler.cc
     src/io.cc
-    src/rendez.cc
-    src/qutex.cc
     src/error.cc
-    src/ioproc.cc
-    src/net.cc
-    src/zip.cc
-    src/json.cc
-    src/metrics.cc
-    src/term.cc
-    src/compat.cc
-    src/proc.cc
-    ${ASM}
-    ${RESOLVER_SRC}
-    ${SSL_SRC}
-    src/http_message.cc src/http_parser.c
-    ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
     )
 add_dependencies(ten libglog ragel_uri_parser boost_context)
 
