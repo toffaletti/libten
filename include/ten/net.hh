@@ -200,9 +200,10 @@ public:
 
     //! listen and accept connections
     void serve(address &baddr, unsigned threads=1) {
-        netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
-        throw_if(s.fcntl(F_SETFD, s.fcntl(F_GETFD) ^ FD_CLOEXEC) != 0);
+        netsock s = netsock(baddr.family(), SOCK_STREAM);
+        int flags = s.fcntl(F_GETFD);
+        throw_if(flags == -1 || s.fcntl(F_SETFD, flags & ~FD_CLOEXEC) == -1);
         setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);
