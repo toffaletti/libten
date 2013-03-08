@@ -281,7 +281,7 @@ public:
             char *args[vargs.size()+1];
             for (unsigned i=0; i<vargs.size(); ++i) {
                 // evil cast away const
-                args[i] = (char *)vargs[i].c_str();
+                args[i] = const_cast<char *>(vargs[i].c_str());
             }
             args[vargs.size()] = nullptr;
             throw_if(execv(exe_path, args) == -1);
