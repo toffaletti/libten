@@ -21,8 +21,6 @@ static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
     task::set_default_stacksize(default_stacksize);
 
-    umask(02); // allow group-readable logs
-
     static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
     InitGoogleLogging(perm_glog_name);
     glog_inited = true;
