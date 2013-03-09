@@ -16,9 +16,9 @@ void task::set_default_stacksize(size_t stacksize) {
 std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
     if (t) {
         o << "[" << (void*)t.get() << " " << t->id << " "
-            << t->name << " |" << t->state
-            << "| canceled: " << t->canceled
-            << " ready: " << t->is_ready << "]";
+          << t->getname() << " |" << t->getstate()
+          << "| canceled: " << t->canceled
+          << " ready: " << t->is_ready << "]";
     } else {
         o << "nulltask";
     }
@@ -61,6 +61,7 @@ uint64_t task::get_id() const {
 task::impl::impl()
     : _ctx{},
     cancel_points{0},
+    aux{new auxinfo{}},
     id{++taskidgen},
     fn{},
     is_ready{false},
@@ -73,6 +74,7 @@ task::impl::impl()
 task::impl::impl(const std::function<void ()> &f, size_t stacksize)
     : _ctx{task::impl::trampoline, stacksize},
     cancel_points{0},
+    aux{new auxinfo{}},
     id{++taskidgen},
     fn{f},
     is_ready{false},
@@ -111,7 +113,7 @@ void task::impl::setname(const char *fmt, ...) {
 }
 
 void task::impl::vsetname(const char *fmt, va_list arg) {
-    vsnprintf(name, namesize, fmt, arg);
+    vsnprintf(aux->name, namesize, fmt, arg);
 }
 
 void task::impl::setstate(const char *fmt, ...) {
@@ -122,7 +124,7 @@ void task::impl::setstate(const char *fmt, ...) {
 }
 
 void task::impl::vsetstate(const char *fmt, va_list arg) {
-    vsnprintf(state, statesize, fmt, arg);
+    vsnprintf(aux->state, statesize, fmt, arg);
 }
 
 void task::impl::yield() {
