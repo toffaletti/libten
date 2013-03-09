@@ -1,4 +1,5 @@
 #include "thread_context.hh"
+#include <inttypes.h>
 
 namespace ten {
 
@@ -12,12 +13,12 @@ void task::set_default_stacksize(size_t stacksize) {
     current_stacksize = stacksize;
 }
 
-std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t) {
+std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
     if (t) {
         o << "[" << (void*)t.get() << " " << t->id << " "
-            << t->name.get() << " |" << t->state.get()
-            << "| canceled: " << t->canceled
-            << " ready: " << t->is_ready << "]";
+          << t->getname() << " |" << t->getstate()
+          << "| canceled: " << t->canceled
+          << " ready: " << t->is_ready << "]";
     } else {
         o << "nulltask";
     }
@@ -31,13 +32,13 @@ uint64_t get_id() {
 }
 
 void yield() {
-    ptr<task::pimpl> t = kernel::current_task();
+    const auto t = kernel::current_task();
     t->yield(); 
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
-    task::pimpl::cancellation_point cancellable;
-    ptr<task::pimpl> t = kernel::current_task();
+    task::impl::cancellation_point cancellable;
+    const auto t = kernel::current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{
         this_ctx->scheduler.arm_alarm(t, sleep_time)};
     t->swap();
@@ -46,102 +47,100 @@ void sleep_until(const proc_time_t& sleep_time) {
 
 
 task::task(const std::function<void ()> &f)
-    : _pimpl{std::make_shared<task::pimpl>(f, current_stacksize)}
+    : _impl{std::make_shared<task::impl>(f, current_stacksize)}
 {
-    this_ctx->scheduler.attach_task(_pimpl);
+    this_ctx->scheduler.attach_task(_impl);
     // add new tasks to front of runqueue
-    _pimpl->ready(true);
+    _impl->ready(true);
 }
 
 uint64_t task::get_id() const {
-    return _pimpl->id;
+    return _impl->id;
 }
 
-task::pimpl::pimpl()
+task::impl::impl()
     : _ctx{},
     cancel_points{0},
-    name{new char[namesize]},
-    state{new char[statesize]},
+    aux{new auxinfo{}},
     id{++taskidgen},
     fn{},
     is_ready{false},
     canceled{false}
 {
-    setname("main[%ju]", id);
+    setname("main[%" PRId64 "]", id);
     setstate("new");
 }
 
-task::pimpl::pimpl(const std::function<void ()> &f, size_t stacksize)
-    : _ctx{task::pimpl::trampoline, stacksize},
+task::impl::impl(const std::function<void ()> &f, size_t stacksize)
+    : _ctx{task::impl::trampoline, stacksize},
     cancel_points{0},
-    name{new char[namesize]},
-    state{new char[statesize]},
+    aux{new auxinfo{}},
     id{++taskidgen},
     fn{f},
     is_ready{false},
     canceled{false}
 {
-    setname("task[%ju]", id);
+    setname("task[%" PRId64 "]", id);
     setstate("new");
 }
 
-void task::pimpl::trampoline(intptr_t arg) {
-    ptr<task::pimpl> self{reinterpret_cast<task::pimpl *>(arg)};
+void task::impl::trampoline(intptr_t arg) {
+    const ptr<task::impl> t{reinterpret_cast<task::impl *>(arg)};
     try {
-        if (!self->canceled) {
-            self->fn();
+        if (!t->canceled) {
+            t->fn();
         }
     } catch (task_interrupted &e) {
-        DVLOG(5) << self << " interrupted ";
+        DVLOG(5) << t << " interrupted ";
     } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error in " << self << ": " << e.what() << "\n" << e.backtrace_str();
+        LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
     } catch (std::exception &e) {
-        LOG(ERROR) << "unhandled error in " << self << ": " << e.what();
+        LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
     }
-    self->fn = nullptr;
-    ptr<scheduler> sched = self->_scheduler;
-    sched->remove_task(self);
-    self->swap();
+    t->fn = nullptr;
+    const auto sched = t->_scheduler;
+    sched->remove_task(t);
+    sched->schedule();
     // never get here
-    LOG(FATAL) << "Oh no! You fell through the trampoline " << self;
+    LOG(FATAL) << "Oh no! You fell through the trampoline in " << t;
 }
 
-void task::pimpl::setname(const char *fmt, ...) {
+void task::impl::setname(const char *fmt, ...) {
     va_list arg;
     va_start(arg, fmt);
     vsetname(fmt, arg);
     va_end(arg);
 }
 
-void task::pimpl::vsetname(const char *fmt, va_list arg) {
-    vsnprintf(name.get(), namesize, fmt, arg);
+void task::impl::vsetname(const char *fmt, va_list arg) {
+    vsnprintf(aux->name, namesize, fmt, arg);
 }
 
-void task::pimpl::setstate(const char *fmt, ...) {
+void task::impl::setstate(const char *fmt, ...) {
     va_list arg;
     va_start(arg, fmt);
     vsetstate(fmt, arg);
     va_end(arg);
 }
 
-void task::pimpl::vsetstate(const char *fmt, va_list arg) {
-    vsnprintf(state.get(), statesize, fmt, arg);
+void task::impl::vsetstate(const char *fmt, va_list arg) {
+    vsnprintf(aux->state, statesize, fmt, arg);
 }
 
-void task::pimpl::yield() {
-    task::pimpl::cancellation_point cancellable;
+void task::impl::yield() {
+    task::impl::cancellation_point cancellable;
     if (is_ready.exchange(true) == false) {
         setstate("yield");
-        _scheduler->unsafe_ready(ptr<task::pimpl>{this});
+        _scheduler->unsafe_ready(ptr<task::impl>{this});
     }
     swap();
 }
 
-void task::pimpl::safe_swap() noexcept {
+void task::impl::safe_swap() noexcept {
     _scheduler->schedule();
 }
 
-void task::pimpl::swap() {
+void task::impl::swap() {
     _scheduler->schedule();
     //ctx.swap(this_ctx->scheduler.sched_context(), 0);
 
@@ -158,33 +157,33 @@ void task::pimpl::swap() {
     }
 }
 
-bool task::pimpl::cancelable() const {
+bool task::impl::cancelable() const {
     return cancel_points > 0;
 }
 
-void task::pimpl::cancel() {
+void task::impl::cancel() {
     canceled = true;
     if (is_ready.exchange(true) == false) {
-        this_ctx->scheduler.unsafe_ready(ptr<task::pimpl>{this});
+        this_ctx->scheduler.unsafe_ready(ptr<task::impl>{this});
     }
 }
 
-void task::pimpl::ready(bool front) {
-    _scheduler->ready(ptr<task::pimpl>{this}, front);
+void task::impl::ready(bool front) {
+    _scheduler->ready(ptr<task::impl>{this}, front);
 }
 
 
-void task::pimpl::ready_for_io() {
-    _scheduler->ready_for_io(ptr<task::pimpl>{this});
+void task::impl::ready_for_io() {
+    _scheduler->ready_for_io(ptr<task::impl>{this});
 }
 
-task::pimpl::cancellation_point::cancellation_point() {
-    ptr<task::pimpl> t = kernel::current_task();
+task::impl::cancellation_point::cancellation_point() {
+    const auto t = kernel::current_task();
     ++t->cancel_points;
 }
 
-task::pimpl::cancellation_point::~cancellation_point() {
-    ptr<task::pimpl> t = kernel::current_task();
+task::impl::cancellation_point::~cancellation_point() {
+    const auto t = kernel::current_task();
     --t->cancel_points;
 }
 

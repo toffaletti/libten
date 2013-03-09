@@ -36,9 +36,9 @@ template <class Rep, class Period>
 //! cooperatively scheduled light-weight threads of execution
 class task {
 public:
-    class pimpl;
+    class impl;
 private:
-    std::shared_ptr<pimpl> _pimpl;
+    std::shared_ptr<impl> _impl;
 
     explicit task(const std::function<void ()> &f);
 public:
@@ -51,13 +51,12 @@ public:
     //! spawn a new task in the current thread
     template<class Function, class... Args> 
         static task spawn(Function &&f, Args&&... args) {
-            return task{std::bind(f, args...)};
+            return task{std::bind(f, std::forward<Args>(args)...)};
         }
 
     //! id of this task
     uint64_t get_id() const;
 
-public:
     //! set stack size that tasks will use when spawning
     static void set_default_stacksize(size_t stacksize);
 };

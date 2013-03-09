@@ -186,7 +186,7 @@ public:
           _lifetime(lifetime_)
     {
         if (_lifetime && _lifetime->count() <= 0)
-            throw errorx("%s: invalid client lifetime %jd", name().c_str(), (intmax_t)_lifetime->count());
+            throw errorx("%s: invalid client lifetime %jdms", name().c_str(), (intmax_t)_lifetime->count());
         _lt_start();
     }
     ~http_pool() {

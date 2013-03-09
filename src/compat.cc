@@ -7,12 +7,12 @@ void tasksleep(uint64_t ms) {
 }
 
 bool fdwait(int fd, int rw, optional_timeout ms) {
-    task::pimpl::cancellation_point cancellable;
+    task::impl::cancellation_point cancellable;
     return this_ctx->scheduler.get_io().fdwait(fd, rw, ms);
 }
 
 int taskpoll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    task::pimpl::cancellation_point cancellable;
+    task::impl::cancellation_point cancellable;
     return this_ctx->scheduler.get_io().poll(fds, nfds, ms);
 }
 
@@ -30,7 +30,7 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    ptr<task::pimpl> t = kernel::current_task();
+    const auto t = kernel::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -42,7 +42,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-	ptr<task::pimpl> t = kernel::current_task();
+    const auto t = kernel::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
