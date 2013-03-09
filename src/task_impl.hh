@@ -37,8 +37,8 @@ private:
     ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
-    char name[namesize];
-    char state[statesize];
+    struct auxinfo { char name[namesize]; char state[statesize]; };
+    std::unique_ptr<auxinfo> aux;
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -57,8 +57,8 @@ public:
     void setstate(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetstate(const char *fmt, va_list arg);
 
-    const char *getname() const { return name; }
-    const char *getstate() const { return state; }
+    const char *getname() const { return aux->name; }
+    const char *getstate() const { return aux->state; }
 
     void ready(bool front=false);
     void ready_for_io();
