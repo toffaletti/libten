@@ -58,7 +58,7 @@ time_point now() {
     return this_ctx->scheduler._now;
 }
 
-ptr<task::pimpl> current_task() {
+ptr<task::impl> current_task() {
     return this_ctx->scheduler._current_task;
 }
 

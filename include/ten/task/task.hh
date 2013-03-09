@@ -36,9 +36,9 @@ template <class Rep, class Period>
 //! cooperatively scheduled light-weight threads of execution
 class task {
 public:
-    class pimpl;
+    class impl;
 private:
-    std::shared_ptr<pimpl> _pimpl;
+    std::shared_ptr<impl> _impl;
 
     explicit task(const std::function<void ()> &f);
 public:

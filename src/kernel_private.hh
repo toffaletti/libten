@@ -8,7 +8,7 @@
 namespace ten {
 namespace kernel {
 
-ptr<task::pimpl> current_task();
+ptr<task::impl> current_task();
 
 } // kernel
 } // ten

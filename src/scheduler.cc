@@ -4,17 +4,17 @@
 namespace ten {
 
 scheduler::scheduler()
-  : _main_task{std::make_shared<task::pimpl>()}, 
-    _current_task{_main_task.get()},
+  : _os_task{std::make_shared<task::impl>()}, 
+    _current_task{_os_task.get()},
     _canceled{false}
 {
-    _main_task->_scheduler.reset(this);
+    _os_task->_scheduler.reset(this);
     update_cached_time();
 }
 
 scheduler::~scheduler() {
     // wait for all tasks to exit
-    // this is needed because main task could be canceled
+    // this is needed because os task could be canceled
     // and exit before other tasks do.
     wait_for_all(0);
     DVLOG(5) << "scheduler freed: " << this;
@@ -23,7 +23,7 @@ scheduler::~scheduler() {
 void scheduler::shutdown() {
     if (!_shutdown_sequence_initiated) {
         _shutdown_sequence_initiated = true;
-        for (auto &t : _alltasks) {
+        for (auto &t : _user_tasks) {
             // don't add ourself to the _readyq
             // TODO: this assumes the task that called this will
             // behave and exit itself. perhaps we should cancel it
@@ -32,7 +32,7 @@ void scheduler::shutdown() {
             if (t.get() == _current_task.get()) continue;
             t->cancel();
         }
-        _main_task->cancel();
+        _os_task->cancel();
     }
 }
 
@@ -47,10 +47,10 @@ void scheduler::wait_for_all(size_t thread_count) {
     // thread count is passed in as zero or one.
     // one because we might call this inside procmain
     // zero because it is called in ~scheduler after remove_thread
-    DCHECK(_current_task.get() == _main_task.get());
+    DCHECK(_current_task.get() == _os_task.get());
     DVLOG(5) << "entering loop";
     _looping = true;
-    while (_alltasks.size() > 0) {
+    while (_user_tasks.size() > 0) {
         schedule();
     }
     _looping = false;
@@ -73,7 +73,7 @@ void scheduler::check_canceled() {
 }
 
 void scheduler::check_dirty_queue() {
-    ptr<task::pimpl> t;
+    ptr<task::impl> t;
     while (_dirtyq.pop(t)) {
         DVLOG(5) << "dirty readying " << t;
         _readyq.push_front(t);
@@ -83,7 +83,7 @@ void scheduler::check_dirty_queue() {
 void scheduler::check_timeout_tasks() {
     update_cached_time();
     // wake up sleeping tasks
-    _alarms.tick(_now, [this](ptr<task::pimpl> t, std::exception_ptr exception) {
+    _alarms.tick(_now, [this](ptr<task::impl> t, std::exception_ptr exception) {
         if (exception != nullptr && t->exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
             t->exception = exception;
@@ -111,16 +111,16 @@ void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> 
 }
 
 void scheduler::schedule() {
-    if (_looping && _alltasks.size() == 0) {
+    if (_looping && _user_tasks.size() == 0) {
         // XXX: ugly hack
         // this should resume in ::wait_for_all()
-        // which should only be called from main task.
+        // which should only be called from os task.
         // the purpose of this is to allow other tasks to exit
-        // while the main task sticks around. then swap to
-        // the main task with will exit the thread/process
-        _main_task->ready();
+        // while the os task sticks around, then swap to the
+        // os task which will exit the thread/process
+        _os_task->ready();
     }
-    ptr<task::pimpl> saved_task = _current_task;
+    const auto saved_task = _current_task;
     try {
         do {
             check_canceled();
@@ -132,7 +132,7 @@ void scheduler::schedule() {
                 wait(lock, when);
             }
         } while (_readyq.empty());
-        ptr<task::pimpl> t{_readyq.front()};
+        const auto t = _readyq.front();
         _readyq.pop_front();
         DCHECK(t->is_ready);
         t->is_ready.store(false);
@@ -153,27 +153,27 @@ void scheduler::schedule() {
     }
 }
 
-void scheduler::attach_task(std::shared_ptr<task::pimpl> t) {
+void scheduler::attach_task(std::shared_ptr<task::impl> t) {
     DCHECK(t->_scheduler.get() == nullptr);
     t->_scheduler.reset(this);
-    _alltasks.emplace_back(std::move(t));
+    _user_tasks.emplace_back(std::move(t));
 }
 
-void scheduler::remove_task(ptr<task::pimpl> t) {
+void scheduler::remove_task(ptr<task::impl> t) {
     using namespace std;
     DCHECK(t);
     DCHECK(t->_scheduler.get() == this);
     DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))
         << "BUG: " << t << " found in _readyq while being deleted";
-    auto i = find_if(begin(_alltasks), end(_alltasks), [=](shared_ptr<task::pimpl> &tt) -> bool {
+    auto i = find_if(begin(_user_tasks), end(_user_tasks), [=](shared_ptr<task::impl> &tt) -> bool {
         return tt.get() == t.get();
     });
-    DCHECK(i != end(_alltasks));
+    DCHECK(i != end(_user_tasks));
     _gctasks.emplace_back(*i);
-    _alltasks.erase(i);
+    _user_tasks.erase(i);
 }
 
-void scheduler::ready(ptr<task::pimpl> t, bool front) {
+void scheduler::ready(ptr<task::impl> t, bool front) {
     DVLOG(5) << "readying: " << t;
     if (t->is_ready.exchange(true) == false) {
         if (this != &this_ctx->scheduler) {
@@ -189,21 +189,21 @@ void scheduler::ready(ptr<task::pimpl> t, bool front) {
     }
 }
 
-void scheduler::ready_for_io(ptr<task::pimpl> t) {
+void scheduler::ready_for_io(ptr<task::impl> t) {
     DVLOG(5) << "readying for io: " << t;
     if (t->is_ready.exchange(true) == false) {
         _readyq.push_back(t);
     }
 }
 
-void scheduler::unsafe_ready(ptr<task::pimpl> t) {
+void scheduler::unsafe_ready(ptr<task::impl> t) {
     DVLOG(5) << "readying: " << t;
     _readyq.push_back(t);
 }
 
 bool scheduler::cancel_task_by_id(uint64_t id) {
     bool found = false;
-    for (auto &t : _alltasks) {
+    for (auto &t : _user_tasks) {
         if (t->id == id) {
             found = true;
             t->cancel();
@@ -225,12 +225,12 @@ void scheduler::wakeup() {
 
 void scheduler::dump() const {
     LOG(INFO) << "scheduler: " << this;
-    LOG(INFO) << ptr<task::pimpl>{_main_task.get()};
+    LOG(INFO) << ptr<task::impl>{_os_task.get()};
 #ifdef TEN_TASK_TRACE
-    LOG(INFO) << _main_task->_trace.str();
+    LOG(INFO) << _os_task->_trace.str();
 #endif
-    for (auto &t : _alltasks) {
-        LOG(INFO) << ptr<task::pimpl>{t.get()};
+    for (auto &t : _user_tasks) {
+        LOG(INFO) << ptr<task::impl>{t.get()};
 #ifdef TEN_TASK_TRACE
         LOG(INFO) << t->_trace.str();
 #endif
