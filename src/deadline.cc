@@ -42,11 +42,11 @@ deadline::~deadline() {
     cancel();
 }
 
-milliseconds deadline::remaining() const {
+optional_timeout deadline::remaining() const {
     if (_pimpl) {
         return _pimpl->alarm.remaining();
     }
-    return {};
+    return nullopt;
 }
 
 } // ten

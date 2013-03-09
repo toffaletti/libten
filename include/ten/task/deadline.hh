@@ -24,7 +24,7 @@ public:
     deadline &operator =(const deadline &) = delete;
 
     //! milliseconds remaining on the deadline
-    std::chrono::milliseconds remaining() const;
+    optional_timeout remaining() const;
     
     //! cancel the deadline
     void cancel();
