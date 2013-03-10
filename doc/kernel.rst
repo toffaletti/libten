@@ -1,3 +1,5 @@
+.. _kernel:
+
 ######
 Kernel
 ######
@@ -6,6 +8,13 @@ Overview
 ========
 
 The kernel of the task system. Types and functions for setup and information about the environment.
+
+   
+.. _kernel_boot_note:
+.. note::
+
+    :func:`kernel::boot` must be called from the main thread before any other threads are created. This can be done by explicitely calling it from `main()` or implicitely by spawning a task from `main()`.
+
 
 Reference
 =========
@@ -32,7 +41,7 @@ Reference
 
 .. function:: void kernel::boot()
 
-   Bootstrap the task system. Must be called from the main thread before any other threads are created. Can be implicitely called by other task functions.
+   Bootstrap the task system. :ref:`See note. <kernel_boot_note>`
 
 .. function:: void kernel::shutdown()
 
