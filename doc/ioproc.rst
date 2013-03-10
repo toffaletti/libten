@@ -40,8 +40,8 @@ Reference
 
     Wait for result of a previous :func:`iocallasync` call.
 
-Example
--------
+Examples
+========
 
 .. code-block:: c++
     

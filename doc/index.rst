@@ -15,4 +15,5 @@ A C++11 library for network services on modern x86-64 Linux.
    task
    net
    ioproc
+   http
    internals
