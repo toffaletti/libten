@@ -9,11 +9,12 @@ libten Manual
 A C++11 library for network services on modern x86-64 Linux.
 
 .. toctree::
-   :maxdepth: 2
+    :maxdepth: 2
 
-   kernel
-   task
-   net
-   ioproc
-   http
-   internals
+    build
+    kernel
+    task
+    net
+    ioproc
+    http
+    internals
