@@ -25,12 +25,12 @@ public:
 int main() {
     synchronized<A> a(1);
     A b;
-    synchronize(a, [&](A &a_) {
+    a([&](A &a_) {
         a_.set(2);
         b = a_;
     });
 
-    synchronize(a, [](A &a_) {
+    a([](A &a_) {
         a_.set(3);
         std::cout << "a: " << a_.get_squared() << "\n";
     });
