@@ -7,13 +7,12 @@ Kernel
 Overview
 ========
 
-The kernel of the task system. Types and functions for setup and information about the environment.
-
-   
+The kernel of the task system. Get information and setup the environment.
+ 
 .. _kernel_boot_note:
 .. note::
 
-    :func:`kernel::boot` must be called from the main thread before any other threads are created. This can be done by explicitely calling it from `main()` or implicitely by spawning a task from `main()`.
+    :func:`kernel::boot` must be called from the main thread before any other threads are created because it modifies signal handlers and sets an alternate signal stack. This can be done by explicitly calling it from `main()` or implicitely by spawning a task from `main()`.
 
 
 Reference
