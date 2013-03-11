@@ -10,8 +10,6 @@ namespace {
         ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
     } stoplog;
 
-    const char *glog_name = nullptr;
-
     std::once_flag boot_flag;
 }
 
@@ -21,8 +19,7 @@ static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
     task::set_default_stacksize(default_stacksize);
 
-    static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
-    InitGoogleLogging(perm_glog_name);
+    InitGoogleLogging(program_invocation_short_name);
     glog_inited = true;
 
     // default to logging everything to stderr only.
@@ -48,10 +45,6 @@ static void kernel_boot() {
     }
 
     netinit();
-}
-
-void set_logname(const char *name) {
-    glog_name = name;
 }
 
 time_point now() {
