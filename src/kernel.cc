@@ -4,12 +4,9 @@
 
 namespace ten {
 
-namespace {
-    static bool glog_inited;
-    struct stoplog_t {
-        ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
-    } stoplog;
+bool glog_inited;
 
+namespace {
     std::once_flag boot_flag;
 }
 

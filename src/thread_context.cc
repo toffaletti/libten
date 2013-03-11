@@ -8,7 +8,13 @@ namespace ten {
 // threads and cache are potentially used by
 // ~thread_context because of scheduler
 // so they must be declared *before* this_ctx
+extern bool glog_inited;
+
 namespace {
+    struct stoplog_t {
+        ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
+    } stoplog;
+
     static std::mutex threads_mutex;
     static std::vector<ptr<thread_context>> threads;
 } // namespace
