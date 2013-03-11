@@ -9,7 +9,7 @@ namespace ten {
 class rendez {
 private:
     std::timed_mutex _m;
-    std::deque<ptr<task::pimpl>> _waiting;
+    std::deque<ptr<task::impl>> _waiting;
 public:
     rendez() {}
     rendez(const rendez &) = delete;

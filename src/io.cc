@@ -39,7 +39,7 @@ io::io() {
 #endif // HAS_CARES
 }
 
-void io::add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds) {
+void io::add_pollfds(ptr<task::impl> t, pollfd *fds, nfds_t nfds) {
     for (nfds_t i=0; i<nfds; ++i) {
         epoll_event ev{};
         int fd = fds[i].fd;
@@ -128,7 +128,7 @@ bool io::fdwait(int fd, int rw, optional_timeout ms) {
 }
 
 int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    ptr<task::pimpl> t = kernel::current_task();
+    const auto t = kernel::current_task();
     if (nfds == 1) {
         taskstate("poll fd %i r: %i w: %i %ul ms",
                 fds->fd,
@@ -185,7 +185,7 @@ void io::wait(optional<proc_time_t> when) {
     }
 
     _efd.wait(_events, ms);
-    ptr<task::pimpl> t;
+    ptr<task::impl> t;
     for (auto &event : _events) {
         // NOTE: epoll will also return EPOLLERR and EPOLLHUP for every fd
         // even if they arent asked for, so we must wake up the tasks on any event

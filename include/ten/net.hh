@@ -79,34 +79,34 @@ public:
 
     virtual void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={}) = 0;
+            optional_timeout timeout_ms=nullopt) = 0;
 
     virtual int connect(const address &addr,
-            optional_timeout ms = {})
+            optional_timeout timeout_ms = nullopt)
         __attribute__((warn_unused_result)) = 0;
 
     virtual int accept(address &addr,
             int flags=0,
-            optional_timeout ms = {})
+            optional_timeout timeout_ms = nullopt)
         __attribute__((warn_unused_result)) = 0;
 
     virtual ssize_t recv(void *buf,
             size_t len,
             int flags=0,
-            optional_timeout ms = {})
+            optional_timeout timeout_ms = nullopt)
         __attribute__((warn_unused_result)) = 0;
 
     virtual ssize_t send(const void *buf,
             size_t len,
             int flags=0,
-            optional_timeout ms = {})
+            optional_timeout timeout_ms = nullopt)
         __attribute__((warn_unused_result)) = 0;
 
-    ssize_t recvall(void *buf, size_t len, optional_timeout ms={}) {
+    ssize_t recvall(void *buf, size_t len, optional_timeout timeout_ms=nullopt) {
         size_t pos = 0;
         ssize_t left = len;
         while (pos != len) {
-            ssize_t nr = this->recv(&((char *)buf)[pos], left, 0, ms);
+            ssize_t nr = this->recv(&((char *)buf)[pos], left, 0, timeout_ms);
             if (nr > 0) {
                 pos += nr;
                 left -= nr;
@@ -135,10 +135,10 @@ public:
     //! dial requires a large 8MB stack size for getaddrinfo; throws on error
     void dial(const char *addr,
             uint16_t port,
-            optional_timeout timeout_ms={}) override;
+            optional_timeout timeout_ms=nullopt) override;
 
     int connect(const address &addr,
-            optional_timeout timeout_ms={}) override
+            optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return netconnect(s.fd, addr, timeout_ms);
@@ -146,7 +146,7 @@ public:
 
     int accept(address &addr,
             int flags=0,
-            optional_timeout timeout_ms={}) override
+            optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return netaccept(s.fd, addr, flags, timeout_ms);
@@ -155,7 +155,7 @@ public:
     ssize_t recv(void *buf,
             size_t len,
             int flags=0,
-            optional_timeout timeout_ms={}) override
+            optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return netrecv(s.fd, buf, len, flags, timeout_ms);
@@ -164,7 +164,7 @@ public:
     ssize_t send(const void *buf,
             size_t len,
             int flags=0,
-            optional_timeout timeout_ms={}) override
+            optional_timeout timeout_ms=nullopt) override
         __attribute__((warn_unused_result))
     {
         return netsend(s.fd, buf, len, flags, timeout_ms);
@@ -182,7 +182,7 @@ protected:
 public:
     netsock_server(const std::string &protocol_name_,
             size_t stacksize_=default_stacksize,
-            optional_timeout recv_timeout_ms={})
+            optional_timeout recv_timeout_ms=nullopt)
         : _protocol_name(protocol_name_),
         _stacksize(stacksize_),
         _recv_timeout_ms(recv_timeout_ms)
@@ -200,9 +200,10 @@ public:
 
     //! listen and accept connections
     void serve(address &baddr, unsigned threads=1) {
-        netsock s = netsock(baddr.family(), SOCK_STREAM);
         // listening sockets we do want to share across exec
-        throw_if(s.fcntl(F_SETFD, s.fcntl(F_GETFD) ^ FD_CLOEXEC) != 0);
+        netsock s = netsock(baddr.family(), SOCK_STREAM);
+        int flags = s.fcntl(F_GETFD);
+        throw_if(flags == -1 || s.fcntl(F_SETFD, flags & ~FD_CLOEXEC) == -1);
         setup_listen_socket(s);
         s.bind(baddr);
         serve(std::move(s), baddr, threads);
@@ -242,7 +243,9 @@ protected:
         for (;;) {
             address client_addr;
             int fd;
-            while ((fd = _sock.accept(client_addr, 0)) > 0) {
+            while ((fd = _sock.accept(client_addr, 0)) >= 0) {
+                if (fd <= 2)
+                    throw errorx("somebody closed stdin/stdout/stderr");
                 auto self = shared_from_this();
                 taskspawn(std::bind(&netsock_server::client_task, std::move(self), fd), _stacksize);
                 taskyield(); // yield to new client task

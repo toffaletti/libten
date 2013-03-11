@@ -78,6 +78,17 @@ struct app_config {
         // Other levels disabled by setting filename to "" (not null).
         for (int i = 0; i < NUM_SEVERITIES; ++i)
             SetLogDestination(i, (i == glog_file_level) ? name : "");
+        // Ensure sane umask if we know we're writing log files.
+        // If logfiles are configure manually later, you're on your own.
+        if (glog_file_level >= 0 && glog_file_level < NUM_SEVERITIES) {
+            const int oldmask = umask(0777);
+            const int newmask = oldmask & ~0555;
+            umask(newmask);
+            if (newmask != oldmask) {
+                LOG(WARNING) << "umask changed to " << std::oct << std::showbase << newmask
+                             << " (was " << oldmask << ") to ensure readable logfiles";
+            }
+        }
     }
 };
 
@@ -281,7 +292,7 @@ public:
             char *args[vargs.size()+1];
             for (unsigned i=0; i<vargs.size(); ++i) {
                 // evil cast away const
-                args[i] = (char *)vargs[i].c_str();
+                args[i] = const_cast<char *>(vargs[i].c_str());
             }
             args[vargs.size()] = nullptr;
             throw_if(execv(exe_path, args) == -1);

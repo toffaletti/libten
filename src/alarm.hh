@@ -11,8 +11,8 @@ namespace ten {
 
 template <class T, class Clock>
 struct alarm_clock {
-public:
     typedef std::chrono::time_point<Clock> time_point;
+
 private:
     struct data {
         T value;
@@ -31,7 +31,6 @@ private:
     };
 
     typedef std::vector<data> container_type;
-private:
     container_type _set;
 
     struct order {
@@ -75,7 +74,6 @@ private:
 public:
     template <class Function>
     void tick(const time_point &now, Function f) {
-        using namespace std;
         auto i = begin(_set);
         for (; i != end(_set); ++i) {
             if (i->when <= now) {

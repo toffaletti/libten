@@ -12,7 +12,7 @@ namespace {
 
     const char *glog_name = nullptr;
 
-    static std::once_flag boot_flag;
+    std::once_flag boot_flag;
 }
 
 namespace kernel {
@@ -20,8 +20,6 @@ namespace kernel {
 static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
     task::set_default_stacksize(default_stacksize);
-
-    umask(02); // allow group-readable logs
 
     static char *perm_glog_name = glog_name ? strdup(glog_name) : program_invocation_short_name;
     InitGoogleLogging(perm_glog_name);
@@ -60,7 +58,7 @@ time_point now() {
     return this_ctx->scheduler._now;
 }
 
-ptr<task::pimpl> current_task() {
+ptr<task::impl> current_task() {
     return this_ctx->scheduler._current_task;
 }
 
