@@ -23,7 +23,7 @@ void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
         throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
     if (ms.count() > 0) {
-        ptr<task::pimpl> t = kernel::current_task();
+        const auto t = kernel::current_task();
         auto now = kernel::now();
         _pimpl.reset(new deadline_pimpl{
                 this_ctx->scheduler.arm_alarm(t, ms+now, deadline_reached{})
@@ -42,11 +42,11 @@ deadline::~deadline() {
     cancel();
 }
 
-milliseconds deadline::remaining() const {
+optional_timeout deadline::remaining() const {
     if (_pimpl) {
         return _pimpl->alarm.remaining();
     }
-    return {};
+    return nullopt;
 }
 
 } // ten

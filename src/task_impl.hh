@@ -19,9 +19,9 @@ class scheduler;
 
 void taskdumpf(FILE *of = stderr);
 
-class task::pimpl {
+class task::impl {
     friend class scheduler;
-    friend std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
+    friend std::ostream &operator << (std::ostream &o, ptr<task::impl> t);
 private:
     static constexpr size_t namesize = 16;
     static constexpr size_t statesize = 32;
@@ -37,8 +37,8 @@ private:
     ptr<scheduler> _scheduler;
     std::exception_ptr exception;
     uint64_t cancel_points;
-    std::unique_ptr<char[]> name;
-    std::unique_ptr<char[]> state;
+    struct auxinfo { char name[namesize]; char state[statesize]; };
+    std::unique_ptr<auxinfo> aux;
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
@@ -49,16 +49,16 @@ private:
     std::atomic<bool> is_ready;
     bool canceled;
 public:
-    pimpl();
-    pimpl(const std::function<void ()> &f, size_t stacksize);
+    impl();
+    impl(const std::function<void ()> &f, size_t stacksize);
 
-    void setname(const char *fmt, ...);
+    void setname(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetname(const char *fmt, va_list arg);
-    void setstate(const char *fmt, ...);
+    void setstate(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetstate(const char *fmt, va_list arg);
 
-    const char *getname() const { return name.get(); }
-    const char *getstate() const { return state.get(); }
+    const char *getname() const { return aux->name; }
+    const char *getstate() const { return aux->state; }
 
     void ready(bool front=false);
     void ready_for_io();
@@ -75,7 +75,7 @@ private:
     static void trampoline(intptr_t arg);
 };
 
-std::ostream &operator << (std::ostream &o, ptr<task::pimpl> t);
+std::ostream &operator << (std::ostream &o, ptr<task::impl> t);
 
 } // end namespace ten
 

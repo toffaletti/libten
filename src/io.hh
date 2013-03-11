@@ -9,10 +9,10 @@ namespace ten {
 class io {
 private:
     struct task_poll_state {
-        ptr<task::pimpl> t;
+        ptr<task::impl> t;
         pollfd *pfd;
 
-        task_poll_state(ptr<task::pimpl> t_, pollfd *pfd_)
+        task_poll_state(ptr<task::impl> t_, pollfd *pfd_)
             : t{t_}, pfd{pfd_} {}
     };
 
@@ -38,7 +38,7 @@ private:
     //! number of fds we've been asked to wait on
     size_t _npollfds = 0;
 private:
-    void add_pollfds(ptr<task::pimpl> t, pollfd *fds, nfds_t nfds);
+    void add_pollfds(ptr<task::impl> t, pollfd *fds, nfds_t nfds);
     int remove_pollfds(pollfd *fds, nfds_t nfds);
 public:
     io();

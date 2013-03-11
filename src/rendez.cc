@@ -6,7 +6,7 @@ namespace ten {
 
 void rendez::sleep(std::unique_lock<qutex> &lk) {
     DCHECK(lk.owns_lock()) << "must own lock before calling rendez::sleep";
-    ptr<task::pimpl> t = kernel::current_task();
+    const auto t = kernel::current_task();
 
     {
         std::lock_guard<std::timed_mutex> ll(_m);
@@ -22,7 +22,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     try 
     {
         {
-            task::pimpl::cancellation_point cancellable;
+            task::impl::cancellation_point cancellable;
             t->swap(); 
         }
         lk.lock();
@@ -40,7 +40,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
 }
 
 void rendez::wakeup() {
-    ptr<task::pimpl> t = nullptr;
+    ptr<task::impl> t = nullptr;
     {
         std::lock_guard<std::timed_mutex> lk(_m);
         if (!_waiting.empty()) {
@@ -54,7 +54,7 @@ void rendez::wakeup() {
 }
 
 void rendez::wakeupall() {
-    std::deque<ptr<task::pimpl>> waiting;
+    std::deque<ptr<task::impl>> waiting;
     {
         std::lock_guard<std::timed_mutex> lk(_m);
         std::swap(waiting, _waiting);
