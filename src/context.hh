@@ -14,7 +14,10 @@ class context {
 private:
     stack_allocator allocator;
 private:
-    boost::ctx::fcontext_t _ctx;
+    struct os_fctx;
+    // XXX: defined in thread_context.cc for global ordering
+    static thread_cached<os_fctx, boost::context::fcontext_t> _os_ctx;
+    boost::context::fcontext_t *_ctx;
 #ifndef NVALGRIND
     //! stack id so valgrind doesn't freak when stack swapping happens
     int valgrind_stack_id;
@@ -26,41 +29,16 @@ public:
     context(const context &&) = delete;
 
     //! make context for existing stack
-    context() noexcept {}
+    context() noexcept;
 
     //! make a new context and stack
-    explicit context(func_type f, size_t stack_size = boost::ctx::default_stacksize()) {
-        memset(&_ctx, 0, sizeof(_ctx));
-        void *stack = allocator.allocate(stack_size);
-#ifndef NVALGRIND
-        valgrind_stack_id =
-            VALGRIND_STACK_REGISTER(stack, reinterpret_cast<intptr_t>(stack)-stack_size);
-#endif
-        _ctx.fc_stack.base = stack;
-        _ctx.fc_stack.limit = reinterpret_cast<void *>(reinterpret_cast<intptr_t>(stack)-stack_size);
-        boost::ctx::make_fcontext(&_ctx, f);
-    }
+    explicit context(func_type f, size_t stack_size = 256*1024);
 
-    intptr_t swap(context &other, intptr_t arg=0) noexcept {
-        return boost::ctx::jump_fcontext(&_ctx,
-                &other._ctx,
-                arg);
-    }
+    intptr_t swap(context &other, intptr_t arg=0) noexcept;
 
-    size_t stack_size() const {
-        return reinterpret_cast<intptr_t>(_ctx.fc_stack.base) -
-            reinterpret_cast<intptr_t>(_ctx.fc_stack.limit);
-    }
+    size_t stack_size() const;
 
-    ~context() {
-        if (_ctx.fc_stack.base) {
-            void *stack = _ctx.fc_stack.base;
-#ifndef NVALGRIND
-            VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
-#endif
-            allocator.deallocate(stack, stack_size());
-        }
-    }
+    ~context();
 };
 
 } // ten

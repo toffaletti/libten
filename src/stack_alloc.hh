@@ -2,10 +2,10 @@
 #define LIBTEN_TASK_STACK_ALLOC_HH_
 
 #include "ten/thread_local.hh"
-#include <boost/context/stack_allocator.hpp>
-#include <boost/context/stack_utils.hpp>
+#include "ten/logging.hh"
 #include <sys/mman.h>
 #include <algorithm>
+#include <list>
 
 namespace ten {
 

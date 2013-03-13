@@ -21,13 +21,11 @@
 
 namespace std{
 
-#if (__GNUC__ == 4 && __GNUC_MINOR__ <= 7)
-
+#if (__clang__)
+#elif (__GNUC__ == 4 && __GNUC_MINOR__ <= 7)
 template <class _Tp> struct is_trivially_destructible
      : public integral_constant<bool, __has_trivial_destructor(_Tp)> {};
-
 #endif
-
 
 namespace experimental{
 

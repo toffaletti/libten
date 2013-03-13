@@ -18,6 +18,7 @@ namespace {
     static std::mutex threads_mutex;
     static std::vector<ptr<thread_context>> threads;
 } // namespace
+thread_cached<context::os_fctx, boost::context::fcontext_t> context::_os_ctx;
 thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::_cache;
 thread_cached<runtime_tag, thread_context> this_ctx;
 // *** end global ordering **
