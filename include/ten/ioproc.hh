@@ -1,8 +1,9 @@
 #ifndef LIBTEN_IOPROC_HH
 #define LIBTEN_IOPROC_HH
 
-#include "task.hh"
-#include "channel.hh"
+#include "ten/thread_guard.hh"
+#include "ten/task.hh"
+#include "ten/channel.hh"
 #include <boost/any.hpp>
 #include <type_traits>
 #include <exception>
@@ -55,6 +56,7 @@ void ioproctask(iochannel &);
 //! a pool of threads for making blocking calls
 struct ioproc {
     iochannel ch;
+    std::vector<thread_guard> threads;
 
     ioproc(size_t stacksize = default_stacksize,
            unsigned nprocs = 1,
@@ -62,8 +64,11 @@ struct ioproc {
            std::function<void(iochannel &)> proctask = ioproctask)
         : ch(chanbuf ? chanbuf : nprocs)
     {
+        // TODO: stacksize no longer used
         for (unsigned i=0; i<nprocs; ++i) {
-            procspawn(std::bind(proctask, ch), stacksize);
+            threads.emplace_back(task::spawn_thread([=] {
+                proctask(ch);
+            }));
         }
     }
 

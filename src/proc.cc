@@ -6,16 +6,14 @@ namespace ten {
 
 void procspawn(const std::function<void ()> &f, size_t stacksize) {
     // XXX: stack size is ignored now
-    std::thread procthread{[=] {
-        try {
-            f();
-        } catch (task_interrupted &e) {}
-    }};
+    std::thread procthread{task::spawn_thread([=] {
+        f();
+    })};
     procthread.detach();
 }
 
 void procshutdown() {
-    this_ctx->cancel_all();
+    kernel::shutdown();
 }
 
 procmain::procmain() {

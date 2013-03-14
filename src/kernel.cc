@@ -66,7 +66,7 @@ void boot() {
 }
 
 void shutdown() {
-    this_ctx->scheduler.shutdown();
+    this_ctx->cancel_all();
 }
 
 bool is_computer_on() { return true; }

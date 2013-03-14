@@ -54,6 +54,18 @@ task::task(const std::function<void ()> &f)
     _impl->ready(true);
 }
 
+void task::entry(const std::function<void ()> &f) {
+    try {
+        f();
+    } catch (task_interrupted &e) {
+        DVLOG(5) << "task " << this_task::get_id() << " interrupted ";
+    } catch (backtrace_exception &e) {
+        LOG(ERROR) << "unhandled error: " << e.what() << "\n" << e.backtrace_str();
+    } catch (std::exception &e) {
+        LOG(ERROR) << "unhandled error: " << e.what();
+    }
+}
+
 uint64_t task::get_id() const {
     return _impl->id;
 }
@@ -86,16 +98,8 @@ task::impl::impl(const std::function<void ()> &f, size_t stacksize)
 
 void task::impl::trampoline(intptr_t arg) {
     const ptr<task::impl> t{reinterpret_cast<task::impl *>(arg)};
-    try {
-        if (!t->canceled) {
-            t->fn();
-        }
-    } catch (task_interrupted &e) {
-        DVLOG(5) << t << " interrupted ";
-    } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error in " << t << ": " << e.what() << "\n" << e.backtrace_str();
-    } catch (std::exception &e) {
-        LOG(ERROR) << "unhandled error in " << t << ": " << e.what();
+    if (!t->canceled) {
+        task::entry(t->fn);
     }
     t->fn = nullptr;
     const auto sched = t->_scheduler;

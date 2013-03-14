@@ -3,9 +3,11 @@
 
 #include "ten/task/kernel.hh"
 #include "ten/optional.hh"
+#include "ten/error.hh"
 #include <memory>
 #include <chrono>
 #include <functional>
+#include <thread>
 
 namespace ten {
 
@@ -40,6 +42,9 @@ public:
 private:
     std::shared_ptr<impl> _impl;
 
+    //! task entry boilerplate exception handling
+    static void entry(const std::function<void ()> &f);
+
     explicit task(const std::function<void ()> &f);
 public:
     task() {}
@@ -52,6 +57,19 @@ public:
     template<class Function, class... Args> 
         static task spawn(Function &&f, Args&&... args) {
             return task{std::bind(f, std::forward<Args>(args)...)};
+        }
+
+    //! spawn a new task in a new thread
+    // returns a joinable std::thread
+    template<class Function, class... Args> 
+        static std::thread spawn_thread(Function &&f, Args&&... args) {
+            // TODO: variadic templates don't work with lambdas yet
+            // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=41933
+            // work around using std::function and std::bind
+            std::function<void ()> fb{std::bind(f, std::forward<Args>(args)...)};
+            return std::thread{[=] {
+                task::entry(fb);
+            }};
         }
 
     //! id of this task

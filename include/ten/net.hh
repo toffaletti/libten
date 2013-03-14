@@ -1,9 +1,11 @@
 #ifndef LIBTEN_NET_HH
 #define LIBTEN_NET_HH
 
+#include "ten/thread_guard.hh"
 #include "ten/descriptors.hh"
 #include "ten/task.hh"
 #include <memory>
+#include <thread>
 
 namespace ten {
 
@@ -169,7 +171,6 @@ public:
     {
         return netsend(s.fd, buf, len, flags, timeout_ms);
     }
-
 };
 
 //! task/proc aware socket server
@@ -192,6 +193,9 @@ public:
     netsock_server(const netsock_server &) = delete;
     netsock_server &operator=(const netsock_server &) = delete;
 
+    ~netsock_server() {
+    }
+
     //! listen and accept connections
     void serve(const std::string &ipaddr, uint16_t port, unsigned threads=1) {
         address baddr(ipaddr.c_str(), port);
@@ -210,17 +214,20 @@ public:
     }
 
     //! listen and accept connections
-    void serve(netsock s, address &baddr, unsigned threads=1) {
+    void serve(netsock s, address &baddr, unsigned nthreads=1) {
         std::swap(_sock, s);
         _sock.getsockname(baddr);
         LOG(INFO) << "listening for " << _protocol_name
-            << " on " << baddr << " with " << threads << " threads";;
+            << " on " << baddr << " with " << nthreads << " threads";;
         _sock.listen();
         auto self = shared_from_this();
-        for (unsigned n=1; n<threads; ++n) {
-            procspawn(std::bind(&netsock_server::do_accept_loop, self));
+        std::vector<thread_guard> threads;
+        for (unsigned n=1; n<nthreads; ++n) {
+            threads.emplace_back(task::spawn_thread([=] {
+                self->accept_loop();
+            }));
         }
-        do_accept_loop();
+        accept_loop();
     }
 
     int listen_fd() const {
@@ -234,10 +241,6 @@ protected:
     }
 
     virtual void on_connection(netsock &s) = 0;
-
-    void do_accept_loop() {
-        accept_loop();
-    }
 
     virtual void accept_loop() {
         for (;;) {
