@@ -86,15 +86,13 @@ struct state {
     ioproc io;
 
     state()
-        : io{default_stacksize, conf.threads, 1*1024*1024}
-    {
-    }
+        : io{default_stacksize, conf.threads}
+    {}
 };
 
 unsigned dowork(unsigned i) {
-    taskstate(__FUNCTION__);
-    //tasksleep(conf.sleep_ms);
-    usleep(conf.sleep_ms * 1000);
+    using namespace std::chrono;
+    std::this_thread::sleep_for(milliseconds{conf.sleep_ms});
     return i;
 }
 
@@ -107,7 +105,9 @@ void dorequest(shared_ptr<state> st, unsigned reqn) {
         iochannel reply_chan{conf.work, true};
         for (unsigned i=0; i<conf.work; ++i) {
             taskstate("spawning %d", i);
-            iocallasync(st->io, bind(dowork, i), reply_chan);
+            iocallasync(st->io, [=] {
+                return dowork(i);
+            }, reply_chan);
         }
         for (unsigned i=0; i<conf.work; ++i) {
             done++;
@@ -120,15 +120,8 @@ void dorequest(shared_ptr<state> st, unsigned reqn) {
     taskstate("exiting");
 }
 
-void startup() {
-    taskname(__FUNCTION__);
-    shared_ptr<state> st = make_shared<state>();
-    for (unsigned i=0; i<conf.requests; ++i) {
-        taskspawn(bind(dorequest, st, i));
-    }
-}
-
 int main(int argc, char *argv[]) {
+    kernel::boot();
     options opts;
 
     opts.configuration.add_options()
@@ -146,8 +139,11 @@ int main(int argc, char *argv[]) {
 
     parse_args(opts, argc, argv);
 
-    procmain p;
-    taskspawn(startup);
-    p.main();
+    shared_ptr<state> st = make_shared<state>();
+    for (unsigned i=0; i<conf.requests; ++i) {
+        task::spawn([=] {
+            dorequest(st, i);
+        });
+    }
 }
 

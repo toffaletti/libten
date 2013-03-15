@@ -1,5 +1,5 @@
 #include <thread>
-#include "ten/semaphore.hh"
+#include "ten/thread_guard.hh"
 #include "ten/task/rendez.hh"
 #include "ten/logging.hh"
 
@@ -35,9 +35,12 @@ bool is_done(int &x) {
 void qutex_task_spawn() {
     taskname("qutex_task_spawn");
     std::shared_ptr<state> st = std::make_shared<state>();
+    std::vector<thread_guard> threads;
     for (int i=0; i<20; ++i) {
         taskstate("spawning %d", i);
-        procspawn(std::bind(qlocker, st));
+        threads.emplace_back(task::spawn_thread([=] {
+            qlocker(st);
+        }));
     }
     std::unique_lock<qutex> lk(st->q);
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
@@ -45,10 +48,8 @@ void qutex_task_spawn() {
 }
 
 int main(int argc, char *argv[]) {
-    procmain p;
     for (int i=0; i<10; ++i) {
-        taskspawn(qutex_task_spawn);
+        task::spawn(qutex_task_spawn);
     }
-    p.main();
 }
 
