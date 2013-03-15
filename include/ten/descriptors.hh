@@ -2,7 +2,7 @@
 #define LIBTEN_DESCRIPTORS_HH
 
 #include "error.hh"
-#include "address.hh"
+#include "net/address.hh"
 #include "logging.hh"
 
 #include <errno.h>

@@ -1,7 +1,7 @@
 #ifndef TEN_ADDRESS_HH
 #define TEN_ADDRESS_HH
 
-#include "error.hh"
+#include "ten/error.hh"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string>

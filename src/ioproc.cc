@@ -1,5 +1,4 @@
 #include "ten/ioproc.hh"
-#include "ten/address.hh"
 #include "ten/logging.hh"
 
 namespace ten {
