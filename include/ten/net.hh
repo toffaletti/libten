@@ -250,8 +250,10 @@ protected:
                 if (fd <= 2)
                     throw errorx("somebody closed stdin/stdout/stderr");
                 auto self = shared_from_this();
-                taskspawn(std::bind(&netsock_server::client_task, std::move(self), fd), _stacksize);
-                taskyield(); // yield to new client task
+                task::spawn([=] {
+                    self->client_task(fd);
+                });
+                this_task::yield(); // yield to new client task
             }
         }
     }

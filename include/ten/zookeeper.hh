@@ -36,7 +36,15 @@ public:
         zh = zookeeper_init(server_list.c_str(),
                 zookeeper_client::watcher, timeout_ms, 0, this, 0);
         if (!zh) throw zk_error(ZSYSTEMERROR);
-        taskspawn(std::bind(&zookeeper_client::task, this));
+        // TODO: probably should use enable_shared_from_this
+        // to use a shared_ptr for capturing this
+        task::spawn([=] {
+            task();
+        });
+    }
+
+    ~zookeeper_client() {
+        CHECK(zookeeper_close(zh) == ZOK);
     }
 
     int create(const std::string &path, const std::string &value,
@@ -109,9 +117,6 @@ public:
         return zoo_state(zh);
     }
 
-    ~zookeeper_client() {
-        CHECK(zookeeper_close(zh) == ZOK);
-    }
 private:
     zhandle_t *zh;
     // TODO: this might need to be a multimap
