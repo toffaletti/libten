@@ -84,9 +84,9 @@ void scheduler::check_timeout_tasks() {
     update_cached_time();
     // wake up sleeping tasks
     _alarms.tick(_now, [this](ptr<task::impl> t, std::exception_ptr exception) {
-        if (exception != nullptr && t->exception == nullptr) {
+        if (exception != nullptr && t->_exception == nullptr) {
             DVLOG(5) << "alarm with exception fired: " << t;
-            t->exception = exception;
+            t->_exception = exception;
         }
         DVLOG(5) << "TIMEOUT on task: " << t;
         t->ready_for_io();
@@ -134,8 +134,8 @@ void scheduler::schedule() {
         } while (_readyq.empty());
         const auto t = _readyq.front();
         _readyq.pop_front();
-        DCHECK(t->is_ready);
-        t->is_ready.store(false);
+        DCHECK(t->_ready);
+        t->_ready.store(false);
         _current_task = t;
         DVLOG(5) << this << " swapping to: " << t;
 #ifdef TEN_TASK_TRACE
@@ -175,7 +175,7 @@ void scheduler::remove_task(ptr<task::impl> t) {
 
 void scheduler::ready(ptr<task::impl> t, bool front) {
     DVLOG(5) << "readying: " << t;
-    if (t->is_ready.exchange(true) == false) {
+    if (t->_ready.exchange(true) == false) {
         if (this != &this_ctx->scheduler) {
             _dirtyq.push(t);
             wakeup();
@@ -191,7 +191,7 @@ void scheduler::ready(ptr<task::impl> t, bool front) {
 
 void scheduler::ready_for_io(ptr<task::impl> t) {
     DVLOG(5) << "readying for io: " << t;
-    if (t->is_ready.exchange(true) == false) {
+    if (t->_ready.exchange(true) == false) {
         _readyq.push_back(t);
     }
 }
@@ -204,7 +204,7 @@ void scheduler::unsafe_ready(ptr<task::impl> t) {
 bool scheduler::cancel_task_by_id(uint64_t id) {
     bool found = false;
     for (auto &t : _user_tasks) {
-        if (t->id == id) {
+        if (t->get_id() == id) {
             found = true;
             t->cancel();
             break;

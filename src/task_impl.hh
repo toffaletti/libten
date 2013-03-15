@@ -35,19 +35,17 @@ private:
     // trying to get most used in the same cache line
     context _ctx;
     ptr<scheduler> _scheduler;
-    std::exception_ptr exception;
-    uint64_t cancel_points;
+    std::exception_ptr _exception;
+    uint64_t _cancel_points;
     struct auxinfo { char name[namesize]; char state[statesize]; };
-    std::unique_ptr<auxinfo> aux;
+    std::unique_ptr<auxinfo> _aux;
 #ifdef TEN_TASK_TRACE
     saved_backtrace _trace;
 #endif
-public:
-    const uint64_t id;
-private:
-    std::function<void ()> fn;
-    std::atomic<bool> is_ready;
-    bool canceled;
+    const uint64_t _id;
+    std::function<void ()> _fn;
+    std::atomic<bool> _ready;
+    std::atomic<bool> _canceled;
 public:
     impl();
     impl(const std::function<void ()> &f, size_t stacksize);
@@ -57,8 +55,8 @@ public:
     void setstate(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetstate(const char *fmt, va_list arg);
 
-    const char *getname() const { return aux->name; }
-    const char *getstate() const { return aux->state; }
+    const char *getname() const { return _aux->name; }
+    const char *getstate() const { return _aux->state; }
 
     void ready(bool front=false);
     void ready_for_io();
@@ -70,6 +68,8 @@ public:
 
     void cancel();
     bool cancelable() const;
+
+    uint64_t get_id() const { return _id; }
 
 private:
     static void trampoline(intptr_t arg);

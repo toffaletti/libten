@@ -187,10 +187,12 @@ public:
     {
         if (_lifetime && _lifetime->count() <= 0)
             throw errorx("%s: invalid client lifetime %jdms", name().c_str(), (intmax_t)_lifetime->count());
-        _lt_start();
-    }
-    ~http_pool() {
-        _lt_stop();
+        if (_lifetime) {
+            _lt = std::make_shared<lt_state>();
+            _lt->t = task::spawn([=] {
+                _lt_run(_impl(), _lt, _lifetime);
+            });
+        }
     }
 
 protected:
@@ -199,28 +201,19 @@ protected:
     http_client::lifetime_t _lifetime;
 
     struct lt_state {
-        uint64_t id{};
+        task t;
         std::atomic<size_t> retired{};
         rendez worker;
+
+        ~lt_state() {
+            t.cancel();
+        }
     };
     std::shared_ptr<lt_state> _lt;
 
     res_ptr new_resource() {
         VLOG(3) << name() << ": new http_client resource " << _host << ":" << _port;
         return std::make_shared<http_client>(_host, _port, _lifetime);
-    }
-
-    void _lt_start() {
-        if (!_lt && _lifetime) {
-            _lt = std::make_shared<lt_state>();
-            _lt->id = taskspawn(std::bind(_lt_run, _impl(), _lt, _lifetime));
-        }
-    }
-    void _lt_stop() {
-        if (_lt) {
-            taskcancel(_lt->id);
-            _lt.reset();
-        }
     }
 
     // periodically check the items at the front of the avail queue.

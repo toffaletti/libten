@@ -11,7 +11,7 @@
 
 namespace ten {
 
-//! exception to unwind stack on taskcancel
+//! exception to unwind stack on task cancel
 struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
@@ -72,8 +72,11 @@ public:
             }};
         }
 
-    //! id of this task
+    //! id of the task
     uint64_t get_id() const;
+
+    //! cancel the task
+    void cancel();
 
     //! set stack size that tasks will use when spawning
     static void set_default_stacksize(size_t stacksize);

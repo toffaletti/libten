@@ -15,10 +15,10 @@ void task::set_default_stacksize(size_t stacksize) {
 
 std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
     if (t) {
-        o << "[" << (void*)t.get() << " " << t->id << " "
+        o << "[" << (void*)t.get() << " " << t->get_id() << " "
           << t->getname() << " |" << t->getstate()
-          << "| canceled: " << t->canceled
-          << " ready: " << t->is_ready << "]";
+          << "| canceled: " << t->_canceled
+          << " ready: " << t->_ready << "]";
     } else {
         o << "nulltask";
     }
@@ -28,7 +28,7 @@ std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
 namespace this_task {
 uint64_t get_id() {
     DCHECK(kernel::current_task());
-    return kernel::current_task()->id;
+    return kernel::current_task()->get_id();
 }
 
 void yield() {
@@ -67,41 +67,50 @@ void task::entry(const std::function<void ()> &f) {
 }
 
 uint64_t task::get_id() const {
-    return _impl->id;
+    if (_impl) {
+        return _impl->get_id();
+    }
+    return 0;
+}
+
+void task::cancel() {
+    if (_impl) {
+        _impl->cancel();
+    }
 }
 
 task::impl::impl()
     : _ctx{},
-    cancel_points{0},
-    aux{new auxinfo{}},
-    id{++taskidgen},
-    fn{},
-    is_ready{false},
-    canceled{false}
+    _cancel_points{0},
+    _aux{new auxinfo{}},
+    _id{++taskidgen},
+    _fn{},
+    _ready{false},
+    _canceled{false}
 {
-    setname("main[%" PRId64 "]", id);
+    setname("main[%" PRId64 "]", _id);
     setstate("new");
 }
 
 task::impl::impl(const std::function<void ()> &f, size_t stacksize)
     : _ctx{task::impl::trampoline, stacksize},
-    cancel_points{0},
-    aux{new auxinfo{}},
-    id{++taskidgen},
-    fn{f},
-    is_ready{false},
-    canceled{false}
+    _cancel_points{0},
+    _aux{new auxinfo{}},
+    _id{++taskidgen},
+    _fn{f},
+    _ready{false},
+    _canceled{false}
 {
-    setname("task[%" PRId64 "]", id);
+    setname("task[%" PRId64 "]", _id);
     setstate("new");
 }
 
 void task::impl::trampoline(intptr_t arg) {
     const ptr<task::impl> t{reinterpret_cast<task::impl *>(arg)};
-    if (!t->canceled) {
-        task::entry(t->fn);
+    if (!t->_canceled) {
+        task::entry(t->_fn);
     }
-    t->fn = nullptr;
+    t->_fn = nullptr;
     const auto sched = t->_scheduler;
     sched->remove_task(t);
     sched->schedule();
@@ -117,7 +126,7 @@ void task::impl::setname(const char *fmt, ...) {
 }
 
 void task::impl::vsetname(const char *fmt, va_list arg) {
-    vsnprintf(aux->name, namesize, fmt, arg);
+    vsnprintf(_aux->name, namesize, fmt, arg);
 }
 
 void task::impl::setstate(const char *fmt, ...) {
@@ -128,12 +137,12 @@ void task::impl::setstate(const char *fmt, ...) {
 }
 
 void task::impl::vsetstate(const char *fmt, va_list arg) {
-    vsnprintf(aux->state, statesize, fmt, arg);
+    vsnprintf(_aux->state, statesize, fmt, arg);
 }
 
 void task::impl::yield() {
     task::impl::cancellation_point cancellable;
-    if (is_ready.exchange(true) == false) {
+    if (_ready.exchange(true) == false) {
         setstate("yield");
         _scheduler->unsafe_ready(ptr<task::impl>{this});
     }
@@ -148,27 +157,27 @@ void task::impl::swap() {
     _scheduler->schedule();
     //ctx.swap(this_ctx->scheduler.sched_context(), 0);
 
-    if (canceled && cancel_points > 0) {
+    if (_canceled && _cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
     }
 
-    if (exception && cancel_points > 0) {
+    if (_exception && _cancel_points > 0) {
         DVLOG(5) << "THROW TIMEOUT: " << this << "\n" << saved_backtrace().str();
-        std::exception_ptr tmp = nullptr;
-        std::swap(tmp, exception);
+        std::exception_ptr tmp;
+        std::swap(tmp, _exception);
         std::rethrow_exception(tmp);
     }
 }
 
 bool task::impl::cancelable() const {
-    return cancel_points > 0;
+    return _cancel_points > 0;
 }
 
 void task::impl::cancel() {
-    canceled = true;
-    if (is_ready.exchange(true) == false) {
-        this_ctx->scheduler.unsafe_ready(ptr<task::impl>{this});
+    if (_canceled.exchange(true) == false) {
+        DVLOG(5) << "canceling " << ptr<task::impl>{this};
+        ready();
     }
 }
 
@@ -183,12 +192,12 @@ void task::impl::ready_for_io() {
 
 task::impl::cancellation_point::cancellation_point() {
     const auto t = kernel::current_task();
-    ++t->cancel_points;
+    ++t->_cancel_points;
 }
 
 task::impl::cancellation_point::~cancellation_point() {
     const auto t = kernel::current_task();
-    --t->cancel_points;
+    --t->_cancel_points;
 }
 
 // should be in compat.cc but here because of current_stacksize mess

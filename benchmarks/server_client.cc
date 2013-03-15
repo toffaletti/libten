@@ -7,7 +7,7 @@ using namespace ten;
 
 const size_t default_stacksize=256*1024;
 
-static void connecter(address &addr, channel<int> ch) {
+static void connecter(const address &addr, channel<int> ch) {
     try {
         netsock s(AF_INET, SOCK_STREAM);
         if (s.connect(addr, std::chrono::milliseconds{100}) == 0) {
@@ -34,27 +34,36 @@ static void listener(netsock &sock) {
     for (;;) {
         int fd = sock.accept(addr);
         if (fd != -1) {
-            taskspawn(std::bind(handler, fd));
+            task::spawn([=] {
+                handler(fd);
+            });
         }
     }
 }
 
-static void connecter_spawner(address &addr, channel<int> &ch) {
+static void connecter_spawner(const address &addr, const channel<int> &ch) {
     for (int i=0; i<1000; ++i) {
-        taskspawn(std::bind(connecter, addr, ch));
+        task::spawn([=] {
+            connecter(addr, ch);
+        });
     }
 }
 
-static void startup() {
+int main(int argc, char *argv[]) {
+
     channel<int> ch(1000);
     address addr{AF_INET};
     netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
     s.bind(addr);
     s.listen();
     s.getsockname(addr);
-    int listen_task = taskspawn(std::bind(listener, std::ref(s)));
-    taskyield(); // let listener get setup
-    procspawn(std::bind(connecter_spawner, addr, ch));
+    task listen_task = task::spawn([&] {
+        listener(s);
+    });
+    this_task::yield(); // let listener get setup
+    std::thread connecter_thread = task::spawn_thread([=] {
+        connecter_spawner(addr, ch);
+    });
 
     std::unordered_map<int, unsigned int> results;
     for (unsigned i=0; i<1000; ++i) {
@@ -69,11 +78,6 @@ static void startup() {
         }
     }
     std::cout << std::endl;
-    taskcancel(listen_task);
-}
-
-int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(startup);
-    return p.main();
+    listen_task.cancel();
+    connecter_thread.join();
 }
