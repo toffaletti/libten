@@ -15,7 +15,5 @@ static void stack_overflow() {
 }
 
 int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(stack_overflow);
-    return p.main(argc, argv);
+    task::spawn(stack_overflow);
 }

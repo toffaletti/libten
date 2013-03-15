@@ -68,16 +68,16 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0, duration_cast<milliseconds>(minutes{1}))) > 0) {
-            taskspawn(std::bind(chat_task, sock));
+            task::spawn([=] {
+                chat_task(sock);
+            });
         }
         std::cout << "accept timeout reached\n";
     }
 }
 
 int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(broadcast_task);
-    taskspawn(listen_task);
-    return p.main(argc, argv);
+    task::spawn(broadcast_task);
+    task::spawn(listen_task);
 }
 

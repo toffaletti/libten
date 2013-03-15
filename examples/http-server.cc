@@ -19,10 +19,10 @@ struct my_config : app_config {
 static my_config conf;
 
 struct state {
-    application &app;
+    std::shared_ptr<application> app;
     std::shared_ptr<http_server> http;
 
-    state(application &app_) : app(app_) {
+    state(const std::shared_ptr<application> &app_) : app(app_) {
         http = std::make_shared<http_server>();
     }
 
@@ -45,7 +45,7 @@ static void log_request(http_exchange &ex) {
 static void http_quit(std::weak_ptr<state> wst, http_exchange &ex) {
     if (auto st = wst.lock()) {
         LOG(INFO) << "quit requested over http";
-        st->app.quit();
+        st->app->quit();
     }
     ex.resp = { 200, { "Connection", "close" } };
     ex.resp.set_body("");
@@ -58,7 +58,7 @@ static void http_root(std::weak_ptr<state> wst, http_exchange &ex) {
     ex.send_response();
 }
 
-static void start_http_server(std::shared_ptr<state> &st) {
+static void start_http_server(const std::shared_ptr<state> &st) {
     using namespace std::placeholders;
     std::string addr = conf.http_address;
     uint16_t port = 0;
@@ -71,22 +71,19 @@ static void start_http_server(std::shared_ptr<state> &st) {
     st->http->serve(addr, port, conf.http_threads);
 }
 
-static void startup(application &app) {
-    taskname("startup");
-
-    std::shared_ptr<state> st = std::make_shared<state>(app);
-    taskspawn(std::bind(start_http_server, st));
-}
-
 int main(int argc, char *argv[]) {
-    application app{"0.0.1", conf};
+    std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
     namespace po = boost::program_options;
-    app.opts.configuration.add_options()
+    app->opts.configuration.add_options()
         ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
          "http listen address:port")
         ("http-threads", po::value<unsigned int>(&conf.http_threads)->default_value(1), "http threads")
     ;
-    app.parse_args(argc, argv);
-    taskspawn(std::bind(startup, std::ref(app)));
-    return app.run();
+    app->parse_args(argc, argv);
+
+    std::shared_ptr<state> st = std::make_shared<state>(app);
+    task::spawn([=] {
+        start_http_server(st);
+    });
+    return app->run();
 }

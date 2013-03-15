@@ -71,16 +71,16 @@ private:
         }
 done:
         if (conf.single) {
-            procshutdown();
+            kernel::shutdown();
         }
     }
 };
 
 struct state {
-    application &app;
+    std::shared_ptr<application> app;
     std::shared_ptr<memg_server> server;
 
-    state(application &app_) : app(app_) {
+    state(const std::shared_ptr<application> &app_) : app(app_) {
         server = std::make_shared<memg_server>();
     }
 
@@ -88,25 +88,23 @@ struct state {
     state &operator =(const state &) = delete;
 };
 
-static void startup(application &app) {
-    taskname("startup");
+int main(int argc, char *argv[]) {
+    std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
+    namespace po = boost::program_options;
+    app->opts.configuration.add_options()
+        ("listen,L", po::value<std::string>(&conf.listen_addr)->default_value("127.0.0.1:11211"),
+         "listen address:port")
+        ("single", po::value<bool>(&conf.single)->zero_tokens(), "single connection")
+    ;
+    app->parse_args(argc, argv);
 
     std::string addr = conf.listen_addr;
     uint16_t port = 11211;
     parse_host_port(addr, port);
     std::shared_ptr<state> st = std::make_shared<state>(app);
-    st->server->serve(addr, port);
-}
+    task::spawn([=] {
+        st->server->serve(addr, port);
+    });
 
-int main(int argc, char *argv[]) {
-    application app{"0.0.1", conf};
-    namespace po = boost::program_options;
-    app.opts.configuration.add_options()
-        ("listen,L", po::value<std::string>(&conf.listen_addr)->default_value("127.0.0.1:11211"),
-         "listen address:port")
-        ("single", po::value<bool>(&conf.single)->zero_tokens(), "single connection")
-    ;
-    app.parse_args(argc, argv);
-    taskspawn(std::bind(startup, std::ref(app)));
-    return app.run();
+    return app->run();
 }

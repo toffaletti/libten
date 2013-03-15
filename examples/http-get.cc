@@ -47,9 +47,9 @@ static void do_get(uri u) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
-    procmain p;
 
     uri u{argv[1]};
-    taskspawn(std::bind(do_get, u));
-    return p.main(argc, argv);
+    task::spawn([=] {
+        do_get(u);
+    });
 }

@@ -3,13 +3,6 @@ cmake_minimum_required(VERSION 2.8)
 add_executable(prime-sieve EXCLUDE_FROM_ALL prime-sieve.cc)
 target_link_libraries(prime-sieve ten)
 
-# TODO: update example to work with new buffer api after buffer has move
-#add_executable(file-send file-send.cc)
-#target_link_libraries(file-send ten)
-
-add_executable(old-echo-server EXCLUDE_FROM_ALL old-echo-server.cc)
-target_link_libraries(old-echo-server ten)
-
 add_executable(echo-server EXCLUDE_FROM_ALL echo-server.cc)
 target_link_libraries(echo-server ten)
 
@@ -57,7 +50,6 @@ endif (OPENSSL_FOUND)
 
 add_custom_target(examples DEPENDS
     prime-sieve
-    old-echo-server
     echo-server
     chat-server
     stack-guard

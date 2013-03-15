@@ -1,44 +1,32 @@
-#include "ten/task.hh"
-#include "ten/descriptors.hh"
 #include "ten/net.hh"
+#include "ten/buffer.hh"
 #include <iostream>
 
 using namespace ten;
 const size_t default_stacksize=256*1024;
 
-void echo_task(int sock) {
-    netsock s{sock};
-    char buf[4096];
-    for (;;) {
-        ssize_t nr = s.recv(buf, sizeof(buf));
-        if (nr <= 0) break;
-        ssize_t nw = s.send(buf, nr);
-    }
-}
-
-void listen_task() {
-    netsock s{AF_INET, SOCK_STREAM};
-    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr{"127.0.0.1", 0};
-    s.bind(addr);
-    s.getsockname(addr);
-    std::cout << "listening on: " << addr << "\n";
-    s.listen();
-
-    for (;;) {
-        using namespace std::chrono;
-        address client_addr;
-        int sock;
-        while ((sock = s.accept(client_addr, 0, duration_cast<milliseconds>(minutes{1}))) > 0) {
-            taskspawn(std::bind(echo_task, sock));
+class echo_server : public netsock_server {
+public:
+    echo_server() : netsock_server{"echo"} {}
+private:
+    void on_connection(netsock &s) override {
+        buffer buf{4*1024};
+        for (;;) {
+            buf.reserve(4*1024);
+            ssize_t nr = s.recv(buf.back(), buf.available());
+            if (nr <= 0) break;
+            buf.commit(nr);
+            ssize_t nw = s.send(buf.front(), buf.size());
+            if (nw != nr) break;
+            buf.remove(nw);
         }
-        std::cout << "accept timeout reached\n";
     }
-}
+};
 
 int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(listen_task);
-    return p.main(argc, argv);
+    kernel::boot();
+    address addr{"127.0.0.1", 0};
+    std::shared_ptr<echo_server> server = std::make_shared<echo_server>();
+    server->serve(addr);
 }
 

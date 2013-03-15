@@ -82,8 +82,13 @@ void proxy_task(int sock) {
             ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
 
             channel<int> c;
-            taskspawn(std::bind(sock_copy, c, std::ref(s), std::ref(cs), std::ref(buf)));
-            taskspawn(std::bind(sock_copy, c, std::ref(cs), std::ref(s), std::ref(buf)));
+            task::spawn([&] {
+                sock_copy(c, s, cs, buf);
+            });
+            task::spawn([&] {
+                sock_copy(c, cs, s, buf);
+            });
+            // wait for sock copy tasks to exit
             c.recv();
             c.recv();
             return;
@@ -169,7 +174,8 @@ response_send_error:
     return;
 }
 
-void listen_task() {
+int main(int argc, char *argv[]) {
+    kernel::boot();
     netsock s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr{"0.0.0.0", 3080};
@@ -182,13 +188,9 @@ void listen_task() {
         address client_addr;
         int sock;
         while ((sock = s.accept(client_addr, 0)) > 0) {
-            taskspawn(std::bind(proxy_task, sock), 4*1024*1024);
+            task::spawn([=] {
+                proxy_task(sock);
+            });
         }
     }
-}
-
-int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(listen_task);
-    return p.main(argc, argv);
 }

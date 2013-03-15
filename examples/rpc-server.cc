@@ -16,7 +16,7 @@ static void client_task() {
     } catch (errorx &e) {
         LOG(ERROR) << "fail got: " << e.what();
     }
-    procshutdown();
+    kernel::shutdown();
 }
 
 static int fail() {
@@ -40,7 +40,7 @@ static void notify_world(std::string s) {
     LOG(INFO) << "NOTIFY WORLD " << s;
 }
 
-static void startup() {
+int main(int argc, char *argv[]) {
     auto rpc = std::make_shared<rpc_server>();
     rpc->add_command("add2", add2);
     rpc->add_command("add2", add2);
@@ -48,13 +48,7 @@ static void startup() {
     rpc->add_command("fail", fail);
     rpc->add_notify("notify_me", notify_me);
     rpc->add_notify("notify_world", notify_world);
-    taskspawn(client_task);
+    task::spawn(client_task);
     rpc->serve("0.0.0.0", 5500);
-}
-
-int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(startup);
-    return p.main(argc, argv);
 }
 

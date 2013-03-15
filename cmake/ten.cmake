@@ -19,15 +19,13 @@ else (JANSSON_LIB AND JANSSON_INCLUDE)
     message(FATAL_ERROR "jansson not found")
 endif (JANSSON_LIB AND JANSSON_INCLUDE)
 
-
-
 find_library(CARES_LIB cares)
 find_file(CARES_INCLUDE ares.h)
 if (CARES_LIB AND CARES_INCLUDE)
     message(STATUS "Using c-ares: ${CARES_LIB} ${CARES_INCLUDE}")
     add_definitions(-DHAVE_CARES)
 else (CARES_LIB AND CARES_INCLUDE)
-    message(STATUS "c-ares not found")
+    message(FATAL_ERROR "c-ares not found")
 endif (CARES_LIB AND CARES_INCLUDE)
 
 file(RELATIVE_PATH REL ${CMAKE_CURRENT_SOURCE_DIR} ${CWD}/..)

@@ -38,16 +38,10 @@ endif()
 
 add_subdirectory(glog)
 
-if (CARES_LIB AND CARES_INCLUDE)
-    add_definitions(-DHAS_CARES)
-    set(RESOLVER_SRC src/cares.cc)
-else()
-    set(CARES_LIB "")
-    set(RESOLVER_SRC src/resolve.cc)
-endif ()
-
 if (OPENSSL_FOUND)
     set(SSL_SRC src/ssl.cc)
+else (OPENSSL_FOUND)
+    message(FATAL_ERROR "openssl not found")
 endif (OPENSSL_FOUND)
 
 add_definitions(-DHTTP_PARSER_STRICT=0)
@@ -69,14 +63,14 @@ add_library(ten
     src/json.cc
     src/metrics.cc
     src/proc.cc
-    ${SSL_SRC}
+    src/ssl.cc
     src/term.cc
     ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc
     src/zip.cc
     src/http_parser.c
     src/rendez.cc
     src/qutex.cc
-    ${RESOLVER_SRC}
+    src/cares.cc
     src/net.cc
     src/compat.cc
     src/kernel.cc

@@ -218,7 +218,7 @@ public:
         std::swap(_sock, s);
         _sock.getsockname(baddr);
         LOG(INFO) << "listening for " << _protocol_name
-            << " on " << baddr << " with " << nthreads << " threads";;
+            << " on " << baddr << " with " << nthreads << " threads";
         _sock.listen();
         auto self = shared_from_this();
         std::vector<thread_guard> threads;

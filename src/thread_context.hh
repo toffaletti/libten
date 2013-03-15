@@ -3,16 +3,12 @@
 #include "ten/thread_local.hh"
 #include "scheduler.hh"
 #include "kernel_private.hh"
-
-#ifdef HAS_CARES
-    #include <ares.h>
-#endif // HAS_CARES
+#include <ares.h>
 
 namespace ten {
 
 //! per-thread context for runtime
 struct thread_context {
-#ifdef HAS_CARES
     // XXX: the downside to having one ares_channel per thread
     // is that if resolv.conf ever changes we won't see the changes
     // because c-ares only reads it when ares_init is called.
@@ -22,7 +18,7 @@ struct thread_context {
     // ensure this is freed *after* scheduler
     // so all tasks will have exited
     std::shared_ptr<ares_channeldata> dns_channel;
-#endif // HAS_CARES
+
     ten::scheduler scheduler;
 
     thread_context();

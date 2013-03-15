@@ -21,21 +21,20 @@ void filter(channel<int> in, channel<int> out, int prime) {
     }
 }
 
-void primes() {
+int main(int argc, char *argv[]) {
     channel<int> ch;
-    taskspawn(std::bind(generate, ch));
+    task::spawn([=] {
+        generate(ch);
+    });
     for (int i=0; i<100; ++i) {
         int prime = ch.recv();
         std::cout << prime << "\n";
         channel<int> out;
-        taskspawn(std::bind(filter, ch, out, prime));
+        task::spawn([=] {
+            filter(ch, out, prime);
+        });
         ch = out;
     }
-    procshutdown();
+    kernel::shutdown();
 }
 
-int main(int argc, char *argv[]) {
-    procmain p;
-    taskspawn(primes);
-    return p.main(argc, argv);
-}

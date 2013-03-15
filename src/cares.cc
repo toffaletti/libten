@@ -12,7 +12,8 @@
 
 namespace ten {
 
-inotify_fd resolv_conf_watch_fd{IN_NONBLOCK};
+// XXX: defined in thread_context.cc for global ordering
+extern inotify_fd resolv_conf_watch_fd;
 
 // convert read and write fd_set to pollfd
 std::vector<pollfd> fd_sets_to_pollfd(fd_set *read_fds, fd_set *write_fds, const int max_fd) {
