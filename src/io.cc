@@ -128,7 +128,7 @@ bool io::fdwait(int fd, int rw, optional_timeout ms) {
 }
 
 int io::poll(pollfd *fds, nfds_t nfds, optional_timeout ms) {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     if (nfds == 1) {
         taskstate("poll fd %i r: %i w: %i %ul ms",
                 fds->fd,

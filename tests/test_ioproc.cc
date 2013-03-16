@@ -14,9 +14,8 @@ static void ioproc_sleeper() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
-    procmain p;
-    taskspawn(ioproc_sleeper);
-    p.main();
+    kernel the_kernel;
+    task::spawn(ioproc_sleeper);
 }
 
 static void test_pool() {
@@ -35,9 +34,8 @@ static void test_pool() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_thread_pool) {
-    procmain p;
-    taskspawn(test_pool);
-    p.main();
+    kernel the_kernel;
+    task::spawn(test_pool);
 }
 
 static void fail() {
@@ -57,7 +55,6 @@ static void ioproc_failure() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_error_test) {
-    procmain p;
-    taskspawn(ioproc_failure);
-    p.main();
+    kernel the_kernel;
+    task::spawn(ioproc_failure);
 }

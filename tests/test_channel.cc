@@ -25,8 +25,12 @@ static void channel_send(channel<intptr_t> c, channel<int> done_chan) {
 void channel_test_task() {
     channel<int> done_chan;
     channel<intptr_t> c{10};
-    taskspawn(std::bind(channel_recv, c, done_chan));
-    taskspawn(std::bind(channel_send, c, done_chan));
+    task::spawn([=] {
+        channel_recv(c, done_chan);
+    });
+    task::spawn([=] {
+        channel_send(c, done_chan);
+    });
     for (int i=0; i<2; ++i) {
         done_chan.recv();
     }
@@ -34,16 +38,19 @@ void channel_test_task() {
 }
 
 BOOST_AUTO_TEST_CASE(channel_test) {
-    procmain p;
-    taskspawn(channel_test_task);
-    p.main();
+    kernel the_kernel;
+    task::spawn(channel_test_task);
 }
 
 void unbuffered_test_task() {
     channel<int> done_chan;
     channel<intptr_t> c;
-    taskspawn(std::bind(channel_recv, c, done_chan));
-    taskspawn(std::bind(channel_send, c, done_chan));
+    task::spawn([=] {
+        channel_recv(c, done_chan);
+    });
+    task::spawn([=] {
+        channel_send(c, done_chan);
+    });
     for (int i=0; i<2; ++i) {
         done_chan.recv();
     }
@@ -51,9 +58,8 @@ void unbuffered_test_task() {
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
-    procmain p;
-    taskspawn(unbuffered_test_task);
-    p.main();
+    kernel the_kernel;
+    task::spawn(unbuffered_test_task);
 }
 
 static void channel_recv_mt(channel<intptr_t> c, channel<int> done_chan) {
@@ -67,19 +73,23 @@ static void channel_recv_mt(channel<intptr_t> c, channel<int> done_chan) {
 void mt_test_task() {
     channel<intptr_t> c;
     channel<int> done_chan;
-    procspawn(std::bind(channel_recv_mt, c, done_chan));
-    procspawn(std::bind(channel_send, c, done_chan));
+    auto recv_thread = task::spawn_thread([=] {
+        channel_recv_mt(c, done_chan);
+    });
+    auto send_thread = task::spawn_thread([=] {
+        channel_send(c, done_chan);
+    });
     for (int i=0; i<2; ++i) {
         done_chan.recv();
     }
-
+    recv_thread.join();
+    send_thread.join();
     BOOST_CHECK(c.empty());
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
-    procmain p;
-    taskspawn(mt_test_task);
-    p.main();
+    kernel the_kernel;
+    task::spawn(mt_test_task);
 }
 
 static void channel_multi_send(channel<intptr_t> c, channel<int> done_chan) {
@@ -101,9 +111,15 @@ void multiple_senders_task() {
     channel<int> done_chan;
     channel<intptr_t> c{4};
     c.send(1234);
-    taskspawn(std::bind(channel_multi_recv, c, done_chan));
-    taskspawn(std::bind(channel_multi_send, c, done_chan));
-    taskspawn(std::bind(channel_multi_send, c, done_chan));
+    task::spawn([=] {
+        channel_multi_recv(c, done_chan);
+    });
+    task::spawn([=] {
+        channel_multi_send(c, done_chan);
+    });
+    task::spawn([=] {
+        channel_multi_send(c, done_chan);
+    });
     for (int i=0; i<3; ++i) {
         done_chan.recv();
     }
@@ -111,9 +127,8 @@ void multiple_senders_task() {
 }
 
 BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
-    procmain p;
-    taskspawn(multiple_senders_task);
-    p.main();
+    kernel the_kernel;
+    task::spawn(multiple_senders_task);
 }
 
 static void delayed_channel_send(channel<int> c) {
@@ -124,7 +139,9 @@ static void delayed_channel_send(channel<int> c) {
 static void delayed_channel(address addr) {
     channel<int> c;
     // spawn the send in another thread before blocking on recv
-    procspawn(std::bind(delayed_channel_send, c));
+    auto channel_send_thread = task::spawn_thread([=] {
+        delayed_channel_send(c);
+    });
     int a = c.recv();
     (void)a;
 
@@ -138,6 +155,7 @@ static void delayed_channel(address addr) {
     } else {
         throw errno_error();
     }
+    channel_send_thread.join();
 }
 
 static void wait_on_io() {
@@ -148,7 +166,9 @@ static void wait_on_io() {
     s.getsockname(addr);
     s.listen();
 
-    taskspawn(std::bind(delayed_channel, addr));
+    task::spawn([=] {
+        delayed_channel(addr);
+    });
     fdwait(s.fd, 'r');
     // yield here, otherwise fdwait in delayed_channel
     // could get the close event on our listening socket
@@ -156,9 +176,8 @@ static void wait_on_io() {
 }
 
 BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
-    procmain p;
-    taskspawn(wait_on_io);
-    p.main();
+    kernel the_kernel;
+    task::spawn(wait_on_io);
 }
 
 static void channel_closer_task(channel<int> c, int &closed) {
@@ -177,16 +196,24 @@ static void channel_recv_close(channel<int> c, int &closed) {
 
 void close_test_task(int &closed) {
     channel<int> c;
-    taskspawn(std::bind(channel_recv_close, c, std::ref(closed)));
-    taskspawn(std::bind(channel_recv_close, c, std::ref(closed)));
-    taskspawn(std::bind(channel_closer_task, c, std::ref(closed)));
+    task::spawn([=, &closed] {
+        channel_recv_close(c, closed);
+    });
+    task::spawn([=, &closed] {
+        channel_recv_close(c, closed);
+    });
+    task::spawn([=, &closed] {
+        channel_closer_task(c, closed);
+    });
 }
 
 BOOST_AUTO_TEST_CASE(channel_close_test) {
-    procmain p;
+    kernel the_kernel;
     int closed=0;
-    taskspawn(std::bind(close_test_task, std::ref(closed)));
-    p.main();
+    task::spawn([&] {
+        close_test_task(closed);
+    });
+    kernel::wait_for_tasks();
     BOOST_CHECK_EQUAL(closed, 3);
 }
 

@@ -1,4 +1,3 @@
-#include "kernel_private.hh"
 #include "thread_context.hh"
 #include <sys/syscall.h>
 
@@ -9,8 +8,6 @@ bool glog_inited;
 namespace {
     std::once_flag boot_flag;
 }
-
-namespace kernel {
 
 static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
@@ -44,38 +41,45 @@ static void kernel_boot() {
     netinit();
 }
 
-time_point now() {
+kernel::time_point kernel::now() {
     return this_ctx->scheduler._now;
 }
 
-ptr<task::impl> current_task() {
-    return this_ctx->scheduler._current_task;
-}
-
-bool is_main_thread() {
+bool kernel::is_main_thread() {
     // TODO: could cache this in thread_context
     return getpid() == syscall(SYS_gettid);
 }
 
-size_t cpu_count() {
+size_t kernel::cpu_count() {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-void boot() {
-    std::call_once(boot_flag, kernel_boot);
-}
-
-void shutdown() {
+void kernel::shutdown() {
     this_ctx->cancel_all();
 }
 
-bool is_computer_on() { return true; }
+int32_t kernel::is_computer_on() { return 1; }
 
-bool is_computer_on_fire() {
+double kernel::is_computer_on_fire() {
     // TODO: implement
-    return false;
+    return 7.0;
 }
 
-} // kernel
+void kernel::boot() {
+    std::call_once(boot_flag, kernel_boot);
+}
+
+void kernel::wait_for_tasks() {
+    this_ctx->scheduler.wait_for_all(1);
+}
+
+kernel::kernel() {
+    boot();
+}
+
+kernel::~kernel() {
+    wait_for_tasks();
+}
+
 } // ten
 

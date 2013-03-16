@@ -1,12 +1,12 @@
 #include "ten/task/qutex.hh"
-#include "kernel_private.hh"
+#include "scheduler.hh"
 
 namespace ten {
 
 void qutex::safe_lock() noexcept {
     // NOTE: copy-pasted logic from lock() but calls safe_swap which doesn't throw
     // this is useful if you need to lock inside a destructor
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
@@ -33,7 +33,7 @@ void qutex::safe_lock() noexcept {
 }
 
 void qutex::lock() {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     DCHECK(!t->cancelable()) << "BUG: cannot cancel a lock";
     DCHECK(t) << "BUG: qutex::lock called outside of task";
     {
@@ -67,7 +67,7 @@ void qutex::lock() {
 }
 
 bool qutex::try_lock() {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     DCHECK(t) << "BUG: qutex::try_lock called outside of task";
     std::unique_lock<std::timed_mutex> lk{_m, std::try_to_lock};
     if (lk.owns_lock()) {
@@ -80,7 +80,7 @@ bool qutex::try_lock() {
 }
 
 inline void qutex::unlock_or_giveup(std::lock_guard<std::timed_mutex> &lk) {
-    const auto current_task = kernel::current_task();
+    const auto current_task = scheduler::current_task();
     DVLOG(5) << "QUTEX[" << this << "] unlock: " << current_task;
     if (current_task == _owner) {
         if (!_waiting.empty()) {

@@ -27,18 +27,18 @@ std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
 
 namespace this_task {
 uint64_t get_id() {
-    DCHECK(kernel::current_task());
-    return kernel::current_task()->get_id();
+    DCHECK(scheduler::current_task());
+    return scheduler::current_task()->get_id();
 }
 
 void yield() {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     t->yield(); 
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
     task::impl::cancellation_point cancellable;
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{
         this_ctx->scheduler.arm_alarm(t, sleep_time)};
     t->swap();
@@ -191,12 +191,12 @@ void task::impl::ready_for_io() {
 }
 
 task::impl::cancellation_point::cancellation_point() {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     ++t->_cancel_points;
 }
 
 task::impl::cancellation_point::~cancellation_point() {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     --t->_cancel_points;
 }
 

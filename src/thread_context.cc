@@ -1,5 +1,4 @@
 #include "thread_context.hh"
-#include "kernel_private.hh"
 
 namespace ten {
 

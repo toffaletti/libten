@@ -1,34 +1,42 @@
 #ifndef TEN_KERNEL_HH
 #define TEN_KERNEL_HH
 
+#include "ten/ptr.hh"
 #include <chrono>
 
 namespace ten {
-namespace kernel {
 
-using clock = std::chrono::steady_clock;
-using time_point = std::chrono::time_point<clock>;
+class kernel {
+public:
+    using clock = std::chrono::steady_clock;
+    using time_point = std::chrono::time_point<clock>;
 
-//! return cached time from event loop, not precise
-time_point now();
+    //! return cached time from event loop, not precise
+    static time_point now();
 
-//! is this the main thread?
-bool is_main_thread();
+    //! is this the main thread?
+    static bool is_main_thread();
 
-//! number of available cpus
-size_t cpu_count();
+    //! number of available cpus
+    static size_t cpu_count();
 
-//! perform setup
-void boot();
+    //! perform setup
+    static void boot();
 
-//! perform clean shutdown
-void shutdown();
+    //! wait for all tasks
+    static void wait_for_tasks();
 
-//! this is only a tribute
-bool is_computer_on();
-bool is_computer_on_fire();
+    //! perform clean shutdown
+    static void shutdown();
 
-} // kernel
+    //! this is only a tribute
+    static int32_t is_computer_on();
+    static double is_computer_on_fire();
+
+    kernel();
+    ~kernel(); 
+};
+
 } // ten
 
 #endif

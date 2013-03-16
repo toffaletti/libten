@@ -2,7 +2,6 @@
 #define TEN_THREAD_CONTEXT_HH
 #include "ten/thread_local.hh"
 #include "scheduler.hh"
-#include "kernel_private.hh"
 #include <ares.h>
 
 namespace ten {

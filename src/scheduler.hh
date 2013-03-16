@@ -4,7 +4,6 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
-#include "kernel_private.hh"
 #include "alarm.hh"
 #include "io.hh"
 
@@ -15,8 +14,7 @@ namespace ten {
 // resources like dns resolving threads, etc.
 
 class scheduler {
-    friend kernel::time_point kernel::now();
-    friend ptr<task::impl> kernel::current_task();
+    friend class kernel;
 public:
     typedef ten::alarm_clock<ptr<task::impl>, kernel::clock> alarm_clock;
 
@@ -103,6 +101,8 @@ public:
     }
 
     void dump() const;
+
+    static ptr<task::impl> current_task();
 private:
     friend class task;
     friend void this_task::yield();

@@ -17,12 +17,12 @@ void procshutdown() {
 }
 
 procmain::procmain() {
-    kernel::current_task(); // causes kernel::boot to be called
+    scheduler::current_task(); // causes kernel::boot to be called
 }
 
 int procmain::main(int argc, char *argv[]) {
     DVLOG(5) << "thread id: " << std::this_thread::get_id();
-    this_ctx->scheduler.wait_for_all(1);
+    kernel::wait_for_tasks();
     DVLOG(5) << "thread done: " << std::this_thread::get_id();
     return EXIT_SUCCESS;
 }

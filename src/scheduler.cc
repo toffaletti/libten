@@ -238,5 +238,9 @@ void scheduler::dump() const {
     FlushLogFiles(INFO);
 }
 
+ptr<task::impl> scheduler::current_task() {
+    return this_ctx->scheduler._current_task;
+}
+
 } // ten
 

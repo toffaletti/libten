@@ -30,7 +30,7 @@ bool taskcancel(uint64_t id) {
 
 const char *taskname(const char *fmt, ...)
 {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);
@@ -42,7 +42,7 @@ const char *taskname(const char *fmt, ...)
 
 const char *taskstate(const char *fmt, ...)
 {
-    const auto t = kernel::current_task();
+    const auto t = scheduler::current_task();
     if (fmt && strlen(fmt)) {
         va_list arg;
         va_start(arg, fmt);

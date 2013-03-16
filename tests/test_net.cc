@@ -23,9 +23,8 @@ static void dial_google() {
 
 
 BOOST_AUTO_TEST_CASE(task_socket_dial) {
-    procmain p;
-    taskspawn(dial_google);
-    p.main();
+    kernel the_kernel;
+    task::spawn(dial_google);
 }
 
 static void http_callback(http_exchange &ex) {
@@ -42,21 +41,20 @@ static void start_http_server(address &addr) {
 
 static void start_http_test() {
     address http_addr("0.0.0.0");
-    uint64_t server_tid = taskspawn(
-            std::bind(start_http_server, std::ref(http_addr))
-            ); 
-    taskyield(); // allow server to bind and listen
+    task server_task = task::spawn([&] {
+        start_http_server(http_addr);
+    }); 
+    this_task::yield(); // allow server to bind and listen
     http_client c{http_addr.str()};
     http_response resp = c.get("/");
     BOOST_CHECK_EQUAL("Hello World", resp.body);
     resp = c.get("/foobar");
     BOOST_CHECK_EQUAL("Hello World", resp.body);
-    taskcancel(server_tid);
+    server_task.cancel();
 }
 
 BOOST_AUTO_TEST_CASE(http_server_client_get) {
-    procmain p;
-    taskspawn(start_http_test);
-    p.main();
+    kernel the_kernel;
+    task::spawn(start_http_test);
 }
 

@@ -3,6 +3,7 @@
 #include <thread>
 #include "ten/semaphore.hh"
 #include "ten/synchronized.hh"
+#include "ten/thread_guard.hh"
 #include "ten/task/rendez.hh"
 
 using namespace ten;
@@ -29,9 +30,12 @@ bool is_done(int &x) { return x == 20*1000; }
 void qutex_task_spawn() {
 
     std::shared_ptr<state> st = std::make_shared<state>();
+    std::vector<thread_guard> threads;
     for (int i=0; i<20; ++i) {
-        procspawn(std::bind(qlocker, st));
-        taskyield();
+        threads.emplace_back(task::spawn_thread([=] {
+            qlocker(st);
+        }));
+        this_task::yield();
     }
     std::unique_lock<qutex> lk{st->q};
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
@@ -39,9 +43,8 @@ void qutex_task_spawn() {
 }
 
 BOOST_AUTO_TEST_CASE(qutex_test) {
-    procmain p;
-    taskspawn(qutex_task_spawn);
-    p.main();
+    kernel the_kernel;
+    task::spawn(qutex_task_spawn);
 }
 
 BOOST_AUTO_TEST_CASE(sync_test) {
