@@ -43,10 +43,7 @@ struct http_exchange {
         if (log_func) {
             log_func(*this);
         }
-        if (!resp_sent) {
-            // ensure a response is sent
-            send_response();
-        }
+        send_response(); // ensure a response is sent
         if (resp.close_after()) {
             sock.close();
         }
@@ -149,14 +146,27 @@ public:
 
 private:
     struct route {
+        optional<std::string> method;
         std::string pattern;
-        callback_type callback;
         int fnmatch_flags;
+        callback_type callback;
 
-        route(const std::string &pattern_,
-                const callback_type &callback_,
-                int fnmatch_flags_=0)
-            : pattern(pattern_), callback(callback_), fnmatch_flags(fnmatch_flags_) {}
+        route(optional<std::string> method_,
+              std::string pattern_,
+              const callback_type &callback_,
+              int fnmatch_flags_=0)
+            : method(std::move(method_)), pattern(std::move(pattern_)), fnmatch_flags(fnmatch_flags_), callback(callback_) {}
+
+        route(const char *method_,
+              std::string pattern_,
+              const callback_type &callback_,
+              int fnmatch_flags_=0)
+            : route(optional<std::string>(method_), std::move(pattern_), callback_, fnmatch_flags_) {}
+
+        route(std::string pattern_,
+              const callback_type &callback_,
+              int fnmatch_flags_=0)
+            : route(nullopt, std::move(pattern_), callback_, fnmatch_flags_) {}
     };
 
     std::vector<route> _routes;
@@ -169,11 +179,9 @@ public:
     }
 
     //! add a callback for a uri with an fnmatch pattern
-    void add_route(const std::string &pattern,
-            const callback_type &callback,
-            int fnmatch_flags = 0)
-    {
-        _routes.emplace_back(pattern, callback, fnmatch_flags);
+    template <typename... Args>
+    void add_route(Args&&... args) {
+        _routes.emplace_back(std::forward<Args>(args)...);
     }
 
     //! set logging function, called after every exchange
@@ -244,28 +252,36 @@ done:
         }
     }
 
-    void handle_exchange(http_exchange &ex) {
+    void handle_exchange(http_exchange &ex) const {
         const auto path = ex.req.path();
         DVLOG(5) << "path: " << path;
         // not super efficient, but good enough
         // note: empty string pattern matches everything
-        for (const auto &i : _routes) {
-            DVLOG(5) << "matching pattern: " << i.pattern;
-            if (i.pattern.empty() || fnmatch(i.pattern.c_str(), path.c_str(), i.fnmatch_flags) == 0) {
+        bool bad_method = false;
+        for (const auto &r : _routes) {
+            DVLOG(5) << "matching pattern: " << r.pattern << (r.method ? " (" + *r.method + ")" : "");
+            if (r.pattern.empty() || fnmatch(r.pattern.c_str(), path.c_str(), r.fnmatch_flags) == 0) {
+                if (r.method && *r.method != ex.req.method) {
+                    bad_method = true;
+                    continue;
+                }
                 try {
-                    i.callback(std::ref(ex));
+                    r.callback(std::ref(ex));
                 } catch (std::exception &e) {
-                    DVLOG(2) << "unhandled exception in route [" << i.pattern << "]: " << e.what();
-                    ex.resp = http_response(500, http_headers{hs::Connection, hs::close});
+                    DVLOG(2) << "unhandled exception in " << ex.req.method << " of route [" << r.pattern << "]: " << e.what();
+                    ex.resp = { 500, { hs::Connection, hs::close } };
                     std::string msg = e.what();
                     if (!msg.empty() && *msg.rbegin() != '\n')
                         msg += '\n';
                     ex.resp.set_body(msg, hs::text_plain);
-                    ex.send_response();
                 }
+                ex.send_response();
                 break;
             }
         }
+        // if at least one pattern would have matched except method was wrong, avoid nondescript 404
+        if (bad_method)
+            ex.resp = { 405 };
     }
 };
 
