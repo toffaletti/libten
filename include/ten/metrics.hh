@@ -3,6 +3,8 @@
 
 #include "ten/thread_local.hh"
 #include "ten/synchronized.hh"
+#include "ten/task.hh"
+#include "ten/optional.hh"
 #include "ten/logging.hh"
 #include "ten/json.hh"
 #include <boost/utility.hpp>
@@ -33,7 +35,7 @@ inline void path_shift(std::stringstream &ss, Arg&& arg, Args&& ...args) {
 } // namespace impl
 
 inline std::string metric_path(const std::string &arg) { return arg; }
-inline std::string metric_path(std::string &&arg)      { return arg; }
+inline std::string metric_path(std::string &&arg)      { return std::move(arg); }
 
 template <typename Arg, typename ...Args>
 inline std::string metric_path(Arg&& arg, Args&& ...args) {
@@ -68,12 +70,18 @@ public:
         return _count;
     }
 
-    void incr(value_type n = 1) {
-        _count+=n;
-    }
-
     void merge(const counter &other) {
         _count += other._count;
+    }
+
+    void deduct(const counter &other) {
+        _count -= other._count;
+    }
+
+    // counter-specific:
+
+    void incr(value_type n=1) {
+        _count += n;
     }
 };
 
@@ -94,25 +102,28 @@ public:
         return ten::json::array({value(), _incr, _decr});
     }
 
+    value_type value() const {
+        return _incr - _decr;
+    }
+
     void merge(const gauge &other) {
         _incr += other._incr;
         _decr += other._decr;
     }
 
+    void deduct(const gauge &other) {
+        _incr -= other._incr;
+        _decr -= other._decr;
+    }
+
+    // gauge-specific:
+
     void incr(value_type n=1) {
-        _incr+=n;
+        _incr += n;
     }
 
     void decr(value_type n=1) {
-        _decr+=n;
-    }
-
-    value_type value() const {
-        return _incr - _decr;
-    }
-
-    std::pair<value_type, value_type> value_pair() const {
-        return std::make_pair(_incr, _decr);
+        _decr += n;
     }
 
     double ratio() const {
@@ -142,12 +153,18 @@ public:
         return std::chrono::duration_cast<value_type>(_elapsed);
     }
 
-    void update(clock_type::duration elapsed) {
-        _elapsed += elapsed;
-    }
-
     void merge(const timer &other) {
         _elapsed += other._elapsed;
+    }
+
+    void deduct(const timer &other) {
+        _elapsed -= other._elapsed;
+    }
+
+    // timer-specific:
+
+    void update(clock_type::duration elapsed) {
+        _elapsed += elapsed;
     }
 };
 
@@ -162,7 +179,18 @@ using any_metric = boost::variant<counter, gauge, timer>;
 
 // derive rather than alias to trigger ADL
 
-struct group_map : std::unordered_map<std::string, any_metric> {};
+struct group_map;
+void merge_to(group_map &to, const group_map &from);
+void deduct_from(group_map &to, const group_map &from);
+
+struct group_map : std::unordered_map<std::string, any_metric> {
+    // and while we're here, let's throw in some operators
+    group_map & operator += (const group_map &b) { merge_to(*this, b);    return *this; }
+    group_map & operator -= (const group_map &b) { deduct_from(*this, b); return *this; }
+
+    friend group_map operator + (group_map a, const group_map &b) { merge_to(a, b);    return a; }
+    friend group_map operator - (group_map a, const group_map &b) { deduct_from(a, b); return a; }
+};
 
 // group_map accessors:
 //   get() allows update, adds keys as needed
@@ -194,6 +222,19 @@ template <typename M, typename ...Args>
             ? typename M::value_type()
             : boost::get<M>(i->second).value();
     }
+
+// how to make json from any_metric
+
+struct json_visitor : boost::static_visitor<json> {
+    template <typename Met>
+        json operator()(const Met &m) const {
+            return m.to_json();
+        }
+};
+
+inline json to_json(const any_metric &met) {
+    return boost::apply_visitor(json_visitor(), met);
+}
 
 // group - locked, automatically aggregated
 // don't put anything in here you don't want summed
@@ -241,41 +282,8 @@ public:
         }
 };
 
-// how to make json from all the metrics in a group
+// merge when one or the other needs a lock
 
-struct json_visitor : boost::static_visitor<json> {
-    template <typename Met>
-        json operator()(const Met &m) const {
-            return m.to_json();
-        }
-};
-
-// merge
-
-struct merge_visitor : boost::static_visitor<> {
-    any_metric &lhs;
-
-    merge_visitor(any_metric &lhs_) : lhs(lhs_) {}
-
-    template <typename M>
-        void operator()(const M &rhs) const {
-            boost::get<M>(lhs).merge(rhs);
-        }
-};
-
-// base case, no locks
-inline void merge_to(group_map &to, const group_map &from) {
-    for (const auto &fkv : from) {
-        // try to insert into merged map
-        const auto i = to.insert(fkv);
-        if (!i.second) {
-            // merge with existing
-            boost::apply_visitor(merge_visitor{i.first->second}, fkv.second);
-        }
-    }
-}
-
-// when one or the other needs a lock
 template <class T, class F>
 inline void merge_to(T &to, const F &from) {
     maybe_sync(from, [&](const group_map &m_from) mutable {
@@ -349,6 +357,7 @@ public:
 inline group::group()   { global.push_back(this); }
 inline group::~group()  { global.remove(this); }
 
+//----------------------------------------------------------------
 // scoped timer convenience
 
 class time_op {
@@ -394,6 +403,33 @@ public:
     }
 
     timer::value_type elapsed() const { return _elapsed; }
+};
+
+//----------------------------------------------------------------
+// time sequence collection
+
+class intervals {
+    using interval_type = std::chrono::seconds;
+    using value_type = std::pair<time_t, group_map>;
+    using queue_type = std::deque<value_type>;
+
+    const interval_type _interval;
+    const size_t _depth;
+    synchronized<queue_type> _queue;
+    task _task;
+
+    void _collector_main();
+
+public:
+    intervals(interval_type interval, size_t depth);
+    ~intervals();
+
+    interval_type interval() const { return _interval; }
+    size_t        depth()    const { return _depth; }
+    interval_type duration() const { return _interval * _depth; }
+
+    using result_type = std::pair<interval_type, group_map>;
+    optional<result_type> last(interval_type span) const;
 };
 
 } // end namespace metrics
