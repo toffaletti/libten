@@ -6,9 +6,6 @@
 // XXX: old task api has been moved here to be deprecated
 // all of these apis will eventially be replaced
 
-//! user must define
-extern const size_t default_stacksize;
-
 namespace ten {
 
 extern void netinit();
@@ -20,7 +17,7 @@ using proc_time_t = kernel::time_point;
 proc_time_t procnow();
 
 //! spawn a new task in the current thread
-uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
+uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize=0/*deprecated*/);
 //! current task id
 uint64_t taskid();
 //! allow other tasks to run
@@ -33,7 +30,7 @@ const char *taskstate(const char *fmt=nullptr, ...);
 const char * taskname(const char *fmt=nullptr, ...);
 
 //! spawn a new thread with a task scheduler
-void procspawn(const std::function<void ()> &f, size_t stacksize=default_stacksize);
+void procspawn(const std::function<void ()> &f, size_t stacksize=0/*deprecated*/);
 //! cancel all non-system tasks and exit procmain
 void procshutdown();
 

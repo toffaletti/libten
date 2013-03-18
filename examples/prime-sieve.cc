@@ -1,6 +1,5 @@
 #include "ten/channel.hh"
 #include <iostream>
-#include "ten/task/main.icc"
 
 using namespace ten;
 
@@ -21,21 +20,22 @@ void filter(channel<int> in, channel<int> out, int prime) {
     }
 }
 
-int taskmain(int argc, char *argv[]) {
-    channel<int> ch;
-    task::spawn([=] {
-        generate(ch);
-    });
-    for (int i=0; i<100; ++i) {
-        int prime = ch.recv();
-        std::cout << prime << "\n";
-        channel<int> out;
+int main() {
+    task::main([] {
+        channel<int> ch;
         task::spawn([=] {
-            filter(ch, out, prime);
+            generate(ch);
         });
-        ch = out;
-    }
-    kernel::shutdown();
-    return EXIT_SUCCESS;
+        for (int i=0; i<100; ++i) {
+            int prime = ch.recv();
+            std::cout << prime << "\n";
+            channel<int> out;
+            task::spawn([=] {
+                filter(ch, out, prime);
+            });
+            ch = out;
+        }
+        kernel::shutdown();
+    });
 }
 

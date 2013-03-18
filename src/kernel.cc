@@ -11,7 +11,6 @@ namespace {
 
 static void kernel_boot() {
     CHECK(is_main_thread()) << "must call in main thread before anything else";
-    task::set_default_stacksize(default_stacksize);
 
     InitGoogleLogging(program_invocation_short_name);
     glog_inited = true;

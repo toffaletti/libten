@@ -5,8 +5,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void ioproc_sleeper() {
     ioproc io;
     int ret = iocall(io, std::bind(usleep, 100));
@@ -14,12 +12,13 @@ static void ioproc_sleeper() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
-    kernel the_kernel;
-    task::spawn(ioproc_sleeper);
+    task::main([] {
+        task::spawn(ioproc_sleeper);
+    });
 }
 
 static void test_pool() {
-    ioproc io{default_stacksize, 4};
+    ioproc io{0, 4};
     iochannel reply_chan;
 
     for (int i=0; i<4; ++i) {
@@ -34,8 +33,9 @@ static void test_pool() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_thread_pool) {
-    kernel the_kernel;
-    task::spawn(test_pool);
+    task::main([] {
+        task::spawn(test_pool);
+    });
 }
 
 static void fail() {
@@ -55,6 +55,7 @@ static void ioproc_failure() {
 }
 
 BOOST_AUTO_TEST_CASE(ioproc_error_test) {
-    kernel the_kernel;
-    task::spawn(ioproc_failure);
+    task::main([] {
+        task::spawn(ioproc_failure);
+    });
 }

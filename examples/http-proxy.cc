@@ -6,7 +6,6 @@
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
 #include <boost/lexical_cast.hpp>
-#include "ten/task/main.icc"
 
 using namespace ten;
 
@@ -174,23 +173,24 @@ response_send_error:
     return;
 }
 
-int taskmain(int argc, char *argv[]) {
-    netsock s{AF_INET, SOCK_STREAM};
-    s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
-    address addr{"0.0.0.0", 3080};
-    s.bind(addr);
-    s.getsockname(addr);
-    LOG(INFO) << "listening on: " << addr;
-    s.listen();
+int main() {
+    task::main([] {
+        netsock s{AF_INET, SOCK_STREAM};
+        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
+        address addr{"0.0.0.0", 3080};
+        s.bind(addr);
+        s.getsockname(addr);
+        LOG(INFO) << "listening on: " << addr;
+        s.listen();
 
-    for (;;) {
-        address client_addr;
-        int sock;
-        while ((sock = s.accept(client_addr, 0)) > 0) {
-            task::spawn([=] {
-                proxy_task(sock);
-            });
+        for (;;) {
+            address client_addr;
+            int sock;
+            while ((sock = s.accept(client_addr, 0)) > 0) {
+                task::spawn([=] {
+                    proxy_task(sock);
+                });
+            }
         }
-    }
-    return EXIT_SUCCESS;
+    });
 }

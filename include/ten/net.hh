@@ -182,7 +182,7 @@ protected:
     optional_timeout _recv_timeout_ms;
 public:
     netsock_server(const std::string &protocol_name_,
-            size_t stacksize_=default_stacksize,
+            size_t stacksize_=0/*deprecated*/,
             optional_timeout recv_timeout_ms=nullopt)
         : _protocol_name(protocol_name_),
         _stacksize(stacksize_),

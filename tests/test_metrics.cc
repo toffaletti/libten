@@ -8,7 +8,6 @@
 #include "ten/ewma.hh"
 
 using namespace ten;
-const size_t default_stacksize=64*1024;
 
 void my_thread() {
 #if 1
@@ -26,7 +25,7 @@ void my_thread() {
 static const int nthreads = 100;
 
 BOOST_AUTO_TEST_CASE(ten_init) {
-    procmain p; // init logging etc
+    kernel::boot(); // init logging etc
 }
 
 BOOST_AUTO_TEST_CASE(thread_local_test) {

@@ -5,8 +5,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void connecter(const address &addr, channel<int> ch) {
     try {
         netsock s(AF_INET, SOCK_STREAM);
@@ -50,34 +48,35 @@ static void connecter_spawner(const address &addr, const channel<int> &ch) {
 }
 
 int main(int argc, char *argv[]) {
+    task::main([] {
+        channel<int> ch(1000);
+        address addr{AF_INET};
+        netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
+        s.bind(addr);
+        s.listen();
+        s.getsockname(addr);
+        task listen_task = task::spawn([&] {
+            listener(s);
+        });
+        this_task::yield(); // let listener get setup
+        std::thread connecter_thread = task::spawn_thread([=] {
+            connecter_spawner(addr, ch);
+        });
 
-    channel<int> ch(1000);
-    address addr{AF_INET};
-    netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);
-    s.bind(addr);
-    s.listen();
-    s.getsockname(addr);
-    task listen_task = task::spawn([&] {
-        listener(s);
-    });
-    this_task::yield(); // let listener get setup
-    std::thread connecter_thread = task::spawn_thread([=] {
-        connecter_spawner(addr, ch);
-    });
-
-    std::unordered_map<int, unsigned int> results;
-    for (unsigned i=0; i<1000; ++i) {
-        int result = ch.recv();
-        results[result] += 1;
-    }
-    for (auto i=results.begin(); i!=results.end(); ++i) {
-        if (i->first == 0) {
-            std::cout << "Success: " << i->second << "\n";
-        } else {
-            std::cout << strerror(i->first) << ": " << i->second << "\n";
+        std::unordered_map<int, unsigned int> results;
+        for (unsigned i=0; i<1000; ++i) {
+            int result = ch.recv();
+            results[result] += 1;
         }
-    }
-    std::cout << std::endl;
-    listen_task.cancel();
-    connecter_thread.join();
+        for (auto i=results.begin(); i!=results.end(); ++i) {
+            if (i->first == 0) {
+                std::cout << "Success: " << i->second << "\n";
+            } else {
+                std::cout << strerror(i->first) << ": " << i->second << "\n";
+            }
+        }
+        std::cout << std::endl;
+        listen_task.cancel();
+        connecter_thread.join();
+    });
 }

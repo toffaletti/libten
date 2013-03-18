@@ -1,5 +1,4 @@
 #include "ten/task.hh"
-#include "ten/task/main.icc"
 
 using namespace ten;
 
@@ -14,7 +13,8 @@ static void stack_overflow() {
     printf("%s %c\n", buf, crash);
 }
 
-int taskmain(int argc, char *argv[]) {
-    task::spawn(stack_overflow);
-    return EXIT_SUCCESS;
+int main() {
+    task::main([] {
+        task::spawn(stack_overflow);
+    });
 }

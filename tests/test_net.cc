@@ -6,8 +6,6 @@
 
 using namespace ten;
 
-const size_t default_stacksize=256*1024;
-
 static void dial_google() {
     socket_fd s{AF_INET, SOCK_STREAM};
     bool ok = false;
@@ -23,8 +21,9 @@ static void dial_google() {
 
 
 BOOST_AUTO_TEST_CASE(task_socket_dial) {
-    kernel the_kernel;
-    task::spawn(dial_google);
+    task::main([] {
+        task::spawn(dial_google);
+    });
 }
 
 static void http_callback(http_exchange &ex) {
@@ -54,7 +53,8 @@ static void start_http_test() {
 }
 
 BOOST_AUTO_TEST_CASE(http_server_client_get) {
-    kernel the_kernel;
-    task::spawn(start_http_test);
+    task::main([] {
+        task::spawn(start_http_test);
+    });
 }
 

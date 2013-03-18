@@ -1,6 +1,5 @@
 #include "ten/task.hh"
 #include "ten/error.hh"
-#include "ten/task/main.icc"
 
 using namespace ten;
 
@@ -12,7 +11,8 @@ static void unnamed() {
     go_crazy();
 }
 
-int taskmain(int argc, char *argv[]) {
-    task::spawn(unnamed);
-    return EXIT_SUCCESS;
+int main() {
+    task::main([] {
+        task::spawn(unnamed);
+    });
 }

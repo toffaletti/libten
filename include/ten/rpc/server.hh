@@ -21,7 +21,7 @@ public:
     typedef std::function<msgpack::object (msgpack::object & , msgpack::zone *)> callback_type;
     typedef std::function<void (msgpack::object & , msgpack::zone *)> notify_func;
 
-    rpc_server(size_t stacksize_=default_stacksize)
+    rpc_server(size_t stacksize_=0/*deprecated*/)
         : netsock_server("msgpack-rpc", stacksize_)
     {
     }

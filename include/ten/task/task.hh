@@ -39,11 +39,30 @@ template <class Rep, class Period>
 class task {
 public:
     class impl;
+
+    //! call from main() to setup task system and do boilerplate exception handling
+    template <class Func>
+        static void main(Func &&f) {
+            kernel the_kernel;
+            task::entry(std::forward<Func>(f));
+        }
+
 private:
     std::shared_ptr<impl> _impl;
 
     //! task entry boilerplate exception handling
-    static void entry(const std::function<void ()> &f);
+    template <class Func>
+        static void entry(Func &&f) {
+            try {
+                f();
+            } catch (ten::task_interrupted &e) {
+                DVLOG(5) << "task " << ten::this_task::get_id() << " interrupted ";
+            } catch (ten::backtrace_exception &e) {
+                LOG(ERROR) << "unhandled error: " << e.what() << "\n" << e.backtrace_str();
+            } catch (std::exception &e) {
+                LOG(ERROR) << "unhandled error: " << e.what();
+            }
+        }
 
     explicit task(const std::function<void ()> &f);
 public:

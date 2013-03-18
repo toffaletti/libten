@@ -4,7 +4,6 @@
 #include <sstream>
 #include <iostream>
 #include <list>
-#include "ten/task/main.icc"
 
 using namespace ten;
 
@@ -76,9 +75,10 @@ void listen_task() {
     }
 }
 
-int taskmain(int argc, char *argv[]) {
-    task::spawn(broadcast_task);
-    task::spawn(listen_task);
-    return EXIT_SUCCESS;
+int main() {
+    task::main([] {
+        task::spawn(broadcast_task);
+        task::spawn(listen_task);
+    });
 }
 

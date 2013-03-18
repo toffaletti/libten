@@ -5,7 +5,6 @@
 #include "ten/net.hh"
 #include "ten/channel.hh"
 #include "ten/http/server.hh"
-#include "ten/task/main.icc"
 
 #include <boost/lexical_cast.hpp>
 
@@ -71,19 +70,21 @@ static void start_http_server(const std::shared_ptr<state> &st) {
     st->http->serve(addr, port, conf.http_threads);
 }
 
-int taskmain(int argc, char *argv[]) {
-    std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
-    namespace po = boost::program_options;
-    app->opts.configuration.add_options()
-        ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
-         "http listen address:port")
-        ("http-threads", po::value<unsigned int>(&conf.http_threads)->default_value(1), "http threads")
-    ;
-    app->parse_args(argc, argv);
+int main(int argc, char *argv[]) {
+    task::main([&] {
+        std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
+        namespace po = boost::program_options;
+        app->opts.configuration.add_options()
+            ("http,H", po::value<std::string>(&conf.http_address)->default_value("0.0.0.0:3080"),
+            "http listen address:port")
+            ("http-threads", po::value<unsigned int>(&conf.http_threads)->default_value(1), "http threads")
+        ;
+        app->parse_args(argc, argv);
 
-    std::shared_ptr<state> st = std::make_shared<state>(app);
-    task::spawn([=] {
-        start_http_server(st);
+        std::shared_ptr<state> st = std::make_shared<state>(app);
+        task::spawn([=] {
+            start_http_server(st);
+        });
+        app->run();
     });
-    return app->run();
 }

@@ -58,7 +58,7 @@ struct ioproc {
     iochannel ch;
     std::vector<thread_guard> threads;
 
-    ioproc(size_t stacksize = default_stacksize,
+    ioproc(size_t stacksize = 0/*deprecated*/,
            unsigned nprocs = 1,
            unsigned chanbuf = 0,
            std::function<void(iochannel &)> proctask = ioproctask)

@@ -14,8 +14,6 @@ using std::bind;
 using std::endl;
 using std::cerr;
 
-const size_t default_stacksize=256*1024;
-
 namespace po = boost::program_options;
 
 struct options {
@@ -86,7 +84,7 @@ struct state {
     ioproc io;
 
     state()
-        : io{default_stacksize, conf.threads}
+        : io{0, conf.threads}
     {}
 };
 
@@ -121,29 +119,30 @@ void dorequest(shared_ptr<state> st, unsigned reqn) {
 }
 
 int main(int argc, char *argv[]) {
-    kernel::boot();
-    options opts;
+    task::main([&] {
+        options opts;
 
-    opts.configuration.add_options()
-        ("threads", po::value<unsigned>(&conf.threads)->default_value(1),
-         "number of threads in ioproc pool")
-        ("requests", po::value<unsigned>(&conf.requests)->default_value(10),
-         "number of concurrent requests that need to do work")
-        ("work", po::value<unsigned>(&conf.work)->default_value(3),
-         "number of work items to submit")
-        ("deadline", po::value<unsigned>(&conf.deadline_ms)->default_value(500),
-         "milliseconds for deadline")
-        ("sleep", po::value<unsigned>(&conf.sleep_ms)->default_value(200),
-         "time to sleep while doing work")
-    ;
+        opts.configuration.add_options()
+            ("threads", po::value<unsigned>(&conf.threads)->default_value(1),
+            "number of threads in ioproc pool")
+            ("requests", po::value<unsigned>(&conf.requests)->default_value(10),
+            "number of concurrent requests that need to do work")
+            ("work", po::value<unsigned>(&conf.work)->default_value(3),
+            "number of work items to submit")
+            ("deadline", po::value<unsigned>(&conf.deadline_ms)->default_value(500),
+            "milliseconds for deadline")
+            ("sleep", po::value<unsigned>(&conf.sleep_ms)->default_value(200),
+            "time to sleep while doing work")
+        ;
 
-    parse_args(opts, argc, argv);
+        parse_args(opts, argc, argv);
 
-    shared_ptr<state> st = make_shared<state>();
-    for (unsigned i=0; i<conf.requests; ++i) {
-        task::spawn([=] {
-            dorequest(st, i);
-        });
-    }
+        shared_ptr<state> st = make_shared<state>();
+        for (unsigned i=0; i<conf.requests; ++i) {
+            task::spawn([=] {
+                dorequest(st, i);
+            });
+        }
+    });
 }
 

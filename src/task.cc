@@ -4,7 +4,7 @@
 namespace ten {
 
 namespace {
-static __thread size_t current_stacksize = SIGSTKSZ;
+static __thread size_t current_stacksize = 256*1024;
 static std::atomic<uint64_t> taskidgen(0);
 }
 
@@ -52,18 +52,6 @@ task::task(const std::function<void ()> &f)
     this_ctx->scheduler.attach_task(_impl);
     // add new tasks to front of runqueue
     _impl->ready(true);
-}
-
-void task::entry(const std::function<void ()> &f) {
-    try {
-        f();
-    } catch (task_interrupted &e) {
-        DVLOG(5) << "task " << this_task::get_id() << " interrupted ";
-    } catch (backtrace_exception &e) {
-        LOG(ERROR) << "unhandled error: " << e.what() << "\n" << e.backtrace_str();
-    } catch (std::exception &e) {
-        LOG(ERROR) << "unhandled error: " << e.what();
-    }
 }
 
 uint64_t task::get_id() const {
@@ -202,15 +190,9 @@ task::impl::cancellation_point::~cancellation_point() {
 
 // should be in compat.cc but here because of current_stacksize mess
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
-    size_t ss = current_stacksize;
-    if (ss != stacksize) {
-        current_stacksize = stacksize;
-    }
+    // XXX: stacksize is ignored now
     task t = task::spawn(f);
-    current_stacksize = ss;
     return t.get_id();
 }
-
-
 
 } // end namespace ten

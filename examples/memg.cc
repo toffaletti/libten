@@ -3,7 +3,6 @@
 #include "ten/buffer.hh"
 #include <unordered_map>
 #include <boost/algorithm/string.hpp>
-#include "ten/task/main.icc"
 
 // poor-man's memcached
 // http://www.darkcoding.net/software/in-memory-key-value-store-in-c-go-and-python/
@@ -88,23 +87,24 @@ struct state {
     state &operator =(const state &) = delete;
 };
 
-int taskmain(int argc, char *argv[]) {
-    std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
-    namespace po = boost::program_options;
-    app->opts.configuration.add_options()
-        ("listen,L", po::value<std::string>(&conf.listen_addr)->default_value("127.0.0.1:11211"),
-         "listen address:port")
-        ("single", po::value<bool>(&conf.single)->zero_tokens(), "single connection")
-    ;
-    app->parse_args(argc, argv);
+int main(int argc, char *argv[]) {
+    task::main([&] {
+        std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
+        namespace po = boost::program_options;
+        app->opts.configuration.add_options()
+            ("listen,L", po::value<std::string>(&conf.listen_addr)->default_value("127.0.0.1:11211"),
+            "listen address:port")
+            ("single", po::value<bool>(&conf.single)->zero_tokens(), "single connection")
+        ;
+        app->parse_args(argc, argv);
 
-    std::string addr = conf.listen_addr;
-    uint16_t port = 11211;
-    parse_host_port(addr, port);
-    std::shared_ptr<state> st = std::make_shared<state>(app);
-    task::spawn([=] {
-        st->server->serve(addr, port);
+        std::string addr = conf.listen_addr;
+        uint16_t port = 11211;
+        parse_host_port(addr, port);
+        std::shared_ptr<state> st = std::make_shared<state>(app);
+        task::spawn([=] {
+            st->server->serve(addr, port);
+        });
+        app->run();
     });
-
-    return app->run();
 }

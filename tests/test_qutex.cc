@@ -7,7 +7,6 @@
 #include "ten/task/rendez.hh"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct state {
     qutex q;
@@ -43,8 +42,9 @@ void qutex_task_spawn() {
 }
 
 BOOST_AUTO_TEST_CASE(qutex_test) {
-    kernel the_kernel;
-    task::spawn(qutex_task_spawn);
+    task::main([=] {
+        task::spawn(qutex_task_spawn);
+    });
 }
 
 BOOST_AUTO_TEST_CASE(sync_test) {

@@ -4,7 +4,6 @@
 #include "ten/logging.hh"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct state {
     qutex q;
@@ -47,9 +46,11 @@ void qutex_task_spawn() {
     CHECK(st->x == 20*1000);
 }
 
-int main(int argc, char *argv[]) {
-    for (int i=0; i<10; ++i) {
-        task::spawn(qutex_task_spawn);
-    }
+int main() {
+    task::main([] {
+        for (int i=0; i<10; ++i) {
+            task::spawn(qutex_task_spawn);
+        }
+    });
 }
 

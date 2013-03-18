@@ -3,7 +3,6 @@
 #include "ten/net.hh"
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
-#include "ten/task/main.icc"
 
 #include <iostream>
 
@@ -45,12 +44,12 @@ static void do_get(uri u) {
     std::cout << "Body size: " << resp.body.size() << "\n";
 }
 
-int taskmain(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
-
-    uri u{argv[1]};
-    task::spawn([=] {
-        do_get(u);
+    task::main([&] {
+        uri u{argv[1]};
+        task::spawn([=] {
+            do_get(u);
+        });
     });
-    return EXIT_SUCCESS;
 }

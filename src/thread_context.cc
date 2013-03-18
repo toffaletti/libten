@@ -37,7 +37,6 @@ static void remove_thread(ptr<thread_context> ctx) {
 }
 
 thread_context::thread_context() {
-    task::set_default_stacksize(default_stacksize);
     kernel::boot();
     add_thread(ptr<thread_context>{this});
 }

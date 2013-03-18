@@ -5,7 +5,6 @@
 #include "ten/channel.hh"
 
 using namespace ten;
-const size_t default_stacksize=245*1024;
 
 static void channel_recv(channel<intptr_t> c, channel<int> done_chan) {
     intptr_t d = c.recv();
@@ -38,8 +37,9 @@ void channel_test_task() {
 }
 
 BOOST_AUTO_TEST_CASE(channel_test) {
-    kernel the_kernel;
-    task::spawn(channel_test_task);
+    task::main([] {
+        task::spawn(channel_test_task);
+    });
 }
 
 void unbuffered_test_task() {
@@ -58,8 +58,9 @@ void unbuffered_test_task() {
 }
 
 BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
-    kernel the_kernel;
-    task::spawn(unbuffered_test_task);
+    task::main([] {
+        task::spawn(unbuffered_test_task);
+    });
 }
 
 static void channel_recv_mt(channel<intptr_t> c, channel<int> done_chan) {

@@ -1,6 +1,5 @@
 #include "ten/rpc/server.hh"
 #include "ten/rpc/client.hh"
-#include "ten/task/main.icc"
 
 using namespace ten;
 using namespace msgpack::rpc;
@@ -40,16 +39,17 @@ static void notify_world(std::string s) {
     LOG(INFO) << "NOTIFY WORLD " << s;
 }
 
-int taskmain(int argc, char *argv[]) {
-    auto rpc = std::make_shared<rpc_server>();
-    rpc->add_command("add2", add2);
-    rpc->add_command("add2", add2);
-    rpc->add_command("subtract2", subtract2);
-    rpc->add_command("fail", fail);
-    rpc->add_notify("notify_me", notify_me);
-    rpc->add_notify("notify_world", notify_world);
-    task::spawn(client_task);
-    rpc->serve("0.0.0.0", 5500);
-    return EXIT_SUCCESS;
+int main() {
+    task::main([] {
+        auto rpc = std::make_shared<rpc_server>();
+        rpc->add_command("add2", add2);
+        rpc->add_command("add2", add2);
+        rpc->add_command("subtract2", subtract2);
+        rpc->add_command("fail", fail);
+        rpc->add_notify("notify_me", notify_me);
+        rpc->add_notify("notify_world", notify_world);
+        task::spawn(client_task);
+        rpc->serve("0.0.0.0", 5500);
+    });
 }
 
