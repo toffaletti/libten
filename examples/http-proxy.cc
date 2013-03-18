@@ -6,9 +6,9 @@
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
 #include <boost/lexical_cast.hpp>
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
     for (;;) {
@@ -174,8 +174,7 @@ response_send_error:
     return;
 }
 
-int main(int argc, char *argv[]) {
-    kernel::boot();
+int taskmain(int argc, char *argv[]) {
     netsock s{AF_INET, SOCK_STREAM};
     s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     address addr{"0.0.0.0", 3080};
@@ -193,4 +192,5 @@ int main(int argc, char *argv[]) {
             });
         }
     }
+    return EXIT_SUCCESS;
 }

@@ -12,8 +12,8 @@ target_link_libraries(chat-server ten)
 add_executable(stack-guard EXCLUDE_FROM_ALL stack-guard.cc)
 target_link_libraries(stack-guard ten)
 
-add_executable(backtrace EXCLUDE_FROM_ALL backtrace.cc)
-target_link_libraries(backtrace ten)
+add_executable(stack-trace EXCLUDE_FROM_ALL stack-trace.cc)
+target_link_libraries(stack-trace ten)
 
 add_executable(http-get EXCLUDE_FROM_ALL http-get.cc)
 target_link_libraries(http-get ten)
@@ -53,7 +53,7 @@ add_custom_target(examples DEPENDS
     echo-server
     chat-server
     stack-guard
-    backtrace
+    stack-trace
     http-get
     http-proxy
     http-server

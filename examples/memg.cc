@@ -3,12 +3,12 @@
 #include "ten/buffer.hh"
 #include <unordered_map>
 #include <boost/algorithm/string.hpp>
+#include "ten/task/main.icc"
 
 // poor-man's memcached
 // http://www.darkcoding.net/software/in-memory-key-value-store-in-c-go-and-python/
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct memg_config : app_config {
     std::string listen_addr;
@@ -19,8 +19,8 @@ static memg_config conf;
 
 class memg_server : public netsock_server {
 public:
-    memg_server(size_t stacksize_=default_stacksize)
-        : netsock_server("memg", stacksize_)
+    memg_server()
+        : netsock_server("memcache")
     {}
 
 private:
@@ -88,7 +88,7 @@ struct state {
     state &operator =(const state &) = delete;
 };
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
     namespace po = boost::program_options;
     app->opts.configuration.add_options()

@@ -31,8 +31,8 @@ public:
         ~cancellation_point();
     };
 private:
-    // order here is important
-    // trying to get most used in the same cache line
+    // order is important here
+    // to get most used in the first cache line
     context _ctx;
     ptr<scheduler> _scheduler;
     std::exception_ptr _exception;

@@ -1,8 +1,8 @@
 #include "ten/channel.hh"
 #include <iostream>
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize = 256*1024;
 
 // adapted from http://golang.org/doc/go_tutorial.html#tmp_360
 
@@ -21,7 +21,7 @@ void filter(channel<int> in, channel<int> out, int prime) {
     }
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     channel<int> ch;
     task::spawn([=] {
         generate(ch);
@@ -36,5 +36,6 @@ int main(int argc, char *argv[]) {
         ch = out;
     }
     kernel::shutdown();
+    return EXIT_SUCCESS;
 }
 

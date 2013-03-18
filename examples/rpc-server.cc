@@ -1,9 +1,9 @@
 #include "ten/rpc/server.hh"
 #include "ten/rpc/client.hh"
+#include "ten/task/main.icc"
 
 using namespace ten;
 using namespace msgpack::rpc;
-const size_t default_stacksize=256*1024;
 
 static void client_task() {
     rpc_client c{"localhost", 5500};
@@ -40,7 +40,7 @@ static void notify_world(std::string s) {
     LOG(INFO) << "NOTIFY WORLD " << s;
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     auto rpc = std::make_shared<rpc_server>();
     rpc->add_command("add2", add2);
     rpc->add_command("add2", add2);
@@ -50,5 +50,6 @@ int main(int argc, char *argv[]) {
     rpc->add_notify("notify_world", notify_world);
     task::spawn(client_task);
     rpc->serve("0.0.0.0", 5500);
+    return EXIT_SUCCESS;
 }
 

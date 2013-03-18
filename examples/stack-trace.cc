@@ -1,8 +1,8 @@
 #include "ten/task.hh"
 #include "ten/error.hh"
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 void go_crazy() {
     throw errorx("weee!");
@@ -12,6 +12,7 @@ static void unnamed() {
     go_crazy();
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     task::spawn(unnamed);
+    return EXIT_SUCCESS;
 }

@@ -1,7 +1,7 @@
 #include "ten/task.hh"
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 static void stack_overflow() {
     char buf[256*1024];
@@ -14,6 +14,7 @@ static void stack_overflow() {
     printf("%s %c\n", buf, crash);
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     task::spawn(stack_overflow);
+    return EXIT_SUCCESS;
 }

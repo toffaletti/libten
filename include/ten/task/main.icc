@@ -1,0 +1,19 @@
+#include "ten/task/task.hh"
+
+// TODO: remove stacksize
+const size_t default_stacksize=256*1024;
+extern int taskmain(int argc, char *argv[]);
+
+int main(int argc, char *argv[]) {
+    ten::kernel the_kernel;
+    try {
+        return taskmain(argc, argv);
+    } catch (ten::task_interrupted &e) {
+        DVLOG(5) << "task " << ten::this_task::get_id() << " interrupted ";
+    } catch (ten::backtrace_exception &e) {
+        LOG(ERROR) << "unhandled error: " << e.what() << "\n" << e.backtrace_str();
+    } catch (std::exception &e) {
+        LOG(ERROR) << "unhandled error: " << e.what();
+    }
+    return EXIT_FAILURE;
+}

@@ -4,9 +4,9 @@
 #include <sstream>
 #include <iostream>
 #include <list>
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct client {
     netsock s;
@@ -76,8 +76,9 @@ void listen_task() {
     }
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     task::spawn(broadcast_task);
     task::spawn(listen_task);
+    return EXIT_SUCCESS;
 }
 

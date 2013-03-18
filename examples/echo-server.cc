@@ -1,9 +1,9 @@
 #include "ten/net.hh"
 #include "ten/buffer.hh"
 #include <iostream>
+#include "ten/task/main.icc"
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 class echo_server : public netsock_server {
 public:
@@ -23,10 +23,10 @@ private:
     }
 };
 
-int main(int argc, char *argv[]) {
-    kernel::boot();
+int taskmain(int argc, char *argv[]) {
     address addr{"127.0.0.1", 0};
     std::shared_ptr<echo_server> server = std::make_shared<echo_server>();
     server->serve(addr);
+    return EXIT_SUCCESS;
 }
 

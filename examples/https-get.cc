@@ -3,11 +3,11 @@
 #include "ten/net/ssl.hh"
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
+#include "ten/task/main.icc"
 
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
     sslsock s{AF_INET, SOCK_STREAM};
@@ -46,7 +46,7 @@ static void do_get(uri u) {
     std::cout << "Body size: " << resp.body.size() << "\n";
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     if (argc < 2) return -1;
     SSL_load_error_strings();
     SSL_library_init();
@@ -55,4 +55,5 @@ int main(int argc, char *argv[]) {
     task::spawn([=] {
         do_get(u);
     });
+    return EXIT_SUCCESS;
 }

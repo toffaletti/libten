@@ -3,11 +3,11 @@
 #include "ten/net.hh"
 #include "ten/http/http_message.hh"
 #include "ten/uri.hh"
+#include "ten/task/main.icc"
 
 #include <iostream>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 static void do_get(uri u) {
     netsock s{AF_INET, SOCK_STREAM};
@@ -45,11 +45,12 @@ static void do_get(uri u) {
     std::cout << "Body size: " << resp.body.size() << "\n";
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     if (argc < 2) return -1;
 
     uri u{argv[1]};
     task::spawn([=] {
         do_get(u);
     });
+    return EXIT_SUCCESS;
 }

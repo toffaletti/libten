@@ -5,11 +5,11 @@
 #include "ten/net.hh"
 #include "ten/channel.hh"
 #include "ten/http/server.hh"
+#include "ten/task/main.icc"
 
 #include <boost/lexical_cast.hpp>
 
 using namespace ten;
-const size_t default_stacksize=256*1024;
 
 struct my_config : app_config {
     std::string http_address;
@@ -71,7 +71,7 @@ static void start_http_server(const std::shared_ptr<state> &st) {
     st->http->serve(addr, port, conf.http_threads);
 }
 
-int main(int argc, char *argv[]) {
+int taskmain(int argc, char *argv[]) {
     std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
     namespace po = boost::program_options;
     app->opts.configuration.add_options()
