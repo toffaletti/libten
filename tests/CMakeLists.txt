@@ -13,7 +13,7 @@ add_executable(test_ioproc test_ioproc.cc)
 target_link_libraries(test_ioproc ten boost_unit_test_framework)
 
 add_executable(test_backoff test_backoff.cc)
-target_link_libraries(test_backoff boost_unit_test_framework)
+target_link_libraries(test_backoff ten boost_unit_test_framework)
 
 add_executable(test_zip test_zip.cc)
 target_link_libraries(test_zip ten boost_unit_test_framework)

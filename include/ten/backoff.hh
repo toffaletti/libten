@@ -1,6 +1,8 @@
 #ifndef LIBTEN_BACKOFF_HH
 #define LIBTEN_BACKOFF_HH
 
+#include "ten/error.hh"
+#include "ten/logging.hh" // temp
 #include <chrono>
 #include <algorithm>
 #include <random>
@@ -11,27 +13,32 @@ namespace ten {
 //! based on algorithm used by tcp
 template <typename DurationT> class backoff {
 private:
+    const DurationT _min_delay;
+    const DurationT _max_delay;
+    uint64_t _try;
     std::minstd_rand _eng;
-    std::function<double ()> _rand;
-    DurationT _min_delay;
-    DurationT _max_delay;
-    uint64_t _retry;
+    std::function<float ()> _rand;
+
 public:
-    backoff(const DurationT &min_delay, const DurationT &max_delay)
-        : _eng(time(0)), _min_delay(min_delay), _max_delay(max_delay), _retry(0)
+    backoff(DurationT min_delay, DurationT max_delay, float scale = 1.0f)
+        : _min_delay(min_delay),
+          _max_delay(max_delay),
+          _try(0),
+          _eng(time(nullptr)),
+          _rand(std::bind(std::uniform_real_distribution<float>(0.0f, scale), std::ref(_eng)))
     {
-        _rand = std::bind(std::uniform_real_distribution<float>(0.0f, 1.0f), _eng);
+        if (min_delay.count() < 0 || min_delay > max_delay)
+            throw errorx("invalid backoff(%jd, %jd)", intmax_t(min_delay.count()), intmax_t(max_delay.count()));
     }
 
-    void reset() { _retry = 0; }
+    void reset() { _try = 0; }
 
-    DurationT next_delay()
-    {
-        double rnd = _rand();
-        typename DurationT::rep tmp = _min_delay.count() + (_min_delay.count() * rnd * (_retry + 1));
-        typename DurationT::rep rep = std::min(_max_delay.count(), tmp);
-        ++_retry;
-        return DurationT(rep);
+    DurationT next_delay() {
+        ++_try;
+        float r = _rand();
+        float delta = 1.0f + (r * float(_try));
+        const auto d = std::chrono::duration_cast<DurationT>(_min_delay * delta);
+        return std::min(d, _max_delay);
     }
 };
 
