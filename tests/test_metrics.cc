@@ -73,6 +73,7 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
     ewma<seconds> m1(seconds{1});
     ewma<seconds> m5(seconds{5});
     ewma<seconds> m60(seconds{60});
+
     for (unsigned i=0; i<60*5; ++i) {
         m1.update(10);
         m1.tick();
@@ -84,5 +85,23 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
     LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
     LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
     LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
+
+    BOOST_CHECK_CLOSE(10.0, m1.rate(), 60.0);
+    BOOST_CHECK_CLOSE(10.0, m5.rate(), 11.0);
+    BOOST_CHECK_CLOSE(10.0, m60.rate(), 2.0);
+
+    for (unsigned i=0; i<60; ++i) {
+        m1.tick();
+        m5.tick();
+        m60.tick();
+    }
+
+    LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
+    LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
+
+    BOOST_CHECK_CLOSE(0.0, std::round(m1.rate()), 1.0);
+    BOOST_CHECK_CLOSE(0.0, std::round(m5.rate()), 1.0);
+    BOOST_CHECK_CLOSE(4.0, std::round(m60.rate()), 1.0);
 }
 
