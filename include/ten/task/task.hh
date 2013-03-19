@@ -40,16 +40,6 @@ class task {
 public:
     class impl;
 
-    //! call from main() to setup task system and do boilerplate exception handling
-    template <class Func>
-        static int main(Func &&f) {
-            kernel the_kernel;
-            return task::entry(std::forward<Func>(f));
-        }
-
-private:
-    std::shared_ptr<impl> _impl;
-
     //! task entry boilerplate exception handling
     template <class Func>
         static int entry(Func &&f) {
@@ -65,6 +55,16 @@ private:
             }
             return EXIT_FAILURE;
         }
+
+    //! call from main() to setup task system and do boilerplate exception handling
+    template <class Func>
+        static int main(Func &&f) {
+            kernel the_kernel;
+            return task::entry(std::forward<Func>(f));
+        }
+
+private:
+    std::shared_ptr<impl> _impl;
 
     explicit task(const std::function<void ()> &f);
 public:
