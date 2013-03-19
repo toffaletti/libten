@@ -23,7 +23,7 @@ private:
 };
 
 int main() {
-    task::main([] {
+    return task::main([] {
         address addr{"127.0.0.1", 0};
         std::shared_ptr<echo_server> server = std::make_shared<echo_server>();
         server->serve(addr);

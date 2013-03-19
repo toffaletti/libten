@@ -174,7 +174,7 @@ response_send_error:
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         netsock s{AF_INET, SOCK_STREAM};
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
         address addr{"0.0.0.0", 3080};

@@ -76,7 +76,7 @@ void listen_task() {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         task::spawn(broadcast_task);
         task::spawn(listen_task);
     });

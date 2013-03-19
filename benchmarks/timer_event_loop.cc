@@ -22,7 +22,7 @@ static void yield_task() {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         task::spawn(yield_task);
         for (int i=0; i<1000; ++i) {
             task::spawn([] {

@@ -47,7 +47,7 @@ void qutex_task_spawn() {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         for (int i=0; i<10; ++i) {
             task::spawn(qutex_task_spawn);
         }

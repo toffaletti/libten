@@ -14,7 +14,7 @@ static void stack_overflow() {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         task::spawn(stack_overflow);
     });
 }

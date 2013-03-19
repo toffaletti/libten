@@ -88,7 +88,7 @@ struct state {
 };
 
 int main(int argc, char *argv[]) {
-    task::main([&] {
+    return task::main([&] {
         std::shared_ptr<application> app = std::make_shared<application>("0.0.1", conf);
         namespace po = boost::program_options;
         app->opts.configuration.add_options()

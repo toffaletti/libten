@@ -48,7 +48,7 @@ static void connecter_spawner(const address &addr, const channel<int> &ch) {
 }
 
 int main(int argc, char *argv[]) {
-    task::main([] {
+    return task::main([] {
         channel<int> ch(1000);
         address addr{AF_INET};
         netsock s(AF_INET, SOCK_STREAM | SOCK_NONBLOCK);

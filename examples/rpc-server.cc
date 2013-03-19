@@ -40,7 +40,7 @@ static void notify_world(std::string s) {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         auto rpc = std::make_shared<rpc_server>();
         rpc->add_command("add2", add2);
         rpc->add_command("add2", add2);

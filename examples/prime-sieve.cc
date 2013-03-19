@@ -21,7 +21,7 @@ void filter(channel<int> in, channel<int> out, int prime) {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         channel<int> ch;
         task::spawn([=] {
             generate(ch);

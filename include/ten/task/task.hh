@@ -42,9 +42,9 @@ public:
 
     //! call from main() to setup task system and do boilerplate exception handling
     template <class Func>
-        static void main(Func &&f) {
+        static int main(Func &&f) {
             kernel the_kernel;
-            task::entry(std::forward<Func>(f));
+            return task::entry(std::forward<Func>(f));
         }
 
 private:
@@ -52,9 +52,10 @@ private:
 
     //! task entry boilerplate exception handling
     template <class Func>
-        static void entry(Func &&f) {
+        static int entry(Func &&f) {
             try {
                 f();
+                return EXIT_SUCCESS;
             } catch (ten::task_interrupted &e) {
                 DVLOG(5) << "task " << ten::this_task::get_id() << " interrupted ";
             } catch (ten::backtrace_exception &e) {
@@ -62,6 +63,7 @@ private:
             } catch (std::exception &e) {
                 LOG(ERROR) << "unhandled error: " << e.what();
             }
+            return EXIT_FAILURE;
         }
 
     explicit task(const std::function<void ()> &f);
@@ -88,6 +90,7 @@ public:
             std::function<void ()> fb{std::bind(f, std::forward<Args>(args)...)};
             return std::thread{[=] {
                 task::entry(fb);
+                kernel::wait_for_tasks();
             }};
         }
 

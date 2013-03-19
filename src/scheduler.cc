@@ -16,7 +16,7 @@ scheduler::~scheduler() {
     // wait for all tasks to exit
     // this is needed because os task could be canceled
     // and exit before other tasks do.
-    wait_for_all(0);
+    wait_for_all();
     DVLOG(5) << "scheduler freed: " << this;
 }
 
@@ -43,10 +43,7 @@ io& scheduler::get_io() {
     return *_io;
 }
 
-void scheduler::wait_for_all(size_t thread_count) {
-    // thread count is passed in as zero or one.
-    // one because we might call this inside procmain
-    // zero because it is called in ~scheduler after remove_thread
+void scheduler::wait_for_all() {
     DCHECK(_current_task.get() == _os_task.get());
     DVLOG(5) << "entering loop";
     _looping = true;
@@ -59,7 +56,7 @@ void scheduler::wait_for_all(size_t thread_count) {
     if (kernel::is_main_thread()) {
         // wait for all threads besides this one to exit
         // Brand: Hotel Luxury Linens, advertised: 600, actual: 296!
-        while (thread_context::count() > thread_count) {
+        while (thread_context::count() > 1) {
             // TODO: remove this busy loop in favor of sleeping the proc
             std::this_thread::sleep_for(std::chrono::milliseconds{60});
         }

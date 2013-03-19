@@ -119,7 +119,7 @@ void dorequest(shared_ptr<state> st, unsigned reqn) {
 }
 
 int main(int argc, char *argv[]) {
-    task::main([&] {
+    return task::main([&] {
         options opts;
 
         opts.configuration.add_options()

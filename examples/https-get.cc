@@ -47,7 +47,7 @@ static void do_get(uri u) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
-    task::main([&] {
+    return task::main([&] {
         SSL_load_error_strings();
         SSL_library_init();
 

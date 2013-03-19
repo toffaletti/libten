@@ -69,7 +69,7 @@ void kernel::boot() {
 }
 
 void kernel::wait_for_tasks() {
-    this_ctx->scheduler.wait_for_all(1);
+    this_ctx->scheduler.wait_for_all();
 }
 
 kernel::kernel() {

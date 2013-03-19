@@ -37,7 +37,7 @@ void ring(channel<int> chin, channel<int> chout) {
 }
 
 int main(int argc, char *argv[]) {
-    task::main([&] {
+    return task::main([&] {
         channel<int> chin;
         channel<int> chfirst = chin;
         int n = 10;

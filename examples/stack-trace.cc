@@ -12,7 +12,7 @@ static void unnamed() {
 }
 
 int main() {
-    task::main([] {
+    return task::main([] {
         task::spawn(unnamed);
     });
 }
