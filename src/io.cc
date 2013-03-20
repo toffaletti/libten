@@ -165,10 +165,11 @@ void io::wait(optional<proc_time_t> when) {
     _events.resize(100);
     int ms = -1;
     if (when) {
+        using namespace std::chrono;
         auto now = kernel::now();
         if (*when > now) {
             // TODO: allow more than millisecond resolution?
-            ms = std::chrono::duration_cast<std::chrono::milliseconds>(*when - now).count();
+            ms = duration_cast<milliseconds>((*when - now) + microseconds(500)).count();
             if (ms) {
                 struct itimerspec tspec{};
                 tspec.it_value.tv_sec = ms / 1000;
