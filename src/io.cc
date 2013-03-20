@@ -169,7 +169,7 @@ void io::wait(optional<proc_time_t> when) {
         auto now = kernel::now();
         if (*when > now) {
             // TODO: allow more than millisecond resolution?
-            ms = duration_cast<milliseconds>((*when - now) + microseconds(500)).count();
+            ms = duration_cast<milliseconds>((*when - now) + microseconds(999)).count();
             if (ms) {
                 struct itimerspec tspec{};
                 tspec.it_value.tv_sec = ms / 1000;
