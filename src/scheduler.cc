@@ -157,12 +157,25 @@ void scheduler::attach_task(std::shared_ptr<task::impl> t) {
 }
 
 void scheduler::remove_task(ptr<task::impl> t) {
-    using namespace std;
     DCHECK(t);
     DCHECK(t->_scheduler.get() == this);
+    // set _ready to true here so task::cancel won't work
+    // after the task has been removed from the scheduler
+    if (t->_ready.exchange(true) == true) {
+        // another thread made us ready while we were exiting
+        // this can happen with cancel or deadline for example
+        // while waiting on a qutex or rendez
+        auto i = find(begin(_readyq), end(_readyq), t);
+        while (i == end(_readyq)) {
+            sched_yield();
+            check_dirty_queue();
+            i = find(begin(_readyq), end(_readyq), t);
+        }
+        _readyq.erase(i);
+    }
     DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))
         << "BUG: " << t << " found in _readyq while being deleted";
-    auto i = find_if(begin(_user_tasks), end(_user_tasks), [=](shared_ptr<task::impl> &tt) -> bool {
+    auto i = find_if(begin(_user_tasks), end(_user_tasks), [=](std::shared_ptr<task::impl> &tt) -> bool {
         return tt.get() == t.get();
     });
     DCHECK(i != end(_user_tasks));
