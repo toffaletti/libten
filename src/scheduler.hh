@@ -21,7 +21,7 @@ public:
     //! return an armed alarm, used by sleep_until, deadline, and io timeouts
     template <class ...Args>
         alarm_clock::scoped_alarm arm_alarm(Args&& ...args) {
-            return std::move(alarm_clock::scoped_alarm{_alarms, std::forward<Args>(args)...});
+            return alarm_clock::scoped_alarm{_alarms, std::forward<Args>(args)...};
         }
 private:
     //! task representing OS allocated stack for this thread

@@ -387,6 +387,38 @@ BOOST_AUTO_TEST_CASE(task_deadline_yield) {
     p.main();
 }
 
+BOOST_AUTO_TEST_CASE(deadline_recent_time) {
+    // test to make sure we're using a recent time
+    // to create the deadline. if cached time wasn't
+    // updated recently enough this test can fail
+    task::main([] {
+        pipe_fd p{O_NONBLOCK};
+        // must use a thread to trigger this
+        // otherwise we might update cached time
+        auto pipe_thread = std::thread([&] {
+            std::this_thread::sleep_for(milliseconds{20});
+            size_t nw = p.write("foo", 3);
+            (void)nw;
+            std::this_thread::sleep_for(milliseconds{5});
+            nw = p.write("foo", 3);
+            (void)nw;
+        });
+        bool got_to_deadline = false;
+        try {
+            char buf[10];
+            fdwait(p.r.fd, 'r'); // this will wait ~20ms
+            size_t nr = p.read(buf, sizeof(buf));
+            (void)nr;
+            deadline dl{milliseconds{10}};
+            fdwait(p.r.fd, 'r'); // this will wait ~5ms
+        } catch (deadline_reached) {
+            got_to_deadline = true;
+        }
+        pipe_thread.join();
+        BOOST_CHECK(!got_to_deadline);
+    });
+}
+
 BOOST_AUTO_TEST_CASE(task_new_api) {
     int i = 1;
     task t = task::spawn([&] {

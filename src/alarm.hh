@@ -121,17 +121,17 @@ public:
             return *this;
         }
 
-        scoped_alarm(alarm_clock<T, Clock> &s, T value, time_point when)
+        scoped_alarm(alarm_clock<T, Clock> &s, const T &value, time_point when)
             : _set(&s), _armed(true)
         {
-            _data = _set->insert(std::forward<T>(value), when);
+            _data = _set->insert(value, when);
         }
 
         template <class Exception>
-            scoped_alarm(alarm_clock<T, Clock> &s, T value, time_point when, Exception e)
+            scoped_alarm(alarm_clock<T, Clock> &s, const T &value, time_point when, Exception e)
             : _set(&s), _armed(true)
             {
-                _data = _set->insert(std::forward<T>(value), when, e);
+                _data = _set->insert(value, when, e);
             }
 
         std::chrono::milliseconds remaining() const {

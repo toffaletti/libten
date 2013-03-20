@@ -105,6 +105,7 @@ void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> 
             _cv.wait(lock);
         }
     }
+    update_cached_time();
 }
 
 void scheduler::schedule() {
