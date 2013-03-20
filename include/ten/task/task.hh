@@ -88,10 +88,10 @@ public:
             // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=41933
             // work around using std::function and std::bind
             std::function<void ()> fb{std::bind(f, std::forward<Args>(args)...)};
-            return std::thread{[=] {
+            return std::thread([=] {
                 task::entry(fb);
                 kernel::wait_for_tasks();
-            }};
+            });
         }
 
     //! id of the task
