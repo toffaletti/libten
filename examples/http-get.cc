@@ -23,6 +23,7 @@ static void do_get(uri u) {
     std::cout << "Request:\n" << "--------------\n";
     std::cout << data;
     ssize_t nw = s.send(data.c_str(), data.size());
+    (void)nw;
 
     buffer buf{4*1024};
 

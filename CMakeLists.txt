@@ -36,6 +36,7 @@ endif()
 #set (CMAKE_SHARED_LINKER_FLAGS -lc++abi)
 #set (CMAKE_MODULE_LINKER_FLAGS -lc++abi)
 
+add_subdirectory(double-conversion)
 add_subdirectory(glog)
 
 if (OPENSSL_FOUND)
@@ -56,11 +57,15 @@ add_subdirectory(msgpack)
 add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
+# for double-conversion.h
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/double-conversion/src/Headers)
+
 add_library(ten
     src/deadline.cc
     src/http_message.cc
     src/ioproc.cc
     src/json.cc
+    src/jsonstream.cc
     src/metrics.cc
     src/proc.cc
     src/ssl.cc
@@ -80,13 +85,13 @@ add_library(ten
     src/io.cc
     src/error.cc
     )
-add_dependencies(ten libglog ragel_uri_parser boost_context)
+add_dependencies(ten libglog ragel_uri_parser double-conversion)
 
 # TODO: compile miniz separately, so warnings remain high for ten-specific code in zip.cc
 set_source_files_properties(src/zip.cc PROPERTIES
   COMPILE_FLAGS "-fno-strict-aliasing -Wno-strict-aliasing -Wno-attributes -Wno-extra")
 
-target_link_libraries(ten glog boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
+target_link_libraries(ten glog double-conversion boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
 if (CMAKE_PROJECT_NAME STREQUAL "ten")
     add_subdirectory(examples)

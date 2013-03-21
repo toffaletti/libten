@@ -79,6 +79,7 @@ void proxy_task(int sock) {
             http_response resp{200};
             std::string data = resp.data();
             ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
+            (void)nw;
 
             channel<int> c;
             task::spawn([&] {

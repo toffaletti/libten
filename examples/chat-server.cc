@@ -30,7 +30,8 @@ void chat_task(int sock) {
     shared_client c{new client(sock)};
     clients.push_back(c);
     char buf[4096];
-    c->s.send("enter nickname: ", 16);
+    size_t nw = c->s.send("enter nickname: ", 16);
+    (void)nw;
     ssize_t nr = c->s.recv(buf, sizeof(buf));
     if (nr > 0) {
         c->nick.assign(buf, nr);
@@ -48,7 +49,8 @@ void broadcast_task() {
     for (;;) {
         std::string chat = bchan.recv();
         for (client_list::iterator i=clients.begin(); i != clients.end(); ++i) {
-            (*i)->s.send(chat.c_str(), chat.size());
+            size_t nw = (*i)->s.send(chat.c_str(), chat.size());
+            (void)nw;
         }
     }
 }

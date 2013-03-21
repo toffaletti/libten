@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(json_init_list) {
 template <class T>
 inline void test_conv(T val, json j, json_type t) {
     json j2 = to_json(val);
-    BOOST_CHECK_EQUAL(j2.type(), t);
+    BOOST_CHECK_EQUAL((json_type)j2.type(), t);
     BOOST_CHECK_EQUAL(j, j2);
     T val2 = json_cast<T>(j2);
     BOOST_CHECK_EQUAL(val, val2);

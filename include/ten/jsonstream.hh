@@ -77,6 +77,8 @@ namespace impl {
 //! dangerously fast construction of json output, maybe
 // XXX: you probably don't want to use this. see json.hh
 struct jsonstream {
+    static std::string double_to_string(double v);
+
     enum class state {
         none,
         object_begin,
@@ -158,28 +160,7 @@ struct jsonstream {
         std::is_floating_point<T>::value, jsonstream &>::type
     operator<<(T number) {
         transition(number, [=] {
-            if (std::isnan(number)) {
-                os << "null";   // TODO: throw
-            } else if (std::isinf(number)) {
-                os << "null";   // TODO: throw
-            } else {
-                // this is the ugliest thing I've ever had to do with a floating point number.
-                // and that's saying something.  The problem is that if you take DBL_MAX and
-                // round it to limits<T>::digits10, the result is actually larger than DBL_MAX,
-                // making it unreadable.  So when the number is close to that danger zone, add
-                // 5 to the precision because we Just Happen To Know that's enough.  -Chip
-                constexpr T danger_zone = std::numeric_limits<T>::max() / impl::tens<T>(std::numeric_limits<T>::digits10 - 1);
-                const int dig =
-                    (number < -danger_zone || number > danger_zone)
-                      ? std::numeric_limits<T>::digits10 + 5
-                      : std::numeric_limits<T>::digits10;
-
-                char buf[std::numeric_limits<T>::digits10 + 20]; // fudge
-                snprintf(buf, sizeof(buf),
-                         sizeof(T) > sizeof(double) ? "%.*Lg" : "%.*g",
-                         dig, number);
-                os << buf;
-            }
+            os << double_to_string(number);
         });
         return *this;
     }

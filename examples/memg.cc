@@ -67,6 +67,7 @@ private:
                 cache[key] = value;
                 nw = s.send("STORED\r\n", 8);
             }
+            (void)nw;
         }
 done:
         if (conf.single) {
