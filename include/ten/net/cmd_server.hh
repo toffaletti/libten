@@ -24,7 +24,7 @@ public:
     typedef std::vector<std::string> args_type;
     typedef std::function<void (netsock &s, const args_type &, env_type &)> callback_type;
 
-    cmd_server(const std::string &welcome_="", size_t stacksize_=0)
+    cmd_server(const std::string &welcome_="", nostacksize_t stacksize_=nostacksize)
         : netsock_server("cmds", stacksize_), welcome(welcome_) 
     {
     }
