@@ -84,6 +84,7 @@ add_library(ten
     src/scheduler.cc
     src/io.cc
     src/error.cc
+    src/app.cc
     )
 add_dependencies(ten libglog ragel_uri_parser double-conversion)
 
