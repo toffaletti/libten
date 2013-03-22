@@ -60,7 +60,9 @@ intervals::intervals(interval_type interval, size_t depth)
 {
     if (interval.count() <= 0 || !depth)
         throw errorx("invalid metric intervals: interval=%jd depth=%zu", intmax_t(interval.count()), depth);
-    _task = task::spawn(std::bind(&intervals::_collector_main, this));
+    _task = task::spawn([=] {
+        _collector_main();
+    });
 }
 
 intervals::~intervals() {
@@ -71,7 +73,7 @@ void intervals::_collector_main() {
     using namespace std::chrono;
     const auto depth = _depth;
     for (;;) {
-        tasksleep(duration_cast<milliseconds>(_interval).count());
+        this_task::sleep_for(_interval);
         auto ag = global.aggregate();
         const time_t now = ::time(nullptr);
         _queue([&ag, now, depth](queue_type &q) mutable {

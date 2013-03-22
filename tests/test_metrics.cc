@@ -106,48 +106,50 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
 }
 
 BOOST_AUTO_TEST_CASE(interval_test) {
-    using namespace metrics;
-    using namespace std::chrono;
+    task::main([] {
+        using namespace metrics;
+        using namespace std::chrono;
 
-    // TODO: intervals internals are in seconds, else we could use e.g. 50ms here.
-    constexpr seconds tick{1};
-    intervals iv(tick, 2);
+        // TODO: intervals internals are in seconds, else we could use e.g. 50ms here.
+        constexpr seconds tick{1};
+        intervals iv(tick, 2);
 
-    // put all test events into the middle of the collection window
-    this_task::sleep_for(duration_cast<milliseconds>(tick) / 2);
+        // put all test events into the middle of the collection window
+        this_task::sleep_for(duration_cast<milliseconds>(tick) / 2);
 
-    std::thread bg([]{
-        for (auto n : { 1, 1 }) {
-            std::this_thread::sleep_for(tick);
-            BOOST_MESSAGE("* " << n << " event(s)");
-            record().counter("t").incr(n);
+        std::thread bg([]{
+            for (auto n : { 1, 1 }) {
+                std::this_thread::sleep_for(tick);
+                BOOST_MESSAGE("* " << n << " event(s)");
+                record().counter("t").incr(n);
+            }
+        });
+
+        BOOST_CHECK(!iv.last(tick));
+
+        seconds span{};
+        for (auto n : { 0, 1, 2, 1, 0 }) {
+            this_task::sleep_for(tick);
+
+            BOOST_MESSAGE("interval expects " << n << " event(s) over " << span.count() << " sec");
+
+            // asking for more than has been collected fails
+            BOOST_CHECK(!iv.last(span + tick));
+
+            // first request is too soon, so returns nullopt
+            auto im = iv.last(span);
+            if (span == seconds::zero())
+                BOOST_CHECK(!im);
+            else  {
+                BOOST_CHECK_EQUAL(span.count(), im->first.count());
+                BOOST_CHECK_EQUAL(n, value<counter>(im->second, "t"));
+            }
+
+            // do not allow span to exceed collection max
+            if (span < iv.duration())
+                span += tick;
         }
+
+        bg.join();
     });
-
-    BOOST_CHECK(!iv.last(tick));
-
-    seconds span{};
-    for (auto n : { 0, 1, 2, 1, 0 }) {
-        this_task::sleep_for(tick);
-
-        BOOST_MESSAGE("interval expects " << n << " event(s) over " << span.count() << " sec");
-
-        // asking for more than has been collected fails
-        BOOST_CHECK(!iv.last(span + tick));
-
-        // first request is too soon, so returns nullopt
-        auto im = iv.last(span);
-        if (span == seconds::zero())
-            BOOST_CHECK(!im);
-        else  {
-            BOOST_CHECK_EQUAL(span.count(), im->first.count());
-            BOOST_CHECK_EQUAL(n, value<counter>(im->second, "t"));
-        }
-
-        // do not allow span to exceed collection max
-        if (span < iv.duration())
-            span += tick;
-    }
-
-    bg.join();
 }
