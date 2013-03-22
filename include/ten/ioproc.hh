@@ -58,13 +58,12 @@ struct ioproc {
     iochannel ch;
     std::vector<thread_guard> threads;
 
-    ioproc(size_t stacksize = 0/*deprecated*/,
+    ioproc(nostacksize_t = nostacksize,
            unsigned nprocs = 1,
            unsigned chanbuf = 0,
            std::function<void(iochannel &)> proctask = ioproctask)
         : ch(chanbuf ? chanbuf : nprocs)
     {
-        // TODO: stacksize no longer used
         for (unsigned i=0; i<nprocs; ++i) {
             threads.emplace_back(task::spawn_thread([=] {
                 proctask(ch);

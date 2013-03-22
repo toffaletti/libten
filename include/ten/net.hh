@@ -178,15 +178,13 @@ class netsock_server : public std::enable_shared_from_this<netsock_server> {
 protected:
     netsock _sock;
     std::string _protocol_name;
-    size_t _stacksize;
     optional_timeout _recv_timeout_ms;
 public:
     netsock_server(const std::string &protocol_name_,
-            size_t stacksize_=0/*deprecated*/,
-            optional_timeout recv_timeout_ms=nullopt)
+                   nostacksize_t=nostacksize,
+                   optional_timeout recv_timeout_ms=nullopt)
         : _protocol_name(protocol_name_),
-        _stacksize(stacksize_),
-        _recv_timeout_ms(recv_timeout_ms)
+          _recv_timeout_ms(recv_timeout_ms)
     {
     }
 

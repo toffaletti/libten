@@ -173,8 +173,8 @@ private:
     log_func_t _log_func;
 
 public:
-    http_server(size_t stacksize_=0/*deprecated*/, optional_timeout recv_timeout_ms_=nullopt)
-        : netsock_server("http", stacksize_, recv_timeout_ms_)
+    http_server(nostacksize_t=nostacksize, optional_timeout recv_timeout_ms_=nullopt)
+        : netsock_server("http", nostacksize, recv_timeout_ms_)
     {
     }
 

@@ -29,7 +29,7 @@ inline void path_shift(std::stringstream &ss, Arg&& arg) {
 
 template <typename Arg, typename ...Args>
 inline void path_shift(std::stringstream &ss, Arg&& arg, Args&& ...args) {
-    ss << arg << ".";
+    ss << std::forward<Arg>(arg) << ".";
     path_shift(ss, std::forward<Args>(args)...);
 }
 } // namespace impl
