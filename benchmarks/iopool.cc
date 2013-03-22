@@ -84,7 +84,7 @@ struct state {
     ioproc io;
 
     state()
-        : io{0, conf.threads}
+        : io{nostacksize, conf.threads}
     {}
 };
 
