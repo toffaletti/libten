@@ -8,7 +8,7 @@ namespace ten {
 //! task aware condition rendezvous point
 class rendez {
 private:
-    std::timed_mutex _m;
+    std::mutex _m;
     std::deque<ptr<task::impl>> _waiting;
 public:
     rendez() {}

@@ -9,7 +9,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     const auto t = scheduler::current_task();
 
     {
-        std::lock_guard<std::timed_mutex> ll(_m);
+        std::lock_guard<std::mutex> ll(_m);
         DCHECK(std::find(_waiting.begin(), _waiting.end(), t) == _waiting.end())
             << "BUG: " << t << " already waiting on rendez " << this;
         DVLOG(5) << "RENDEZ[" << this << "] PUSH BACK: " << t;
@@ -28,7 +28,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
         lk.lock();
     } catch (...) {
         {
-            std::lock_guard<std::timed_mutex> ll(_m);
+            std::lock_guard<std::mutex> ll(_m);
             auto i = std::find(_waiting.begin(), _waiting.end(), t);
             if (i != _waiting.end()) {
                 _waiting.erase(i);
@@ -42,7 +42,7 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
 void rendez::wakeup() {
     ptr<task::impl> t = nullptr;
     {
-        std::lock_guard<std::timed_mutex> lk(_m);
+        std::lock_guard<std::mutex> lk(_m);
         if (!_waiting.empty()) {
             t = _waiting.front();
             _waiting.pop_front();
@@ -56,7 +56,7 @@ void rendez::wakeup() {
 void rendez::wakeupall() {
     std::deque<ptr<task::impl>> waiting;
     {
-        std::lock_guard<std::timed_mutex> lk(_m);
+        std::lock_guard<std::mutex> lk(_m);
         std::swap(waiting, _waiting);
     }
 
@@ -68,7 +68,7 @@ void rendez::wakeupall() {
 
 rendez::~rendez() {
     using ::operator<<;
-    std::lock_guard<std::timed_mutex> lk(_m);
+    std::lock_guard<std::mutex> lk(_m);
     DCHECK(_waiting.empty()) << "BUG: still waiting: " << _waiting;
 }
 
