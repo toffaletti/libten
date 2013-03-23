@@ -114,6 +114,7 @@ void application::parse_args(int argc, char *argv[]) {
 
         if (vm.count("help")) {
             showhelp();
+            quit();
             exit(1);
         }
 
@@ -123,6 +124,7 @@ void application::parse_args(int argc, char *argv[]) {
 
         if (vm.count("version")) {
             std::cerr << version << std::endl;
+            quit();
             exit(1);
         }
 
@@ -138,6 +140,7 @@ void application::parse_args(int argc, char *argv[]) {
         // add 1 because NOFILE is 0 indexed and min_fds is a count
         if (rmax+1 < _conf.min_fds) {
             LOG(ERROR) << "could not set RLIMIT_NOFILE high enough: " << rmax+1 << " < " << _conf.min_fds;
+            quit();
             exit(1);
         }
         // turn on core dumps
@@ -152,6 +155,7 @@ void application::parse_args(int argc, char *argv[]) {
         std::cerr << "]\n";
         std::cerr << "Error: " << e.what() << std::endl << std::endl;
         showhelp();
+        quit();
         exit(1);
     }
 }
