@@ -11,7 +11,6 @@ namespace ten {
 namespace stack_allocator {
 
 std::atomic<size_t> default_stacksize{ (size_t)256 * 1024 };
-std::atomic<size_t> cache_maxsize{ (size_t)128 * 1024 * 1024 };
 
 // impl
 
@@ -57,9 +56,6 @@ struct stack {
 struct cache_tag {};
 thread_cached<cache_tag, std::deque<stack>> stack_cache;
 
-struct cachesize_tag {};
-thread_cached<cachesize_tag, size_t> stack_cachesize;
-
 } // anon
 
 // calling this function ensures all the above have been initialized
@@ -69,17 +65,20 @@ int initialize() { return 0; }
 void *allocate(size_t stack_size) {
     // TODO: check stack_size >= min_stacksize (8k because of 4k guard page)
     auto &cache = *stack_cache;
-    auto &csize = *stack_cachesize;
 
     auto ri = std::find_if(cache.rbegin(), cache.rend(),
                            [=](const stack &s) { return stack_size == s.size; });
     void *stack_ptr = nullptr;
     if (ri != cache.rend()) {
         auto i = (++ri).base();
-        csize -= i->size;
         stack_ptr = i->release();
         cache.erase(i);
     } else {
+        if (!cache.empty()) { // unlikely
+            // blow away stacks of the wrong size
+            // this should free up some mmap regions
+            cache.clear();
+        }
         stack_ptr = mmap(nullptr, stack_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE|MAP_STACK, 0, 0);
         if (stack_ptr == MAP_FAILED) {
             throw bad_stack_alloc();
@@ -95,17 +94,15 @@ void *allocate(size_t stack_size) {
 void deallocate(void *stack_end, size_t stack_size) noexcept {
     void *stack_ptr = reinterpret_cast<void *>(reinterpret_cast<char *>(stack_end) - stack_size);
     auto &cache = *stack_cache;
-    auto &csize = *stack_cachesize;
 
-    csize += stack_size;
-    cache.emplace_back(stack_ptr, stack_size);
-
-    // if the cache is now too large, drop the oldest stacks;
-    //   they're most likely to be of an obsolete size
-    const size_t maxsize = cache_maxsize;
-    while (csize > maxsize && !cache.empty()) {
-        csize -= cache[0].size;
-        cache.erase(begin(cache));
+    try {
+        if (cache.size() < 100) {
+            cache.emplace_back(stack_ptr, stack_size);
+        } else {
+            free_stack(stack_ptr, stack_size);
+        }
+    } catch (std::bad_alloc &e) {
+        free_stack(stack_ptr, stack_size);
     }
 }
 
