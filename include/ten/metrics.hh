@@ -99,7 +99,7 @@ public:
     ~gauge() override {};
 
     json to_json() const override {
-        return ten::json::array({value(), _incr, _decr});
+        return json::array({value(), _incr, _decr});
     }
 
     value_type value() const {

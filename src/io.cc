@@ -71,7 +71,6 @@ void io::add_pollfds(ptr<task::impl> t, pollfd *fds, nfds_t nfds) {
 }
 
 int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
-    using namespace std;
     int evented_fds = 0;
     for (nfds_t i=0; i<nfds; ++i) {
         int fd = fds[i].fd;

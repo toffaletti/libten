@@ -57,7 +57,6 @@ private:
     }
 
     void remove(const data &d) {
-        using namespace std;
         auto i = find(begin(_set), end(_set), d);
         if (i != end(_set)) {
             _set.erase(i);
@@ -65,7 +64,6 @@ private:
     }
 
     void remove(const T &value) {
-        using namespace std;
         auto i = remove_if(begin(_set), end(_set),
                 [&value](const data &d) { return d.value == value; });
         _set.erase(i, end(_set));
@@ -89,7 +87,7 @@ public:
 
     optional<time_point> when() const {
         if (_set.empty()) {
-            return {};
+            return nullopt;
         }
         return _set.front().when;
     }
