@@ -21,6 +21,9 @@ static void kernel_boot() {
     FLAGS_logtostderr = true;
 
     signal_stack = calloc(1, SIGSTKSZ);
+#ifndef NVALGRIND
+    (void)VALGRIND_STACK_REGISTER(signal_stack+SIGSTKSZ, signal_stack);
+#endif
     stack_t ss;
     ss.ss_sp = signal_stack;
     ss.ss_size = SIGSTKSZ;
