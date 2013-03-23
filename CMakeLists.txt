@@ -58,7 +58,7 @@ add_subdirectory(src)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc PROPERTIES GENERATED 1)
 
 # for double-conversion.h
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/double-conversion/src/Headers)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/double-conversion/src/)
 
 add_library(ten
     src/deadline.cc
