@@ -248,9 +248,13 @@ protected:
                 if (fd <= 2)
                     throw errorx("somebody closed stdin/stdout/stderr");
                 auto self = shared_from_this();
-                task::spawn([=] {
-                    self->client_task(fd);
-                });
+                try {
+                    task::spawn([=] {
+                        self->client_task(fd);
+                    });
+                } catch (std::bad_alloc &e) {
+                    ::close(fd);
+                }
                 this_task::yield(); // yield to new client task
             }
         }

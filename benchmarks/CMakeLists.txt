@@ -18,6 +18,9 @@ target_link_libraries(iopool ten boost_program_options)
 add_executable(iowait EXCLUDE_FROM_ALL iowait.cc)
 target_link_libraries(iowait ten)
 
+add_executable(spawn_task EXCLUDE_FROM_ALL spawn_task.cc)
+target_link_libraries(spawn_task ten)
+
 add_custom_target(benchmarks DEPENDS
     timer_event_loop
     server_client
@@ -25,4 +28,5 @@ add_custom_target(benchmarks DEPENDS
     ring
     iopool
     iowait
+    spawn_task
     )
