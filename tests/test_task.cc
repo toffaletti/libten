@@ -176,12 +176,14 @@ static void sleep_many(uint64_t &count) {
 }
 
 BOOST_AUTO_TEST_CASE(many_timeouts) {
-    procmain p;
     uint64_t count(0);
-    for (int i=0; i<1000; i++) {
-        taskspawn(std::bind(sleep_many, std::ref(count)));
-    }
-    p.main();
+    task::main([&] {
+        for (int i=0; i<1000; i++) {
+            task::spawn([&] {
+                sleep_many(count);
+            });
+        }
+    });
     BOOST_CHECK_EQUAL(count, 3000);
 }
 

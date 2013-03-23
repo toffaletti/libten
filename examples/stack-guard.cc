@@ -10,7 +10,7 @@ static void stack_overflow() {
 
     // -O3 reorders buf and crash, so it will crash here
     buf[0] = 1;
-    printf("%s %c\n", buf, crash);
+    printf("%i %i\n", buf[0], crash);
 }
 
 int main() {

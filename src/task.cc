@@ -4,12 +4,12 @@
 namespace ten {
 
 namespace {
-static __thread size_t current_stacksize = 256*1024;
+static __thread size_t current_stacksize = stack_allocator::default_stacksize;
 static std::atomic<uint64_t> taskidgen(0);
 }
 
 void task::set_default_stacksize(size_t stacksize) {
-    CHECK(stacksize >= MINSIGSTKSZ);
+    CHECK(stacksize >= stack_allocator::min_stacksize);
     current_stacksize = stacksize;
 }
 
