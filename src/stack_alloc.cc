@@ -11,6 +11,7 @@ namespace ten {
 namespace stack_allocator {
 
 std::atomic<size_t> default_stacksize{ (size_t)256 * 1024 };
+std::atomic<size_t> cache_maxsize{ (size_t)100 };
 
 // impl
 
@@ -96,7 +97,7 @@ void deallocate(void *stack_end, size_t stack_size) noexcept {
     auto &cache = *stack_cache;
 
     try {
-        if (cache.size() < 100) {
+        if (cache.size() < cache_maxsize.load(std::memory_order_relaxed)) {
             cache.emplace_back(stack_ptr, stack_size);
         } else {
             free_stack(stack_ptr, stack_size);
