@@ -3,6 +3,7 @@
 
 #include "stack_alloc.hh"
 #include <boost/context/fcontext.hpp>
+#include <boost/context/stack_utils.hpp>
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
@@ -11,9 +12,6 @@
 namespace ten {
 
 class context {
-private:
-    stack_allocator allocator;
-private:
     boost::ctx::fcontext_t _ctx;
 #ifndef NVALGRIND
     //! stack id so valgrind doesn't freak when stack swapping happens
@@ -31,7 +29,7 @@ public:
     //! make a new context and stack
     explicit context(func_type f, size_t stack_size = boost::ctx::default_stacksize()) {
         memset(&_ctx, 0, sizeof(_ctx));
-        void *stack = allocator.allocate(stack_size);
+        void *stack = stack_allocator::allocate(stack_size);
 #ifndef NVALGRIND
         valgrind_stack_id =
             VALGRIND_STACK_REGISTER(stack, reinterpret_cast<intptr_t>(stack)-stack_size);
@@ -58,7 +56,7 @@ public:
 #ifndef NVALGRIND
             VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
 #endif
-            allocator.deallocate(stack, stack_size());
+            stack_allocator::deallocate(stack, stack_size());
         }
     }
 };
