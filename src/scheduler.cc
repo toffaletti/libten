@@ -90,7 +90,7 @@ void scheduler::check_timeout_tasks() {
     });
 }
 
-void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<proc_time_t> when) {
+void scheduler::wait(std::unique_lock <std::mutex> &lock, optional<kernel::time_point> when) {
     // do not wait if _readyq is not empty
     check_dirty_queue();
     if (!_readyq.empty()) return;

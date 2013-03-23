@@ -67,7 +67,6 @@ add_library(ten
     src/json.cc
     src/jsonstream.cc
     src/metrics.cc
-    src/proc.cc
     src/ssl.cc
     src/term.cc
     ${CMAKE_CURRENT_BINARY_DIR}/src/uri_parser.cc

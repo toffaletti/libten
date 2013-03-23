@@ -158,7 +158,7 @@ void io::wakeup() {
     _evfd.write(1);
 }
 
-void io::wait(optional<proc_time_t> when) {
+void io::wait(optional<kernel::time_point> when) {
     // only process 100 events each iteration to keep it fair
     _events.resize(100);
     int ms = -1;

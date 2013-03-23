@@ -113,7 +113,7 @@ void dorequest(shared_ptr<state> st, unsigned reqn) {
             LOG(INFO) << reqn <<  " got " << iowait<unsigned>(reply_chan);
         }
     } catch (deadline_reached &s) {
-        LOG(INFO) << "task " << taskid() << " deadline reached: " << done << " done out of " << conf.work;
+        LOG(INFO) << "task " << this_task::get_id() << " deadline reached: " << done << " done out of " << conf.work;
     }
     taskstate("exiting");
 }

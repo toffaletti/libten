@@ -36,7 +36,7 @@ void yield() {
     t->yield();
 }
 
-void sleep_until(const proc_time_t& sleep_time) {
+void sleep_until(const kernel::time_point& sleep_time) {
     task::impl::cancellation_point cancellable;
     const auto t = scheduler::current_task();
     scheduler::alarm_clock::scoped_alarm sleep_alarm{

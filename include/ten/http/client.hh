@@ -20,7 +20,7 @@ namespace ten {
 class http_client {
 public:
     using lifetime_t = optional<std::chrono::seconds>;
-    using retire_t = optional<proc_time_t>;
+    using retire_t = optional<kernel::time_point>;
     static constexpr double pretire_factor = 0.8;
 private:
     netsock _sock;
@@ -54,10 +54,10 @@ public:
         parse_host_port(_host, _port);
 
         if (lifetime) {
-            _retire = procnow() + *lifetime;
+            _retire = kernel::now() + *lifetime;
             const auto pre_elig = (intmax_t)(lifetime->count() * pretire_factor);
             if (pre_elig >= 1)
-                _pretire = procnow() + lifetime_t::value_type(pre_elig);
+                _pretire = kernel::now() + lifetime_t::value_type(pre_elig);
         }
     }
 
@@ -65,8 +65,8 @@ public:
     uint16_t port() const    { return _port; }
     retire_t pretire() const { return _pretire; }
     retire_t retire() const  { return _retire; }
-    bool pretire_by(proc_time_t when) { return _pretire && when >= *_pretire; }
-    bool retire_by(proc_time_t when)  { return _retire  && when >= *_retire; }
+    bool pretire_by(kernel::time_point when) { return _pretire && when >= *_pretire; }
+    bool retire_by(kernel::time_point when)  { return _retire  && when >= *_retire; }
 
     http_response get(const std::string &path, optional_timeout timeout = nullopt) {
         return perform(hs::GET, path, {}, {}, timeout);
@@ -267,7 +267,7 @@ protected:
 
             while (!im->avail.empty()) {
                 auto c = im->avail.back();
-                if (!c->retire_by(procnow()))
+                if (!c->retire_by(kernel::now()))
                     break;
                 VLOG(3) << im->name << ": LT dropping stale " << c;
                 im->avail.pop_back();
@@ -291,7 +291,7 @@ public:
     explicit http_scoped_resource(http_pool &p)
         : scoped_resource{p},
           _lt{p._lt},
-          _mustdie{_c->pretire_by(procnow())}
+          _mustdie{_c->pretire_by(kernel::now())}
     {
         if (_mustdie) {
             _lt->retired++;

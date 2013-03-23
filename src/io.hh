@@ -47,7 +47,7 @@ public:
     int poll(pollfd *fds, nfds_t nfds, optional_timeout ms);
 
     void wakeup();
-    void wait(optional<proc_time_t> when);
+    void wait(optional<kernel::time_point> when);
 };
 
 } // end namespace ten

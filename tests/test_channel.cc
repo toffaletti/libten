@@ -133,7 +133,8 @@ BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
 }
 
 static void delayed_channel_send(channel<int> c) {
-    tasksleep(100);
+    using namespace std::chrono;
+    this_task::sleep_for(milliseconds{100});
     c.send(5309);
 }
 
@@ -173,7 +174,7 @@ static void wait_on_io() {
     fdwait(s.fd, 'r');
     // yield here, otherwise fdwait in delayed_channel
     // could get the close event on our listening socket
-    taskyield();
+    this_task::yield();
 }
 
 BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
@@ -182,7 +183,7 @@ BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
 }
 
 static void channel_closer_task(channel<int> c, int &closed) {
-    taskyield();
+    this_task::yield();
     c.close();
     closed++;
 }
