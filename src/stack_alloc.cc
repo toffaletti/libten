@@ -75,7 +75,7 @@ void *allocate(size_t stack_size) {
                            [=](const stack &s) { return stack_size == s.size; });
     void *stack_ptr = nullptr;
     if (ri != cache.rend()) {
-        auto i = ri.base() - 1;
+        auto i = (++ri).base();
         csize -= i->size;
         stack_ptr = i->release();
         cache.erase(i);
