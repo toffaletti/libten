@@ -78,21 +78,17 @@ public:
     task &operator=(task &&) = default;
 
     //! spawn a new task in the current thread
-    template<class Function, class... Args> 
-        static task spawn(Function &&f, Args&&... args) {
-            return task{std::bind(f, std::forward<Args>(args)...)};
+    template<class Function> 
+        static task spawn(Function &&f) {
+            return task{f};
         }
 
     //! spawn a new task in a new thread
     // returns a joinable std::thread
-    template<class Function, class... Args> 
-        static std::thread spawn_thread(Function &&f, Args&&... args) {
-            // TODO: variadic templates don't work with lambdas yet
-            // http://gcc.gnu.org/bugzilla/show_bug.cgi?id=41933
-            // work around using std::function and std::bind
-            std::function<void ()> fb{std::bind(f, std::forward<Args>(args)...)};
+    template<class Function> 
+        static std::thread spawn_thread(Function &&f) {
             return std::thread([=] {
-                task::entry(fb);
+                task::entry(f);
                 kernel::wait_for_tasks();
             });
         }
