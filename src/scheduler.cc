@@ -24,12 +24,6 @@ void scheduler::shutdown() {
     if (!_shutdown_sequence_initiated) {
         _shutdown_sequence_initiated = true;
         for (auto &t : _user_tasks) {
-            // don't add ourself to the _readyq
-            // TODO: this assumes the task that called this will
-            // behave and exit itself. perhaps we should cancel it
-            // however if it does exit and it canceled itself
-            // it will be in the readyq and trigger the DCHECK in remove_task
-            if (t.get() == _current_task.get()) continue;
             t->cancel();
         }
         _os_task->cancel();
