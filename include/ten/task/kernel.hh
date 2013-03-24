@@ -2,6 +2,7 @@
 #define TEN_KERNEL_HH
 
 #include "ten/ptr.hh"
+#include "ten/optional.hh"
 #include <chrono>
 
 namespace ten {
@@ -34,7 +35,7 @@ public:
     static int32_t is_computer_on();
     static double is_computer_on_fire();
 
-    kernel();
+    kernel(optional<size_t> stacksize=nullopt);
     ~kernel(); 
 };
 

@@ -10,7 +10,7 @@ namespace ten {
 
 namespace stack_allocator {
 
-std::atomic<size_t> default_stacksize{ (size_t)256 * 1024 };
+size_t default_stacksize{ (size_t)256 * 1024 };
 std::atomic<size_t> cache_maxsize{ (size_t)100 };
 
 // impl

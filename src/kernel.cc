@@ -77,7 +77,12 @@ void kernel::wait_for_tasks() {
     this_ctx->scheduler.wait_for_all();
 }
 
-kernel::kernel() {
+kernel::kernel(optional<size_t> stacksize) {
+    if (stacksize) {
+        CHECK(*stacksize >= stack_allocator::min_stacksize);
+        (void)stack_allocator::initialize(); // ensure static init done
+        stack_allocator::default_stacksize = *stacksize;
+    }
     boot();
 }
 

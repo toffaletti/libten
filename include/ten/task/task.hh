@@ -48,8 +48,8 @@ public:
 
     //! call from main() to setup task system and do boilerplate exception handling
     template <class Func>
-        static int main(Func &&f) {
-            kernel the_kernel;
+        static int main(Func &&f, optional<size_t> stacksize=nullopt) {
+            kernel the_kernel(stacksize);
             return entry(std::forward<Func>(f));
         }
 
@@ -85,9 +85,6 @@ public:
 
     //! cancel the task
     void cancel();
-
-    //! set stack size that tasks will use when spawning
-    static void set_default_stacksize(size_t stacksize);
 };
 
 } // end namespace ten
