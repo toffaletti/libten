@@ -85,6 +85,12 @@ public:
 
     //! cancel the task
     void cancel();
+
+    //! is task joinable
+    bool joinable() noexcept;
+
+    //! join the task
+    void join() noexcept;
 };
 
 } // end namespace ten

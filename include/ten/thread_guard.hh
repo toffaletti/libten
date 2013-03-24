@@ -2,6 +2,7 @@
 #define TEN_THREAD_GUARD_HH
 
 #include <thread>
+#include <system_error>
 
 namespace ten {
 
@@ -30,8 +31,11 @@ public:
     }
 
     ~thread_guard() {
-        if (_thread.joinable()) {
-            _thread.join();
+        try {
+            if (_thread.joinable()) {
+                _thread.join();
+            }
+        } catch (std::system_error &e) {
         }
     }
 };

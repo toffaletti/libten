@@ -61,6 +61,18 @@ void task::cancel() {
     }
 }
 
+bool task::joinable() noexcept {
+    return (bool)_impl;
+}
+
+void task::join() noexcept {
+    // TODO: maybe we want to throw system_error like
+    // std::thread::join when not joinable
+    if (_impl) {
+        _impl->join();
+    }
+}
+
 task::impl::impl()
     : _ctx{},
     _cancel_points{0},
@@ -93,6 +105,13 @@ void task::impl::trampoline(intptr_t arg) {
         task::entry(t->_fn);
     }
     t->_fn = nullptr;
+    t->_join([](joininfo &i){
+        DCHECK(!i.finished);
+        i.finished = true;
+        if (i.joiner) {
+            i.joiner->ready();
+        }
+    });
     const auto sched = t->_scheduler;
     sched->remove_task(t);
     sched->schedule();
@@ -177,6 +196,22 @@ void task::impl::cancel() {
         DVLOG(5) << "canceling " << ptr<task::impl>{this};
         ready();
     }
+}
+
+void task::impl::join() noexcept {
+    const auto t = scheduler::current_task();
+    bool finished = _join([t](joininfo &i) {
+        if (!i.finished) {
+            CHECK(i.joiner == nullptr);
+            i.joiner = t;
+        }
+        return i.finished;
+    });
+    if (!finished) {
+        // join isn't interruptable
+        t->safe_swap();
+    }
+    DCHECK(_join([](joininfo &i) { return i.finished; }));
 }
 
 void task::impl::ready(bool front) {

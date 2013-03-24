@@ -426,25 +426,46 @@ BOOST_AUTO_TEST_CASE(deadline_recent_time) {
 }
 
 BOOST_AUTO_TEST_CASE(task_new_api) {
-    int i = 1;
-    task t = task::spawn([&] {
-        ++i;
-    });
-    this_task::yield();
-    BOOST_CHECK_EQUAL(2, i);
-
-    auto start = kernel::now();
-    std::thread th([&] {
-        // yield to nothing
+    task::main([]{
+        int i = 1;
+        task t = task::spawn([&] {
+            ++i;
+        });
         this_task::yield();
-        ++i;
-        this_task::sleep_for(milliseconds{20});
-        std::this_thread::sleep_for(milliseconds{20});
+        BOOST_CHECK_EQUAL(2, i);
+
+        auto start = kernel::now();
+        std::thread th([&] {
+            // yield to nothing
+            this_task::yield();
+            ++i;
+            this_task::sleep_for(milliseconds{20});
+            std::this_thread::sleep_for(milliseconds{20});
+        });
+        th.join();
+        this_task::yield(); // allow cached time to update
+        auto stop = kernel::now();
+        BOOST_CHECK_EQUAL(3, i);
+        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(stop-start).count(), 40.0, 10.0);
     });
-    th.join();
-    this_task::yield(); // allow cached time to update
-    auto stop = kernel::now();
-    BOOST_CHECK_EQUAL(3, i);
-    BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(stop-start).count(), 40.0, 10.0);
+}
+
+BOOST_AUTO_TEST_CASE(task_join) {
+    task::main([]{
+        task t;
+        BOOST_CHECK(t.joinable() == false);
+        int foo = 0;
+        t = task::spawn([&]{
+            this_task::sleep_for(milliseconds{5});
+            foo = 42;
+        });
+        BOOST_CHECK(t.joinable());
+        BOOST_CHECK(foo == 0);
+        t.join();
+        BOOST_CHECK(t.joinable());
+        BOOST_CHECK(foo == 42);
+        t.join();
+        BOOST_CHECK(t.joinable());
+    });
 }
 

@@ -9,6 +9,7 @@
 #include "ten/logging.hh"
 #include "ten/error.hh"
 #include "ten/ptr.hh"
+#include "ten/synchronized.hh"
 #include "context.hh"
 
 using namespace std::chrono;
@@ -46,6 +47,11 @@ private:
     std::function<void ()> _fn;
     std::atomic<bool> _ready;
     std::atomic<bool> _canceled;
+    struct joininfo {
+        bool finished = false;
+        ptr<task::impl> joiner;
+    };
+    synchronized<joininfo> _join;
 public:
     impl();
     impl(std::function<void ()> f, size_t stacksize);
@@ -71,6 +77,7 @@ public:
 
     uint64_t get_id() const { return _id; }
 
+    void join() noexcept;
 private:
     static void trampoline(intptr_t arg);
 };
