@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(interval_test) {
         std::thread bg([] {
             for (auto n : { 1, 1 }) {
                 std::this_thread::sleep_for(tick);
-                BOOST_MESSAGE("* " << n << " event(s)");
+                VLOG(1) << "* " << n << " event(s)";
                 record().counter("t").incr(n);
             }
         });
