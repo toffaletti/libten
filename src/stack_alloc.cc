@@ -67,19 +67,8 @@ void *allocate(size_t stack_size) {
     // TODO: check stack_size >= min_stacksize (8k because of 4k guard page)
     auto &cache = *stack_cache;
 
-    auto ri = std::find_if(cache.rbegin(), cache.rend(),
-                           [=](const stack &s) { return stack_size == s.size; });
     void *stack_ptr = nullptr;
-    if (ri != cache.rend()) {
-        auto i = (++ri).base();
-        stack_ptr = i->release();
-        cache.erase(i);
-    } else {
-        if (!cache.empty()) { // unlikely
-            // blow away stacks of the wrong size
-            // this should free up some mmap regions
-            cache.clear();
-        }
+    if (cache.empty()) {
         stack_ptr = mmap(nullptr, stack_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE|MAP_STACK, 0, 0);
         if (stack_ptr == MAP_FAILED) {
             throw bad_stack_alloc();
@@ -88,6 +77,9 @@ void *allocate(size_t stack_size) {
             free_stack(stack_ptr, stack_size);
             throw bad_stack_alloc();
         }
+    } else {
+        stack_ptr = cache.back().release();
+        cache.pop_back();
     }
     return reinterpret_cast<void *>(reinterpret_cast<char *>(stack_ptr) + stack_size);
 }
