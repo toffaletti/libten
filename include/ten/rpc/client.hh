@@ -5,6 +5,7 @@
 #include "ten/shared_pool.hh"
 #include "ten/rpc/protocol.hh"
 #include <boost/lexical_cast.hpp>
+#include <netinet/tcp.h>
 
 using namespace msgpack::rpc;
 
