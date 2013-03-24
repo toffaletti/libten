@@ -178,7 +178,6 @@ public:
 //! task/proc aware socket server
 class netsock_server : public std::enable_shared_from_this<netsock_server> {
 protected:
-    netsock _sock;
     std::string _protocol_name;
     optional_timeout _recv_timeout_ms;
 public:
@@ -215,23 +214,21 @@ public:
 
     //! listen and accept connections, and modify baddr to bound address
     void serve(netsock s, address &baddr, unsigned nthreads=1) {
-        _sock = std::move(s);
-        _sock.getsockname(baddr);
+        // use a shared_ptr here so when all accept_loops exit
+        // the socket will be closed
+        std::shared_ptr<netsock> sock = std::make_shared<netsock>(std::move(s));
+        sock->getsockname(baddr);
         LOG(INFO) << "listening for " << _protocol_name
             << " on " << baddr << " with " << nthreads << " threads";
-        _sock.listen();
+        sock->listen();
         auto self = shared_from_this();
         std::vector<thread_guard> threads;
         for (unsigned n=1; n<nthreads; ++n) {
             threads.emplace_back(task::spawn_thread([=] {
-                self->accept_loop();
+                self->accept_loop(sock);
             }));
         }
-        accept_loop();
-    }
-
-    int listen_fd() const {
-        return _sock.s.fd;
+        accept_loop(sock);
     }
 
 protected:
@@ -240,12 +237,12 @@ protected:
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
 
-    virtual void accept_loop() {
+    virtual void accept_loop(std::shared_ptr<netsock> sock) {
         const auto self = shared_from_this();
         for (;;) {
             address client_addr;
             int fd;
-            while ((fd = _sock.accept(client_addr, 0)) >= 0) {
+            while ((fd = sock->accept(client_addr, 0)) >= 0) {
                 if (fd <= 2)
                     throw errorx("somebody closed stdin/stdout/stderr");
                 try {
