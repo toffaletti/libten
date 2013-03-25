@@ -73,12 +73,11 @@ void io::add_pollfds(ptr<task::impl> t, pollfd *fds, nfds_t nfds) {
 int io::remove_pollfds(pollfd *fds, nfds_t nfds) {
     int evented_fds = 0;
     for (nfds_t i=0; i<nfds; ++i) {
-        int fd = fds[i].fd;
-
-        uint32_t saved_events = _pollfds[fd].events;
+        const int fd = fds[i].fd;
+        const auto saved_events = _pollfds[fd].events;
 
         auto it = find_if(begin(_pollfds[fd].tasks), end(_pollfds[fd].tasks),
-                [&](const task_poll_state &st) { return st.pfd == &fds[i]; });
+                          [&](const task_poll_state &st) { return st.pfd == &fds[i]; });
         if (it != end(_pollfds[fd].tasks)) {
             _pollfds[fd].tasks.erase(it);
             // calculate new event mask
