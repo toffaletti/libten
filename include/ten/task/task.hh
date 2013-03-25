@@ -16,6 +16,9 @@ struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
 
+//! dummy type to smooth API change
+enum nostacksize_t { nostacksize };
+
 namespace this_task {
 
 //! id of the current task

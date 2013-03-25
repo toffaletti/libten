@@ -39,7 +39,7 @@ extern const std::string
     Host,
     Date,
     Content_Length,
-    Content_Type, text_plain, app_octet_stream;
+    Content_Type, text_plain, app_json, app_json_utf8, app_octet_stream;
 }
 
 //! http headers
