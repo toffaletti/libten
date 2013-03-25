@@ -55,7 +55,11 @@ namespace hs {
         Host{"Host"},
         Date{"Date"},
         Content_Length{"Content-Length"},
-        Content_Type{"Content-Type"}, text_plain{"text/plain"}, app_octet_stream{"application/octet-stream"};
+        Content_Type{"Content-Type"},
+            text_plain{"text/plain"},
+            app_json{"application/json"},
+            app_json_utf8{"application/json; charset=utf-8"},
+            app_octet_stream{"application/octet-stream"};
 }
 
 const std::string &version_string(http_version ver) {

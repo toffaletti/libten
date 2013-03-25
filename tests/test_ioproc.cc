@@ -18,7 +18,7 @@ BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
 }
 
 static void test_pool() {
-    ioproc io{0, 4};
+    ioproc io{nostacksize, 4};
     iochannel reply_chan;
 
     for (int i=0; i<4; ++i) {

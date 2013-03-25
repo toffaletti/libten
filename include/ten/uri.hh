@@ -117,17 +117,17 @@ public:
         query_params(const std::string &query);
 
         template <typename ValueT, typename ...Args>
-        query_params(std::string key, ValueT value, Args ...args) {
+        query_params(std::string key, ValueT&& value, Args&& ...args) {
             _params.reserve(sizeof...(args));
-            init(key, value, args...);
+            init(std::move(key), std::forward<ValueT>(value), std::forward<Args>(args)...);
         }
 
         // init can go away with delegating constructor support
         void init() {}
         template <typename ValueT, typename ...Args>
-        void init(std::string key, ValueT value, Args ...args) {
-            append<ValueT>(key, value);
-            init(args...);
+        void init(std::string key, ValueT&& value, Args&& ...args) {
+            append<ValueT>(std::move(key), std::forward<ValueT>(value));
+            init(std::forward<Args>(args)...);
         }
 
         void append(const std::string &key, const std::string &value) {
