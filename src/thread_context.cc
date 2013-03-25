@@ -1,4 +1,5 @@
 #include "thread_context.hh"
+#include "ten/synchronized.hh"
 
 namespace ten {
 
@@ -14,57 +15,53 @@ namespace {
         ~stoplog_t() { if (glog_inited) ShutdownGoogleLogging(); }
     } stoplog;
 
-    static std::mutex threads_mutex;
-    static std::vector<ptr<thread_context>> threads;
-} // namespace
+    using tvec_t = std::vector<ptr<thread_context>>;
+    static synchronized<tvec_t> threads;
+} // anon namespace
 
 inotify_fd resolv_conf_watch_fd{IN_NONBLOCK};
 thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::_cache;
 thread_cached<runtime_tag, thread_context> this_ctx;
 // *** end global ordering **
 
-static void add_thread(ptr<thread_context> ctx) {
-    using namespace std;
-    lock_guard<mutex> lock{threads_mutex};
-    threads.push_back(ctx);
-}
-
-static void remove_thread(ptr<thread_context> ctx) {
-    using namespace std;
-    lock_guard<mutex> lock{threads_mutex};
-    auto i = find(begin(threads), end(threads), ctx);
-    threads.erase(i);
-}
-
 thread_context::thread_context() {
     kernel::boot();
-    add_thread(ptr<thread_context>{this});
+    const ptr<thread_context> me(this);
+    threads([me](tvec_t &tvec) {
+        tvec.push_back(me);
+    });
 }
 
 thread_context::~thread_context() {
-    remove_thread(ptr<thread_context>{this});
+    const ptr<thread_context> me(this);
+    threads([me](tvec_t &tvec){
+        auto i = find(begin(tvec), end(tvec), me);
+        if (i == end(tvec))
+            LOG(FATAL) << "BUG: thread " << (void*)me.get() << " escaped the thread list";
+        tvec.erase(i);
+    });
 }
 
 size_t thread_context::count() {
-    using namespace std;
-    lock_guard<mutex> lock{threads_mutex};
-    return threads.size();
+    return threads([](const tvec_t &tvec){
+        return tvec.size();
+    });
 }
 
 void thread_context::cancel_all() {
-    using namespace std;
-    lock_guard<mutex> lock{threads_mutex};
-    for (auto &ctx : threads) {
-        ctx->scheduler.cancel();
-    }
+    threads([](const tvec_t &tvec){
+        for (auto &ctx : tvec) {
+            ctx->scheduler.cancel();
+        }
+    });
 }
 
 void thread_context::dump_all() {
-    using namespace std;
-    lock_guard<mutex> lock{threads_mutex};
-    for (auto &ctx : threads) {
-        ctx->scheduler.dump();
-    }
+    threads([](const tvec_t &tvec){
+        for (auto &ctx : tvec) {
+            ctx->scheduler.dump();
+        }
+    });
 }
 
 } // ten
