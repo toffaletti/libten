@@ -21,14 +21,14 @@ deadline::deadline(milliseconds ms) {
 
 void deadline::_set_deadline(milliseconds ms) {
     if (ms.count() < 0)
-        throw errorx("negative deadline: %jdms", intmax_t(ms.count()));
+        throw_stream() << "negative deadline: " << ms;
     if (ms.count() > 0) {
         const auto t = scheduler::current_task();
         auto now = kernel::now();
         _pimpl.reset(new deadline_pimpl{
                 this_ctx->scheduler.arm_alarm(t, ms+now, deadline_reached{})
                 });
-        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms.count() << "ms";
+        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms;
     }
 }
 

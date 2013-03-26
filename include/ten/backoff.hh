@@ -3,6 +3,7 @@
 
 #include "ten/error.hh"
 #include <chrono>
+#include <chrono_io>
 #include <random>
 
 namespace ten {
@@ -26,7 +27,7 @@ public:
           _scale(scale)
     {
         if (min_delay.count() < 0 || min_delay > max_delay)
-            throw errorx("invalid backoff(%jd, %jd)", intmax_t(min_delay.count()), intmax_t(max_delay.count()));
+            throw_stream() << "invalid backoff(" << min_delay << ", " << max_delay << ")";
     }
 
     void reset() { _try = 0; }

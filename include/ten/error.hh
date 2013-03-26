@@ -3,6 +3,8 @@
 
 #include <exception>
 #include <algorithm>
+#include <memory>
+#include <sstream>
 #include <cstdarg>
 #include <cstdio>
 #include <string>
@@ -101,6 +103,31 @@ template <class NotBool, class ...Args>
 void throw_if(NotBool, Args ...args) {
     static_assert(std::is_same<NotBool, bool>::value, "using throw_if without a boolean");
 }
+
+//! conveniently create an errorx with stream output
+
+template <class Exception>
+class error_stream {
+    std::unique_ptr<std::ostringstream> _os;
+
+public:
+    error_stream()                     : _os(new std::ostringstream) {}
+    error_stream(error_stream &&other) : _os(other._os.release())    {}
+    ~error_stream()                    { if (_os) throw Exception(_os->str()); }
+
+    error_stream(const error_stream &) = delete;
+    error_stream & operator = (const error_stream &) = delete;
+    error_stream & operator = (error_stream &&) = delete;
+
+    template <class T>
+    error_stream & operator << (const T &t) {
+        if (_os) *_os << t;
+        return *this;
+    }
+};
+
+template <class Exception = errorx>
+inline error_stream<Exception> throw_stream() { return error_stream<Exception>(); }
 
 } // end namespace ten
 
