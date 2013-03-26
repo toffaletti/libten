@@ -34,7 +34,7 @@ thread_context::thread_context() {
 
 thread_context::~thread_context() {
     const ptr<thread_context> me(this);
-    threads([me](tvec_t &tvec){
+    threads([me](tvec_t &tvec) {
         auto i = find(begin(tvec), end(tvec), me);
         if (i == end(tvec))
             LOG(FATAL) << "BUG: thread " << (void*)me.get() << " escaped the thread list";
@@ -43,13 +43,13 @@ thread_context::~thread_context() {
 }
 
 size_t thread_context::count() {
-    return threads([](const tvec_t &tvec){
+    return threads([](const tvec_t &tvec) {
         return tvec.size();
     });
 }
 
 void thread_context::cancel_all() {
-    threads([](const tvec_t &tvec){
+    threads([](const tvec_t &tvec) {
         for (auto &ctx : tvec) {
             ctx->scheduler.cancel();
         }
@@ -57,7 +57,7 @@ void thread_context::cancel_all() {
 }
 
 void thread_context::dump_all() {
-    threads([](const tvec_t &tvec){
+    threads([](const tvec_t &tvec) {
         for (auto &ctx : tvec) {
             ctx->scheduler.dump();
         }

@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(interval_test) {
         // put all test events into the middle of the collection window
         this_task::sleep_for(duration_cast<milliseconds>(tick) / 2);
 
-        std::thread bg([]{
+        std::thread bg([] {
             for (auto n : { 1, 1 }) {
                 std::this_thread::sleep_for(tick);
                 BOOST_MESSAGE("* " << n << " event(s)");

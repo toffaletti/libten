@@ -74,7 +74,7 @@ public:
     // returns a joinable std::thread
     template<class Function> 
         static std::thread spawn_thread(Function &&f) {
-            return std::thread([=] {
+            return std::thread([f] {
                 task::entry(f);
                 kernel::wait_for_tasks();
             });
