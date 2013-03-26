@@ -31,10 +31,12 @@ class sockbase {
 public:
     socket_fd s;
 
-    sockbase(int domain, int type, int protocol=0)
-        : s(domain, type | SOCK_NONBLOCK, protocol) {}
     sockbase(int fd=-1) noexcept
         : s(fd) {}
+    sockbase(socket_fd sfd) noexcept
+        : s(std::move(sfd)) {}
+    sockbase(int domain, int type, int protocol=0)
+        : s(domain, type | SOCK_NONBLOCK, protocol) {}
 
     sockbase(const sockbase &) = delete;
     sockbase &operator =(const sockbase &) = delete;
