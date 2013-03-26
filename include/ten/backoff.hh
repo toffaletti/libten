@@ -42,6 +42,12 @@ public:
     }
 };
 
+template <typename D1, typename D2,
+          typename DurationT = typename std::common_type<D1, D2>::type>
+inline backoff<DurationT> make_backoff(D1 d1, D2 d2, float scale = 1.0f) {
+    return backoff<DurationT>(d1, d2, scale);
+}
+
 } // end namespace ten
 
 #endif // LIBTEN_BACKOFF_HH
