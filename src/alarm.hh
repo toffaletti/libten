@@ -11,7 +11,8 @@ namespace ten {
 
 template <class T, class Clock>
 struct alarm_clock {
-    typedef std::chrono::time_point<Clock> time_point;
+    typedef typename Clock::time_point time_point;
+    typedef typename Clock::duration   duration;
 
 private:
     struct data {
@@ -132,16 +133,14 @@ public:
                 _data = _set->insert(value, when, e);
             }
 
-        std::chrono::milliseconds remaining() const {
-            using namespace std::chrono;
+        duration remaining() const {
             if (_armed) {
-                time_point now = Clock::now();
-                if (now > _data.when) {
-                    return milliseconds{0};
-                }
-                return duration_cast<milliseconds>(_data.when - now);
+                const time_point now = Clock::now();
+                const duration rem = _data.when - now;
+                if (rem > duration::zero())
+                    return rem;
             }
-            return milliseconds{0};
+            return duration::zero();
         }
 
         void cancel() {
