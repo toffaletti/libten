@@ -9,7 +9,8 @@ namespace ten {
 class kernel {
 public:
     using clock = std::chrono::steady_clock;
-    using time_point = std::chrono::time_point<clock>;
+    using time_point = clock::time_point;
+    using duration   = clock::duration;
 
     //! return cached time from event loop, not precise
     static time_point now();

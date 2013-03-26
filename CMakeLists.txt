@@ -85,6 +85,7 @@ add_library(ten
     src/io.cc
     src/error.cc
     src/app.cc
+    src/chrono_io.cpp
     )
 add_dependencies(ten libglog ragel_uri_parser double-conversion)
 
