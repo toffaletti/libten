@@ -11,11 +11,11 @@ struct deadline_reached : task_interrupted {};
 struct deadline_pimpl;
 
 //! schedule a deadline to interrupt task with
-//! deadline_reached exception after N milliseconds
+//! deadline_reached exception after given time
 class deadline {
 private:
     std::unique_ptr<deadline_pimpl> _pimpl;
-    void _set_deadline(std::chrono::milliseconds ms);
+    void _set_deadline(kernel::duration dur);
 public:
     deadline(optional_timeout timeout);
     deadline(std::chrono::milliseconds ms); // deprecated

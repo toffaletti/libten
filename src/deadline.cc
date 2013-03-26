@@ -1,5 +1,6 @@
 #include "ten/task.hh"
 #include "thread_context.hh"
+#include <chrono_io>
 
 namespace ten {
 
@@ -19,16 +20,16 @@ deadline::deadline(milliseconds ms) {
     _set_deadline(ms);
 }
 
-void deadline::_set_deadline(milliseconds ms) {
-    if (ms.count() < 0)
-        throw_stream() << "negative deadline: " << ms;
-    if (ms.count() > 0) {
+void deadline::_set_deadline(kernel::duration dur) {
+    if (dur.count() < 0)
+        throw_stream() << "negative deadline: " << dur;
+    if (dur.count() > 0) {
         const auto t = scheduler::current_task();
         auto now = kernel::now();
         _pimpl.reset(new deadline_pimpl{
-                this_ctx->scheduler.arm_alarm(t, ms+now, deadline_reached{})
+                this_ctx->scheduler.arm_alarm(t, now + dur, deadline_reached{})
                 });
-        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << ms;
+        DVLOG(5) << "deadline alarm armed: " << _pimpl->alarm._armed << " in " << dur;
     }
 }
 
@@ -44,7 +45,8 @@ deadline::~deadline() {
 
 optional_timeout deadline::remaining() const {
     if (_pimpl) {
-        return _pimpl->alarm.remaining();
+        // TODO: define optional_timeout in terms of kernel::duration, so this is not lossy
+        return duration_cast<optional_timeout::value_type>(_pimpl->alarm.remaining());
     }
     return nullopt;
 }
