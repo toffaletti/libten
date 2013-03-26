@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(timer_test) {
     using namespace metrics;
     using namespace std::chrono;
     time_op to("timer1");
-    usleep(5*1000); 
+    usleep(5*1000);
     to.stop();
     auto mg = global.aggregate();
     auto v = value<timer>(mg, "timer1");

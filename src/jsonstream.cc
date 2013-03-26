@@ -13,8 +13,8 @@ std::string jsonstream::double_to_string(double val) {
 
     DoubleToStringConverter conv(
             DoubleToStringConverter::EMIT_POSITIVE_EXPONENT_SIGN |
-                DoubleToStringConverter::EMIT_TRAILING_DECIMAL_POINT | 
-                DoubleToStringConverter::EMIT_TRAILING_ZERO_AFTER_POINT | 
+                DoubleToStringConverter::EMIT_TRAILING_DECIMAL_POINT |
+                DoubleToStringConverter::EMIT_TRAILING_ZERO_AFTER_POINT |
                 DoubleToStringConverter::UNIQUE_ZERO,
             infinity_symbol,
             nan_symbol,

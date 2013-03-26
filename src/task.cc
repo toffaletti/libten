@@ -33,7 +33,7 @@ uint64_t get_id() {
 
 void yield() {
     const auto t = scheduler::current_task();
-    t->yield(); 
+    t->yield();
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
