@@ -273,7 +273,7 @@ struct socket_fd : fd_base {
     socket_fd(int fd_) noexcept : fd_base(fd_) {}
 
     //! bind socket to address
-    void bind(address &addr) {
+    void bind(const address &addr) {
         throw_if(::bind(fd, addr.sockaddr(), addr.addrlen()) == -1);
     }
 

@@ -33,7 +33,7 @@ uint64_t get_id() {
 
 void yield() {
     const auto t = scheduler::current_task();
-    t->yield(); 
+    t->yield();
 }
 
 void sleep_until(const proc_time_t& sleep_time) {
@@ -46,8 +46,8 @@ void sleep_until(const proc_time_t& sleep_time) {
 } // this_task
 
 
-task::task(const std::function<void ()> &f)
-    : _impl{std::make_shared<task::impl>(f, current_stacksize)}
+task::task(std::function<void ()> f)
+    : _impl{std::make_shared<task::impl>(std::move(f), current_stacksize)}
 {
     this_ctx->scheduler.attach_task(_impl);
     // add new tasks to front of runqueue
@@ -80,12 +80,12 @@ task::impl::impl()
     setstate("new");
 }
 
-task::impl::impl(const std::function<void ()> &f, size_t stacksize)
+task::impl::impl(std::function<void ()> f, size_t stacksize)
     : _ctx{task::impl::trampoline, stacksize},
     _cancel_points{0},
     _aux{new auxinfo{}},
     _id{++taskidgen},
-    _fn{f},
+    _fn{std::move(f)},
     _ready{false},
     _canceled{false}
 {
@@ -104,6 +104,22 @@ void task::impl::trampoline(intptr_t arg) {
     sched->schedule();
     // never get here
     LOG(FATAL) << "Oh no! You fell through the trampoline in " << t;
+}
+
+int task::entry(std::function<void()> f) {
+    try {
+        f();
+        return EXIT_SUCCESS;
+    } catch (deadline_reached &e) {
+        DVLOG(5) << "task " << ten::this_task::get_id() << " crossed a deadline";
+    } catch (task_interrupted &e) {
+        DVLOG(5) << "task " << ten::this_task::get_id() << " interrupted";
+    } catch (backtrace_exception &e) {
+        LOG(ERROR) << "unhandled exception: " << e.what() << "\n" << e.backtrace_str();
+    } catch (std::exception &e) {
+        LOG(ERROR) << "unhandled exception: " << e.what();
+    }
+    return EXIT_FAILURE;
 }
 
 void task::impl::setname(const char *fmt, ...) {
@@ -191,7 +207,7 @@ task::impl::cancellation_point::~cancellation_point() {
 // should be in compat.cc but here because of current_stacksize mess
 uint64_t taskspawn(const std::function<void ()> &f, size_t stacksize) {
     // XXX: stacksize is ignored now
-    task t = task::spawn(f);
+    task t = task::spawn(std::move(f));
     return t.get_id();
 }
 

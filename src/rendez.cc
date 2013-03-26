@@ -19,11 +19,11 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
     // otherwise another thread might modify the condition and
     // call wakeup() and waiting would be empty so we'd sleep forever
     lk.unlock();
-    try 
+    try
     {
         {
             task::impl::cancellation_point cancellable;
-            t->swap(); 
+            t->swap();
         }
         lk.lock();
     } catch (...) {

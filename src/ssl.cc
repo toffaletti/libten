@@ -235,12 +235,17 @@ sslerror::sslerror() {
 
 
 sslsock::sslsock(int fd)
-    : sockbase(fd), ctx(0), bio(0)
+    : sockbase(fd)
+{
+}
+
+sslsock::sslsock(netsock ns)
+    : sockbase(std::move(ns))
 {
 }
 
 sslsock::sslsock(int domain, int type, int protocol)
-    : sockbase(domain, type | SOCK_NONBLOCK, protocol), ctx(0), bio(0)
+    : sockbase(domain, type | SOCK_NONBLOCK, protocol)
 {
 }
 

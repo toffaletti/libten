@@ -397,7 +397,7 @@ public:
         if (_stopped) return;
         _stopped = true;
         _elapsed = std::chrono::duration_cast<timer::value_type>(clock_type::now() - _start);
-        _g([this](group_map &m){ 
+        _g([this](group_map &m) {
             get<timer>(m, _name).update(_elapsed);
         });
     }

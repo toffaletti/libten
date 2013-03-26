@@ -4,7 +4,7 @@
 namespace ten {
 
 scheduler::scheduler()
-  : _os_task{std::make_shared<task::impl>()}, 
+  : _os_task{std::make_shared<task::impl>()},
     _current_task{_os_task.get()},
     _canceled{false}
 {

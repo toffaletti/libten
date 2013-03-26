@@ -48,7 +48,7 @@ private:
     std::atomic<bool> _canceled;
 public:
     impl();
-    impl(const std::function<void ()> &f, size_t stacksize);
+    impl(std::function<void ()> f, size_t stacksize);
 
     void setname(const char *fmt, ...) __attribute__((format (printf, 2, 3)));
     void vsetname(const char *fmt, va_list arg);

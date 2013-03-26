@@ -22,38 +22,21 @@ BIO *BIO_new_netfd(int fd, int close_flag);
 //! task io aware SSL wrapper
 class sslsock : public sockbase {
 public:
-    SSL_CTX *ctx;
-    BIO *bio;
+    SSL_CTX *ctx = nullptr;
+    BIO *bio = nullptr;
 
     sslsock(int fd=-1);
+    sslsock(netsock ns);
     sslsock(int domain, int type, int protocol=0);
+
+    sslsock(sslsock &&other) = default;
+    sslsock & operator = (sslsock &&other) = default;
 
     ~sslsock() override;
 
     //! false for server mode
     void initssl(SSL_CTX *ctx_, bool client);
     void initssl(const SSL_METHOD *method, bool client);
-
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    // C++0x move stuff
-    sslsock(netsock &&other) : sockbase(), ctx(0), bio(0) {
-        std::swap(s, other.s);
-    }
-
-    sslsock(sslsock &&other) : sockbase(), ctx(0), bio(0) {
-        std::swap(s, other.s);
-        std::swap(ctx, other.ctx);
-        std::swap(bio, other.bio);
-    }
-    sslsock &operator = (sslsock &&other) {
-        if (this != &other) {
-            std::swap(s, other.s);
-            std::swap(ctx, other.ctx);
-            std::swap(bio, other.bio);
-        }
-        return *this;
-    }
-#endif
 
     //! dial requires a large 8MB stack size for getaddrinfo
     void dial(const char *addr,
