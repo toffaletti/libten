@@ -50,7 +50,7 @@ public:
     int fcntl(int cmd) { return s.fcntl(cmd); }
     int fcntl(int cmd, long arg) { return s.fcntl(cmd, arg); }
 
-    void bind(address &addr) { s.bind(addr); }
+    void bind(const address &addr) { s.bind(addr); }
     // use a ridiculous number, kernel will truncate to max
     void listen(int backlog=100000) { s.listen(backlog); }
     bool getpeername(address &addr) __attribute__((warn_unused_result)) {
@@ -200,7 +200,7 @@ public:
         serve(baddr, threads);
     }
 
-    //! listen and accept connections
+    //! listen and accept connections, and modify baddr to bound address
     void serve(address &baddr, unsigned threads=1) {
         // listening sockets we do want to share across exec
         netsock s = netsock(baddr.family(), SOCK_STREAM);
@@ -211,9 +211,9 @@ public:
         serve(std::move(s), baddr, threads);
     }
 
-    //! listen and accept connections
+    //! listen and accept connections, and modify baddr to bound address
     void serve(netsock s, address &baddr, unsigned nthreads=1) {
-        std::swap(_sock, s);
+        _sock = std::move(s);
         _sock.getsockname(baddr);
         LOG(INFO) << "listening for " << _protocol_name
             << " on " << baddr << " with " << nthreads << " threads";
