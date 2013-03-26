@@ -44,32 +44,19 @@ public:
     class impl;
 
     //! task entry boilerplate exception handling
-    template <class Func>
-        static int entry(Func &&f) {
-            try {
-                f();
-                return EXIT_SUCCESS;
-            } catch (ten::task_interrupted &e) {
-                DVLOG(5) << "task " << ten::this_task::get_id() << " interrupted ";
-            } catch (ten::backtrace_exception &e) {
-                LOG(ERROR) << "unhandled error: " << e.what() << "\n" << e.backtrace_str();
-            } catch (std::exception &e) {
-                LOG(ERROR) << "unhandled error: " << e.what();
-            }
-            return EXIT_FAILURE;
-        }
+    static int entry(std::function<void ()> f);
 
     //! call from main() to setup task system and do boilerplate exception handling
     template <class Func>
         static int main(Func &&f) {
             kernel the_kernel;
-            return task::entry(std::forward<Func>(f));
+            return entry(std::forward<Func>(f));
         }
 
 private:
     std::shared_ptr<impl> _impl;
 
-    explicit task(const std::function<void ()> &f);
+    explicit task(std::function<void ()> f);
 public:
     task() {}
     task(const task &) = delete;
@@ -87,7 +74,7 @@ public:
     // returns a joinable std::thread
     template<class Function> 
         static std::thread spawn_thread(Function &&f) {
-            return std::thread([=] {
+            return std::thread([f] {
                 task::entry(f);
                 kernel::wait_for_tasks();
             });

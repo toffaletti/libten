@@ -45,8 +45,8 @@ static void start_http_test() {
     address http_addr("0.0.0.0");
     task server_task = task::spawn([&] {
         start_http_server(http_addr);
-    }); 
-    this_task::yield(); // allow server to bind and listen
+    });
+    this_task::yield(); // allow server to bind, set http_addr, and listen
     http_client c{http_addr.str()};
     http_response resp = c.get("/");
     BOOST_CHECK_EQUAL("Hello World", resp.body);
