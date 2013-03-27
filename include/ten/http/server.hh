@@ -139,7 +139,7 @@ struct http_exchange {
 class http_server : public netsock_server {
 public:
     using log_func_t = http_exchange::log_func_t;
-    typedef std::function<void (http_exchange &)> callback_type;
+    using callback_type = std::function<void (http_exchange &)>;
 
     std::function<void ()> connect_watch;
     std::function<void ()> disconnect_watch;
