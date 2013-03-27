@@ -4,13 +4,14 @@
 namespace ten {
 
 namespace {
-static __thread size_t current_stacksize = stack_allocator::default_stacksize;
-static std::atomic<uint64_t> taskidgen(0);
+std::atomic<uint64_t> taskidgen(0);
 }
 
 void task::set_default_stacksize(size_t stacksize) {
     CHECK(stacksize >= stack_allocator::min_stacksize);
-    current_stacksize = stacksize;
+
+    (void)stack_allocator::initialize(); // ensure static init done
+    stack_allocator::default_stacksize = stacksize;
 }
 
 std::ostream &operator << (std::ostream &o, ptr<task::impl> t) {
@@ -47,7 +48,7 @@ void sleep_until(const proc_time_t& sleep_time) {
 
 
 task::task(std::function<void ()> f)
-    : _impl{std::make_shared<task::impl>(std::move(f), current_stacksize)}
+    : _impl{std::make_shared<task::impl>(std::move(f), stack_allocator::default_stacksize)}
 {
     this_ctx->scheduler.attach_task(_impl);
     // add new tasks to front of runqueue

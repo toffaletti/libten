@@ -80,6 +80,7 @@ add_library(ten
     src/compat.cc
     src/kernel.cc
     src/thread_context.cc
+    src/stack_alloc.cc
     src/task.cc
     src/scheduler.cc
     src/io.cc
