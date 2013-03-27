@@ -4,11 +4,13 @@
 namespace ten {
 
 namespace {
-static std::atomic<uint64_t> taskidgen(0);
+std::atomic<uint64_t> taskidgen(0);
 }
 
 void task::set_default_stacksize(size_t stacksize) {
     CHECK(stacksize >= stack_allocator::min_stacksize);
+
+    (void)stack_allocator::initialize(); // ensure static init done
     stack_allocator::default_stacksize = stacksize;
 }
 
