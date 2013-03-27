@@ -7,6 +7,7 @@ bool glog_inited;
 
 namespace {
     std::once_flag boot_flag;
+    void *signal_stack; // for valgrind
 }
 
 static void kernel_boot() {
@@ -19,8 +20,9 @@ static void kernel_boot() {
     // ten::application turns this off again in favor of finer control.
     FLAGS_logtostderr = true;
 
+    signal_stack = calloc(1, SIGSTKSZ);
     stack_t ss;
-    ss.ss_sp = calloc(1, SIGSTKSZ);
+    ss.ss_sp = signal_stack;
     ss.ss_size = SIGSTKSZ;
     ss.ss_flags = 0;
     throw_if(sigaltstack(&ss, NULL) == -1);
