@@ -240,22 +240,23 @@ protected:
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
 
-    virtual void on_connection(netsock &s) = 0;
-
     virtual void accept_loop() {
+        const auto self = shared_from_this();
         for (;;) {
             address client_addr;
             int fd;
             while ((fd = _sock.accept(client_addr, 0)) >= 0) {
                 if (fd <= 2)
                     throw errorx("somebody closed stdin/stdout/stderr");
-                auto self = shared_from_this();
                 try {
                     task::spawn([=] {
                         self->client_task(fd);
                     });
                 } catch (std::bad_alloc &e) {
                     ::close(fd);
+                } catch (...) {
+                    ::close(fd);
+                    throw;
                 }
                 this_task::yield(); // yield to new client task
             }
@@ -270,6 +271,8 @@ protected:
             LOG(ERROR) << "unhandled client task error: " << e.what();
         }
     }
+
+    virtual void on_connection(netsock &s) = 0;
 };
 
 } // end namespace ten

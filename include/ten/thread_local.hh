@@ -66,6 +66,10 @@ public:
         return reinterpret_cast<T*>(&storage);
     }
 
+    T &operator* () {
+        return *get();
+    }
+
     T *operator-> () {
         return get();
     }
