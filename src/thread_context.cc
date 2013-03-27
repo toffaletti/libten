@@ -20,7 +20,7 @@ namespace {
 } // anon namespace
 
 inotify_fd resolv_conf_watch_fd{IN_NONBLOCK};
-thread_cached<stack_allocator::stack_cache, std::list<stack_allocator::stack>> stack_allocator::_cache;
+thread_cached<stack_allocator::stack_cache, std::vector<stack_allocator::stack>> stack_allocator::_cache;
 thread_cached<runtime_tag, thread_context> this_ctx;
 // *** end global ordering **
 
