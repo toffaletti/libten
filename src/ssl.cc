@@ -107,7 +107,8 @@ static int netfd_connect(BIO *b) {
             return -1;
         }
     }
-    try { netdial(b->num, s->param_hostname, s->port, {}); }
+    // NOTE: if we add a timeout then b->num will need to be closed on failure
+    try { netdial(b->num, s->param_hostname, s->port, nullopt); }
     catch (hostname_error &) { return 0; } // TODO: log
     catch (errno_error &)    { return 0; } // TODO: log
     return 1;

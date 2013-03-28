@@ -9,6 +9,7 @@
 #include "ten/uri.hh"
 #include "ten/task.hh"
 #include <atomic>
+#include <chrono_io>
 #include <netinet/tcp.h>
 
 namespace ten {
@@ -27,29 +28,33 @@ private:
     buffer _buf;
     std::string _host;
     uint16_t _port;
+    optional_timeout _conn_timeout;
     retire_t _pretire, _retire;
 
     void ensure_connection() {
         if (!_sock.valid()) {
-            _sock = std::move(netsock(AF_INET, SOCK_STREAM));
-            if (!_sock.valid()) {
+            netsock cs{AF_INET, SOCK_STREAM};
+            if (!cs.valid()) {
                 throw http_makesock_error{};
             }
             try {
-                _sock.dial(_host.c_str(), _port);
-            }
-            catch (const std::exception &e) {
+                cs.dial(_host.c_str(), _port, _conn_timeout);
+            } catch (const errno_error &e) {
+                throw http_dial_error{e.error(), e.what()};
+            } catch (const std::exception &e) {
                 throw http_dial_error{e.what()};
             }
-            _sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+            cs.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+            _sock = std::move(cs);
         }
     }
 
 public:
     size_t max_content_length = ~(size_t)0;
 
-    http_client(const std::string &host_, uint16_t port_ = 80, lifetime_t lifetime = nullopt)
-        : _buf(4*1024), _host(host_), _port(port_)
+    http_client(const std::string &host_, uint16_t port_ = 80,
+                lifetime_t lifetime = nullopt, optional_timeout conn_timeout = nullopt)
+        : _buf(4*1024), _host(host_), _port(port_), _conn_timeout(conn_timeout)
     {
         parse_host_port(_host, _port);
 
@@ -61,12 +66,13 @@ public:
         }
     }
 
-    std::string host() const { return _host; }
-    uint16_t port() const    { return _port; }
-    retire_t pretire() const { return _pretire; }
-    retire_t retire() const  { return _retire; }
-    bool pretire_by(kernel::time_point when) { return _pretire && when >= *_pretire; }
-    bool retire_by(kernel::time_point when)  { return _retire  && when >= *_retire; }
+    std::string host() const                       { return _host; }
+    uint16_t port() const                          { return _port; }
+    optional_timeout conn_timeout() const          { return _conn_timeout; }
+    retire_t pretire() const                       { return _pretire; }
+    retire_t retire() const                        { return _retire; }
+    bool pretire_by(kernel::time_point when) const { return _pretire && when >= *_pretire; }
+    bool retire_by(kernel::time_point when) const  { return _retire  && when >= *_retire; }
 
     http_response get(const std::string &path, optional_timeout timeout = nullopt) {
         return perform(hs::GET, path, {}, {}, timeout);
@@ -156,7 +162,8 @@ public:
             VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
         } catch (errorx &e) {
-            _sock.close();
+            if (_sock.valid())
+                _sock.close();
             throw;
         }
     }
@@ -175,7 +182,8 @@ public:
     http_pool(const std::string &host_,
             uint16_t port_,
             optional<size_t> max_conn = nullopt,
-            http_client::lifetime_t lifetime_ = nullopt)
+            http_client::lifetime_t lifetime_ = nullopt,
+            optional_timeout conn_timeout_ = nullopt)
         : shared_pool<http_client>(
             "http://" + host_ + ":" + std::to_string(port_),
             std::bind(&http_pool::new_resource, this),
@@ -183,11 +191,12 @@ public:
           ),
           _host(host_),
           _port(port_),
-          _lifetime(lifetime_)
+          _lifetime(lifetime_),
+          _conn_timeout(conn_timeout_)
     {
-        if (_lifetime && _lifetime->count() <= 0)
-            throw errorx("%s: invalid client lifetime %jdms", name().c_str(), (intmax_t)_lifetime->count());
         if (_lifetime) {
+            if (_lifetime->count() <= 0)
+                throw_stream() << name() << ": invalid client lifetime " << *_lifetime;
             _lt = std::make_shared<lt_state>();
             _lt->t = task::spawn([=] {
                 _lt_run(_impl(), _lt, _lifetime);
@@ -199,6 +208,7 @@ protected:
     std::string _host;
     uint16_t _port;
     http_client::lifetime_t _lifetime;
+    optional_timeout _conn_timeout;
 
     struct lt_state {
         task t;
@@ -213,7 +223,7 @@ protected:
 
     res_ptr new_resource() {
         VLOG(3) << name() << ": new http_client resource " << _host << ":" << _port;
-        return std::make_shared<http_client>(_host, _port, _lifetime);
+        return std::make_shared<http_client>(_host, _port, _lifetime, _conn_timeout);
     }
 
     // periodically check the items at the front of the avail queue.

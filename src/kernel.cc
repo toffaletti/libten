@@ -22,7 +22,7 @@ static void kernel_boot() {
 
     signal_stack = calloc(1, SIGSTKSZ);
 #ifndef NVALGRIND
-    (void)VALGRIND_STACK_REGISTER(signal_stack+SIGSTKSZ, signal_stack);
+    (void)VALGRIND_STACK_REGISTER(static_cast<char *>(signal_stack) + SIGSTKSZ, signal_stack);
 #endif
     stack_t ss;
     ss.ss_sp = signal_stack;

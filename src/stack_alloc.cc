@@ -78,14 +78,16 @@ void *allocate(size_t stack_size) {
             throw bad_stack_alloc();
         }
     } else {
-        stack_ptr = cache.back().release();
+        auto &reuse = cache.back();
+        PCHECK(reuse.size == stack_size);
+        stack_ptr = reuse.release();
         cache.pop_back();
     }
-    return reinterpret_cast<void *>(reinterpret_cast<char *>(stack_ptr) + stack_size);
+    return static_cast<char *>(stack_ptr) + stack_size;
 }
 
 void deallocate(void *stack_end, size_t stack_size) noexcept {
-    void *stack_ptr = reinterpret_cast<void *>(reinterpret_cast<char *>(stack_end) - stack_size);
+    void *stack_ptr = static_cast<char *>(stack_end) - stack_size;
     auto &cache = *stack_cache;
 
     try {
