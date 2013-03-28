@@ -162,7 +162,8 @@ public:
             VLOG(4) << "<- " << resp.status_code << " [" << resp.body.size() << "]";
             return resp;
         } catch (errorx &e) {
-            _sock.close();
+            if (_sock.valid())
+                _sock.close();
             throw;
         }
     }
