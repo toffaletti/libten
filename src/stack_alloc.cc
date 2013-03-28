@@ -78,7 +78,9 @@ void *allocate(size_t stack_size) {
             throw bad_stack_alloc();
         }
     } else {
-        stack_ptr = cache.back().release();
+        auto &reuse = cache.back();
+        PCHECK(reuse.size == stack_size);
+        stack_ptr = reuse.release();
         cache.pop_back();
     }
     return static_cast<char *>(stack_ptr) + stack_size;
