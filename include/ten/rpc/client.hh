@@ -66,16 +66,18 @@ protected:
 
     void ensure_connection() {
         if (!s.valid()) {
-            s = std::move(netsock(AF_INET, SOCK_STREAM));
-            if (!s.valid()) {
+            netsock cs{AF_INET, SOCK_STREAM};
+            if (!cs.valid()) {
                 throw rpc_failure("socket");
             }
             try {
-                s.dial(hostname.c_str(), port);
+                cs.dial(hostname.c_str(), port);
             }
             catch (const std::exception &e) {
                 throw rpc_failure(e.what());
             }
+            cs.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
+            s = std::move(cs);
         }
     }
 
