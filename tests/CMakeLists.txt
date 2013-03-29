@@ -7,6 +7,8 @@ ExternalProject_Add(googletest
     SVN_REVISION -r646
     # Disable install
     INSTALL_COMMAND ""
+    # Disable update
+    UPDATE_COMMAND ""
     )
 
 ExternalProject_Get_Property(googletest source_dir binary_dir)
