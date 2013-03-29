@@ -1,4 +1,5 @@
 #include "thread_context.hh"
+#include <stdexcept>
 #include <inttypes.h>
 
 namespace ten {
@@ -65,11 +66,12 @@ bool task::joinable() noexcept {
     return (bool)_impl;
 }
 
-void task::join() noexcept {
-    // TODO: maybe we want to throw system_error like
-    // std::thread::join when not joinable
+void task::join() {
     if (_impl) {
         _impl->join();
+    }
+    else {
+        throw std::system_error{EPERM, std::system_category(), "task not joinable"};
     }
 }
 
@@ -110,6 +112,7 @@ void task::impl::trampoline(intptr_t arg) {
         i.finished = true;
         if (i.joiner) {
             i.joiner->ready();
+            i.joiner = nullptr;
         }
     });
     const auto sched = t->_scheduler;

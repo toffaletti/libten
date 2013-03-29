@@ -89,8 +89,8 @@ public:
     //! is task joinable
     bool joinable() noexcept;
 
-    //! join the task
-    void join() noexcept;
+    //! join the task or throw system_error
+    void join();
 };
 
 } // end namespace ten

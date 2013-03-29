@@ -118,17 +118,14 @@ struct fd_base {
         return ::writev(fd, iov, iovcnt);
     }
 
-    //! attempts to close fd, it will retry on EINTR
+    //! attempts to close fd
     void close() noexcept {
         // man 2 close says close can result in EBADF, EIO, and EINTR
-        while (::close(fd) == -1) {
-            switch (errno) {
-                case EINTR: // just retry
-                    continue;
-                case EIO: // catastrophic
-                case EBADF: // programming error
-                default:
-                    break;
+        // Linux and any thread-safe OS will not return EINTR, but we check just in case
+        if (::close(fd) == -1) {
+            if (errno == EINTR) {
+                saved_backtrace bt;
+                LOG(DFATAL) << "close() failed with EINTR; This Should Never Happen\n" << bt.str();
             }
         }
         fd = -1;
