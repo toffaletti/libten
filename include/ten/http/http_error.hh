@@ -11,6 +11,7 @@ public:
     //! captures errno implicitly
     http_error(const char *msg) : errno_error(msg) {}
     //! when you don't want to capture errno implicitly, dial and close use this
+    http_error(const errno_error &e) : errno_error(e) {}
     http_error(int err, const char *msg) : errno_error(err, msg) {}
 };
 
@@ -18,6 +19,7 @@ public:
 //! and sometimes with errno values
 struct http_dial_error : public http_error {
     http_dial_error(const char *msg) : http_error(0, msg) {}
+    http_dial_error(const errno_error &e) : http_error(e) {}
     http_dial_error(int err, const char *msg) : http_error(err, msg) {}
 };
 

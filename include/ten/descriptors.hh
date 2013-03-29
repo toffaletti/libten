@@ -77,8 +77,8 @@ struct fd_base {
         static_assert(!std::is_same<T, bool>::value, "fd == bool");
     }
 
-    int fcntl(int cmd) { return ::fcntl(fd, cmd); }
-    int fcntl(int cmd, long arg) { return ::fcntl(fd, cmd, arg); }
+    int fcntl(int cmd)              { return ::fcntl(fd, cmd); }
+    int fcntl(int cmd, int arg)     { return ::fcntl(fd, cmd, arg); }
     int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
 
     //! make fd nonblocking by setting O_NONBLOCK flag
@@ -285,6 +285,11 @@ struct socket_fd : fd_base {
         return ::connect(fd, addr.sockaddr(), addr.addrlen());
     }
 
+    //! wrapper around shutdown()
+    int shutdown(int how) __attribute__((warn_unused_result)) {
+        return ::shutdown(fd, how);
+    }
+
     //! wrapper around recv()
     ssize_t recv(void *buf, size_t len, int flags=0) __attribute__((warn_unused_result)) {
         return ::recv(fd, buf, len, flags);
@@ -332,6 +337,13 @@ struct socket_fd : fd_base {
     {
         throw_if(::getsockopt(fd, level, optname, &optval, &optlen) == -1);
     }
+    //! template version of getsockopt that frees you from specifying optlen for basic types
+    template <typename T> void getsockopt(int level, int optname,
+        T &optval)
+    {
+        socklen_t optlen = sizeof(optval);
+        socket_fd::getsockopt(level, optname, optval, optlen);
+    }
 
     //! wrapper around setsockopt()
     template <typename T> void setsockopt(int level, int optname,
@@ -339,13 +351,11 @@ struct socket_fd : fd_base {
     {
         throw_if(::setsockopt(fd, level, optname, &optval, optlen) == -1);
     }
-
     //! template version of setsockopt that frees you from specifying optlen for basic types
     template <typename T> void setsockopt(int level, int optname,
         const T &optval)
     {
-        socklen_t optlen = sizeof(optval);
-        socket_fd::setsockopt(level, optname, optval, optlen);
+        socket_fd::setsockopt(level, optname, optval, sizeof(optval));
     }
 
     //! wrapper around socketpair()
