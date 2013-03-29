@@ -53,8 +53,14 @@ public:
     int fcntl(int cmd, long arg) { return s.fcntl(cmd, arg); }
 
     void bind(const address &addr) { s.bind(addr); }
+
     // use a ridiculous number, kernel will truncate to max
     void listen(int backlog=100000) { s.listen(backlog); }
+
+    int shutdown(int how) __attribute__((warn_unused_result)) {
+        return s.shutdown(how);
+    }
+
     bool getpeername(address &addr) __attribute__((warn_unused_result)) {
         return s.getpeername(addr);
     }
@@ -178,6 +184,7 @@ public:
 //! task/proc aware socket server
 class netsock_server : public std::enable_shared_from_this<netsock_server> {
 protected:
+    netsock _sock;
     std::string _protocol_name;
     optional_timeout _recv_timeout_ms;
 public:
@@ -214,21 +221,33 @@ public:
 
     //! listen and accept connections, and modify baddr to bound address
     void serve(netsock s, address &baddr, unsigned nthreads=1) {
-        // use a shared_ptr here so when all accept_loops exit
-        // the socket will be closed
-        std::shared_ptr<netsock> sock = std::make_shared<netsock>(std::move(s));
-        sock->getsockname(baddr);
+        _sock = std::move(s);
+        _sock.getsockname(baddr);
         LOG(INFO) << "listening for " << _protocol_name
             << " on " << baddr << " with " << nthreads << " threads";
-        sock->listen();
+        _sock.listen();
         auto self = shared_from_this();
         std::vector<thread_guard> threads;
-        for (unsigned n=1; n<nthreads; ++n) {
-            threads.emplace_back(task::spawn_thread([=] {
-                self->accept_loop(sock);
-            }));
+        try {
+            for (unsigned n=1; n<nthreads; ++n) {
+                threads.emplace_back(task::spawn_thread([=] {
+                    self->accept_loop();
+                }));
+            }
+            accept_loop();
+        } catch (...) {
+            // induce other service threads to quit, without invalidating the fd
+            // until all the threads let go of self.
+            if (nthreads) {
+                int err = _sock.shutdown(SHUT_RDWR);
+                (void)err; // during exception handling, no logging please
+            }
+            throw;
         }
-        accept_loop(sock);
+    }
+
+    int listen_fd() const {
+        return _sock.s.fd;
     }
 
 protected:
@@ -237,12 +256,12 @@ protected:
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1);
     }
 
-    virtual void accept_loop(std::shared_ptr<netsock> sock) {
+    virtual void accept_loop() {
         const auto self = shared_from_this();
         for (;;) {
             address client_addr;
             int fd;
-            while ((fd = sock->accept(client_addr, 0)) >= 0) {
+            while ((fd = _sock.accept(client_addr, 0)) >= 0) {
                 if (fd <= 2)
                     throw errorx("somebody closed stdin/stdout/stderr");
                 try {

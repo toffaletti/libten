@@ -285,6 +285,11 @@ struct socket_fd : fd_base {
         return ::connect(fd, addr.sockaddr(), addr.addrlen());
     }
 
+    //! wrapper around shutdown()
+    int shutdown(int how) __attribute__((warn_unused_result)) {
+        return ::shutdown(fd, how);
+    }
+
     //! wrapper around recv()
     ssize_t recv(void *buf, size_t len, int flags=0) __attribute__((warn_unused_result)) {
         return ::recv(fd, buf, len, flags);
