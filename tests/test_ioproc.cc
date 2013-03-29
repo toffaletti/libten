@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE ioproc test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/ioproc.hh"
 #include "ten/descriptors.hh"
 
@@ -8,10 +7,10 @@ using namespace ten;
 static void ioproc_sleeper() {
     ioproc io;
     int ret = iocall(io, std::bind(usleep, 100));
-    BOOST_CHECK_EQUAL(ret, 0);
+    EXPECT_EQ(ret, 0);
 }
 
-BOOST_AUTO_TEST_CASE(ioproc_sleep_test) {
+TEST(IoProc, Sleep) {
     task::main([] {
         task::spawn(ioproc_sleeper);
     });
@@ -28,11 +27,11 @@ static void test_pool() {
     for (int i=0; i<4; ++i) {
         int r = iowait<int>(reply_chan);
         // usleep should return 0
-        BOOST_CHECK_EQUAL(0, r);
+        EXPECT_EQ(0, r);
     }
 }
 
-BOOST_AUTO_TEST_CASE(ioproc_thread_pool) {
+TEST(IoProc, ThreadPool) {
     task::main([] {
         task::spawn(test_pool);
     });
@@ -45,16 +44,10 @@ static void fail() {
 static void ioproc_failure() {
     ioproc io;
     std::string errmsg;
-    try {
-        iocall(io, fail);
-        BOOST_CHECK(false);
-    } catch (std::runtime_error &e) {
-        errmsg = e.what();
-    }
-    BOOST_CHECK_EQUAL(errmsg, "fail has failed");
+    EXPECT_THROW(iocall(io, fail), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(ioproc_error_test) {
+TEST(IoProc, Failure) {
     task::main([] {
         task::spawn(ioproc_failure);
     });

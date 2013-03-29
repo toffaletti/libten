@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE metrics test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/metrics.hh"
 #include "ten/task.hh"
 #include <thread>
@@ -24,11 +23,7 @@ void my_thread() {
 
 static const int nthreads = 100;
 
-BOOST_AUTO_TEST_CASE(ten_init) {
-    kernel::boot(); // init logging etc
-}
-
-BOOST_AUTO_TEST_CASE(thread_local_test) {
+TEST(Metrics, ThreadLocal) {
     using namespace metrics;
 
     std::vector<std::thread> threads(nthreads);
@@ -39,7 +34,7 @@ BOOST_AUTO_TEST_CASE(thread_local_test) {
     {
         auto mg = global.aggregate();
         for (auto kv : mg)
-            DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
+            VLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
     }
 
     for (auto &i : threads) {
@@ -48,13 +43,13 @@ BOOST_AUTO_TEST_CASE(thread_local_test) {
 
     auto mg = global.aggregate();
 
-    BOOST_CHECK_EQUAL(nthreads, value<counter>(mg, "thing"));
+    EXPECT_EQ(nthreads, value<counter>(mg, "thing"));
     for (auto kv : mg) {
-        DVLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
+        VLOG(1) << "metric: " << kv.first << " = " << boost::apply_visitor(json_visitor(), kv.second);
     }
 }
 
-BOOST_AUTO_TEST_CASE(timer_test) {
+TEST(Metrics, Timer) {
     using namespace metrics;
     using namespace std::chrono;
     time_op to("timer1");
@@ -63,12 +58,12 @@ BOOST_AUTO_TEST_CASE(timer_test) {
     auto mg = global.aggregate();
     auto v = value<timer>(mg, "timer1");
     // value type is a duration of unspecified resolution
-    BOOST_CHECK(duration_cast<seconds     >(v).count() == 0);
-    BOOST_CHECK(duration_cast<milliseconds>(v).count() >= 5);
-    BOOST_CHECK(duration_cast<microseconds>(v).count() >= 5000);
+    EXPECT_EQ(duration_cast<seconds     >(v).count(), 0);
+    EXPECT_NEAR(duration_cast<milliseconds>(v).count(), 5.0, 1.0);
+    EXPECT_NEAR(duration_cast<microseconds>(v).count(), 5000.0, 900.0);
 }
 
-BOOST_AUTO_TEST_CASE(ewma_test) {
+TEST(Metrics, Ewma) {
     using namespace std::chrono;
     ewma<seconds> m1(seconds{1});
     ewma<seconds> m5(seconds{5});
@@ -82,13 +77,13 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
         m60.update(10);
         m60.tick();
     }
-    LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
-    LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
-    LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
+    VLOG(1) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
+    VLOG(1) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
+    VLOG(1) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
 
-    BOOST_CHECK_CLOSE(10.0, m1.rate(), 60.0);
-    BOOST_CHECK_CLOSE(10.0, m5.rate(), 11.0);
-    BOOST_CHECK_CLOSE(10.0, m60.rate(), 2.0);
+    EXPECT_NEAR(10.0, m1.rate(), 6.0);
+    EXPECT_NEAR(10.0, m5.rate(), 2.0);
+    EXPECT_NEAR(10.0, m60.rate(), 1.0);
 
     for (unsigned i=0; i<60; ++i) {
         m1.tick();
@@ -96,16 +91,16 @@ BOOST_AUTO_TEST_CASE(ewma_test) {
         m60.tick();
     }
 
-    LOG(INFO) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
-    LOG(INFO) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
-    LOG(INFO) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
+    VLOG(1) << "rate1: "  << m1.rate()  << "/s, " << m1.rate<minutes>()  << "/m";
+    VLOG(1) << "rate5: "  << m5.rate()  << "/s, " << m5.rate<minutes>()  << "/m";
+    VLOG(1) << "rate60: " << m60.rate() << "/s, " << m60.rate<minutes>() << "/m";
 
-    BOOST_CHECK_CLOSE(0.0, std::round(m1.rate()), 1.0);
-    BOOST_CHECK_CLOSE(0.0, std::round(m5.rate()), 1.0);
-    BOOST_CHECK_CLOSE(4.0, std::round(m60.rate()), 1.0);
+    EXPECT_NEAR(0.0, std::round(m1.rate()), 1.0);
+    EXPECT_NEAR(0.0, std::round(m5.rate()), 1.0);
+    EXPECT_NEAR(4.0, std::round(m60.rate()), 1.0);
 }
 
-BOOST_AUTO_TEST_CASE(interval_test) {
+TEST(Metrics, Interval) {
     task::main([] {
         using namespace metrics;
         using namespace std::chrono;
@@ -125,24 +120,24 @@ BOOST_AUTO_TEST_CASE(interval_test) {
             }
         });
 
-        BOOST_CHECK(!iv.last(tick));
+        EXPECT_FALSE(iv.last(tick));
 
         seconds span{};
         for (auto n : { 0, 1, 2, 1, 0 }) {
             this_task::sleep_for(tick);
 
-            BOOST_MESSAGE("interval expects " << n << " event(s) over " << span.count() << " sec");
+            VLOG(1) << "interval expects " << n << " event(s) over " << span.count() << " sec";
 
             // asking for more than has been collected fails
-            BOOST_CHECK(!iv.last(span + tick));
+            EXPECT_FALSE(iv.last(span + tick));
 
             // first request is too soon, so returns nullopt
             auto im = iv.last(span);
             if (span == seconds::zero())
-                BOOST_CHECK(!im);
+                EXPECT_FALSE(im);
             else  {
-                BOOST_CHECK_EQUAL(span.count(), im->first.count());
-                BOOST_CHECK_EQUAL(n, value<counter>(im->second, "t"));
+                EXPECT_EQ(span.count(), im->first.count());
+                EXPECT_EQ(n, value<counter>(im->second, "t"));
             }
 
             // do not allow span to exceed collection max

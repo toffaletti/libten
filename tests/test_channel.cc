@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE channel test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/descriptors.hh"
 #include "ten/semaphore.hh"
 #include "ten/channel.hh"
@@ -8,9 +7,9 @@ using namespace ten;
 
 static void channel_recv(channel<intptr_t> c, channel<int> done_chan) {
     intptr_t d = c.recv();
-    BOOST_CHECK_EQUAL(d, 8675309);
+    EXPECT_EQ(d, 8675309);
     char *str = reinterpret_cast<char *>(c.recv());
-    BOOST_CHECK_EQUAL(str, "hi");
+    EXPECT_STREQ(str, "hi");
     done_chan.send(1);
 }
 
@@ -33,10 +32,10 @@ void channel_test_task() {
     for (int i=0; i<2; ++i) {
         done_chan.recv();
     }
-    BOOST_CHECK(c.empty());
+    EXPECT_TRUE(c.empty());
 }
 
-BOOST_AUTO_TEST_CASE(channel_test) {
+TEST(Channel, Basic) {
     task::main([] {
         task::spawn(channel_test_task);
     });
@@ -54,10 +53,10 @@ void unbuffered_test_task() {
     for (int i=0; i<2; ++i) {
         done_chan.recv();
     }
-    BOOST_CHECK(c.empty());
+    EXPECT_TRUE(c.empty());
 }
 
-BOOST_AUTO_TEST_CASE(channel_unbuffered_test) {
+TEST(Channel, Unbuffered) {
     task::main([] {
         task::spawn(unbuffered_test_task);
     });
@@ -85,12 +84,13 @@ void mt_test_task() {
     }
     recv_thread.join();
     send_thread.join();
-    BOOST_CHECK(c.empty());
+    EXPECT_TRUE(c.empty());
 }
 
-BOOST_AUTO_TEST_CASE(channel_unbuffered_mt_test) {
-    kernel the_kernel;
-    task::spawn(mt_test_task);
+TEST(Channel, UnbufferedThreaded) {
+    task::main([] {
+        task::spawn(mt_test_task);
+    });
 }
 
 static void channel_multi_send(channel<intptr_t> c, channel<int> done_chan) {
@@ -102,9 +102,9 @@ static void channel_multi_send(channel<intptr_t> c, channel<int> done_chan) {
 static void channel_multi_recv(channel<intptr_t> c, channel<int> done_chan) {
     for (int i=0; i<5; ++i) {
         intptr_t d = c.recv();
-        BOOST_CHECK_EQUAL(d, 1234);
+        EXPECT_EQ(d, 1234);
     }
-    BOOST_CHECK(c.empty());
+    EXPECT_TRUE(c.empty());
     done_chan.send(1);
 }
 
@@ -124,12 +124,13 @@ void multiple_senders_task() {
     for (int i=0; i<3; ++i) {
         done_chan.recv();
     }
-    BOOST_CHECK(c.empty());
+    EXPECT_TRUE(c.empty());
 }
 
-BOOST_AUTO_TEST_CASE(channel_multiple_senders_test) {
-    kernel the_kernel;
-    task::spawn(multiple_senders_task);
+TEST(Channel, MultipleSenders) {
+    task::main([]{
+        task::spawn(multiple_senders_task);
+    });
 }
 
 static void delayed_channel_send(channel<int> c) {
@@ -177,9 +178,10 @@ static void wait_on_io() {
     this_task::yield();
 }
 
-BOOST_AUTO_TEST_CASE(blocked_io_and_channel) {
-    kernel the_kernel;
-    task::spawn(wait_on_io);
+TEST(Channel, BlockedIoAndChannel) {
+    task::main([]{
+        task::spawn(wait_on_io);
+    });
 }
 
 static void channel_closer_task(channel<int> c, int &closed) {
@@ -209,13 +211,13 @@ void close_test_task(int &closed) {
     });
 }
 
-BOOST_AUTO_TEST_CASE(channel_close_test) {
-    kernel the_kernel;
+TEST(Channel, Close) {
     int closed=0;
-    task::spawn([&] {
-        close_test_task(closed);
+    task::main([&] {
+        task::spawn([&] {
+            close_test_task(closed);
+        });
     });
-    kernel::wait_for_tasks();
-    BOOST_CHECK_EQUAL(closed, 3);
+    EXPECT_EQ(closed, 3);
 }
 

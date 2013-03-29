@@ -1,8 +1,7 @@
-#define BOOST_TEST_MODULE http_message test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include <boost/algorithm/string/predicate.hpp>
-
 #include "ten/http/http_message.hh"
+#include "ten/logging.hh"
 
 using namespace ten;
 
@@ -11,42 +10,42 @@ static const http_response test_static_init(200,
         http_headers("Access-Control-Allow-Origin", "*")
         );
 
-BOOST_AUTO_TEST_CASE(http_headers_variadic_template) {
+TEST(Http, HeadersVariadicTemplate) {
     http_request req{"GET", "/foo",
         http_headers{"This", 4, "That", "that"}
     };
-    BOOST_CHECK(req.get<int>("this"));
-    BOOST_CHECK_EQUAL(4, *req.get<int>("this"));
-    BOOST_CHECK(req.get("that"));
-    BOOST_CHECK_EQUAL("that", *req.get("that"));
+    ASSERT_TRUE((bool)req.get<int>("this"));
+    EXPECT_EQ(4, *req.get<int>("this"));
+    ASSERT_TRUE((bool)req.get("that"));
+    EXPECT_EQ("that", *req.get("that"));
 
     http_response resp{200, http_headers{"Thing", "stuff"}};
-    BOOST_CHECK(resp.get("thing"));
-    BOOST_CHECK_EQUAL("stuff", *resp.get("thing"));
+    ASSERT_TRUE((bool)resp.get("thing"));
+    EXPECT_EQ("stuff", *resp.get("thing"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_constructor) {
+TEST(Http, RequestConstructor) {
     http_request req;
-    BOOST_CHECK(req.body.empty());
+    EXPECT_TRUE(req.body.empty());
 
     http_request req2{"POST", "/corge", {"Foo", "bar"}, "[1]", "text/json"};
-    BOOST_CHECK_EQUAL("POST", req2.method);
-    BOOST_CHECK_EQUAL("/corge", req2.uri);
-    BOOST_CHECK_EQUAL(default_http_version, req2.version);
-    BOOST_CHECK_EQUAL("text/json", *req2.get("Content-Type"));
-    BOOST_CHECK_EQUAL(3, *req2.get<uint64_t>("Content-Length"));
-    BOOST_CHECK_EQUAL("[1]", req2.body);
+    EXPECT_EQ("POST", req2.method);
+    EXPECT_EQ("/corge", req2.uri);
+    EXPECT_EQ(default_http_version, req2.version);
+    EXPECT_EQ("text/json", *req2.get("Content-Type"));
+    EXPECT_EQ(3, *req2.get<uint64_t>("Content-Length"));
+    EXPECT_EQ("[1]", req2.body);
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_init_test) {
+TEST(Http, RequestParserInit) {
     http_request req;
     http_parser parser;
     req.parser_init(&parser);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(parser.data, &req);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(parser.data, &req);
 }
 
-BOOST_AUTO_TEST_CASE(http_request_make1) {
+TEST(Http, RequestMake1) {
     http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
     req.append("User-Agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
@@ -60,10 +59,10 @@ BOOST_AUTO_TEST_CASE(http_request_make1) {
     "Accept: */*\r\n"
     "\r\n";
 
-    BOOST_CHECK_EQUAL(sdata, req.data());
+    EXPECT_EQ(sdata, req.data());
 }
 
-BOOST_AUTO_TEST_CASE(http_request_make_parse) {
+TEST(Http, RequestMakeParse) {
     http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
     req.append("user-agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
@@ -74,14 +73,14 @@ BOOST_AUTO_TEST_CASE(http_request_make_parse) {
     http_parser parser;
     http_request req2;
     req2.parser_init(&parser);
-    BOOST_CHECK(!req2.complete);
+    EXPECT_TRUE(!req2.complete);
     size_t len = data.size();
     req2.parse(&parser, data.data(), len);
-    BOOST_CHECK(req2.complete);
-    BOOST_CHECK_EQUAL(len, data.size());
+    EXPECT_TRUE(req2.complete);
+    EXPECT_EQ(len, data.size());
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
+TEST(Http, RequestParserOneByte) {
     static const char *sdata =
     "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
     "usER-agEnT: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -100,11 +99,11 @@ BOOST_AUTO_TEST_CASE(http_request_parser_one_byte) {
         p+=1; /* feed parser 1 byte at a time */
     }
 
-    BOOST_CHECK(req.complete);
-    BOOST_MESSAGE("Request:\n" << req.data());
+    EXPECT_TRUE(req.complete);
+    VLOG(1) << "Request:\n" << req.data();
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
+TEST(Http, RequestParserNormalizeHeaderNames) {
     static const char *sdata =
     "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
     "usER-agEnT: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -116,20 +115,20 @@ BOOST_AUTO_TEST_CASE(http_request_parser_normalize_header_names) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_headers) {
+TEST(Http, RequestParserHeaders) {
     static const char *sdata =
     "GET http://b.scorecardresearch.com/b?C1=8&C2=6035047&C3=463.9924&C4=ad21868c&C5=173229&C6=16jfaue1ukmeoq&C7=http%3A//remotecontrol.mtv.com/2011/01/20/sammi-sweetheart-giancoloa-terrell-owens-hair/&C8=Hot%20Shots%3A%20Sammi%20%u2018Sweetheart%u2019%20Lets%20Terrell%20Owens%20Play%20With%20Her%20Hair%20%BB%20MTV%20Remote%20Control%20Blog&C9=&C10=1680x1050&rn=58013009 HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -146,19 +145,19 @@ BOOST_AUTO_TEST_CASE(http_request_parser_headers) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_unicode_escape) {
+TEST(Http, RequestParserUnicodeEscape) {
     static const char *sdata =
     "GET http://b.scorecardresearch.com/b?C1=8&C2=6035047&C3=463.9924&C4=ad21868c&C5=173229&C6=16jfaue1ukmeoq&C7=http%3A//remotecontrol.mtv.com/2011/01/20/sammi-sweetheart-giancoloa-terrell-owens-hair/&C8=Hot%20Shots%3A%20Sammi%20%u2018Sweetheart%u2019%20Lets%20Terrell%20Owens%20Play%20With%20Her%20Hair%20%BB%20MTV%20Remote%20Control%20Blog&C9=&C10=1680x1050&rn=58013009 HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -170,19 +169,19 @@ BOOST_AUTO_TEST_CASE(http_request_parser_unicode_escape) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_percents) {
+TEST(Http, RequestParserPercents) {
     static const char *sdata =
     "GET http://bh.contextweb.com/bh/getuid?url=http://image2.pubmatic.com/AdServer/Pug?vcode=bz0yJnR5cGU9MSZqcz0xJmNvZGU9ODI1JnRsPTQzMjAw&piggybackCookie=%%CWGUID%%,User_tokens:%%USER_TOKENS%% HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -194,19 +193,19 @@ BOOST_AUTO_TEST_CASE(http_request_parser_percents) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_bad_percents) {
+TEST(Http, RequestParserBadPercents) {
     /* this site likes to truncate urls included in their requests, which means they chop up % encoding in the original urls */
     /* for example in this url: Trends%2C%&cv= */
     static const char *sdata =
@@ -220,19 +219,19 @@ BOOST_AUTO_TEST_CASE(http_request_parser_bad_percents) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
+TEST(Http, RequestParserHeaderParts) {
     static const char *sdata =
     "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -244,20 +243,20 @@ BOOST_AUTO_TEST_CASE(http_request_parser_header_parts) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("Accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("Accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_no_headers) {
+TEST(Http, RequestParserNoHeaders) {
     // technically not valid because HTTP/1.1 requires a Host header
     static const char *sdata = "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n\r\n";
 
@@ -266,26 +265,26 @@ BOOST_AUTO_TEST_CASE(http_request_parser_no_headers) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_garbage) {
+TEST(Http, RequestParserGarbage) {
     static const char *sdata = "\x01\xff 83949475dsf--==\x45 dsfsdfds";
 
     http_request req;
     http_parser parser;
     req.parser_init(&parser);
     size_t len = strlen(sdata);
-    BOOST_CHECK_THROW(req.parse(&parser, sdata, len), errorx);
+    EXPECT_THROW(req.parse(&parser, sdata, len), errorx);
 }
 
-BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {
+TEST(Http, RequestParserProxyHttp12) {
     static const char *sdata =
     "GET http://example.com:9182/test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -297,20 +296,20 @@ BOOST_AUTO_TEST_CASE(http_request_parser_proxy_http12) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_clear) {
+TEST(Http, RequestClear) {
     static const char *sdata =
     "GET /test/this?thing=1&stuff=2&fun&good HTTP/1.1\r\n"
     "User-Agent: curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
@@ -322,60 +321,60 @@ BOOST_AUTO_TEST_CASE(http_request_clear) {
     req.parser_init(&parser);
     size_t len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 
     req.clear();
 
-    BOOST_CHECK(req.method.empty());
-    BOOST_CHECK(req.uri.empty());
-    BOOST_CHECK_EQUAL(req.version, default_http_version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
+    EXPECT_TRUE(req.method.empty());
+    EXPECT_TRUE(req.uri.empty());
+    EXPECT_EQ(req.version, default_http_version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
 
     req.parser_init(&parser);
     len = strlen(sdata);
     req.parse(&parser, sdata, len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 
-    BOOST_CHECK_EQUAL("GET", req.method);
-    BOOST_CHECK_EQUAL("/test/this?thing=1&stuff=2&fun&good", req.uri);
-    BOOST_CHECK_EQUAL(http_1_1, req.version);
-    BOOST_CHECK(req.body.empty());
-    BOOST_CHECK_EQUAL(0, req.body_length);
-    BOOST_CHECK_EQUAL("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
+    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
+    EXPECT_EQ(http_1_1, req.version);
+    EXPECT_TRUE(req.body.empty());
+    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
-    BOOST_CHECK_EQUAL("localhost:8080", *req.get("Host"));
-    BOOST_CHECK_EQUAL("*/*", *req.get("accept"));
+    EXPECT_EQ("localhost:8080", *req.get("Host"));
+    EXPECT_EQ("*/*", *req.get("accept"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_header_manipulation) {
+TEST(Http, RequestHeaderManipulation) {
     http_request req;
     req.append("test-a", "test-a");
     req.append("test-b", "test-b");
     req.append("test-c", "test-c");
     req.append("test-a", "test-a");
 
-    BOOST_CHECK_EQUAL("test-a", *req.get("test-a"));
-    BOOST_CHECK_EQUAL("test-b", *req.get("Test-B"));
-    BOOST_CHECK_EQUAL("test-c", *req.get("TesT-c"));
+    EXPECT_EQ("test-a", *req.get("test-a"));
+    EXPECT_EQ("test-b", *req.get("Test-B"));
+    EXPECT_EQ("test-c", *req.get("TesT-c"));
 
-    BOOST_CHECK(req.remove("Test-A"));
-    BOOST_CHECK(req.remove("Test-B"));
-    BOOST_CHECK(req.remove("test-c"));
-    BOOST_CHECK(!req.remove("Test-A"));
+    EXPECT_TRUE(req.remove("Test-A"));
+    EXPECT_TRUE(req.remove("Test-B"));
+    EXPECT_TRUE(req.remove("test-c"));
+    EXPECT_TRUE(!req.remove("Test-A"));
 }
 
-BOOST_AUTO_TEST_CASE(http_request_host_with_underscores) {
+TEST(Http, RequestHostWithUnderscores) {
     http_request req{"HEAD", "http://my_host_name/"};
     std::string data = req.data();
 
@@ -383,36 +382,36 @@ BOOST_AUTO_TEST_CASE(http_request_host_with_underscores) {
     req.parser_init(&parser);
     size_t len = data.size();
     req.parse(&parser, data.data(), len);
-    BOOST_CHECK(req.complete);
+    EXPECT_TRUE(req.complete);
 }
 
 /* http response */
 
-BOOST_AUTO_TEST_CASE(http_response_constructor) {
+TEST(Http, ResponseConstructor) {
     http_response resp;
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(default_http_version, resp.version);
-    BOOST_CHECK(resp.body.empty());
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(default_http_version, resp.version);
+    EXPECT_TRUE(resp.body.empty());
 
     http_response resp2{200, {"Foo", "bar"}, "[1]", "text/json"};
-    BOOST_CHECK_EQUAL(200, resp2.status_code);
-    BOOST_CHECK_EQUAL("OK", resp2.reason());
-    BOOST_CHECK_EQUAL(default_http_version, resp2.version);
-    BOOST_CHECK_EQUAL("text/json", *resp2.get("Content-Type"));
-    BOOST_CHECK_EQUAL(3, *resp2.get<uint64_t>("Content-Length"));
-    BOOST_CHECK_EQUAL("[1]", resp2.body);
+    EXPECT_EQ(200, resp2.status_code);
+    EXPECT_EQ("OK", resp2.reason());
+    EXPECT_EQ(default_http_version, resp2.version);
+    EXPECT_EQ("text/json", *resp2.get("Content-Type"));
+    EXPECT_EQ(3, *resp2.get<uint64_t>("Content-Length"));
+    EXPECT_EQ("[1]", resp2.body);
 }
 
-BOOST_AUTO_TEST_CASE(http_response_data) {
+TEST(Http, ResponseData) {
     http_response resp{200};
     resp.append("Host", "localhost");
     resp.append("Content-Length", "0");
 
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("0", *resp.get("content-length"));
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ("0", *resp.get("content-length"));
 
     static const char *expected_data =
     "HTTP/1.1 200 OK\r\n"
@@ -420,10 +419,10 @@ BOOST_AUTO_TEST_CASE(http_response_data) {
     "Content-Length: 0\r\n"
     "\r\n";
 
-    BOOST_CHECK_EQUAL(expected_data, resp.data());
+    EXPECT_EQ(expected_data, resp.data());
 }
 
-BOOST_AUTO_TEST_CASE(http_response_body) {
+TEST(Http, ResponseBody) {
     http_response resp{200};
 
     resp.append("Host", "localhost");
@@ -432,12 +431,12 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
 
     resp.set_body(body, "text/plain");
 
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, *resp.get<int>("content-length"));
-    BOOST_CHECK_EQUAL(body, resp.body);
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ("37", *resp.get("content-length"));
+    EXPECT_EQ(37, *resp.get<int>("content-length"));
+    EXPECT_EQ(body, resp.body);
 
     static const char *expected_data =
     "HTTP/1.1 200 OK\r\n"
@@ -446,19 +445,19 @@ BOOST_AUTO_TEST_CASE(http_response_body) {
     "Content-Type: text/plain\r\n"
     "\r\n";
 
-    BOOST_CHECK_EQUAL(expected_data, resp.data());
+    EXPECT_EQ(expected_data, resp.data());
 }
 
-BOOST_AUTO_TEST_CASE(http_response_parser_init_test) {
+TEST(Http, ResponseParserInit) {
     http_response resp;
     http_parser parser;
 
     resp.parser_init(&parser);
-    BOOST_CHECK(resp.body.empty());
-    BOOST_CHECK_EQUAL(parser.data, &resp);
+    EXPECT_TRUE(resp.body.empty());
+    EXPECT_EQ(parser.data, &resp);
 }
 
-BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
+TEST(Http, ResponseParserOneByte) {
     static const char *sdata =
     "HTTP/1.1 200 OK\r\n"
     "Content-Length: 37\r\n"
@@ -479,20 +478,20 @@ BOOST_AUTO_TEST_CASE(http_response_parser_one_byte) {
         p += 1; /* feed parser 1 byte at a time */
     }
 
-    BOOST_CHECK(resp.complete);
-    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
+    EXPECT_TRUE(resp.complete);
+    VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, *resp.get<uint64_t>("content-length"));
-    BOOST_CHECK_EQUAL("text/plain", *resp.get("content-type"));
-    BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
-    BOOST_CHECK_EQUAL(37, resp.body_length);
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ("37", *resp.get("content-length"));
+    EXPECT_EQ(37, *resp.get<uint64_t>("content-length"));
+    EXPECT_EQ("text/plain", *resp.get("content-type"));
+    EXPECT_EQ("this is a test.\r\nthis is only a test.", resp.body);
+    EXPECT_EQ(37, resp.body_length);
 }
 
-BOOST_AUTO_TEST_CASE(http_response_parser_normalize_header_names) {
+TEST(Http, ResponseParserNormalizeHeaderNames) {
     static const char *sdata =
     "HTTP/1.1 200 OK\r\n"
     "cOnTent-leNgtH: 37\r\n"
@@ -506,19 +505,19 @@ BOOST_AUTO_TEST_CASE(http_response_parser_normalize_header_names) {
     resp.parser_init(&parser);
     size_t len = strlen(sdata);
     resp.parse(&parser, sdata, len);
-    BOOST_CHECK(resp.complete);
+    EXPECT_TRUE(resp.complete);
 
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("37", *resp.get("content-length"));
-    BOOST_CHECK_EQUAL(37, *resp.get<uint64_t>("content-length"));
-    BOOST_CHECK_EQUAL("text/plain", *resp.get("content-type"));
-    BOOST_CHECK_EQUAL("this is a test.\r\nthis is only a test.", resp.body);
-    BOOST_CHECK_EQUAL(37, resp.body_length);
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ("37", *resp.get("content-length"));
+    EXPECT_EQ(37, *resp.get<uint64_t>("content-length"));
+    EXPECT_EQ("text/plain", *resp.get("content-type"));
+    EXPECT_EQ("this is a test.\r\nthis is only a test.", resp.body);
+    EXPECT_EQ(37, resp.body_length);
 }
 
-BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
+TEST(Http, ResponseParserChunked) {
     /* borrowed from http://en.wikipedia.org/wiki/Chunked_transfer_encoding */
     static const char *sdata =
     "HTTP/1.1 200 OK\r\n"
@@ -541,18 +540,18 @@ BOOST_AUTO_TEST_CASE(http_response_parser_chunked) {
     resp.parser_init(&parser);
     size_t len = strlen(sdata);
     resp.parse(&parser, sdata, len);
-    BOOST_CHECK(resp.complete);
-    BOOST_MESSAGE("Response:\n" << resp.data() << resp.body);
+    EXPECT_TRUE(resp.complete);
+    VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
-    BOOST_CHECK_EQUAL(200, resp.status_code);
-    BOOST_CHECK_EQUAL("OK", resp.reason());
-    BOOST_CHECK_EQUAL(http_1_1, resp.version);
-    BOOST_CHECK_EQUAL("text/plain", *resp.get("Content-Type"));
-    BOOST_CHECK_EQUAL("chunked", *resp.get("Transfer-Encoding"));
-    BOOST_CHECK_EQUAL(resp.body_length, 76);
+    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ("text/plain", *resp.get("Content-Type"));
+    EXPECT_EQ("chunked", *resp.get("Transfer-Encoding"));
+    EXPECT_EQ(resp.body_length, 76);
 }
 
-BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
+TEST(Http, BenchAsciiIequals) {
     using namespace std::chrono;
     using clock = std::chrono::high_resolution_clock;
     std::string ahdr = "Content-Length";
@@ -563,7 +562,7 @@ BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
             boost::iequals(ahdr, bhdr);
         }
         auto elapsed = clock::now() - start;
-        BOOST_MESSAGE("boost::iequals: " << duration_cast<microseconds>(elapsed).count());
+        VLOG(1) << "boost::iequals: " << duration_cast<microseconds>(elapsed).count();
     }
 
     {
@@ -572,7 +571,7 @@ BOOST_AUTO_TEST_CASE(bench_ascii_iequals) {
             ascii_iequals(ahdr, bhdr);
         }
         auto elapsed = clock::now() - start;
-        BOOST_MESSAGE("ascii_iequals: " << duration_cast<microseconds>(elapsed).count());
+        VLOG(1) << "ascii_iequals: " << duration_cast<microseconds>(elapsed).count();
     }
 
 }

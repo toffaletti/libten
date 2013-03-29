@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE task test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include <thread>
 #include "ten/descriptors.hh"
 #include "ten/semaphore.hh"
@@ -10,20 +9,20 @@ using namespace ten;
 using namespace std::chrono;
 
 static void bar(std::thread::id p) {
-    // cant use BOOST_CHECK in multi-threaded tests :(
-    assert(std::this_thread::get_id() != p);
+    // cant use EXPECT_TRUE in multi-threaded tests :(
+    EXPECT_NE(std::this_thread::get_id(), p);
     this_task::yield();
 }
 
 static void foo(std::thread::id p) {
-    assert(std::this_thread::get_id() != p);
+    EXPECT_NE(std::this_thread::get_id(), p);
     task::spawn([p]{
         bar(p);
     });
     this_task::yield();
 }
 
-BOOST_AUTO_TEST_CASE(constructor_test) {
+TEST(Task, Constructor) {
     task::main([]{
         std::thread::id main_id = std::this_thread::get_id();
         std::thread t = task::spawn_thread([=]{
@@ -39,18 +38,18 @@ static void co1(int &count) {
     count++;
 }
 
-BOOST_AUTO_TEST_CASE(schedule_test) {
+TEST(Task, Schedule) {
     int count = 0;
     task::main([&]{
         for (int i=0; i<10; ++i) {
             task::spawn([&]{ co1(count); });
         }
     });
-    BOOST_CHECK_EQUAL(20, count);
+    EXPECT_EQ(20, count);
 }
 
 static void pipe_write(pipe_fd &p) {
-    BOOST_CHECK_EQUAL(p.write("test", 4), 4);
+    EXPECT_EQ(p.write("test", 4), 4);
 }
 
 static void pipe_wait(size_t &bytes) {
@@ -63,12 +62,12 @@ static void pipe_wait(size_t &bytes) {
     bytes = p.read(buf, sizeof(buf));
 }
 
-BOOST_AUTO_TEST_CASE(fdwait_test) {
+TEST(Task, Fdwait) {
     size_t bytes = 0;
     task::main([&] {
         task::spawn([&] { pipe_wait(bytes); });
     });
-    BOOST_CHECK_EQUAL(bytes, 4);
+    EXPECT_EQ(bytes, 4);
 }
 
 static void connect_to(address addr) {
@@ -78,8 +77,7 @@ static void connect_to(address addr) {
         // connected!
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        bool success = fdwait(s.fd, 'w');
-        assert(success);
+        EXPECT_TRUE(fdwait(s.fd, 'w'));
     } else {
         throw errno_error();
     }
@@ -104,8 +102,7 @@ static void listen_co(bool multithread) {
         });
     }
 
-    bool success = fdwait(s.fd, 'r');
-    assert(success);
+    EXPECT_TRUE(fdwait(s.fd, 'r'));
 
     address client_addr;
     socket_fd cs{s.accept(client_addr, SOCK_NONBLOCK)};
@@ -120,17 +117,17 @@ static void listen_co(bool multithread) {
     // socket should be disconnected because
     // when connect_to task is finished
     // close was called on its socket
-    BOOST_CHECK_EQUAL(nr, 0);
+    EXPECT_EQ(nr, 0);
 
 }
 
-BOOST_AUTO_TEST_CASE(socket_io) {
+TEST(Task, Socket) {
     task::main([] {
         task::spawn([]{ listen_co(false); });
     });
 }
 
-BOOST_AUTO_TEST_CASE(socket_io_mt) {
+TEST(Task, SocketThreaded) {
     task::main([] {
         task::spawn([]{ listen_co(true); });
     });
@@ -142,12 +139,10 @@ static void sleeper() {
     auto end = steady_clock::now();
 
     // check that at least 10 milliseconds passed
-    // annoyingly have to compare count here because duration doesn't have an
-    // ostream << operator
-    BOOST_CHECK_CLOSE(duration_cast<milliseconds>(end-start).count(), 10.0, 20.0);
+    EXPECT_NEAR(duration_cast<milliseconds>(end-start).count(), 10.0, 2.0);
 }
 
-BOOST_AUTO_TEST_CASE(task_sleep) {
+TEST(Task, Sleep) {
     task::main([] {
         task::spawn([]{ sleeper(); });
     });
@@ -162,10 +157,10 @@ static void listen_timeout_co() {
     s.listen();
 
     bool timeout = !fdwait(s.fd, 'r', std::chrono::milliseconds{5});
-    BOOST_CHECK(timeout);
+    EXPECT_TRUE(timeout);
 }
 
-BOOST_AUTO_TEST_CASE(poll_timeout_io) {
+TEST(Task, PollTimeout) {
     task::main([] {
         listen_timeout_co();
     });
@@ -179,7 +174,7 @@ static void sleep_many(uint64_t &count) {
     ++count;
 }
 
-BOOST_AUTO_TEST_CASE(many_timeouts) {
+TEST(Task, ManyTimeouts) {
     uint64_t count(0);
     task::main([&] {
         for (int i=0; i<1000; i++) {
@@ -188,12 +183,12 @@ BOOST_AUTO_TEST_CASE(many_timeouts) {
             });
         }
     });
-    BOOST_CHECK_EQUAL(count, 3000);
+    EXPECT_EQ(count, 3000);
 }
 
 static void long_sleeper() {
     this_task::sleep_for(seconds{10});
-    BOOST_CHECK(false);
+    EXPECT_TRUE(false);
 }
 
 static void cancel_sleep() {
@@ -202,7 +197,7 @@ static void cancel_sleep() {
     t.cancel();
 }
 
-BOOST_AUTO_TEST_CASE(task_cancel_sleep) {
+TEST(Task, CancelSleep) {
     task::main([] {
         cancel_sleep();
     });
@@ -214,12 +209,12 @@ static void long_sleeper_yield() {
     } catch (task_interrupted &) {
         // make sure yield doesn't throw again
         this_task::yield();
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
         this_task::yield();
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
         throw;
     }
-    BOOST_CHECK(false);
+    EXPECT_TRUE(false);
 }
 
 static void cancel_once() {
@@ -228,7 +223,7 @@ static void cancel_once() {
     t.cancel();
 }
 
-BOOST_AUTO_TEST_CASE(task_cancel_only_once) {
+TEST(Task, CancelOnlyOnce) {
     task::main([] {
         cancel_once();
     });
@@ -238,7 +233,7 @@ static void channel_wait() {
     channel<int> c;
     int a = c.recv();
     (void)a;
-    BOOST_CHECK(false);
+    EXPECT_TRUE(false);
 }
 
 static void cancel_channel() {
@@ -247,7 +242,7 @@ static void cancel_channel() {
     t.cancel();
 }
 
-BOOST_AUTO_TEST_CASE(task_cancel_channel) {
+TEST(Task, CancelChannel) {
     task::main([] {
         cancel_channel();
     });
@@ -256,7 +251,7 @@ BOOST_AUTO_TEST_CASE(task_cancel_channel) {
 static void io_wait() {
     pipe_fd p;
     fdwait(p.r.fd, 'r');
-    BOOST_CHECK(false);
+    EXPECT_TRUE(false);
 }
 
 static void cancel_io() {
@@ -265,7 +260,7 @@ static void cancel_io() {
     t.cancel();
 }
 
-BOOST_AUTO_TEST_CASE(task_cancel_io) {
+TEST(Task, CancelIO) {
     task::main([] {
         cancel_io();
     });
@@ -286,10 +281,10 @@ static void yield_timer() {
     // tight yield loop should take less than microsecond
     // this test depends on hardware and will probably fail
     // when run under debugging tools like valgrind/gdb
-    BOOST_CHECK_MESSAGE(counter > 100000, "counter(" << counter << ") > 100000");
+    EXPECT_GT(counter, 100000);
 }
 
-BOOST_AUTO_TEST_CASE(task_yield_timer) {
+TEST(Task, YieldTimer) {
     task::main([]{
         yield_timer();
     });
@@ -299,9 +294,9 @@ static void deadline_timer() {
     try {
         deadline dl{milliseconds{100}};
         this_task::sleep_for(milliseconds{200});
-        BOOST_CHECK(false);
+        EXPECT_TRUE(false);
     } catch (deadline_reached &e) {
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
     }
 }
 
@@ -309,15 +304,15 @@ static void deadline_not_reached() {
     try {
         deadline dl{milliseconds{100}};
         this_task::sleep_for(milliseconds{50});
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
     } catch (deadline_reached &e) {
-        BOOST_CHECK(false);
+        EXPECT_TRUE(false);
     }
     this_task::sleep_for(milliseconds{100});
-    BOOST_CHECK(true);
+    EXPECT_TRUE(true);
 }
 
-BOOST_AUTO_TEST_CASE(task_deadline_timer) {
+TEST(Task, DeadlineTimer) {
     task::main([] {
         task::spawn(deadline_timer);
         task::spawn(deadline_not_reached);
@@ -329,19 +324,19 @@ static void deadline_cleared() {
     try {
         deadline dl{milliseconds{10}};
         this_task::sleep_for(seconds{20});
-        BOOST_CHECK(false);
+        EXPECT_TRUE(false);
     } catch (deadline_reached &e) {
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
         this_task::yield();
         auto end = steady_clock::now();
-        BOOST_CHECK(true);
-        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(end-start).count(), 10.0, 20.0);
+        EXPECT_TRUE(true);
+        EXPECT_NEAR((float)duration_cast<milliseconds>(end-start).count(), 10.0, 2.0);
     }
 }
 
-BOOST_AUTO_TEST_CASE(task_deadline_cleared) {
+TEST(Task, DeadlineCleared) {
     task::main([] {
         task::spawn(deadline_cleared);
     });
@@ -353,16 +348,16 @@ static void deadline_cleared_not_reached() {
             deadline dl{milliseconds{100}};
             this_task::sleep_for(milliseconds{20});
             // deadline should be removed at this point
-            BOOST_CHECK(true);
+            EXPECT_TRUE(true);
         }
         this_task::sleep_for(milliseconds{100});
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
     } catch (deadline_reached &e) {
-        BOOST_CHECK(false);
+        EXPECT_TRUE(false);
     }
 }
 
-BOOST_AUTO_TEST_CASE(task_deadline_cleared_not_reached) {
+TEST(Task, DeadlineClearedNotReached) {
     task::main([] {
         task::spawn(deadline_cleared_not_reached);
     });
@@ -375,25 +370,25 @@ static void deadline_yield() {
         for (;;) {
             this_task::yield();
         }
-        BOOST_CHECK(false);
+        EXPECT_TRUE(false);
     } catch (deadline_reached &e) {
-        BOOST_CHECK(true);
+        EXPECT_TRUE(true);
         // if the deadline or timeout aren't cleared,
         // this yield will sleep or throw again
         this_task::yield();
         auto end = steady_clock::now();
-        BOOST_CHECK(true);
-        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(end-start).count(), 5.0, 10.0);
+        EXPECT_TRUE(true);
+        EXPECT_NEAR((float)duration_cast<milliseconds>(end-start).count(), 5.0, 2.0);
     }
 }
 
-BOOST_AUTO_TEST_CASE(task_deadline_yield) {
+TEST(Task, DeadlineYield) {
     task::main([]{
         task::spawn(deadline_yield);
     });
 }
 
-BOOST_AUTO_TEST_CASE(deadline_recent_time) {
+TEST(Task, DeadlineRecentTime) {
     // test to make sure we're using a recent time
     // to create the deadline. if cached time wasn't
     // updated recently enough this test can fail
@@ -421,18 +416,18 @@ BOOST_AUTO_TEST_CASE(deadline_recent_time) {
             got_to_deadline = true;
         }
         pipe_thread.join();
-        BOOST_CHECK(!got_to_deadline);
+        EXPECT_TRUE(!got_to_deadline);
     });
 }
 
-BOOST_AUTO_TEST_CASE(task_new_api) {
+TEST(Task, NewApi) {
     task::main([]{
         int i = 1;
         task t = task::spawn([&] {
             ++i;
         });
         this_task::yield();
-        BOOST_CHECK_EQUAL(2, i);
+        EXPECT_EQ(2, i);
 
         auto start = kernel::now();
         std::thread th([&] {
@@ -445,27 +440,27 @@ BOOST_AUTO_TEST_CASE(task_new_api) {
         th.join();
         this_task::yield(); // allow cached time to update
         auto stop = kernel::now();
-        BOOST_CHECK_EQUAL(3, i);
-        BOOST_CHECK_CLOSE((float)duration_cast<milliseconds>(stop-start).count(), 40.0, 10.0);
+        EXPECT_EQ(3, i);
+        EXPECT_NEAR((float)duration_cast<milliseconds>(stop-start).count(), 40.0, 10.0);
     });
 }
 
-BOOST_AUTO_TEST_CASE(task_join) {
+TEST(Task, Join) {
     task::main([]{
         task t;
-        BOOST_CHECK(t.joinable() == false);
+        EXPECT_TRUE(t.joinable() == false);
         int foo = 0;
         t = task::spawn([&]{
             this_task::sleep_for(milliseconds{5});
             foo = 42;
         });
-        BOOST_CHECK(t.joinable());
-        BOOST_CHECK(foo == 0);
+        EXPECT_TRUE(t.joinable());
+        EXPECT_TRUE(foo == 0);
         t.join();
-        BOOST_CHECK(t.joinable());
-        BOOST_CHECK(foo == 42);
+        EXPECT_TRUE(t.joinable());
+        EXPECT_TRUE(foo == 42);
         t.join();
-        BOOST_CHECK(t.joinable());
+        EXPECT_TRUE(t.joinable());
     });
 }
 

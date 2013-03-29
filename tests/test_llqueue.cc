@@ -1,27 +1,26 @@
-#define BOOST_TEST_MODULE llqueue test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/llqueue.hh"
 
 using namespace ten;
 
-BOOST_AUTO_TEST_CASE(llqueue_test) {
+TEST(LowLockQueue, Test) {
     llqueue<intptr_t> q;
     q.push(20);
     q.push(21);
     q.push(22);
     q.push(23);
     intptr_t v = 0;
-    BOOST_CHECK(q.pop(v));
-    BOOST_CHECK_EQUAL(20, v);
+    ASSERT_TRUE(q.pop(v));
+    EXPECT_EQ(20, v);
 
-    BOOST_CHECK(q.pop(v));
-    BOOST_CHECK_EQUAL(21, v);
+    ASSERT_TRUE(q.pop(v));
+    EXPECT_EQ(21, v);
 
-    BOOST_CHECK(q.pop(v));
-    BOOST_CHECK_EQUAL(22, v);
+    ASSERT_TRUE(q.pop(v));
+    EXPECT_EQ(22, v);
 
-    BOOST_CHECK(q.pop(v));
-    BOOST_CHECK_EQUAL(23, v);
+    ASSERT_TRUE(q.pop(v));
+    EXPECT_EQ(23, v);
 
-    BOOST_CHECK(!q.pop(v));
+    ASSERT_TRUE(!q.pop(v));
 }

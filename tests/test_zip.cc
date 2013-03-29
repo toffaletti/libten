@@ -1,17 +1,10 @@
-#define BOOST_TEST_MODULE zip test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/zip.hh"
 
 using namespace ten;
 
-BOOST_AUTO_TEST_CASE(zip_test) {
-    try {
-        zip_reader zr{"", 0};
-        BOOST_REQUIRE(false);
-    } catch (errorx &e) {
-        BOOST_REQUIRE(true);
-    }
-
+TEST(ZipTest, Test1) {
+    EXPECT_THROW(zip_reader zr("", 0), errorx);
     zip_writer rw{1024};
     rw.add("test", "stuff", 5);
     size_t len = 0;
@@ -22,5 +15,5 @@ BOOST_AUTO_TEST_CASE(zip_test) {
     for (auto i=0; i<zr.end(); ++i) {
         zr.stat(i, stat);
     }
-    BOOST_REQUIRE_EQUAL("stuff", zr.extract("test"));
+    EXPECT_EQ("stuff", zr.extract("test"));
 }

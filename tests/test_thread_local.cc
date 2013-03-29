@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE thread_local test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/thread_local.hh"
 #include <thread>
 #include <atomic>
@@ -29,20 +28,20 @@ thread_cached<tag1, X> x1;
 thread_cached<tag1, X> x2;
 
 void my_thread() {
-    BOOST_CHECK_EQUAL(x1.get(), x2.get());
+    EXPECT_EQ(x1.get(), x2.get());
     // unique tag, this will create a new X
     thread_cached<tag2, X> x3;
-    BOOST_CHECK(x1.get() != x3.get());
+    EXPECT_NE(x1.get(), x3.get());
     // same tag, we'll get the x3 pointer again
     thread_cached<tag2, X> x4;
-    BOOST_CHECK_EQUAL(x3.get(), x4.get());
+    EXPECT_EQ(x3.get(), x4.get());
 }
 
-BOOST_AUTO_TEST_CASE(thread_local_test) {
+TEST(ThreadLocal, Test1) {
     std::thread t(my_thread);
     t.join();
 
-    BOOST_CHECK_EQUAL(X::new_count, 2);
-    BOOST_CHECK_EQUAL(X::del_count, 2);
+    EXPECT_EQ(X::new_count, 2);
+    EXPECT_EQ(X::del_count, 2);
 }
 

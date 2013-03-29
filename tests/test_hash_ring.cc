@@ -1,7 +1,7 @@
-#define BOOST_TEST_MODULE hash_ring test
+#include "gtest/gtest.h"
 #include <unordered_map>
-#include <boost/test/unit_test.hpp>
 #include "ten/consistent_hash.hh"
+#include "ten/logging.hh"
 
 using namespace ten;
 
@@ -36,7 +36,7 @@ static const std::map<std::string, std::string> data = {
     {"ten",   "10"},
 };
 
-BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
+TEST(HashRing, Basic) {
     std::unordered_map<std::string, server> servers = {
         {"server1.example.com", server()},
         {"server2.example.com", server()},
@@ -50,18 +50,18 @@ BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
 
     for (auto it : data) {
         auto host = ring.get(it.first);
-        BOOST_MESSAGE("storing " << it.first << "=" << it.second << " on " << host);
+        VLOG(1) << "storing " << it.first << "=" << it.second << " on " << host;
         servers[host].put(it.first, it.second);
     }
 
     for (auto it : data) {
         auto h = ring.get(it.first);
         auto d = servers[h].get(it.first);
-        BOOST_REQUIRE_EQUAL(it.second, d);
+        EXPECT_EQ(it.second, d);
     }
 
     // remove a server
-    BOOST_REQUIRE_EQUAL(3, ring.remove("server3.example.com"));
+    EXPECT_EQ(3, ring.remove("server3.example.com"));
 
     unsigned found = 0;
     for (auto it : data) {
@@ -73,17 +73,17 @@ BOOST_AUTO_TEST_CASE(hash_ring_basic_test) {
     }
     // more than 30% of the keys should still be found
     // after removing one server
-    BOOST_CHECK_MESSAGE(found / (float)data.size() > 0.30,
-            "Found " << found << " data size: " << data.size());
+    EXPECT_TRUE(found / (float)data.size() > 0.30)
+        << "Found " << found << " data size: " << data.size();
 }
 
-BOOST_AUTO_TEST_CASE(hash_ring_remove_test) {
+TEST(HashRing, Remove) {
     hash_ring<std::string, std::string, 100> ring;
     ring.add("test1");
     ring.add("test2");
     ring.add("test3");
-    BOOST_REQUIRE_EQUAL(100, ring.remove("test1"));
-    BOOST_REQUIRE_EQUAL(100, ring.remove("test3"));
-    BOOST_REQUIRE_EQUAL(100, ring.remove("test2"));
+    EXPECT_EQ(100, ring.remove("test1"));
+    EXPECT_EQ(100, ring.remove("test3"));
+    EXPECT_EQ(100, ring.remove("test2"));
 }
 

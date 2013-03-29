@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE net test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include "ten/net.hh"
 #include "ten/http/server.hh"
 #include "ten/http/client.hh"
@@ -15,15 +14,14 @@ static void dial_google() {
     try {
         netdial(s.fd, "www.google.com", 80, {});
         ok = true;
+    } catch (errorx &e) {
+        VLOG(1) << "dial exception: " << e.what() << "\n" << e.backtrace_str();
     }
-    catch (errorx &e) {
-        BOOST_MESSAGE("dial exception: " << e.what() << "\n" << e.backtrace_str());
-    }
-    BOOST_CHECK(ok);
+    EXPECT_TRUE(ok);
 }
 
 
-BOOST_AUTO_TEST_CASE(task_socket_dial) {
+TEST(Net, SocketDial) {
     task::main([] {
         task::spawn(dial_google);
     });
@@ -53,7 +51,7 @@ static void start_http_server(address &addr) {
 static void start_http_test() {
     address http_addr("0.0.0.0");
     auto server_task = task::spawn([=, &http_addr]() mutable {
-        BOOST_MESSAGE("server_task start");
+        VLOG(1) << "server_task start";
         start_http_server(http_addr);
     });
     this_task::yield(); // allow server to bind, set http_addr, and listen
@@ -62,11 +60,11 @@ static void start_http_test() {
     {
         http_client c{http_addr.str()};
         resp = c.get("/");
-        BOOST_CHECK_EQUAL("Hello World", resp.body);
+        EXPECT_EQ("Hello World", resp.body);
         resp = c.get("/foobar");
-        BOOST_CHECK_EQUAL("Hello World", resp.body);
+        EXPECT_EQ("Hello World", resp.body);
         resp = c.post("/foobar", "");
-        BOOST_CHECK_EQUAL("Post World", resp.body);
+        EXPECT_EQ("Post World", resp.body);
     }
     {
         http_client c{http_addr.str()};
@@ -76,7 +74,7 @@ static void start_http_test() {
         } catch (deadline_reached) {
             resp = { 408 };
         }
-        BOOST_CHECK_EQUAL(408, resp.status_code);
+        EXPECT_EQ(408, resp.status_code);
     }
 
     server_task.cancel();
@@ -90,11 +88,11 @@ static void start_http_test() {
         } catch (http_dial_error &e) {
             resp = { 503 };
         }
-        BOOST_CHECK_EQUAL(resp.status_code, 503); // connect refused -> 503
+        EXPECT_EQ(resp.status_code, 503); // connect refused -> 503
     }
 }
 
-BOOST_AUTO_TEST_CASE(http_server_client_get) {
+TEST(Net, HttpServerClientGet) {
     task::main([] {
         task::spawn(start_http_test);
     });

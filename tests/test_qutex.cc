@@ -1,5 +1,4 @@
-#define BOOST_TEST_MODULE qutex test
-#include <boost/test/unit_test.hpp>
+#include "gtest/gtest.h"
 #include <thread>
 #include "ten/semaphore.hh"
 #include "ten/synchronized.hh"
@@ -38,27 +37,27 @@ void qutex_task_spawn() {
     }
     std::unique_lock<qutex> lk{st->q};
     st->r.sleep(lk, std::bind(is_done, std::ref(st->x)));
-    BOOST_CHECK_EQUAL(st->x, 20*1000);
+    EXPECT_EQ(st->x, 20*1000);
 }
 
-BOOST_AUTO_TEST_CASE(qutex_test) {
+TEST(Qutex, Test1) {
     task::main([=] {
         task::spawn(qutex_task_spawn);
     });
 }
 
-BOOST_AUTO_TEST_CASE(sync_test) {
+TEST(Qutex, Synchronized) {
     synchronized<std::string> s("empty");
 
     s([](std::string &str) {
-        BOOST_CHECK_EQUAL("empty", str);
+        EXPECT_EQ("empty", str);
         str = "test";
     });
 
     sync(s, [](std::string &str) {
-        BOOST_CHECK_EQUAL("test", str);
+        EXPECT_EQ("test", str);
         str = "test2";
     });
 
-    BOOST_CHECK_EQUAL(*sync_view(s), "test2");
+    EXPECT_EQ(*sync_view(s), "test2");
 }
