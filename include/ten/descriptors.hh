@@ -337,6 +337,13 @@ struct socket_fd : fd_base {
     {
         throw_if(::getsockopt(fd, level, optname, &optval, &optlen) == -1);
     }
+    //! template version of getsockopt that frees you from specifying optlen for basic types
+    template <typename T> void getsockopt(int level, int optname,
+        T &optval)
+    {
+        socklen_t optlen = sizeof(optval);
+        socket_fd::getsockopt(level, optname, optval, optlen);
+    }
 
     //! wrapper around setsockopt()
     template <typename T> void setsockopt(int level, int optname,
@@ -344,13 +351,11 @@ struct socket_fd : fd_base {
     {
         throw_if(::setsockopt(fd, level, optname, &optval, optlen) == -1);
     }
-
     //! template version of setsockopt that frees you from specifying optlen for basic types
     template <typename T> void setsockopt(int level, int optname,
         const T &optval)
     {
-        socklen_t optlen = sizeof(optval);
-        socket_fd::setsockopt(level, optname, optval, optlen);
+        socket_fd::setsockopt(level, optname, optval, sizeof(optval));
     }
 
     //! wrapper around socketpair()
