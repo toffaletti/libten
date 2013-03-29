@@ -62,19 +62,11 @@ TEST(Channel, Unbuffered) {
     });
 }
 
-static void channel_recv_mt(channel<intptr_t> c, channel<int> done_chan) {
-    intptr_t d = c.recv();
-    assert(d == 8675309);
-    char *str = reinterpret_cast<char *>(c.recv());
-    assert(strcmp(str, "hi") == 0);
-    done_chan.send(1);
-}
-
 void mt_test_task() {
     channel<intptr_t> c;
     channel<int> done_chan;
     auto recv_thread = task::spawn_thread([=] {
-        channel_recv_mt(c, done_chan);
+        channel_recv(c, done_chan);
     });
     auto send_thread = task::spawn_thread([=] {
         channel_send(c, done_chan);
@@ -153,8 +145,7 @@ static void delayed_channel(address addr) {
     if (s.connect(addr) == 0) {
     } else if (errno == EINPROGRESS) {
         // poll for writeable
-        bool success = fdwait(s.fd, 'w');
-        assert(success);
+        EXPECT_TRUE(fdwait(s.fd, 'w'));
     } else {
         throw errno_error();
     }
