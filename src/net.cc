@@ -1,5 +1,12 @@
 #include "ten/net.hh"
 
+static void set_errno_from(int fd, int default_err) {
+    int e = default_err;
+    socklen_t len = sizeof e;
+    (void)::getsockopt(fd, SOL_SOCKET, SO_ERROR, &e, &len);
+    errno = e;
+}
+
 namespace ten {
 
 // on timeout, caller should close, since the kernel may still be trying to connect
@@ -11,9 +18,8 @@ int netconnect(int fd, const address &addr, optional_timeout ms) {
             errno = 0;
             if (fdwait(fd, 'w', ms)) {
                 return 0;
-            } else if (errno == 0) {
-                errno = ETIMEDOUT;
             }
+            set_errno_from(fd, ETIMEDOUT);
         }
         return -1;
     }
@@ -29,7 +35,7 @@ int netaccept(int fd, address &addr, int flags, optional_timeout timeout_ms) {
         if (!io_not_ready())
             return -1;
         if (!fdwait(fd, 'r', timeout_ms)) {
-            errno = ETIMEDOUT;
+            set_errno_from(fd, ETIMEDOUT);
             return -1;
         }
     }
@@ -44,7 +50,7 @@ ssize_t netrecv(int fd, void *buf, size_t len, int flags, optional_timeout timeo
         if (!io_not_ready())
             break;
         if (!fdwait(fd, 'r', timeout_ms)) {
-            errno = ETIMEDOUT;
+            set_errno_from(fd, ETIMEDOUT);
             break;
         }
     }
@@ -58,11 +64,19 @@ ssize_t netsend(int fd, const void *buf, size_t len, int flags, optional_timeout
         if (nw == -1) {
             if (errno == EINTR)
                 continue;
-            if (!io_not_ready())
-                return -1;
+            if (!io_not_ready()) {
+                if (total_sent)
+                    return total_sent;
+                else
+                    return -1;
+            }
             if (!fdwait(fd, 'w', timeout_ms)) {
-                errno = ETIMEDOUT;
-                return total_sent;
+                if (total_sent)
+                    return total_sent;
+                else {
+                    set_errno_from(fd, ETIMEDOUT);
+                    return -1;
+                }
             }
         } else {
             total_sent += nw;
