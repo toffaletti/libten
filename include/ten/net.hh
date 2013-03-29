@@ -70,20 +70,17 @@ public:
     }
 
     template <typename T>
-    void getsockopt(int level, int optname, T &optval, socklen_t &optlen)
-    {
+    void getsockopt(int level, int optname, T &optval, socklen_t &optlen) {
         s.getsockopt(level, optname, optval, optlen);
     }
 
     template <typename T>
-    void setsockopt(int level, int optname, const T &optval, socklen_t optlen)
-    {
+    void setsockopt(int level, int optname, const T &optval, socklen_t optlen) {
         s.setsockopt(level, optname, optval, optlen);
     }
 
     template <typename T>
-    void setsockopt(int level, int optname, const T &optval)
-    {
+    void setsockopt(int level, int optname, const T &optval) {
         s.setsockopt(level, optname, optval);
     }
 
