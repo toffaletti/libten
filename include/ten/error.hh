@@ -94,7 +94,7 @@ private:
 template <class ...Args>
 void throw_if(bool condition, Args ...args) {
     if (condition) {
-        throw errno_error(args...);
+        throw errno_error(std::forward<Args>(args)...);
     }
 }
 

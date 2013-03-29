@@ -2,6 +2,7 @@
 
 namespace ten {
 
+// on timeout, caller should close, since the kernel may still be trying to connect
 int netconnect(int fd, const address &addr, optional_timeout ms) {
     while (::connect(fd, addr.sockaddr(), addr.addrlen()) < 0) {
         if (errno == EINTR)
