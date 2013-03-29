@@ -40,7 +40,7 @@ private:
             try {
                 cs.dial(_host.c_str(), _port, _conn_timeout);
             } catch (const errno_error &e) {
-                throw http_dial_error{e.error(), e.what()};
+                throw http_dial_error{e};
             } catch (const std::exception &e) {
                 throw http_dial_error{e.what()};
             }
