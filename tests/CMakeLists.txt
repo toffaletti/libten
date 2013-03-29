@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
-include(${CMAKE_SOURCE_DIR}/cmake/ExternalProject.cmake)
+include(ExternalProject)
 ExternalProject_Add(googletest
-    URL https://googletest.googlecode.com/files/gtest-1.5.0.tar.bz2
-    URL_MD5 8b2c3c3f26cb53e64a3109d03a97200a
+    URL https://googletest.googlecode.com/files/gtest-1.5.0.tar.gz
     #URL https://googletest.googlecode.com/files/gtest-1.6.0.zip
     #URL_MD5 4577b49f2973c90bf9ba69aa8166b786
     # Disable install
