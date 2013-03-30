@@ -134,18 +134,18 @@ public:
             }
 
             http_parser parser;
-            resp.parser_init(&parser);
+            parser.init(resp);
 
             _buf.clear();
 
-            while (!resp.complete) {
+            while (!parser.complete()) {
                 _buf.reserve(4*1024);
                 ssize_t nr = _sock.recv(_buf.back(), _buf.available(), 0, timeout);
                 if (nr < 0) { throw http_recv_error{}; }
                 if (!nr) { throw http_closed_error{}; }
                 _buf.commit(nr);
                 size_t len = _buf.size();
-                resp.parse(&parser, _buf.front(), len);
+                parser.parse(_buf.front(), len);
                 _buf.remove(len);
                 if (resp.body.size() >= max_content_length) {
                     _sock.close(); // close this socket, we won't read anymore

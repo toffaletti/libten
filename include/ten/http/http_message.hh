@@ -8,9 +8,9 @@
 #include <stdarg.h>
 #include <boost/lexical_cast.hpp>
 
-#include "http_parser.h"
 #include "ten/task.hh"
 #include "ten/error.hh"
+#include "ten/ptr.hh"
 #include "ten/optional.hh"
 
 namespace ten {
@@ -120,6 +120,28 @@ public:
 #endif // CHIP_UNSURE
 };
 
+class http_request;
+class http_response;
+
+class http_parser {
+public:
+    class impl;
+
+    http_parser();
+
+    void init(http_request &req);
+    void init(http_response &resp);
+
+    bool parse(const char *data, size_t &len);
+    bool operator() (const char *data, size_t &len) { return parse(data, len); }
+
+    bool complete() const noexcept;
+    explicit operator bool() const noexcept { return complete(); }
+
+private:
+    std::shared_ptr<impl> _impl;
+};
+
 //! base class for http request and response
 struct http_base : http_headers {
     using super = http_headers;
@@ -127,7 +149,6 @@ struct http_base : http_headers {
     http_version version {default_http_version};
     std::string body;
     size_t body_length {};
-    bool complete {};
 
     explicit http_base(http_headers headers_ = {}, http_version version_ = default_http_version)
         : http_headers(std::move(headers_)), version{version_} {}
@@ -137,7 +158,6 @@ struct http_base : http_headers {
         version = default_http_version;
         body.clear();
         body_length = {};
-        complete = {};
     }
 
     void set_body(std::string body_, const char *content_type) {
@@ -224,9 +244,6 @@ struct http_request : http_base {
         uri.clear();
     }
 
-    void parser_init(struct http_parser *p);
-    void parse(struct http_parser *p, const char *data, size_t &len);
-
     std::string data() const;
 
     std::string path() const {
@@ -273,9 +290,6 @@ struct http_response : http_base {
     }
 
     const std::string &reason() const;
-
-    void parser_init(struct http_parser *p);
-    void parse(struct http_parser *p, const char *data, size_t &len);
 
     std::string data() const;
 };

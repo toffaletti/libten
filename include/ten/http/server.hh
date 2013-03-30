@@ -208,7 +208,7 @@ private:
         bool nodelay_set = false;
         http_request req;
         while (s.valid()) {
-            req.parser_init(&parser);
+            parser.init(req);
             bool got_headers = false;
             for (;;) {
                 buf.reserve(4*1024);
@@ -219,9 +219,9 @@ private:
                     buf.commit(nr);
                 }
                 size_t nparse = buf.size();
-                req.parse(&parser, buf.front(), nparse);
+                parser.parse(buf.front(), nparse);
                 buf.remove(nparse);
-                if (req.complete) {
+                if (parser.complete()) {
                     DVLOG(4) << req.data();
                     // handle http exchange (request -> response)
                     http_exchange ex(req, s, _log_func);

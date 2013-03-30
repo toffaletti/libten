@@ -39,10 +39,12 @@ TEST(Http, RequestConstructor) {
 
 TEST(Http, RequestParserInit) {
     http_request req;
+    req.body = "foo";
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
+    EXPECT_FALSE((bool)parser);
+    EXPECT_FALSE(parser.complete());
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(parser.data, &req);
 }
 
 TEST(Http, RequestMake1) {
@@ -72,11 +74,12 @@ TEST(Http, RequestMakeParse) {
 
     http_parser parser;
     http_request req2;
-    req2.parser_init(&parser);
-    EXPECT_TRUE(!req2.complete);
+    EXPECT_FALSE(parser.complete());
+    parser.init(req2);
+    EXPECT_FALSE(parser.complete());
     size_t len = data.size();
-    req2.parse(&parser, data.data(), len);
-    EXPECT_TRUE(req2.complete);
+    EXPECT_FALSE(parser(data.data(), len));
+    EXPECT_TRUE(parser.complete());
     EXPECT_EQ(len, data.size());
 }
 
@@ -89,17 +92,17 @@ TEST(Http, RequestParserOneByte) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
 
     char *data = strdupa(sdata);
     char *p = data;
-    while (*p != 0 && !req.complete) {
+    while (*p != 0 && !parser) {
         size_t len = 1;
-        req.parse(&parser, p, len);
+        parser(p, len);
         p+=1; /* feed parser 1 byte at a time */
     }
 
-    EXPECT_TRUE(req.complete);
+    EXPECT_TRUE(parser.complete());
     VLOG(1) << "Request:\n" << req.data();
 }
 
@@ -112,10 +115,10 @@ TEST(Http, RequestParserNormalizeHeaderNames) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    parser(sdata, len);
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -142,10 +145,10 @@ TEST(Http, RequestParserHeaders) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    parser.parse(sdata, len);
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ(http_1_1, req.version);
@@ -166,10 +169,10 @@ TEST(Http, RequestParserUnicodeEscape) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    parser(sdata, len);
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ(http_1_1, req.version);
@@ -190,10 +193,10 @@ TEST(Http, RequestParserPercents) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    parser(sdata, len);
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ(http_1_1, req.version);
@@ -216,10 +219,10 @@ TEST(Http, RequestParserBadPercents) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser.parse(sdata, len));
+    EXPECT_TRUE((bool)parser);
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ(http_1_1, req.version);
@@ -240,10 +243,10 @@ TEST(Http, RequestParserHeaderParts) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(sdata, len));
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -262,10 +265,10 @@ TEST(Http, RequestParserNoHeaders) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(sdata, len));
+    EXPECT_TRUE(parser.complete());
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -279,9 +282,9 @@ TEST(Http, RequestParserGarbage) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    EXPECT_THROW(req.parse(&parser, sdata, len), errorx);
+    EXPECT_THROW(parser(sdata, len), errorx);
 }
 
 TEST(Http, RequestParserProxyHttp12) {
@@ -293,10 +296,9 @@ TEST(Http, RequestParserProxyHttp12) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(sdata, len));
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -318,10 +320,9 @@ TEST(Http, RequestClear) {
 
     http_request req;
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(sdata, len));
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -341,10 +342,9 @@ TEST(Http, RequestClear) {
     EXPECT_TRUE(req.body.empty());
     EXPECT_EQ(0, req.body_length);
 
-    req.parser_init(&parser);
+    parser.init(req);
     len = strlen(sdata);
-    req.parse(&parser, sdata, len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(sdata, len));
 
     EXPECT_EQ("GET", req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
@@ -379,10 +379,9 @@ TEST(Http, RequestHostWithUnderscores) {
     std::string data = req.data();
 
     http_parser parser;
-    req.parser_init(&parser);
+    parser.init(req);
     size_t len = data.size();
-    req.parse(&parser, data.data(), len);
-    EXPECT_TRUE(req.complete);
+    EXPECT_FALSE(parser(data.data(), len));
 }
 
 /* http response */
@@ -452,9 +451,9 @@ TEST(Http, ResponseParserInit) {
     http_response resp;
     http_parser parser;
 
-    resp.parser_init(&parser);
+    resp.body = "foo";
+    parser.init(resp);
     EXPECT_TRUE(resp.body.empty());
-    EXPECT_EQ(parser.data, &resp);
 }
 
 TEST(Http, ResponseParserOneByte) {
@@ -468,17 +467,18 @@ TEST(Http, ResponseParserOneByte) {
     http_response resp;
     http_parser parser;
 
-    resp.parser_init(&parser);
+    parser.init(resp);
     char *data = strdupa(sdata);
     char *p = data;
 
-    while (*p != 0 && !resp.complete) {
+    while (*p != 0 && !parser.complete()) {
         size_t len = 1;
-        resp.parse(&parser, p, len);
+        parser(p, len);
         p += 1; /* feed parser 1 byte at a time */
     }
 
-    EXPECT_TRUE(resp.complete);
+    EXPECT_TRUE((bool)parser);
+    EXPECT_TRUE(parser.complete());
     VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
     EXPECT_EQ(200, resp.status_code);
@@ -502,10 +502,9 @@ TEST(Http, ResponseParserNormalizeHeaderNames) {
     http_response resp;
     http_parser parser;
 
-    resp.parser_init(&parser);
+    parser.init(resp);
     size_t len = strlen(sdata);
-    resp.parse(&parser, sdata, len);
-    EXPECT_TRUE(resp.complete);
+    EXPECT_FALSE(parser(sdata, len));
 
     EXPECT_EQ(200, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
@@ -537,10 +536,9 @@ TEST(Http, ResponseParserChunked) {
     http_response resp;
     http_parser parser;
 
-    resp.parser_init(&parser);
+    parser.init(resp);
     size_t len = strlen(sdata);
-    resp.parse(&parser, sdata, len);
-    EXPECT_TRUE(resp.complete);
+    EXPECT_FALSE(parser(sdata, len));
     VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
     EXPECT_EQ(200, resp.status_code);

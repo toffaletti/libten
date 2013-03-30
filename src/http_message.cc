@@ -2,6 +2,117 @@
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>
+#include "http_parser.h"
+
+namespace ten {
+class http_parser::impl {
+public:
+    ptr<http_base> base;
+    struct ::http_parser parser = {};
+    struct ::http_parser_settings s = {};
+    std::function<void (const http_headers &)> on_headers;
+    std::function<void (const char *, size_t)> on_content_part;
+    bool complete = false;
+
+    http_request &req() {
+        CHECK(parser.type == HTTP_REQUEST);
+        return *static_cast<http_request *>(base.get());
+    }
+
+    http_response &resp() {
+        CHECK(parser.type == HTTP_RESPONSE);
+        return *static_cast<http_response*>(base.get());
+    }
+};
+
+//! parser entry points
+struct http_header_parse {
+    static int field(ten::http_headers *h, const char *at, size_t length) {
+        if (!h->_got_header_field)
+            h->_hlist.emplace_back();
+        h->_hlist.back().first.append(at, length);
+        h->_got_header_field = true;
+        return 0;
+    }
+    static int value(ten::http_headers *h, const char *at, size_t length) {
+        assert(!h->_hlist.empty());
+        h->_hlist.back().second.append(at, length);
+        h->_got_header_field = false;
+        return 0;
+    }
+};
+} // ten
+
+extern "C" {
+
+static bool set_version(ten::http_version &ver, http_parser *p) {
+    using namespace ten;
+    if      (p->http_major == 0 && p->http_minor == 9) ver = http_0_9;
+    else if (p->http_major == 1 && p->http_minor == 0) ver = http_1_0;
+    else if (p->http_major == 1 && p->http_minor == 1) ver = http_1_1;
+    else return false;
+    return true;
+}
+
+static int _on_header_field(http_parser *p, const char *at, size_t length) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    return ten::http_header_parse::field(m->base.get(), at, length);
+}
+
+static int _on_header_value(http_parser *p, const char *at, size_t length) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    return ten::http_header_parse::value(m->base.get(), at, length);
+}
+
+static int _on_body(http_parser *p, const char *at, size_t length) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    m->base->body.append(at, length);
+    return 0;
+}
+
+static int _on_message_complete(http_parser *p) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    m->complete = true;
+    m->base->body_length = m->base->body.size();
+    return 1; // cause parser to exit, this http_message is complete
+}
+
+static int _request_on_url(http_parser *p, const char *at, size_t length) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    m->req().uri.append(at, length);
+    return 0;
+}
+
+static int _request_on_headers_complete(http_parser *p) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    m->req().method = http_method_str((http_method)p->method);
+    if (!set_version(m->base->version, p)) {
+        //LOG(INFO) << "on_headers_complete: invalid version";
+        return -1;
+    }
+    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
+        m->base->body.reserve(p->content_length);
+    }
+    return 0;
+}
+
+static int _response_on_headers_complete(http_parser *p) {
+    ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
+    m->resp().status_code = p->status_code;
+    if (!set_version(m->base->version, p)) {
+        return -1;
+    }
+    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
+        m->base->body.reserve(p->content_length);
+    }
+
+    // if this is a response to a HEAD
+    // we need to return 1 here so the
+    // parser knowns not to expect a body
+    return m->resp().guillotine ? 1 : 0;
+}
+
+} // extern "C"
 
 namespace ten {
 
@@ -141,6 +252,59 @@ struct is_header {
 };
 } // ns
 
+http_parser::http_parser()
+    : _impl(std::make_shared<http_parser::impl>())
+{
+}
+
+void http_parser::init(http_request &req) {
+    http_parser_init(&_impl->parser, HTTP_REQUEST);
+    _impl->base.reset(&req);
+    _impl->parser.data = _impl.get();
+    _impl->complete = false;
+    req.clear();
+
+    memset(&_impl->s, 0, sizeof(struct http_parser_settings));
+    _impl->s.on_url              = _request_on_url;
+    _impl->s.on_header_field     = _on_header_field;
+    _impl->s.on_header_value     = _on_header_value;
+    _impl->s.on_headers_complete = _request_on_headers_complete;
+    _impl->s.on_body             = _on_body;
+    _impl->s.on_message_complete = _on_message_complete;
+}
+
+void http_parser::init(http_response &resp) {
+    http_parser_init(&_impl->parser, HTTP_RESPONSE);
+    _impl->base.reset(&resp);
+    _impl->parser.data = _impl.get();
+    _impl->complete = false;
+    resp.clear();
+
+    memset(&_impl->s, 0, sizeof(struct http_parser_settings));
+    _impl->s.on_header_field     = _on_header_field;
+    _impl->s.on_header_value     = _on_header_value;
+    _impl->s.on_headers_complete = _response_on_headers_complete;
+    _impl->s.on_body             = _on_body;
+    _impl->s.on_message_complete = _on_message_complete;
+}
+
+bool http_parser::parse(const char *data, size_t &len) {
+    ssize_t nparsed = http_parser_execute(&_impl->parser, &_impl->s, data, len);
+    if (!_impl->complete && nparsed != (ssize_t)len) {
+        len = nparsed;
+        throw errorx("%s: %s",
+            http_errno_name((http_errno)_impl->parser.http_errno),
+            http_errno_description((http_errno)_impl->parser.http_errno));
+    }
+    len = nparsed;
+    return !_impl->complete;
+}
+
+bool http_parser::complete() const noexcept {
+    return _impl->complete;
+}
+
+
 header_list::iterator http_headers::_hfind(const std::string &field) {
     return std::find_if(begin(_hlist), end(_hlist), is_header{field});
 }
@@ -208,103 +372,6 @@ bool http_headers::is_nocase(const std::string &field, const std::string &value)
 
 #endif // CHIP_UNSURE
 
-static bool set_version(http_version &ver, http_parser *p) {
-    if      (p->http_major == 0 && p->http_minor == 9) ver = http_0_9;
-    else if (p->http_major == 1 && p->http_minor == 0) ver = http_1_0;
-    else if (p->http_major == 1 && p->http_minor == 1) ver = http_1_1;
-    else return false;
-    return true;
-}
-
-//! parser entry points
-struct http_header_parse {
-    static int field(http_headers *h, const char *at, size_t length) {
-        if (!h->_got_header_field)
-            h->_hlist.emplace_back();
-        h->_hlist.back().first.append(at, length);
-        h->_got_header_field = true;
-        return 0;
-    }
-    static int value(http_headers *h, const char *at, size_t length) {
-        assert(!h->_hlist.empty());
-        h->_hlist.back().second.append(at, length);
-        h->_got_header_field = false;
-        return 0;
-    }
-};
-
-extern "C" {
-
-static int _on_header_field(http_parser *p, const char *at, size_t length) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    return http_header_parse::field(m, at, length);
-}
-
-static int _on_header_value(http_parser *p, const char *at, size_t length) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    return http_header_parse::value(m, at, length);
-}
-
-static int _on_body(http_parser *p, const char *at, size_t length) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    m->body.append(at, length);
-    return 0;
-}
-
-static int _on_message_complete(http_parser *p) {
-    http_base *m = reinterpret_cast<http_base *>(p->data);
-    m->complete = true;
-    m->body_length = m->body.size();
-    return 1; // cause parser to exit, this http_message is complete
-}
-
-static int _request_on_url(http_parser *p, const char *at, size_t length) {
-    http_request *m = reinterpret_cast<http_request *>(p->data);
-    m->uri.append(at, length);
-    return 0;
-}
-
-static int _request_on_headers_complete(http_parser *p) {
-    http_request *m = reinterpret_cast<http_request*>(p->data);
-    m->method = http_method_str((http_method)p->method);
-    if (!set_version(m->version, p)) {
-        LOG(INFO) << "on_headers_complete: invalid version";
-        return -1;
-    }
-    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
-        m->body.reserve(p->content_length);
-    }
-    return 0;
-}
-
-} // extern "C"
-
-
-void http_request::parser_init(struct http_parser *p) {
-    http_parser_init(p, HTTP_REQUEST);
-    p->data = this;
-    clear();
-}
-
-void http_request::parse(struct http_parser *p, const char *data_, size_t &len) {
-    http_parser_settings s{};
-    s.on_url              = _request_on_url;
-    s.on_header_field     = _on_header_field;
-    s.on_header_value     = _on_header_value;
-    s.on_headers_complete = _request_on_headers_complete;
-    s.on_body             = _on_body;
-    s.on_message_complete = _on_message_complete;
-
-    ssize_t nparsed = http_parser_execute(p, &s, data_, len);
-    if (!complete && nparsed != (ssize_t)len) {
-        len = nparsed;
-        throw errorx("%s: %s",
-            http_errno_name((http_errno)p->http_errno),
-            http_errno_description((http_errno)p->http_errno));
-    }
-    len = nparsed;
-}
-
 std::string http_request::data() const {
     std::ostringstream ss;
     ss << method << " " << uri << " " << version_string(version) << "\r\n";
@@ -312,47 +379,6 @@ std::string http_request::data() const {
     return ss.str();
 }
 
-/* http_response_t */
-
-static int _response_on_headers_complete(http_parser *p) {
-    http_response *m = reinterpret_cast<http_response *>(p->data);
-    m->status_code = p->status_code;
-    if (!set_version(m->version, p)) {
-        return -1;
-    }
-    if (p->content_length > 0 && p->content_length != UINT64_MAX) {
-        m->body.reserve(p->content_length);
-    }
-
-    // if this is a response to a HEAD
-    // we need to return 1 here so the
-    // parser knowns not to expect a body
-    return m->guillotine ? 1 : 0;
-}
-
-void http_response::parser_init(struct http_parser *p) {
-    http_parser_init(p, HTTP_RESPONSE);
-    p->data = this;
-    clear();
-}
-
-void http_response::parse(struct http_parser *p, const char *data_, size_t &len) {
-    http_parser_settings s{};
-    s.on_header_field     = _on_header_field;
-    s.on_header_value     = _on_header_value;
-    s.on_headers_complete = _response_on_headers_complete;
-    s.on_body             = _on_body;
-    s.on_message_complete = _on_message_complete;
-
-    ssize_t nparsed = http_parser_execute(p, &s, data_, len);
-    if (!complete && nparsed != (ssize_t)len) {
-        len = nparsed;
-        throw errorx("%s: %s",
-            http_errno_name((http_errno)p->http_errno),
-            http_errno_description((http_errno)p->http_errno));
-    }
-    len = nparsed;
-}
 
 const std::string &http_response::reason() const {
     auto i = http_status_codes.find(status_code);
