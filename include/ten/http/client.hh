@@ -89,7 +89,9 @@ public:
 
     http_response perform(const std::string &method, const std::string &path,
                           http_headers hdrs = {}, std::string data = {},
-                          optional_timeout timeout = nullopt)
+                          optional_timeout timeout = nullopt,
+                          http_parser::on_headers_t on_headers = {},
+                          http_parser::on_content_part_t on_content_part = {})
     {
         // Calculate canonical path
         uri u;
@@ -104,10 +106,14 @@ public:
             hdrs.set(hs::Host, u.host);
 
         http_request r{method, u.compose_path(), std::move(hdrs), std::move(data)};
-        return perform(r, timeout);
+        return perform(r, timeout, on_headers, on_content_part);
     }
 
-    http_response perform(http_request &r, optional_timeout timeout = nullopt) {
+    http_response perform(http_request &r,
+            optional_timeout timeout = nullopt,
+            http_parser::on_headers_t on_headers = {},
+            http_parser::on_content_part_t on_content_part = {})
+    {
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
         if (r.body.size()) {
@@ -133,7 +139,7 @@ public:
                 throw http_error(ss.str().c_str());
             }
 
-            http_parser parser;
+            http_parser parser{on_headers, on_content_part};
             parser.init(resp);
 
             _buf.clear();

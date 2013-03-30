@@ -125,12 +125,20 @@ class http_response;
 
 class http_parser {
 public:
+    typedef std::function<void (const http_headers &)> on_headers_t;
+    typedef std::function<void (const char *, size_t)> on_content_part_t;
+
     class impl;
 
-    http_parser();
+    http_parser(on_headers_t on_headers = {},
+            on_content_part_t on_content_part = {});
 
-    void init(http_request &req);
-    void init(http_response &resp);
+    void init(http_request &req,
+            on_headers_t on_headers = {},
+            on_content_part_t on_content_part = {});
+    void init(http_response &resp,
+            on_headers_t on_headers = {},
+            on_content_part_t on_content_part = {});
 
     bool parse(const char *data, size_t &len);
     bool operator() (const char *data, size_t &len) { return parse(data, len); }
@@ -140,6 +148,8 @@ public:
 
 private:
     std::shared_ptr<impl> _impl;
+
+    void set_default_callbacks();
 };
 
 //! base class for http request and response

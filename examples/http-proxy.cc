@@ -37,7 +37,7 @@ void proxy_task(int sock) {
     buffer buf{4*1024};
     http_parser parser;
     http_request req;
-    req.parser_init(&parser);
+    parser.init(req);
 
     bool got_headers = false;
     for (;;) {
@@ -46,9 +46,9 @@ void proxy_task(int sock) {
         if (nr < 0) { goto request_read_error; }
         buf.commit(nr);
         size_t len = buf.size();
-        req.parse(&parser, buf.front(), len);
+        parser(buf.front(), len);
         buf.remove(buf.size()); // normally would remove(len)
-        if (req.complete) break;
+        if (parser.complete()) break;
         if (nr == 0) return;
         if (!got_headers && !req.method.empty()) {
             got_headers = true;
@@ -109,7 +109,7 @@ void proxy_task(int sock) {
             }
 
             http_response resp{&r};
-            resp.parser_init(&parser);
+            parser.init(resp);
             bool headers_sent = false;
             optional<std::string> tx_enc_hdr;
             for (;;) {
@@ -118,7 +118,7 @@ void proxy_task(int sock) {
                 if (nr < 0) { goto response_read_error; }
                 buf.commit(nr);
                 size_t len = buf.size();
-                resp.parse(&parser, buf.front(), len);
+                parser(buf.front(), len);
                 buf.remove(buf.size()); // normally would remove(len)
                 if (headers_sent == false && resp.status_code) {
                     headers_sent = true;
@@ -128,6 +128,7 @@ void proxy_task(int sock) {
                 }
 
                 if (resp.body.size()) {
+                    tx_enc_hdr = resp.get("Transfer-Encoding");
                     if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                         char lenbuf[64];
                         int len = snprintf(lenbuf, sizeof(lenbuf)-1, "%zx\r\n", resp.body.size());
@@ -138,7 +139,7 @@ void proxy_task(int sock) {
                     if (nw <= 0) { goto response_send_error; }
                     resp.body.clear();
                 }
-                if (resp.complete) {
+                if (parser.complete()) {
                     tx_enc_hdr = resp.get("Transfer-Encoding");
                     // send end chunk
                     if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
