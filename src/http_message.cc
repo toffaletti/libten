@@ -277,21 +277,17 @@ http_parser::http_parser(on_headers_t on_headers,
 }
 
 void http_parser::set_default_callbacks() {
-    if (!_impl->on_headers && !_impl->on_content_part) {
-        _impl->on_headers = [=](const http_headers &h) {
-            if (_impl->parser.content_length > 0 &&
-                _impl->parser.content_length != UINT64_MAX)
-            {
-                _impl->base->body.reserve(_impl->parser.content_length);
-            }
-        };
-    } else if (!_impl->on_headers) {
-        // do nothing because content part is handled by user
+    if (!_impl->on_headers) {
         _impl->on_headers = [](const http_headers &) {};
     }
 
     if (!_impl->on_content_part) {
         _impl->on_content_part = [=](const char *data, size_t len) {
+            if (_impl->base->body.capacity() < _impl->parser.content_length &&
+                _impl->parser.content_length != UINT64_MAX)
+            {
+                _impl->base->body.reserve(_impl->parser.content_length);
+            }
             _impl->base->body.append(data, len);
         };
     }

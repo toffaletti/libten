@@ -38,9 +38,16 @@ void proxy_task(int sock) {
     buffer buf{4*1024};
     http_parser parser;
     http_request req;
-    parser.init(req);
-
-    bool got_headers = false;
+    auto on_incoming_headers = [&](const http_headers &hdrs) {
+        auto exp_hdr = req.get("Expect");
+        if (exp_hdr && *exp_hdr == "100-continue") {
+            http_response cont_resp(100);
+            std::string data = cont_resp.data();
+            ssize_t nw = s.send(data.data(), data.size());
+            (void)nw;
+        }
+    };
+    parser.init(req, on_incoming_headers);
     for (;;) {
         buf.reserve(4*1024);
         ssize_t nr = s.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
@@ -51,16 +58,6 @@ void proxy_task(int sock) {
         buf.remove(buf.size()); // normally would remove(len)
         if (parser.complete()) break;
         if (nr == 0) return;
-        if (!got_headers && !req.method.empty()) {
-            got_headers = true;
-            auto exp_hdr = req.get("Expect");
-            if (exp_hdr && *exp_hdr == "100-continue") {
-                http_response cont_resp(100);
-                std::string data = cont_resp.data();
-                ssize_t nw = s.send(data.data(), data.size());
-                (void)nw;
-            }
-        }
     }
 
     try {
@@ -109,9 +106,39 @@ void proxy_task(int sock) {
             }
 
             http_response resp{&r};
-            parser.init(resp);
-            bool headers_sent = false;
-            optional<std::string> tx_enc_hdr;
+            bool chunked = false;
+            auto on_headers = [&](const http_headers &hdrs) {
+                optional<std::string> tx_enc_hdr = resp.get("Transfer-Encoding");
+                if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
+                    chunked = true;
+                }
+                data = resp.data();
+                size_t nw = s.send(data.data(), data.size());
+                if (nw <= 0) { throw errorx("response send error"); }
+            };
+            buffer wbuf{4096};
+            auto on_content_part = [&](const char *part, size_t plen) {
+                if (chunked) {
+                    wbuf.reserve(64+plen+2);
+                    char lenbuf[64];
+                    int len = snprintf(wbuf.back(), wbuf.available(), "%zx\r\n", plen);
+                    // TODO: should really use writev here
+                    wbuf.commit(len);
+                    wbuf.reserve(plen+2);
+                    memcpy(wbuf.back(), part, plen);
+                    wbuf.commit(plen);
+                    memcpy(wbuf.back(), "\r\n", 2);
+                    wbuf.commit(2);
+                    resp.body.insert(0, lenbuf, len);
+                    nw = s.send(wbuf.front(), wbuf.size());
+                    if (nw <= 0) { throw errorx("response send error"); }
+                    wbuf.remove(nw);
+                } else {
+                    nw = s.send(part, plen);
+                    if (nw <= 0) { throw errorx("response send error"); }
+                }
+            };
+            parser.init(resp, on_headers, on_content_part);
             for (;;) {
                 buf.reserve(4*1024);
                 ssize_t nr = cs.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
@@ -120,29 +147,9 @@ void proxy_task(int sock) {
                 size_t len = buf.size();
                 parser(buf.front(), len);
                 buf.remove(buf.size()); // normally would remove(len)
-                if (headers_sent == false && resp.status_code) {
-                    headers_sent = true;
-                    data = resp.data();
-                    nw = s.send(data.data(), data.size());
-                    if (nw <= 0) { goto response_send_error; }
-                }
-
-                if (resp.body.size()) {
-                    tx_enc_hdr = resp.get("Transfer-Encoding");
-                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
-                        char lenbuf[64];
-                        int len = snprintf(lenbuf, sizeof(lenbuf)-1, "%zx\r\n", resp.body.size());
-                        resp.body.insert(0, lenbuf, len);
-                        resp.body.append("\r\n");
-                    }
-                    nw = s.send(resp.body.data(), resp.body.size());
-                    if (nw <= 0) { goto response_send_error; }
-                    resp.body.clear();
-                }
                 if (parser.complete()) {
-                    tx_enc_hdr = resp.get("Transfer-Encoding");
                     // send end chunk
-                    if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
+                    if (chunked) {
                         nw = s.send("0\r\n\r\n", 5);
                     }
                     break;
@@ -169,9 +176,6 @@ request_send_error:
 response_read_error:
     PLOG(ERROR) << "response read error: " << req.method << " " << req.uri;
     send_503_reply(s);
-    return;
-response_send_error:
-    PLOG(ERROR) << "response send error: " << req.method << " " << req.uri;
     return;
 }
 
