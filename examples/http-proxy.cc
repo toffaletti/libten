@@ -37,8 +37,8 @@ void proxy_task(int sock) {
     netsock s{sock};
     buffer buf{4*1024};
     http_parser parser;
-    http_request req;
-    auto on_incoming_headers = [&](const http_headers &hdrs) {
+    auto on_incoming_headers = [&](http_request &req) {
+        req.body.reserve(req.body_length);
         auto exp_hdr = req.get("Expect");
         if (exp_hdr && *exp_hdr == "100-continue") {
             http_response cont_resp(100);
@@ -47,7 +47,8 @@ void proxy_task(int sock) {
             (void)nw;
         }
     };
-    parser.init(req, on_incoming_headers);
+    http_request req{on_incoming_headers};
+    parser.init(req);
     for (;;) {
         buf.reserve(4*1024);
         ssize_t nr = s.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
@@ -105,9 +106,8 @@ void proxy_task(int sock) {
                 if (nw <= 0) { goto request_send_error; }
             }
 
-            http_response resp{&r};
             bool chunked = false;
-            auto on_headers = [&](const http_headers &hdrs) {
+            auto on_headers = [&](const http_response &resp) {
                 optional<std::string> tx_enc_hdr = resp.get("Transfer-Encoding");
                 if (tx_enc_hdr && *tx_enc_hdr == "chunked") {
                     chunked = true;
@@ -117,10 +117,9 @@ void proxy_task(int sock) {
                 if (nw <= 0) { throw errorx("response send error"); }
             };
             buffer wbuf{4096};
-            auto on_content_part = [&](const char *part, size_t plen) {
+            auto on_content_part = [&](const http_response &resp, const char *part, size_t plen) {
                 if (chunked) {
                     wbuf.reserve(64+plen+2);
-                    char lenbuf[64];
                     int len = snprintf(wbuf.back(), wbuf.available(), "%zx\r\n", plen);
                     // TODO: should really use writev here
                     wbuf.commit(len);
@@ -129,7 +128,6 @@ void proxy_task(int sock) {
                     wbuf.commit(plen);
                     memcpy(wbuf.back(), "\r\n", 2);
                     wbuf.commit(2);
-                    resp.body.insert(0, lenbuf, len);
                     nw = s.send(wbuf.front(), wbuf.size());
                     if (nw <= 0) { throw errorx("response send error"); }
                     wbuf.remove(nw);
@@ -138,7 +136,9 @@ void proxy_task(int sock) {
                     if (nw <= 0) { throw errorx("response send error"); }
                 }
             };
-            parser.init(resp, on_headers, on_content_part);
+
+            http_response resp{&r, on_headers, on_content_part};
+            parser.init(resp);
             for (;;) {
                 buf.reserve(4*1024);
                 ssize_t nr = cs.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));

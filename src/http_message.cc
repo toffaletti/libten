@@ -10,15 +10,8 @@ public:
     ptr<http_base> base;
     struct ::http_parser parser = {};
     struct ::http_parser_settings s = {};
-    on_headers_t on_headers;
-    on_content_part_t on_content_part;
     bool complete = false;
     std::exception_ptr exception;
-
-    impl(on_headers_t on_headers_ = {},
-        on_content_part_t on_content_part_ = {})
-        : on_headers{on_headers_}, on_content_part{on_content_part_}
-    {}
 
     http_request &req() {
         CHECK(parser.type == HTTP_REQUEST);
@@ -73,7 +66,7 @@ static int _on_header_value(http_parser *p, const char *at, size_t length) {
 static int _on_body(http_parser *p, const char *at, size_t length) {
     ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
     try {
-        m->on_content_part(at, length);
+        m->base->on_content_part(at, length);
     } catch (...) {
         m->exception = std::current_exception();
         return -1;
@@ -102,7 +95,7 @@ static int _request_on_headers_complete(http_parser *p) {
     }
 
     try {
-        m->on_headers(*m->base);
+        m->base->on_headers(*m);
     } catch (...) {
         m->exception = std::current_exception();
         return -1;
@@ -118,7 +111,7 @@ static int _response_on_headers_complete(http_parser *p) {
     }
 
     try {
-        m->on_headers(*m->base);
+        m->base->on_headers(*m);
     } catch (...) {
         m->exception = std::current_exception();
         return -1;
@@ -270,42 +263,18 @@ struct is_header {
 };
 } // ns
 
-http_parser::http_parser(on_headers_t on_headers,
-            on_content_part_t on_content_part)
-    : _impl(std::make_shared<http_parser::impl>(on_headers, on_content_part))
+http_parser::http_parser()
+    : _impl{std::make_shared<http_parser::impl>()}
 {
 }
 
-void http_parser::set_default_callbacks() {
-    if (!_impl->on_headers) {
-        _impl->on_headers = [](const http_headers &) {};
-    }
-
-    if (!_impl->on_content_part) {
-        _impl->on_content_part = [=](const char *data, size_t len) {
-            if (_impl->base->body.capacity() < _impl->parser.content_length &&
-                _impl->parser.content_length != UINT64_MAX)
-            {
-                _impl->base->body.reserve(_impl->parser.content_length);
-            }
-            _impl->base->body.append(data, len);
-        };
-    }
-}
-
-void http_parser::init(http_request &req,
-        on_headers_t on_headers,
-        on_content_part_t on_content_part)
+void http_parser::init(http_request &req)
 {
     http_parser_init(&_impl->parser, HTTP_REQUEST);
     _impl->base.reset(&req);
     _impl->parser.data = _impl.get();
     _impl->complete = false;
     req.clear();
-
-    _impl->on_headers = on_headers;
-    _impl->on_content_part = on_content_part;
-    set_default_callbacks();
 
     memset(&_impl->s, 0, sizeof(struct http_parser_settings));
     _impl->s.on_url              = _request_on_url;
@@ -316,19 +285,13 @@ void http_parser::init(http_request &req,
     _impl->s.on_message_complete = _on_message_complete;
 }
 
-void http_parser::init(http_response &resp,
-        on_headers_t on_headers,
-        on_content_part_t on_content_part)
+void http_parser::init(http_response &resp)
 {
     http_parser_init(&_impl->parser, HTTP_RESPONSE);
     _impl->base.reset(&resp);
     _impl->parser.data = _impl.get();
     _impl->complete = false;
     resp.clear();
-
-    _impl->on_headers = on_headers;
-    _impl->on_content_part = on_content_part;
-    set_default_callbacks();
 
     memset(&_impl->s, 0, sizeof(struct http_parser_settings));
     _impl->s.on_header_field     = _on_header_field;
@@ -428,6 +391,27 @@ bool http_headers::is_nocase(const std::string &field, const std::string &value)
 
 #endif // CHIP_UNSURE
 
+
+http_request::http_request(on_headers_t on_headers_, on_content_part_t on_content_part_)
+    : http_base(), _on_headers{on_headers_}, _on_content_part{on_content_part_}
+{
+}
+
+void http_request::on_headers(http_parser::impl &impl) {
+    if (impl.parser.content_length > 0 && impl.parser.content_length != UINT64_MAX) {
+        body_length = impl.parser.content_length;
+    }
+    if (_on_headers) {
+        _on_headers(*this);
+    }
+    if (!_on_content_part) {
+        body.reserve(body_length);
+        _on_content_part = [](http_request &r, const char *part, size_t len) {
+            r.body.append(part, len);
+        };
+    }
+}
+
 std::string http_request::data() const {
     std::ostringstream ss;
     ss << method << " " << uri << " " << version_string(version) << "\r\n";
@@ -435,6 +419,36 @@ std::string http_request::data() const {
     return ss.str();
 }
 
+
+http_response::http_response(on_headers_t on_headers_, on_content_part_t on_content_part_)
+    : http_base(), _on_headers{on_headers_}, _on_content_part{on_content_part_}
+{
+}
+
+http_response::http_response(http_request *req_,
+        on_headers_t on_headers_,
+        on_content_part_t on_content_part_)
+    : http_base(),
+    _on_headers{on_headers_},
+    _on_content_part{on_content_part_},
+    guillotine{req_ && req_->method == hs::HEAD}
+{
+}
+
+void http_response::on_headers(http_parser::impl &impl) {
+    if (impl.parser.content_length > 0 && impl.parser.content_length != UINT64_MAX) {
+        body_length = impl.parser.content_length;
+    }
+    if (_on_headers) {
+        _on_headers(*this);
+    }
+    if (!_on_content_part) {
+        body.reserve(body_length);
+        _on_content_part = [](http_response &r, const char *part, size_t len) {
+            r.body.append(part, len);
+        };
+    }
+}
 
 const std::string &http_response::reason() const {
     auto i = http_status_codes.find(status_code);

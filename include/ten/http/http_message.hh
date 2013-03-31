@@ -43,7 +43,7 @@ extern const std::string
 }
 
 //! http headers
-struct http_headers {
+class http_headers {
 protected:
     header_list _hlist;
     bool _got_header_field {}; // for reliable parsing
@@ -125,20 +125,12 @@ class http_response;
 
 class http_parser {
 public:
-    typedef std::function<void (const http_headers &)> on_headers_t;
-    typedef std::function<void (const char *, size_t)> on_content_part_t;
-
     class impl;
 
-    http_parser(on_headers_t on_headers = {},
-            on_content_part_t on_content_part = {});
+    http_parser();
 
-    void init(http_request &req,
-            on_headers_t on_headers = {},
-            on_content_part_t on_content_part = {});
-    void init(http_response &resp,
-            on_headers_t on_headers = {},
-            on_content_part_t on_content_part = {});
+    void init(http_request &req);
+    void init(http_response &resp);
 
     bool parse(const char *data, size_t &len);
     bool operator() (const char *data, size_t &len) { return parse(data, len); }
@@ -148,13 +140,15 @@ public:
 
 private:
     std::shared_ptr<impl> _impl;
-
-    void set_default_callbacks();
 };
 
 //! base class for http request and response
-struct http_base : http_headers {
+class http_base : public http_headers {
+public:
     using super = http_headers;
+
+    virtual void on_headers(http_parser::impl &) = 0;
+    virtual void on_content_part(const char *, size_t) = 0;
 
     http_version version {default_http_version};
     std::string body;
@@ -210,13 +204,25 @@ struct http_base : http_headers {
 };
 
 //! http request
-struct http_request : http_base {
+class http_request : public http_base {
+public:
+    using on_headers_t = std::function<void (http_request &)>;
+    using on_content_part_t = std::function<void (http_request &, const char *, size_t)>;
+private:
+    on_headers_t _on_headers;
+    on_content_part_t _on_content_part;
+    void on_headers(http_parser::impl &) override;
+    void on_content_part(const char *part, size_t len) override {
+        _on_content_part(*this, part, len);
+    }
+public:
     using super = http_base;
 
     std::string method;
     std::string uri;
 
-    http_request() : http_base() {}
+    http_request(on_headers_t on_headers_={}, on_content_part_t on_content_part_={});
+
     http_request(std::string method_,
                  std::string uri_,
                  http_headers headers_ = {},
@@ -266,14 +272,32 @@ struct http_request : http_base {
 };
 
 //! http response
-struct http_response : http_base {
+class http_response : public http_base {
+public:
+    using on_headers_t = std::function<void (http_response &)>;
+    using on_content_part_t = std::function<void (http_response &, const char *, size_t)>;
+private:
+    on_headers_t _on_headers;
+    on_content_part_t _on_content_part;
+    void on_headers(http_parser::impl &) override;
+    void on_content_part(const char *part, size_t len) override {
+        _on_content_part(*this, part, len);
+    }
+public:
     using super = http_base;
     using status_t = uint16_t;
 
     status_t status_code {};
     bool guillotine {};  // return only the head
 
-    http_response(status_t status_code_ = 200,
+    http_response(on_headers_t on_headers_={}, on_content_part_t on_content_part_={});
+
+    // TODO: remove this special case
+    http_response(http_request *req_,
+        on_headers_t on_headers_={},
+        on_content_part_t on_content_part_={});
+
+    http_response(status_t status_code_,
                   http_headers headers_ = {},
                   http_version version_ = default_http_version)
         : http_base(std::move(headers_), version_),
@@ -287,13 +311,7 @@ struct http_response : http_base {
           status_code{status_code_}
         { set_body(std::move(body_), std::move(content_type_)); }
 
-    // TODO: remove this special case
-    http_response(http_request *req_)
-        : http_base(),
-          guillotine{req_ && req_->method == hs::HEAD}
-        {}
-
-    void clear() {
+   void clear() {
         super::clear();
         status_code = {};
         guillotine = {};

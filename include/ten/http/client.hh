@@ -90,8 +90,8 @@ public:
     http_response perform(const std::string &method, const std::string &path,
                           http_headers hdrs = {}, std::string data = {},
                           optional_timeout timeout = nullopt,
-                          http_parser::on_headers_t on_headers = {},
-                          http_parser::on_content_part_t on_content_part = {})
+                          http_response::on_headers_t on_headers = {},
+                          http_response::on_content_part_t on_content_part = {})
     {
         // Calculate canonical path
         uri u;
@@ -111,8 +111,8 @@ public:
 
     http_response perform(http_request &r,
             optional_timeout timeout = nullopt,
-            http_parser::on_headers_t on_headers = {},
-            http_parser::on_content_part_t on_content_part = {})
+            http_response::on_headers_t on_headers = {},
+            http_response::on_content_part_t on_content_part = {})
     {
         VLOG(4) << "-> " << r.method << " " << _host << ":" << _port << " " << r.uri;
 
@@ -123,7 +123,7 @@ public:
         try {
             ensure_connection();
 
-            http_response resp(&r);
+            http_response resp{&r, on_headers, on_content_part};
 
             std::string data = r.data();
             if (r.body.size() > 0) {
@@ -139,7 +139,7 @@ public:
                 throw http_error(ss.str().c_str());
             }
 
-            http_parser parser{on_headers, on_content_part};
+            http_parser parser;
             parser.init(resp);
 
             _buf.clear();

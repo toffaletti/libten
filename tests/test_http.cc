@@ -387,7 +387,7 @@ TEST(Http, RequestHostWithUnderscores) {
 /* http response */
 
 TEST(Http, ResponseConstructor) {
-    http_response resp;
+    http_response resp{200};
     EXPECT_EQ(200, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(default_http_version, resp.version);
