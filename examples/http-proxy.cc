@@ -9,7 +9,8 @@
 
 using namespace ten;
 
-void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
+void sock_copy(netsock &a, netsock &b) {
+    buffer buf{4*1024};
     for (;;) {
         buf.reserve(4*1024);
         ssize_t nr = a.recv(buf.back(), buf.available());
@@ -19,9 +20,9 @@ void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
         buf.remove(nw);
     }
     DVLOG(3) << "shutting down sock_copy: " << a.s.fd << " to " << b.s.fd;
-    shutdown(b.s.fd, SHUT_WR);
+    int s = b.shutdown(SHUT_WR);
+    (void)s;
     a.close();
-    c.send(1);
 }
 
 void send_503_reply(netsock &s) {
@@ -81,16 +82,15 @@ void proxy_task(int sock) {
             ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
             (void)nw;
 
-            channel<int> c;
-            task::spawn([&] {
-                sock_copy(c, s, cs, buf);
+            auto copy_task1 = task::spawn([&] {
+                sock_copy(s, cs);
             });
-            task::spawn([&] {
-                sock_copy(c, cs, s, buf);
+            auto copy_task2 = task::spawn([&] {
+                sock_copy(cs, s);
             });
             // wait for sock copy tasks to exit
-            c.recv();
-            c.recv();
+            copy_task1.join();
+            copy_task2.join();
             return;
         } else {
             if (u.port == 0) u.port = 80;
