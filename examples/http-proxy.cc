@@ -9,14 +9,18 @@
 
 using namespace ten;
 
+static optional_timeout connect_timeout = nullopt;
+static optional_timeout rw_timeout = nullopt;
+
 void sock_copy(netsock &a, netsock &b) {
     buffer buf{4*1024};
     for (;;) {
         buf.reserve(4*1024);
-        ssize_t nr = a.recv(buf.back(), buf.available());
+        ssize_t nr = a.recv(buf.back(), buf.available(), 0, rw_timeout);
         if (nr <= 0) break;
         buf.commit(nr);
-        ssize_t nw = b.send(buf.front(), buf.size());
+        ssize_t nw = b.send(buf.front(), buf.size(), 0, rw_timeout);
+        if (nw <= 0) break;
         buf.remove(nw);
     }
     DVLOG(3) << "shutting down sock_copy: " << a.s.fd << " to " << b.s.fd;
@@ -28,7 +32,7 @@ void sock_copy(netsock &a, netsock &b) {
 void send_503_reply(netsock &s) {
     http_response resp{503};
     std::string data = resp.data();
-    ssize_t nw = s.send(data.data(), data.size());
+    ssize_t nw = s.send(data.data(), data.size(), 0, rw_timeout);
     (void)nw; // ignore
 }
 
@@ -43,7 +47,7 @@ void proxy_task(int sock) {
         if (exp_hdr && *exp_hdr == "100-continue") {
             http_response cont_resp(100);
             std::string data = cont_resp.data();
-            ssize_t nw = s.send(data.data(), data.size());
+            ssize_t nw = s.send(data.data(), data.size(), 0, rw_timeout);
             (void)nw;
         }
     };
@@ -51,7 +55,7 @@ void proxy_task(int sock) {
     parser.init(req);
     for (;;) {
         buf.reserve(4*1024);
-        ssize_t nr = s.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
+        ssize_t nr = s.recv(buf.back(), buf.available(), 0, rw_timeout);
         if (nr < 0) { goto request_read_error; }
         buf.commit(nr);
         size_t len = buf.size();
@@ -63,21 +67,18 @@ void proxy_task(int sock) {
 
     try {
         using namespace std::chrono;
-        uri u{req.uri};
-        u.normalize();
-        LOG(INFO) << req.method << " " << u.compose();
-
+        LOG(INFO) << req.method << " " << req.uri;
         netsock cs{AF_INET, SOCK_STREAM};
 
         if (req.method == "CONNECT") {
-            ssize_t pos = u.path.find(':');
-            u.host = u.path.substr(1, pos-1);
-            u.port = boost::lexical_cast<uint16_t>(u.path.substr(pos+1));
-            cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
+            std::string host = req.uri;
+            uint16_t port{443};
+            parse_host_port(host, port);
+            cs.dial(host.c_str(), port, connect_timeout);
 
             http_response resp{200};
             std::string data = resp.data();
-            ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
+            ssize_t nw = s.send(data.data(), data.size(), 0, rw_timeout);
             (void)nw;
 
             auto copy_task1 = task::spawn([&] {
@@ -91,18 +92,20 @@ void proxy_task(int sock) {
             copy_task2.join();
             return;
         } else {
+            uri u{req.uri};
+            u.normalize();
             if (u.port == 0) u.port = 80;
-            cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
+            cs.dial(u.host.c_str(), u.port, connect_timeout);
 
             http_request r{req};
             r.uri = u.compose_path();
             // HTTP/1.1 requires host header
             r.set("Host", u.host);
             std::string data = r.data();
-            ssize_t nw = cs.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
+            ssize_t nw = cs.send(data.data(), data.size(), 0, rw_timeout);
             if (nw <= 0) { goto request_send_error; }
             if (!req.body.empty()) {
-                nw = cs.send(req.body.data(), req.body.size(), 0, duration_cast<milliseconds>(seconds{5}));
+                nw = cs.send(req.body.data(), req.body.size(), 0, rw_timeout);
                 if (nw <= 0) { goto request_send_error; }
             }
 
@@ -141,7 +144,7 @@ void proxy_task(int sock) {
             parser.init(resp);
             for (;;) {
                 buf.reserve(4*1024);
-                ssize_t nr = cs.recv(buf.back(), buf.available(), 0, duration_cast<milliseconds>(seconds{5}));
+                ssize_t nr = cs.recv(buf.back(), buf.available(), 0, rw_timeout);
                 if (nr < 0) { goto response_read_error; }
                 buf.commit(nr);
                 size_t len = buf.size();
@@ -150,7 +153,7 @@ void proxy_task(int sock) {
                 if (parser.complete()) {
                     // send end chunk
                     if (chunked) {
-                        nw = s.send("0\r\n\r\n", 5);
+                        nw = s.send("0\r\n\r\n", 5, 0, rw_timeout);
                     }
                     break;
                 }

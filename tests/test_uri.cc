@@ -64,7 +64,7 @@ TEST(Uri, RussianDecode) {
     uri u{uri1};
     u.normalize();
     // NOTE: the string below should appear as russian
-    EXPECT_EQ(uri::decode(u.query), "?q=путин");
+    EXPECT_EQ("?q=путин", uri::decode(u.query));
 }
 
 TEST(Uri, ParseQuery) {
@@ -73,8 +73,8 @@ TEST(Uri, ParseQuery) {
     u.normalize();
     uri::query_params params = u.query_part();
     // NOTE: the string below should appear as russian
-    EXPECT_EQ(params.size(), 1);
-    EXPECT_EQ(params.find("q")->second, "путин");
+    EXPECT_EQ(1, params.size());
+    EXPECT_EQ("путин", params.find("q")->second);
 }
 
 TEST(Uri, ParseDups) {
@@ -424,5 +424,6 @@ TEST(Uri, QueryParts) {
     u.query = uri::query_params{"this", "that ",
             "thing", 1234,
             "stuff", false}.str();
-    EXPECT_EQ(u.query, "?this=that+&thing=1234&stuff=0");
+    EXPECT_EQ("?this=that+&thing=1234&stuff=0", u.query);
 }
+
