@@ -17,8 +17,6 @@ namespace stack_allocator {
     constexpr size_t min_stacksize = page_size * 2;
 
     extern size_t default_stacksize;
-    //! max number of task stacks to cache-per thread
-    extern std::atomic<size_t> cache_maxsize;
 
     int initialize();
 
