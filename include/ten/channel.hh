@@ -166,6 +166,11 @@ public:
         return _m->unread;
     }
 
+    bool is_closed() {
+        std::lock_guard<qutex> l(_m->qtx);
+        return _m->closed;
+    }
+
     void close() {
         std::lock_guard<qutex> l(_m->qtx);
         _m->closed = true;
