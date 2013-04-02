@@ -122,6 +122,11 @@ void task::impl::trampoline(intptr_t arg) {
     LOG(FATAL) << "Oh no! You fell through the trampoline in " << t;
 }
 
+int task::introduce(std::function<void()> f) {
+    thread_context ctx;
+    return task::entry(f);
+}
+
 int task::entry(std::function<void()> f) {
     try {
         f();

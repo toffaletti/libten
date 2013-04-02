@@ -430,7 +430,7 @@ TEST(Task, NewApi) {
         EXPECT_EQ(2, i);
 
         auto start = kernel::now();
-        std::thread th([&] {
+        std::thread th = task::spawn_thread([&] {
             // yield to nothing
             this_task::yield();
             ++i;

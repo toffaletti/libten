@@ -16,7 +16,10 @@ scheduler::~scheduler() {
     // wait for all tasks to exit
     // this is needed because os task could be canceled
     // and exit before other tasks do.
-    wait_for_all();
+    //wait_for_all();
+    //XXX ^ this was moved to ~thread_context
+    // because we need to finish all tasks before removing from thread list
+    CHECK(_user_tasks.empty());
     DVLOG(5) << "scheduler freed: " << this;
 }
 

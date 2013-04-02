@@ -43,21 +43,16 @@ class task {
 public:
     class impl;
 
-    //! task entry boilerplate exception handling
-    static int entry(std::function<void ()> f);
+    //! enter the task system
+    static int introduce(std::function<void()> f);
 
     //! call from main() to setup task system and do boilerplate exception handling
     template <class Func>
         static int main(Func &&f, optional<size_t> stacksize=nullopt) {
             kernel the_kernel(stacksize);
-            return entry(std::forward<Func>(f));
+            return introduce(std::forward<Func>(f));
         }
 
-private:
-    std::shared_ptr<impl> _impl;
-
-    explicit task(std::function<void ()> f);
-public:
     task() {}
     task(const task &) = delete;
     task &operator=(const task &) = delete;
@@ -75,8 +70,7 @@ public:
     template<class Function> 
         static std::thread spawn_thread(Function &&f) {
             return std::thread([f] {
-                task::entry(f);
-                kernel::wait_for_tasks();
+                task::introduce(f);
             });
         }
 
@@ -91,6 +85,14 @@ public:
 
     //! join the task or throw system_error
     void join();
+
+private:
+    std::shared_ptr<impl> _impl;
+
+    explicit task(std::function<void ()> f);
+
+    //! task entry boilerplate exception handling
+    static int entry(std::function<void ()> f);
 };
 
 } // end namespace ten

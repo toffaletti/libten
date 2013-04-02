@@ -11,7 +11,7 @@ namespace {
 }
 
 static void kernel_boot() {
-    CHECK(is_main_thread()) << "must call in main thread before anything else";
+    CHECK(kernel::is_main_thread()) << "must call in main thread before anything else";
 
     InitGoogleLogging(program_invocation_short_name);
     glog_inited = true;
@@ -87,7 +87,6 @@ kernel::kernel(optional<size_t> stacksize) {
 }
 
 kernel::~kernel() {
-    wait_for_tasks();
 }
 
 } // ten

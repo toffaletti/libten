@@ -22,11 +22,12 @@ namespace {
 } // anon namespace
 
 inotify_fd resolv_conf_watch_fd{IN_NONBLOCK};
-thread_cached<runtime_tag, thread_context> this_ctx;
+__thread thread_context *this_ctx = nullptr;
 // *** end global ordering **
 
 thread_context::thread_context() {
-    kernel::boot();
+    CHECK(this_ctx == nullptr);
+    this_ctx = this;
     const ptr<thread_context> me(this);
     threads([me](tvec_t &tvec) {
         tvec.push_back(me);
@@ -34,6 +35,7 @@ thread_context::thread_context() {
 }
 
 thread_context::~thread_context() {
+    scheduler.wait_for_all();
     const ptr<thread_context> me(this);
     threads([me](tvec_t &tvec) {
         auto i = find(begin(tvec), end(tvec), me);
@@ -41,6 +43,7 @@ thread_context::~thread_context() {
             LOG(FATAL) << "BUG: thread " << (void*)me.get() << " escaped the thread list";
         tvec.erase(i);
     });
+    this_ctx = nullptr;
 }
 
 size_t thread_context::count() {

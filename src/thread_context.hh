@@ -1,6 +1,5 @@
 #ifndef TEN_THREAD_CONTEXT_HH
 #define TEN_THREAD_CONTEXT_HH
-#include "ten/thread_local.hh"
 #include "scheduler.hh"
 #include <ares.h>
 
@@ -30,8 +29,7 @@ struct thread_context {
     static size_t count();
 };
 
-struct runtime_tag {};
-extern thread_cached<runtime_tag, thread_context> this_ctx;
+extern __thread thread_context *this_ctx;
 
 } // ten
 
