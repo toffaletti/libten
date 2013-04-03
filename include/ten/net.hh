@@ -4,6 +4,8 @@
 #include "ten/thread_guard.hh"
 #include "ten/descriptors.hh"
 #include "ten/task.hh"
+#include "ten/backoff.hh"
+#include <chrono_io>
 #include <memory>
 #include <thread>
 
@@ -254,24 +256,56 @@ protected:
     }
 
     virtual void accept_loop() {
+        using namespace std::chrono;
         const auto self = shared_from_this();
+        auto bo = make_backoff(milliseconds{100}, milliseconds{500});
         for (;;) {
             address client_addr;
-            int fd;
-            while ((fd = _sock.accept(client_addr, 0)) >= 0) {
-                if (fd <= 2)
-                    throw errorx("somebody closed stdin/stdout/stderr");
+            int fd = _sock.accept(client_addr, 0);
+            if (fd == -1) {
+                const int e = errno;
+                switch (e) {
+                case ENFILE:
+                case EMFILE:
+                case ENOBUFS:
+                case ENOMEM: {
+                    auto delay = bo.next_delay();
+                    LOG(ERROR) << "accept failed, sleeping " << delay << ": " << strerror(e);
+                    this_task::sleep_for(delay);
+                    break;
+                  }
+                default: {
+                    LOG(ERROR) << "accept failed: " << strerror(e);
+                    this_task::yield();
+                    break;
+                  }
+                }
+            }
+            else if (fd <= 2) {
+                ::close(fd);
+                throw errorx("somebody closed stdin/stdout/stderr");
+            }
+            else {
+                bool nomem = false;
                 try {
                     task::spawn([=] {
                         self->client_task(fd);
                     });
                 } catch (std::bad_alloc &e) {
                     ::close(fd);
+                    nomem = true;
                 } catch (...) {
                     ::close(fd);
                     throw;
                 }
-                this_task::yield(); // yield to new client task
+                if (nomem) {
+                    auto delay = bo.next_delay();
+                    LOG(ERROR) << "task spawn ran out of memory, sleeping " << delay;
+                    this_task::sleep_for(delay);
+                }
+                else {
+                    this_task::yield(); // yield to new client task
+                }
             }
         }
     }
