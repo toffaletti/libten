@@ -64,12 +64,10 @@ thread_cached<cache_tag, std::vector<stack>> stack_cache;
 int initialize() { return 0; }
 
 void gc_cache(std::vector<stack> &cache) {
-    auto iter = cache.begin();
     // reduce cache size by 20%
-    size_t n = std::max(1.0, cache.size() * 0.20);
-    std::advance(iter, cache.size() - n);
-    if (iter < cache.end()) {
-        cache.erase(iter, cache.end());
+    const size_t n = cache.size() / 5;
+    if (n) {
+        cache.erase(end(cache) - n, end(cache));
         cache.shrink_to_fit();
     }
 }
