@@ -58,9 +58,9 @@ TEST(Metrics, Timer) {
     auto mg = global.aggregate();
     auto v = value<timer>(mg, "timer1");
     // value type is a duration of unspecified resolution
-    EXPECT_EQ(duration_cast<seconds     >(v).count(), 0);
-    EXPECT_NEAR(duration_cast<milliseconds>(v).count(), 5.0, 1.0);
-    EXPECT_NEAR(duration_cast<microseconds>(v).count(), 5000.0, 900.0);
+    EXPECT_EQ(  duration_cast<seconds     >(v).count(), 0);
+    EXPECT_NEAR(duration_cast<milliseconds>(v).count(), 5.0, 1.5);
+    EXPECT_NEAR(duration_cast<microseconds>(v).count(), 5000.0, 1500.0);
 }
 
 TEST(Metrics, Ewma) {
