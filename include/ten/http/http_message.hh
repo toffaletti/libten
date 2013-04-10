@@ -38,6 +38,9 @@ extern const std::string
     Connection, close, keep_alive,
     Host,
     Date,
+    Accept,
+    Accept_Charset,
+    Accept_Encoding,
     Content_Length,
     Content_Type, text_plain, app_json, app_json_utf8, app_octet_stream;
 }
