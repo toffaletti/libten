@@ -219,6 +219,8 @@ TEST(Json, Stream) {
     std::stringstream ss;
     jsonstream s(ss);
     int8_t c = 'C'; // printable
+    float fval = -1.28;
+    double dval = -1.28;
     s << jsobject
         << "key1" << 1234
         << "key2" << "value"
@@ -237,9 +239,13 @@ TEST(Json, Stream) {
             << "[]"
         << jsnoraw
         << "lahalha" << 666
+        << "fval" << fval
+        << "dval" << dval
         //<< "map" << std::map<const char *, int>({{"key", 1}})
     << jsend;
     VLOG(1) << ss.str();
-    EXPECT_TRUE(json::load(ss.str()));
+    auto js = json::load(ss.str());
+    EXPECT_TRUE((bool)js);
+    EXPECT_EQ(js.get("fval"), js.get("dval"));
 }
 
