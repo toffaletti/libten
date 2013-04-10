@@ -79,7 +79,7 @@ struct fd_base {
 
     int fcntl(int cmd)              { return ::fcntl(fd, cmd); }
     int fcntl(int cmd, int arg)     { return ::fcntl(fd, cmd, arg); }
-    int fcntl(int cmd, flock *lock) { return ::fcntl(fd, cmd, lock); }
+    int fcntl(int cmd, struct flock *lock) { return ::fcntl(fd, cmd, lock); }
 
     //! make fd nonblocking by setting O_NONBLOCK flag
     void setblock(bool block = true) {
