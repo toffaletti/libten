@@ -253,11 +253,10 @@ protected:
         const std::chrono::milliseconds interval{500 * std::min((std::chrono::milliseconds::rep)20L, lifetime->count())};
         VLOG(3) << im->name << ": LT interval=" << interval.count();
         for (;;) {
-            std::vector<res_ptr> doomed; // declared first, destroyed last
-            std::unique_lock<qutex> lk(im->mut);
 
             VLOG(4) << im->name << ": LT asleep";
             try {
+                std::unique_lock<qutex> lk(im->mut);
                 deadline dl{interval};
                 lt->worker.sleep(lk);
             }
@@ -266,42 +265,44 @@ protected:
             }
             VLOG(4) << im->name << ": LT awake"
                     << "; retired=" << lt->retired.load()
-                    << ", set=" << im->set.size()
+                    << ", count=" << im->count
                     << ", avail=" << im->avail.size();
 
-            // perform requested replacements
-
-            for (; lt->retired.load(); lt->retired--) {
+            // create replacements
+            size_t retired = lt->retired.exchange(0); 
+            std::vector<res_ptr> new_resources(retired);
+            for (size_t i=0; i<retired; ++i) {
                 res_ptr c;
                 try {
-                    c = im->new_with_lock(lk);
-                }
-                catch (task_interrupted &) {
-                    // let the task die
-                    throw;
-                }
-                catch (std::exception &) {
-                    // any other exception has been logged; skip this replacement
+                    new_resources.emplace_back(std::move(im->new_resource()));
+                } catch (std::exception &) {
+                    // skip this replacement
                     continue;
                 }
                 VLOG(4) << "LT: created " << c;
-                im->avail.push_front(c);
-                im->not_empty.wakeup();
             }
 
             // move deeply stale items into destructobucket, which then... destructs
-
+            std::unique_lock<qutex> lk(im->mut);
+            ssize_t destroyed = 0;
             while (!im->avail.empty()) {
                 auto c = im->avail.back();
                 if (!c->retire_by(kernel::now()))
                     break;
                 VLOG(3) << im->name << ": LT dropping stale " << c;
                 im->avail.pop_back();
-                im->set.erase(c);
-                doomed.push_back(std::move(c));
+                ++destroyed;
+                im->destroy(c);
             }
-            if (!doomed.empty())
-                im->not_empty.wakeup();  // in theory, this should never matter
+            // now add replacements for retired resources
+            for (auto res : new_resources) {
+                im->avail.push_front(res);
+            }
+            // adjust resource count
+            im->count += (ssize_t)(new_resources.size() - destroyed);
+            // notify anyone waiting for resources
+            if (!im->avail.empty())
+                im->not_empty.wakeup();
         }
     }
 };
@@ -326,9 +327,12 @@ public:
         }
     }
 
-    ~http_scoped_resource() {
-        if (_mustdie)
-            _success = false;
+    void done() override {
+        if (_mustdie) {
+            _pm->destroy(_c);
+        } else {
+            _pm->release(_c);
+        }
     }
 };
 

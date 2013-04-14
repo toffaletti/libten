@@ -11,6 +11,7 @@
 #include <memory>
 #include <chrono>
 #include <type_traits>
+#include <atomic>
 
 namespace ten {
 
@@ -34,19 +35,17 @@ protected:
 
     struct pool_impl {
         using queue_type = std::deque<res_ptr>;
-        using set_type = std::unordered_set<res_ptr>;
 
         mutable qutex mut;
         rendez not_empty;
         queue_type avail;
-        set_type set;
         std::string name;
         creator_type new_resource;
         optional<size_t> max_resources;
+        std::atomic<size_t> count;
 
         size_t size() const {
-            std::lock_guard<qutex> lk(mut);
-            return set.size();
+            return count;
         }
 
         bool has_avail() const {
@@ -54,16 +53,10 @@ protected:
             return !avail.empty();
         }
 
-        void clear() {
-            std::lock_guard<qutex> lk(mut);
-            avail.clear();
-            set.clear();
-        }
-
         res_ptr acquire() {
             std::unique_lock<qutex> lk(mut);
             while (avail.empty()) {
-                if (!max_resources || set.size() < *max_resources) {
+                if (!max_resources || count < *max_resources) {
                     // need to create a new resource
                     return new_with_lock(lk);
                 }
@@ -83,50 +76,42 @@ protected:
         }
 
         res_ptr new_with_lock(std::unique_lock<qutex> &lk) {
-            if (lk)
-                lk.unlock(); // unlock while newing resource
-            res_ptr c;
+            CHECK(lk);
+            struct nothing {};
+            auto deleter =  [=](nothing *) { --count; };
+            std::unique_ptr<nothing, decltype(deleter)> count_guard{nullptr, deleter};
+            ++count; // claim resource spot before unlocking
             try {
+                lk.unlock(); // unlock while newing resource
+                res_ptr c;
                 c = new_resource();
+                CHECK(c) << "new_resource failed for pool " << name;
+                VLOG(3) << "adding shared resource to pool " << name << ": " << c;
+                lk.lock(); // re-lock before inserting to set
+                count_guard.release(); // prevent --count
+                return c;
             } catch (std::exception &e) {
                 LOG(ERROR) << "exception creating new resource for pool " << name << ": " << e.what();
                 throw;
             }
-            CHECK(c) << "new_resource failed for pool " << name;
-            VLOG(3) << "adding shared resource to pool " << name << ": " << c;
-            lk.lock(); // re-lock before inserting to set
-            set.insert(c);
-            return c;
         }
 
-        void destroy(res_ptr &c) { discard(c, false); }
-        void release(res_ptr &c) { discard(c, true); }
-
-        void discard(res_ptr &c, bool can_keep) {
-            if (!c)
-                return;
-
+        void release(res_ptr &c) {
+            CHECK(c);
+            res_ptr tmp;
+            std::swap(tmp, c);
             std::unique_lock<qutex> lk(mut);
-
-            if (!can_keep)
-                set.erase(c);
-            else if (!set.count(c))
-                can_keep = false; // it must have exceeded lifetime
-
-            const auto i = std::find(begin(avail), end(avail), c);
-            if (i != end(avail))  // should never happen
-                avail.erase(i);
-            if (can_keep)
-                avail.push_front(c);
-
+            DCHECK(std::find(begin(avail), end(avail), tmp) == end(avail));
+            avail.push_front(tmp);
             // give waiting threads a chance to reuse or create resource
             not_empty.wakeup();
-            lk.unlock();
+        }
 
-            const void * const addr = c.get();
-            c.reset();
-            if (!can_keep)
-                VLOG(3) << "destroyed shared resource from pool " << name << ": " << addr;
+        void destroy(res_ptr &c) {
+            res_ptr tmp;
+            std::swap(tmp, c);
+            --count;
+            VLOG(3) << "destroyed shared resource from pool " << name << ": " << tmp;
         }
     };
 
@@ -167,7 +152,6 @@ public:
     //! accessors
     const std::string &name() const { return _impl()->name; }
     size_t size() const             { return _impl()->size(); }
-    void clear()                    { _impl()->clear(); }
 };
 
 namespace detail {
@@ -183,14 +167,12 @@ protected:
 
     std::shared_ptr<pool_impl> _pm; // no mutex here <- no contention
     res_ptr _c;
-    bool _success;
 
 public:
     //! RAII
     explicit scoped_resource(pool_ref p)
         : _pm{p._impl()},
-          _c{_pm->acquire()},
-          _success{}
+          _c{_pm->acquire()}
     {}
 
     //! do not copy
@@ -205,13 +187,12 @@ public:
     //! otherwise we destroy it because a timeout or other exception
     //! could have occured causing the resource state to be in transition
     ~scoped_resource() {
-        _pm->discard(_c, _success);
+        if (_c) _pm->destroy(_c);
     }
 
     //! call this to allow resource reuse
-    void done() {
-        DCHECK(!_success);
-        _success = true;
+    virtual void done() {
+        _pm->release(_c);
     }
 
     //! access resource
