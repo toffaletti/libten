@@ -302,8 +302,8 @@ void http_parser::init(http_response &resp)
 }
 
 bool http_parser::parse(const char *data, size_t &len) {
-    ssize_t nparsed = http_parser_execute(&_impl->parser, &_impl->s, data, len);
-    if (!_impl->complete && nparsed != (ssize_t)len) {
+    size_t nparsed = http_parser_execute(&_impl->parser, &_impl->s, data, len);
+    if (!_impl->complete && nparsed != len) {
         len = nparsed;
         // rethrow exceptions caught inside "C" callbacks
         if (_impl->exception) {
