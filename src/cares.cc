@@ -131,10 +131,8 @@ void netdial(int fd, const char *addr, uint16_t port, optional_timeout connect_m
         struct timeval *tvp, tv;
         tvp = ares_timeout(channel.get(), NULL, &tv);
         optional_timeout poll_timeout;
-        if (tvp) {
-            using namespace std::chrono;
-            poll_timeout = duration_cast<milliseconds>(seconds(tvp->tv_sec));
-        }
+        if (tvp)
+            poll_timeout = timeval_duration<milliseconds>(*tvp);
         taskpoll(&fds[0], fds.size(), poll_timeout);
 
         memset(read_fd_buf,  0, sizeof(read_fd_buf));

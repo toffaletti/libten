@@ -184,19 +184,20 @@ class http_pool : public shared_pool<http_client> {
 
 public:
     using scoped_resource = detail::http_scoped_resource;
+    using host_port_t = std::pair<std::string, uint16_t>;
 
-    http_pool(const std::string &host_,
-            uint16_t port_,
-            optional<size_t> max_conn = nullopt,
-            http_client::lifetime_t lifetime_ = nullopt,
-            optional_timeout conn_timeout_ = nullopt)
+    // general case: arbitrary host generator
+    http_pool(std::string name_,
+              std::function< host_port_t() > host_factory_,
+              optional<size_t> max_conn_ = nullopt,
+              http_client::lifetime_t lifetime_ = nullopt,
+              optional_timeout conn_timeout_ = nullopt)
         : shared_pool<http_client>(
-            "http://" + host_ + ":" + std::to_string(port_),
-            std::bind(&http_pool::new_resource, this),
-            max_conn
+            name_,
+            [this]{ return new_resource(); },
+            max_conn_
           ),
-          _host(host_),
-          _port(port_),
+          _host_factory(host_factory_),
           _lifetime(lifetime_),
           _conn_timeout(conn_timeout_)
     {
@@ -210,9 +211,23 @@ public:
         }
     }
 
+    // simple case: one host
+    http_pool(std::string host_,
+              uint16_t port_,
+              optional<size_t> max_conn_ = nullopt,
+              http_client::lifetime_t lifetime_ = nullopt,
+              optional_timeout conn_timeout_ = nullopt)
+        : http_pool(
+            "http://" + host_ + ":" + std::to_string(port_),
+            [=]{ return host_port_t{ host_, port_ }; },
+            max_conn_,
+            lifetime_,
+            conn_timeout_
+          )
+    {}
+
 protected:
-    std::string _host;
-    uint16_t _port;
+    std::function< host_port_t() > _host_factory;
     http_client::lifetime_t _lifetime;
     optional_timeout _conn_timeout;
 
@@ -228,8 +243,9 @@ protected:
     std::shared_ptr<lt_state> _lt;
 
     res_ptr new_resource() {
-        VLOG(3) << name() << ": new http_client resource " << _host << ":" << _port;
-        return std::make_shared<http_client>(_host, _port, _lifetime, _conn_timeout);
+        const auto hp = _host_factory();
+        VLOG(3) << name() << ": new http_client resource " << hp.first << ":" << hp.second;
+        return std::make_shared<http_client>(hp.first, hp.second, _lifetime, _conn_timeout);
     }
 
     // periodically check the items at the front of the avail queue.

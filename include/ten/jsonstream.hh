@@ -78,6 +78,7 @@ namespace impl {
 // XXX: you probably don't want to use this. see json.hh
 struct jsonstream {
     static std::string double_to_string(double v);
+    static std::string float_to_string(float v);
 
     enum class state {
         none,
@@ -160,7 +161,11 @@ struct jsonstream {
         std::is_floating_point<T>::value, jsonstream &>::type
     operator<<(T number) {
         transition(number, [=] {
-            os << double_to_string(number);
+            if (std::is_same<float, T>::value) {
+                os << float_to_string(number);
+            } else {
+                os << double_to_string(number);
+            }
         });
         return *this;
     }

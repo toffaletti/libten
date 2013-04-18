@@ -8,6 +8,7 @@
 #include <chrono>
 #include <functional>
 #include <thread>
+#include <sys/time.h>
 
 namespace ten {
 
@@ -15,6 +16,13 @@ namespace ten {
 struct task_interrupted {};
 
 typedef optional<std::chrono::milliseconds> optional_timeout;
+
+template <class D>
+inline D timeval_duration(timeval tv) {
+    using namespace std::chrono;
+    return   duration_cast<D>(seconds{tv.tv_sec})
+           + duration_cast<D>(microseconds{tv.tv_usec});
+}
 
 //! dummy type to smooth API change
 enum nostacksize_t { nostacksize };

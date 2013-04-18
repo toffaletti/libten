@@ -15,6 +15,10 @@ void ioproctask(iochannel &ch) {
             break;
         }
         if (!call) break;
+        if (call->ch.is_closed()) {
+            DVLOG(5) << "ioproc reply channel closed. not doing work.";
+            continue;
+        }
         taskstate("executing call");
         errno = 0;
         try {

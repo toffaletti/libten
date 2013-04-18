@@ -76,6 +76,7 @@ struct config {
     unsigned work;
     unsigned deadline_ms;
     unsigned sleep_ms;
+    unsigned chanbuf;
 };
 
 static config conf;
@@ -84,7 +85,7 @@ struct state {
     ioproc io;
 
     state()
-        : io{nostacksize, conf.threads}
+        : io{nostacksize, conf.threads, conf.chanbuf}
     {}
 };
 
@@ -129,6 +130,8 @@ int main(int argc, char *argv[]) {
             "number of concurrent requests that need to do work")
             ("work", po::value<unsigned>(&conf.work)->default_value(3),
             "number of work items to submit")
+            ("chanbuf", po::value<unsigned>(&conf.chanbuf)->default_value(0),
+            "buffer size of ioproc channel")
             ("deadline", po::value<unsigned>(&conf.deadline_ms)->default_value(500),
             "milliseconds for deadline")
             ("sleep", po::value<unsigned>(&conf.sleep_ms)->default_value(200),
