@@ -77,7 +77,6 @@ static int _on_body(http_parser *p, const char *at, size_t length) {
 static int _on_message_complete(http_parser *p) {
     ten::http_parser::impl *m = reinterpret_cast<ten::http_parser::impl*>(p->data);
     m->complete = true;
-    m->base->body_length = m->base->body.size();
     return 1; // cause parser to exit, this http_message is complete
 }
 

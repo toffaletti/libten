@@ -26,14 +26,16 @@ struct http_exchange {
     netsock &sock;
     http_response resp {404};
     bool resp_sent {false};
+    address addr;
     std::chrono::steady_clock::time_point start;
     log_func_t log_func;
 
-    http_exchange(http_request &req_, netsock &sock_, const log_func_t &log_func_)
+    http_exchange(http_request &req_, address addr_, netsock &sock_, const log_func_t &log_func_)
         : req(req_),
           sock(sock_),
-          start(std::chrono::steady_clock::now()),
-          log_func(log_func_)
+          addr{addr_},
+          start{std::chrono::steady_clock::now()},
+          log_func{log_func_}
         {}
 
     http_exchange(const http_exchange &) = delete;
@@ -123,12 +125,9 @@ struct http_exchange {
                 }
             }
         }
-        address addr;
-        if (sock.getpeername(addr)) {
-            char buf[INET6_ADDRSTRLEN];
-            if (addr.ntop(buf, sizeof(buf))) {
-                return optional<std::string>(emplace, buf);
-            }
+        char buf[INET6_ADDRSTRLEN];
+        if (addr.ntop(buf, sizeof(buf))) {
+            return optional<std::string>(emplace, buf);
         }
         return nullopt;
     }
@@ -197,6 +196,7 @@ private:
     }
 
     void on_connection(netsock &s) override {
+        address addr;
         // TODO: tuneable buffer sizes
         buffer buf(4*1024);
         http_parser parser;
@@ -207,6 +207,11 @@ private:
 
         bool nodelay_set = false;
         http_request req;
+
+        if (!s.getpeername(addr)) {
+            goto done;
+        }
+
         while (s.valid()) {
             parser.init(req);
             bool got_headers = false;
@@ -224,7 +229,7 @@ private:
                 if (parser.complete()) {
                     DVLOG(4) << req.data();
                     // handle http exchange (request -> response)
-                    http_exchange ex(req, s, _log_func);
+                    http_exchange ex{req, addr, s, _log_func};
                     if (!nodelay_set && !req.close_after()) {
                         // this is likely a persistent connection, so low-latency sending is worth the overh
                         s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1);
