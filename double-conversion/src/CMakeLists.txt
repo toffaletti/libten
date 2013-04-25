@@ -29,14 +29,16 @@ ${headers}
 set_target_properties(double-conversion
     PROPERTIES PUBLIC_HEADER "${headers}")
 
-#
-# install command to set up library install
-# given the above PUBLIC_HEADER property set, this
-# pulls along all the header files with the library.
-install(TARGETS double-conversion
-  EXPORT double-conversionLibraryDepends
-  RUNTIME DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin
-  LIBRARY DESTINATION "${INSTALL_LIB_DIR}/lib" COMPONENT shlib
-  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}/lib" COMPONENT lib
-  PUBLIC_HEADER DESTINATION "${INSTALL_INCLUDE_DIR}/include/double-conversion"
-  COMPONENT dev)
+if (CMAKE_PROJECT_NAME STREQUAL "double-conversion")
+  #
+  # install command to set up library install
+  # given the above PUBLIC_HEADER property set, this
+  # pulls along all the header files with the library.
+  install(TARGETS double-conversion
+    EXPORT double-conversionLibraryDepends
+    RUNTIME DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}/lib" COMPONENT shlib
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}/lib" COMPONENT lib
+    PUBLIC_HEADER DESTINATION "${INSTALL_INCLUDE_DIR}/include/double-conversion"
+    COMPONENT dev)
+endif()
