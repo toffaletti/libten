@@ -1,4 +1,5 @@
 #include "ten/http/http_message.hh"
+#include "ten/http/http_error.hh"
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>
@@ -301,9 +302,9 @@ void http_request::parse(struct http_parser *p, const char *data_, size_t &len) 
     ssize_t nparsed = http_parser_execute(p, &s, data_, len);
     if (!complete && nparsed != (ssize_t)len) {
         len = nparsed;
-        throw errorx("%s: %s",
-            http_errno_name((http_errno)p->http_errno),
-            http_errno_description((http_errno)p->http_errno));
+        throw_stream<http_parse_error>()
+            << http_errno_description((http_errno)p->http_errno)
+            << " (" << http_errno_name((http_errno)p->http_errno) << ")";
     }
     len = nparsed;
 }

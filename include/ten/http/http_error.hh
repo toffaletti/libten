@@ -5,14 +5,10 @@
 
 namespace ten {
 
-class http_error : public errno_error {
-public:
-    // TODO: variadic or inherited ctors
-    //! captures errno implicitly
-    http_error(const char *msg) : errno_error(msg) {}
-    //! when you don't want to capture errno implicitly, dial and close use this
-    http_error(const errno_error &e) : errno_error(e) {}
-    http_error(int err, const char *msg) : errno_error(err, msg) {}
+struct http_error : public errno_error {
+    template <typename... Args>
+    http_error(Args&&... args)
+        : errno_error(std::forward<Args>(args)...) {}
 };
 
 //! thrown on http dial errors, which always come with specific messages,
@@ -41,6 +37,12 @@ struct http_recv_error : public http_error {
 //! thrown on http network errors
 struct http_closed_error : public http_error {
     http_closed_error() : http_error(0, "closed") {}
+};
+
+//! thrown on http parsing errors
+struct http_parse_error : public http_error {
+    template <typename... A>
+    http_parse_error(A&&... a) : http_error(0, std::forward<A>(a)...) {}
 };
 
 } // end namespace ten
