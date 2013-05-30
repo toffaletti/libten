@@ -63,7 +63,9 @@ namespace hs {
             text_plain{"text/plain"},
             app_json{"application/json"},
             app_json_utf8{"application/json; charset=utf-8"},
-            app_octet_stream{"application/octet-stream"};
+            app_octet_stream{"application/octet-stream"},
+        Content_Encoding{"Content-Encoding"},
+            identity{"identity"};
 }
 
 const std::string &version_string(http_version ver) {
