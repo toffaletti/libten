@@ -115,6 +115,7 @@ public:
     // construction and assignment,
     //   including a selection of conversions from basic types
 
+    json()                                     : _p()             {}
     json(const json  &js)                      : _p(js._p)        {}
     json(      json &&js)                      : _p(std::move(js._p))  {}
     json(const json_ptr  &p)                   : _p(p)            {}
