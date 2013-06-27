@@ -168,6 +168,11 @@ public:
         return a;
     }
 
+    // copying
+
+    json copy()      const                     { return json(json_copy(get()),      json_take); }
+    json deep_copy() const                     { return json(json_deep_copy(get()), json_take); }
+
     // manipulation via json_t*
 
     friend json take_json(json_t *j)           { return json(j, json_take); }
