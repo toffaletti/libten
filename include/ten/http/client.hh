@@ -160,10 +160,9 @@ public:
             }
             // should not be any data left over in _buf
             if (_buf.size() != 0) {
-                LOG(ERROR) << "Bad HTTP. Data left in buffer[" << _buf.size() << "]: " << r.method << " " << _host << ":" << _port << " " << r.uri;
+                LOG(DFATAL) << "Bad HTTP. Data left in buffer[" << _buf.size() << "]: " << r.method << " " << _host << ":" << _port << " " << r.uri;
                 _sock.close(); // can't reuse this socket now
             }
-            DCHECK(_buf.size() == 0);
 
             // if response requests closing socket, do it
             if (resp.close_after())
