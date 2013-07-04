@@ -151,7 +151,7 @@ TEST(Json, InitList) {
         { "corge", json::array({ 1, 3.14159 }) },
         { "grault", json::array({ "hello", string("world") }) },
     };
-    ASSERT_TRUE(meta);
+    ASSERT_TRUE((bool)meta);
     ASSERT_TRUE(meta.is_object());
     EXPECT_EQ(meta.osize(), 5);
     EXPECT_EQ(meta["foo"].integer(), 17);
@@ -199,9 +199,9 @@ TEST(Json, Conversions) {
 
 TEST(Json, Create) {
     json obj1{{}};
-    EXPECT_TRUE(obj1);
+    EXPECT_TRUE((bool)obj1);
     obj1.set("test", "set");
-    EXPECT_TRUE(obj1.get("test"));
+    EXPECT_TRUE((bool)obj1.get("test"));
     json root{
         {"obj1", obj1}
     };

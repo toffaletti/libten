@@ -1,4 +1,5 @@
 #include "ten/http/http_message.hh"
+#include "ten/http/http_error.hh"
 #include <sstream>
 #include <algorithm>
 #include <unordered_map>
@@ -175,12 +176,17 @@ namespace hs {
         Connection{"Connection"}, close{"close"}, keep_alive{"Keep-Alive"},
         Host{"Host"},
         Date{"Date"},
+        Accept{"Accept"},
+        Accept_Charset{"Accept-Charset"},
+        Accept_Encoding{"Accept-Encoding"},
         Content_Length{"Content-Length"},
         Content_Type{"Content-Type"},
             text_plain{"text/plain"},
             app_json{"application/json"},
             app_json_utf8{"application/json; charset=utf-8"},
-            app_octet_stream{"application/octet-stream"};
+            app_octet_stream{"application/octet-stream"},
+        Content_Encoding{"Content-Encoding"},
+            identity{"identity"};
 }
 
 const std::string &version_string(http_version ver) {
@@ -310,9 +316,9 @@ bool http_parser::parse(const char *data, size_t &len) {
             std::swap(tmp, _impl->exception);
             std::rethrow_exception(tmp);
         }
-        throw errorx("%s: %s",
-            http_errno_name((http_errno)_impl->parser.http_errno),
-            http_errno_description((http_errno)_impl->parser.http_errno));
+        throw_stream<http_parse_error>()
+            << http_errno_description((http_errno)_impl->parser.http_errno)
+            << " (" << http_errno_name((http_errno)_impl->parser.http_errno) << ")";
     }
     len = nparsed;
     return !_impl->complete;

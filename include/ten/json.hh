@@ -31,9 +31,6 @@ template <class J> class shared_json_ptr {
 private:
     J *p;
 
-    typedef void (shared_json_ptr::*unspecified_bool_type)() const;
-    void true_value() const {}
-
 public:
     // ctor, dtor, assign
     shared_json_ptr()                          : p() {}
@@ -54,13 +51,17 @@ public:
     void reset(J *j) { take(json_incref(j)); }
     void take(J *j)  { json_decref(p); p = j; }  // must be convenient for use with C code
 
+    // operator interface
+
     J * operator -> () const { return p; }
     J *get() const           { return p; }
     J *release()             { J *j = p; p = nullptr; return j; }
 
-    operator unspecified_bool_type () const {
-        return p ? &shared_json_ptr::true_value : nullptr;
-    }
+    // boolean truth === has json_t of any type
+
+    explicit operator bool () const { return get(); }
+
+    // "show me"
 
     friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) {
         dump(o, jp.get());
@@ -95,11 +96,8 @@ enum ten_json_type {
 
 //! represent JSON values
 class json {
-  private:
+private:
     json_ptr _p;
-
-    typedef void (json::*unspecified_bool_type)() const;
-    void true_value() const {}
 
     // autovivify array or object
     json_t *_o_get() {
@@ -113,7 +111,7 @@ class json {
         return get();
     }
 
-  public:
+public:
     // construction and assignment,
     //   including a selection of conversions from basic types
 
@@ -121,7 +119,7 @@ class json {
     json(const json  &js)                      : _p(js._p)        {}
     json(      json &&js)                      : _p(std::move(js._p))  {}
     json(const json_ptr  &p)                   : _p(p)            {}
-    json(      json_ptr &&p)                   : _p(p)            {}
+    json(      json_ptr &&p)                   : _p(std::move(p)) {}
     explicit json(json_t *j)                   : _p(j)            {}
              json(json_t *j, json_take_t t)    : _p(j, t)         {}
     json & operator = (const json  &js)        { _p = js._p;       return *this; }
@@ -163,12 +161,17 @@ class json {
         for (const auto &kv : init)
             set(kv.first, kv.second);
     }
-    static json array(std::initializer_list<const json> init) {
-        json a(json_array(), json_take);
+    static json array(std::initializer_list<json> init) {
+        json a = array();
         for (const auto &j : init)
             a.push(j);
         return a;
     }
+
+    // copying
+
+    json copy()      const                     { return json(json_copy(get()),      json_take); }
+    json deep_copy() const                     { return json(json_deep_copy(get()), json_take); }
 
     // manipulation via json_t*
 
@@ -180,12 +183,15 @@ class json {
     json_t *release()                          { return _p.release(); }
     json_ptr get_shared() const                { return _p; }
 
-    // equivalence
+    // operator interface
+
+    // boolean truth === has json_t of any type
+    explicit operator bool () const            { return get(); }
 
     friend bool operator == (const json &lhs, const json &rhs) {
         // jansson doesn't think null pointers are equal
-        auto jl = lhs._p.get();
-        auto jr = rhs._p.get();
+        const auto jl = lhs.get();
+        const auto jr = rhs.get();
         return (!jl && !jr) || json_equal(jl, jr);
     }
     friend bool operator != (const json &lhs, const json &rhs) {
@@ -226,14 +232,26 @@ class json {
     const char *c_str()  const  { return json_string_value(get()); }
     json_int_t integer() const  { return json_integer_value(get()); }
     double real()        const  { return json_real_value(get()); }
-    bool boolean()       const  { json_t *j = get(); return j && !json_is_null(j) && !json_is_false(j); }
+    bool boolean()       const  { return json_is_true(get()); }
 
-    operator unspecified_bool_type () const {
-        return get() ? &json::true_value : nullptr;
+    // 'truthiness' a la JavaScript - useful for config files etc.
+
+    bool truthy() const  {
+        switch (type()) {
+        case TEN_JSON_FALSE:   return false;
+        case TEN_JSON_STRING:  return *c_str();
+        case TEN_JSON_INTEGER: return integer();
+        case TEN_JSON_REAL:    return real();
+        default:               return false;
+        }
     }
 
-    bool set_integer(json_int_t iv)   { return !json_integer_set(get(), iv); }
-    bool set_real(double rv)          { return !json_real_set(   get(), rv); }
+    // scalar mutation - TODO - is this worth keeping?
+
+    bool set_string(const char *sv)         { return !json_string_set( get(), sv); }
+    bool set_string(const std::string &sv)  { return !json_string_set( get(), sv.c_str()); }
+    bool set_integer(json_int_t iv)         { return !json_integer_set(get(), iv); }
+    bool set_real(double rv)                { return !json_real_set(   get(), rv); }
 
     // aggregate access
 
@@ -368,7 +386,7 @@ class json {
 //
 
 inline json to_json(const json & j)   { return j; }
-inline json to_json(      json &&j)   { return j; }
+inline json to_json(      json &&j)   { return std::move(j); }
 inline json to_json(const char *s)    { return json(s); }
 inline json to_json(const std::string &s)  { return json(s); }
 inline json to_json(int i)            { return json(i); }

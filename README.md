@@ -24,15 +24,12 @@ They are not entirely at odds, libten's event loop could be built on
 any of these libraries. However, another major difference is that
 other libraries strive to provide a cross platform solution to event
 driven network programming. They are great if you need portable
-code that works across many versions and platforms. However,
-this feature doesn't come for free. There is added complexity in
-the code base, more code, and compromises that effect performance.
-libten's approach is to focus only on modern Linux, modern compilers,
-and high-performance APIs. For example, the libten event loop uses
-epoll, timerfd, and signalfd. It trades memory for speed. libten has
-a broad scope too and aims to be a more of a framework, like boost.
-In addition to networking and concurrency it provides APIs for logging,
-JSON, URI, http client and server, rpc, zookeeper and more.
+code that works across many versions and platforms. libten's approach
+is to focus only on modern Linux, modern compilers, and performance.
+This makes libten's code base smaller and easier to maintain, with
+very minimal abstraction. libten uses epoll, timerfd, and signalfd.
+In addition to networking and concurrency it provides logging, JSON,
+URI, http client and server, rpc, zookeeper and more.
 
 API Stability
 -------------

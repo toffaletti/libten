@@ -74,6 +74,7 @@ application::application(const char *version_, app_config &c,
         sigset_t sigset;
         sigemptyset(&sigset);
         sigaddset(&sigset, SIGINT);
+        sigaddset(&sigset, SIGTERM);
         signal_fd sigfd{sigset, SFD_NONBLOCK};
         signalfd_siginfo si;
         fdwait(sigfd.fd, 'r');
