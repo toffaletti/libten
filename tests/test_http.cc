@@ -11,7 +11,7 @@ static const http_response test_static_init(200,
         );
 
 TEST(Http, HeadersVariadicTemplate) {
-    http_request req{"GET", "/foo",
+    http_request req{hs::GET, "/foo",
         http_headers{"This", 4, "That", "that"}
     };
     ASSERT_TRUE((bool)req.get<int>("this"));
@@ -28,8 +28,8 @@ TEST(Http, RequestConstructor) {
     http_request req;
     EXPECT_TRUE(req.body.empty());
 
-    http_request req2{"POST", "/corge", {"Foo", "bar"}, "[1]", "text/json"};
-    EXPECT_EQ("POST", req2.method);
+    http_request req2{hs::POST, "/corge", {"Foo", "bar"}, "[1]", "text/json"};
+    EXPECT_EQ(hs::POST, req2.method);
     EXPECT_EQ("/corge", req2.uri);
     EXPECT_EQ(default_http_version, req2.version);
     EXPECT_EQ("text/json", *req2.get("Content-Type"));
@@ -48,7 +48,7 @@ TEST(Http, RequestParserInit) {
 }
 
 TEST(Http, RequestMake1) {
-    http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
+    http_request req{hs::GET, "/test/this?thing=1&stuff=2&fun&good"};
     req.append("User-Agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
     req.append("Host", "localhost:8080");
@@ -65,7 +65,7 @@ TEST(Http, RequestMake1) {
 }
 
 TEST(Http, RequestMakeParse) {
-    http_request req{"GET", "/test/this?thing=1&stuff=2&fun&good"};
+    http_request req{hs::GET, "/test/this?thing=1&stuff=2&fun&good"};
     req.append("user-agent",
         "curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18");
     req.append("host", "localhost:8080");
@@ -120,7 +120,7 @@ TEST(Http, RequestParserNormalizeHeaderNames) {
     parser(sdata, len);
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -150,7 +150,7 @@ TEST(Http, RequestParserHeaders) {
     parser.parse(sdata, len);
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
     EXPECT_EQ(0, req.body_length);
@@ -174,7 +174,7 @@ TEST(Http, RequestParserUnicodeEscape) {
     parser(sdata, len);
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
     EXPECT_EQ(0, req.body_length);
@@ -198,7 +198,7 @@ TEST(Http, RequestParserPercents) {
     parser(sdata, len);
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
     EXPECT_EQ(0, req.body_length);
@@ -224,7 +224,7 @@ TEST(Http, RequestParserBadPercents) {
     EXPECT_FALSE(parser.parse(sdata, len));
     EXPECT_TRUE((bool)parser);
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
     EXPECT_EQ(0, req.body_length);
@@ -248,7 +248,7 @@ TEST(Http, RequestParserHeaderParts) {
     EXPECT_FALSE(parser(sdata, len));
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -270,7 +270,7 @@ TEST(Http, RequestParserNoHeaders) {
     EXPECT_FALSE(parser(sdata, len));
     EXPECT_TRUE(parser.complete());
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -300,7 +300,7 @@ TEST(Http, RequestParserProxyHttp12) {
     size_t len = strlen(sdata);
     EXPECT_FALSE(parser(sdata, len));
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -324,7 +324,7 @@ TEST(Http, RequestClear) {
     size_t len = strlen(sdata);
     EXPECT_FALSE(parser(sdata, len));
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -346,7 +346,7 @@ TEST(Http, RequestClear) {
     len = strlen(sdata);
     EXPECT_FALSE(parser(sdata, len));
 
-    EXPECT_EQ("GET", req.method);
+    EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
@@ -375,7 +375,7 @@ TEST(Http, RequestHeaderManipulation) {
 }
 
 TEST(Http, RequestHostWithUnderscores) {
-    http_request req{"HEAD", "http://my_host_name/"};
+    http_request req{hs::HEAD, "http://my_host_name/"};
     std::string data = req.data();
 
     http_parser parser;
