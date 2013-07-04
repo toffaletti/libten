@@ -41,6 +41,13 @@
 #ifndef UNREACHABLE
 #define UNREACHABLE()   (abort())
 #endif
+#ifndef DECL_UNUSED
+#if __GNUC__
+#define DECL_UNUSED __attribute__((unused))
+#else
+#define DECL_UNUSED
+#endif
+#endif
 
 // Double operations detection based on target architecture.
 // Linux uses a 80bit wide floating point stack on x86. This induces double
