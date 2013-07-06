@@ -43,7 +43,8 @@ extern const std::string
     Accept_Encoding,
     Content_Length,
     Content_Type, text_plain, app_json, app_json_utf8, app_octet_stream,
-    Content_Encoding, identity;
+    Content_Encoding, identity,
+    Cache_Control, no_cache;
 }
 
 //! http headers
@@ -59,16 +60,27 @@ protected:
     void _hwrite(std::ostream &os) const;
 
 public:
+    enum concat_t { concat };
+
     http_headers() {}
 
     template <typename ...Args>
         http_headers(Args&& ...args) {
-            static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-            _hlist.reserve(sizeof...(args) / 2);
+            constexpr size_t hdr_fudge = 4; // room to grow
+            constexpr auto n = sizeof...(args);
+            static_assert(n % 2 == 0, "mismatched header name/value pairs");
+            reserve((n / 2) + hdr_fudge);
             append(std::forward<Args>(args)...);
         }
 
     void append() {}
+
+    template <typename ...Args>
+        void append(concat_t, const http_headers &other, Args&& ...args) {
+            if (&other != this)
+                _hlist.insert(_hlist.end(), begin(other._hlist), end(other._hlist));  // no vector::append
+            append(std::forward<Args>(args)...);
+        }
 
     template <typename ValueT, typename ...Args>
         void append(const std::string &field, ValueT &&header_value,
@@ -96,6 +108,7 @@ public:
         _got_header_field = {};
     }
 
+    void reserve(size_t n)  { _hlist.reserve(n); }
     bool empty() const;
 
     bool contains(const std::string &field) const;
@@ -153,6 +166,8 @@ struct http_base : http_headers {
         set(hs::Content_Length, body_length);
         if (content_type)
             set(hs::Content_Type, *content_type);
+        else if (!contains(hs::Content_Type))
+            set(hs::Content_Type, hs::text_plain);
     }
 
     bool close_after() const {
@@ -259,7 +274,7 @@ struct http_response : http_base {
     http_response(status_t status_code_,
                   http_headers headers_,
                   std::string body_,
-                  std::string content_type_ = std::string())
+                  optional<std::string> content_type_ = nullopt)
         : http_base(std::move(headers_)),
           status_code{status_code_}
         { set_body(std::move(body_), std::move(content_type_)); }
