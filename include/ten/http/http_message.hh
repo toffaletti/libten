@@ -154,6 +154,8 @@ struct http_base : http_headers {
         set(hs::Content_Length, body_length);
         if (content_type)
             set(hs::Content_Type, *content_type);
+        else if (!contains(hs::Content_Type))
+            set(hs::Content_Type, hs::text_plain);
     }
 
     bool close_after() const {
