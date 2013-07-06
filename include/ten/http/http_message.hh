@@ -60,16 +60,27 @@ protected:
     void _hwrite(std::ostream &os) const;
 
 public:
+    enum concat_t { concat };
+
     http_headers() {}
 
     template <typename ...Args>
         http_headers(Args&& ...args) {
-            static_assert((sizeof...(args) % 2) == 0, "mismatched header name/value pairs");
-            _hlist.reserve(sizeof...(args) / 2);
+            constexpr size_t hdr_fudge = 4; // room to grow
+            constexpr auto n = sizeof...(args);
+            static_assert(n % 2 == 0, "mismatched header name/value pairs");
+            reserve((n / 2) + hdr_fudge);
             append(std::forward<Args>(args)...);
         }
 
     void append() {}
+
+    template <typename ...Args>
+        void append(concat_t, const http_headers &other, Args&& ...args) {
+            if (&other != this)
+                _hlist.insert(_hlist.end(), begin(other._hlist), end(other._hlist));  // no vector::append
+            append(std::forward<Args>(args)...);
+        }
 
     template <typename ValueT, typename ...Args>
         void append(const std::string &field, ValueT &&header_value,
@@ -97,6 +108,7 @@ public:
         _got_header_field = {};
     }
 
+    void reserve(size_t n)  { _hlist.reserve(n); }
     bool empty() const;
 
     bool contains(const std::string &field) const;
