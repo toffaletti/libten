@@ -260,7 +260,7 @@ struct http_response : http_base {
     http_response(status_t status_code_,
                   http_headers headers_,
                   std::string body_,
-                  std::string content_type_ = std::string())
+                  optional<std::string> content_type_ = nullopt)
         : http_base(std::move(headers_)),
           status_code{status_code_}
         { set_body(std::move(body_), std::move(content_type_)); }
