@@ -394,7 +394,7 @@ TEST(Http, ResponseConstructor) {
     EXPECT_EQ(default_http_version, resp.version);
     EXPECT_TRUE(resp.body.empty());
 
-    http_response resp2{200, {"Foo", "bar"}, "[1]", "text/json"};
+    http_response resp2{200, {"Foo", "bar"}, "[1]", std::string{"text/json"}};
     EXPECT_EQ(200, resp2.status_code);
     EXPECT_EQ("OK", resp2.reason());
     EXPECT_EQ(default_http_version, resp2.version);
