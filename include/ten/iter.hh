@@ -8,7 +8,7 @@ namespace ten {
 // cyclic iterator
 
 template <class Iter>
-class cycle_iter {
+class cycle_iterator {
     using itr = typename std::iterator_traits<Iter>;
 
     const Iter from, to;
@@ -20,33 +20,36 @@ public:
     using reference         = typename itr::reference;
     using iterator_category = std::forward_iterator_tag;
 
-    cycle_iter(Iter from_, Iter to_) : from(std::move(from_)), to(std::move(to_)), cur(from) {}
+    cycle_iterator(Iter from_, Iter to_) : from(std::move(from_)), to(std::move(to_)), cur(from) {}
 
     bool empty() const {
         return from == to;
     }
     reference operator * () const {
-        if (empty()) throw std::out_of_range("empty cycle_iter");
+        if (empty()) throw std::out_of_range("empty cycle_iterator");
         return *cur;
     }
-    cycle_iter & operator ++ () {
-        if (empty()) throw std::out_of_range("empty cycle_iter");
+    cycle_iterator & operator ++ () {
+        if (empty()) throw std::out_of_range("empty cycle_iterator");
         if (++cur == to)
             cur = from;
         return *this;
     }
-    cycle_iter operator ++ (int) {
-        cycle_iter orig(*this);
+    cycle_iterator operator ++ (int) {
+        cycle_iterator orig(*this);
         ++*this;
         return orig;
     }
 };
 
 template <class T, class Iter = typename T::iterator>
-  inline cycle_iter<Iter> make_cycle_iter(T &coll)       { return cycle_iter<Iter>(begin(coll), end(coll)); }
+  inline cycle_iterator<Iter> make_cycle_iterator(T &coll)       { return cycle_iterator<Iter>(begin(coll), end(coll)); }
 
 template <class T, class Iter = typename T::const_iterator>
-  inline cycle_iter<Iter> make_cycle_iter(const T &coll) { return cycle_iter<Iter>(begin(coll), end(coll)); }
+  inline cycle_iterator<Iter> make_cycle_iterator(const T &coll) { return cycle_iterator<Iter>(begin(coll), end(coll)); }
+
+template <class T, class RRef = T&&>
+  void make_cycle_iterator(RRef);  // that should prevent using temporaries
 
 } // ten
 
