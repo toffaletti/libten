@@ -179,10 +179,11 @@ class http_pool : public shared_pool<http_client> {
 public:
     using scoped_resource = detail::http_scoped_resource;
     using host_port_t = std::pair<std::string, uint16_t>;
+    using host_port_factory_t = std::function< host_port_t() >;
 
     // general case: arbitrary host generator
     http_pool(std::string name_,
-              std::function< host_port_t() > host_factory_,
+              host_port_factory_t host_factory_,
               optional<size_t> max_conn_ = nullopt,
               http_client::lifetime_t lifetime_ = nullopt,
               optional_timeout conn_timeout_ = nullopt)
@@ -221,7 +222,7 @@ public:
     {}
 
 protected:
-    std::function< host_port_t() > _host_factory;
+    host_port_factory_t _host_factory;
     http_client::lifetime_t _lifetime;
     optional_timeout _conn_timeout;
 
