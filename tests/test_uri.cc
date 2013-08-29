@@ -73,7 +73,7 @@ TEST(Uri, ParseQuery) {
     u.normalize();
     uri::query_params params = u.query_part();
     // NOTE: the string below should appear as russian
-    EXPECT_EQ(params.size(), 1);
+    EXPECT_EQ(params.size(), 1u);
     EXPECT_EQ(params.find("q")->second, "путин");
 }
 

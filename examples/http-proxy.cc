@@ -24,8 +24,8 @@ void sock_copy(channel<int> c, netsock &a, netsock &b, buffer &buf) {
     c.send(1);
 }
 
-void send_503_reply(netsock &s) {
-    http_response resp{503};
+void send_unavail_reply(netsock &s) {
+    http_response resp{ HTTP_Service_Unavailable };
     std::string data = resp.data();
     ssize_t nw = s.send(data.data(), data.size());
     (void)nw; // ignore
@@ -152,7 +152,7 @@ void proxy_task(int sock) {
         }
     } catch (errno_error &e) {
         PLOG(ERROR) << "request connect error " << req.method << " " << req.uri;
-        send_503_reply(s);
+        send_unavail_reply(s);
         return;
     } catch (std::exception &e) {
         LOG(ERROR) << "exception error: " << req.uri << " : " << e.what();
@@ -163,11 +163,11 @@ request_read_error:
     return;
 request_send_error:
     PLOG(ERROR) << "request send error: " << req.method << " " << req.uri;
-    send_503_reply(s);
+    send_unavail_reply(s);
     return;
 response_read_error:
     PLOG(ERROR) << "response read error: " << req.method << " " << req.uri;
-    send_503_reply(s);
+    send_unavail_reply(s);
     return;
 response_send_error:
     PLOG(ERROR) << "response send error: " << req.method << " " << req.uri;

@@ -47,6 +47,63 @@ extern const std::string
     Cache_Control, no_cache;
 }
 
+//! http statuses
+enum http_status_t : uint16_t {
+    HTTP_Continue                         = 100,
+    HTTP_Switching_Protocols              = 101,
+    HTTP_OK                               = 200,
+    HTTP_Created                          = 201,
+    HTTP_Accepted                         = 202,
+    HTTP_Non_Authoritative_Information    = 203,
+    HTTP_No_Content                       = 204,
+    HTTP_Reset_Content                    = 205,
+    HTTP_Partial_Content                  = 206,
+    HTTP_Multiple_Choices                 = 300,
+    HTTP_Moved_Permanently                = 301,
+    HTTP_Found                            = 302,
+    HTTP_See_Other                        = 303,
+    HTTP_Not_Modified                     = 304,
+    HTTP_Use_Proxy                        = 305,
+    HTTP_Temporary_Redirect               = 307,
+    HTTP_Bad_Request                      = 400,
+    HTTP_Unauthroized                     = 401,
+    HTTP_Payment_Required                 = 402,
+    HTTP_Forbidden                        = 403,
+    HTTP_Not_Found                        = 404,
+    HTTP_Method_Not_Allowed               = 405,
+    HTTP_Not_Acceptable                   = 406,
+    HTTP_Proxy_Authentication_Required    = 407,
+    HTTP_Request_Timeout                  = 408,
+    HTTP_Conflict                         = 409,
+    HTTP_Gone                             = 410,
+    HTTP_Length_Required                  = 411,
+    HTTP_Precondition_Failed              = 412,
+    HTTP_Request_Entity_Too_Large         = 413,
+    HTTP_Request_URI_Too_Large            = 414,
+    HTTP_Unsupported_Media_Type           = 415,
+    HTTP_Requested_Range_Not_Satisfiable  = 416,
+    HTTP_Expectation_Failed               = 417,
+    HTTP_Internal_Server_Error            = 500,
+    HTTP_Not_Implemented                  = 501,
+    HTTP_Bad_Gateway                      = 502,
+    HTTP_Service_Unavailable              = 503,
+    HTTP_Gateway_Timeout                  = 504,
+    HTTP_Version_Not_Supported            = 505,
+};
+
+// an enum needs an explicit hash to be a map key
+} // close ten
+namespace std {
+template <> struct hash<ten::http_status_t> {
+    using argument_type = ten::http_status_t;
+    using result_type   = size_t;
+    result_type operator()(argument_type n) const noexcept {
+        return static_cast<result_type>(n);
+    }
+};
+} // close std
+namespace ten {
+
 //! http headers
 struct http_headers {
 protected:
@@ -225,6 +282,7 @@ struct http_request : http_base {
           uri{std::move(uri_)}
     { set_body(std::move(body_), std::move(content_type_)); }
 
+    // variant for quoted string content type
     http_request(std::string method_,
                  std::string uri_,
                  http_headers headers_,
@@ -260,17 +318,18 @@ struct http_request : http_base {
 //! http response
 struct http_response : http_base {
     using super = http_base;
-    using status_t = uint16_t;
+    using status_t = http_status_t;
 
     status_t status_code {};
-    bool guillotine {};  // return only the head
+    bool _parser_guillotine;  // return only the head during parsing
 
-    http_response(status_t status_code_ = 200,
+    http_response(status_t status_code_ = HTTP_OK,
                   http_headers headers_ = {},
                   http_version version_ = default_http_version)
         : http_base(std::move(headers_), version_),
           status_code{status_code_}
         {}
+
     http_response(status_t status_code_,
                   http_headers headers_,
                   std::string body_,
@@ -279,21 +338,25 @@ struct http_response : http_base {
           status_code{status_code_}
         { set_body(std::move(body_), std::move(content_type_)); }
 
-    // TODO: remove this special case
-    http_response(http_request *req_)
-        : http_base(),
-          guillotine{req_ && req_->method == hs::HEAD}
+    // variant for quoted string content type
+    http_response(status_t status_code_,
+                  http_headers headers_,
+                  std::string body_,
+                  const char *content_type_)
+        : http_response(status_code_,
+                        std::move(headers_),
+                        std::move(body_),
+                        std::string(content_type_))
         {}
 
     void clear() {
         super::clear();
         status_code = {};
-        guillotine = {};
     }
 
     const std::string &reason() const;
 
-    void parser_init(struct http_parser *p);
+    void parser_init(struct http_parser *p, bool guillotine = false);
     void parse(struct http_parser *p, const char *data, size_t &len);
 
     std::string data() const;

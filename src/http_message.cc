@@ -7,46 +7,46 @@
 namespace ten {
 
 static const std::unordered_map<http_response::status_t, std::string> http_status_codes = {
-    { 100, "Continue" },
-    { 101, "Switching Protocols" },
-    { 200, "OK" },
-    { 201, "Created" },
-    { 202, "Accepted" },
-    { 203, "Non-Authoritative Information" },
-    { 204, "No Content" },
-    { 205, "Reset Content" },
-    { 206, "Partial Content" },
-    { 300, "Multiple Choices" },
-    { 301, "Moved Permanently" },
-    { 302, "Found" },
-    { 303, "See Other" },
-    { 304, "Not Modified" },
-    { 305, "Use Proxy" },
-    { 307, "Temporary Redirect" },
-    { 400, "Bad Request" },
-    { 401, "Unauthroized" },
-    { 402, "Payment Required" },
-    { 403, "Forbidden" },
-    { 404, "Not Found" },
-    { 405, "Method Not Allowed" },
-    { 406, "Not Acceptable" },
-    { 407, "Proxy Authentication Required" },
-    { 408, "Request Time-out" },
-    { 409, "Conflict" },
-    { 410, "Gone" },
-    { 411, "Length Required" },
-    { 412, "Precondition Failed" },
-    { 413, "Request Entity Too Large" },
-    { 414, "Request-URI Too Large" },
-    { 415, "Unsupported Media Type" },
-    { 416, "Requested range not satisfiable" },
-    { 417, "Expectation Failed" },
-    { 500, "Internal Server Error" },
-    { 501, "Not Implemented" },
-    { 502, "Bad Gateway" },
-    { 503, "Service Unavailable" },
-    { 504, "Gateway Timeout" },
-    { 505, "HTTP Version Not Supported" },
+    { HTTP_Continue                         , "Continue" },
+    { HTTP_Switching_Protocols              , "Switching Protocols" },
+    { HTTP_OK                               , "OK" },
+    { HTTP_Created                          , "Created" },
+    { HTTP_Accepted                         , "Accepted" },
+    { HTTP_Non_Authoritative_Information    , "Non-Authoritative Information" },
+    { HTTP_No_Content                       , "No Content" },
+    { HTTP_Reset_Content                    , "Reset Content" },
+    { HTTP_Partial_Content                  , "Partial Content" },
+    { HTTP_Multiple_Choices                 , "Multiple Choices" },
+    { HTTP_Moved_Permanently                , "Moved Permanently" },
+    { HTTP_Found                            , "Found" },
+    { HTTP_See_Other                        , "See Other" },
+    { HTTP_Not_Modified                     , "Not Modified" },
+    { HTTP_Use_Proxy                        , "Use Proxy" },
+    { HTTP_Temporary_Redirect               , "Temporary Redirect" },
+    { HTTP_Bad_Request                      , "Bad Request" },
+    { HTTP_Unauthroized                     , "Unauthroized" },
+    { HTTP_Payment_Required                 , "Payment Required" },
+    { HTTP_Forbidden                        , "Forbidden" },
+    { HTTP_Not_Found                        , "Not Found" },
+    { HTTP_Method_Not_Allowed               , "Method Not Allowed" },
+    { HTTP_Not_Acceptable                   , "Not Acceptable" },
+    { HTTP_Proxy_Authentication_Required    , "Proxy Authentication Required" },
+    { HTTP_Request_Timeout                  , "Request Timeout" },
+    { HTTP_Conflict                         , "Conflict" },
+    { HTTP_Gone                             , "Gone" },
+    { HTTP_Length_Required                  , "Length Required" },
+    { HTTP_Precondition_Failed              , "Precondition Failed" },
+    { HTTP_Request_Entity_Too_Large         , "Request Entity Too Large" },
+    { HTTP_Request_URI_Too_Large            , "Request URI Too Large" },
+    { HTTP_Unsupported_Media_Type           , "Unsupported Media Type" },
+    { HTTP_Requested_Range_Not_Satisfiable  , "Requested Range Not Satisfiable" },
+    { HTTP_Expectation_Failed               , "Expectation Failed" },
+    { HTTP_Internal_Server_Error            , "Internal Server Error" },
+    { HTTP_Not_Implemented                  , "Not Implemented" },
+    { HTTP_Bad_Gateway                      , "Bad Gateway" },
+    { HTTP_Service_Unavailable              , "Service Unavailable" },
+    { HTTP_Gateway_Timeout                  , "Gateway Timeout" },
+    { HTTP_Version_Not_Supported            , "HTTP Version Not Supported" },
 };
 
 namespace hs {
@@ -324,7 +324,7 @@ std::string http_request::data() const {
 
 static int _response_on_headers_complete(http_parser *p) {
     http_response *m = reinterpret_cast<http_response *>(p->data);
-    m->status_code = p->status_code;
+    m->status_code = static_cast<http_status_t>(p->status_code);
     if (!set_version(m->version, p)) {
         return -1;
     }
@@ -335,13 +335,14 @@ static int _response_on_headers_complete(http_parser *p) {
     // if this is a response to a HEAD
     // we need to return 1 here so the
     // parser knowns not to expect a body
-    return m->guillotine ? 1 : 0;
+    return m->_parser_guillotine ? 1 : 0;
 }
 
-void http_response::parser_init(struct http_parser *p) {
+void http_response::parser_init(struct http_parser *p, bool guillotine) {
     http_parser_init(p, HTTP_RESPONSE);
     p->data = this;
     clear();
+    _parser_guillotine = guillotine;
 }
 
 void http_response::parse(struct http_parser *p, const char *data_, size_t &len) {

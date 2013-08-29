@@ -13,14 +13,14 @@ TEST(Buffer, Test1) {
     EXPECT_TRUE(b.end() - b.back() >= 1000);
     std::fill(b.back(), b.end(1000), 0x41);
     b.commit(1000);
-    EXPECT_EQ(1000, b.size());
+    EXPECT_EQ(1000u, b.size());
     b.remove(500);
     b.reserve(1000);
     EXPECT_TRUE(b.end() - b.back() >= 1000);
     EXPECT_TRUE(std::equal(b.front(), b.back(), aa.begin()));
     std::fill(b.front(), b.end(500), 0x42);
     b.commit(500);
-    EXPECT_EQ(1000, b.size());
+    EXPECT_EQ(1000u, b.size());
     EXPECT_TRUE(std::equal(b.front(), b.back(), bb.begin()));
     b.remove(500);
     b.reserve(1000);

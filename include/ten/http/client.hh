@@ -117,8 +117,6 @@ public:
         try {
             ensure_connection();
 
-            http_response resp(&r);
-
             std::string data = r.data();
             if (r.body.size() > 0) {
                 data += r.body;
@@ -133,8 +131,9 @@ public:
                 throw http_error(ss.str().c_str());
             }
 
+            http_response resp;
             http_parser parser;
-            resp.parser_init(&parser);
+            resp.parser_init(&parser, r.method == hs::HEAD);
 
             _buf.clear();
 

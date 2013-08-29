@@ -28,16 +28,16 @@ TEST(Net, SocketDial) {
 }
 
 static void http_callback(http_exchange &ex) {
-    ex.resp = { 200, {}, "Hello World" };
+    ex.resp = { HTTP_OK, {}, "Hello World" };
 }
 
 static void http_post_callback(http_exchange &ex) {
-    ex.resp = { 200, {}, "Post World" };
+    ex.resp = { HTTP_OK, {}, "Post World" };
 }
 
 static void http_slow_callback(http_exchange &ex) {
     this_task::sleep_for(milliseconds{10});
-    ex.resp = { 200, {}, "Slow World" };
+    ex.resp = { HTTP_OK, {}, "Slow World" };
 }
 
 static void start_http_server(address &addr) {
@@ -72,9 +72,9 @@ static void start_http_test() {
             deadline dl{milliseconds{5}};
             resp = c.get("/slow");
         } catch (deadline_reached) {
-            resp = { 408 };
+            resp = { HTTP_Request_Timeout };
         }
-        EXPECT_EQ(408, resp.status_code);
+        EXPECT_EQ(HTTP_Request_Timeout, resp.status_code);
     }
 
     server_task.cancel();
@@ -86,9 +86,9 @@ static void start_http_test() {
         try {
             resp = c.get("/blargh");
         } catch (http_dial_error &e) {
-            resp = { 503 };
+            resp = { HTTP_Service_Unavailable };
         }
-        EXPECT_EQ(resp.status_code, 503); // connect refused -> 503
+        EXPECT_EQ(resp.status_code, HTTP_Service_Unavailable); // connect refused -> 503
     }
 }
 
