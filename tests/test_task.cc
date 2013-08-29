@@ -67,7 +67,7 @@ TEST(Task, Fdwait) {
     task::main([&] {
         task::spawn([&] { pipe_wait(bytes); });
     });
-    EXPECT_EQ(bytes, 4);
+    EXPECT_EQ(bytes, 4u);
 }
 
 static void connect_to(address addr) {
@@ -183,7 +183,7 @@ TEST(Task, ManyTimeouts) {
             });
         }
     });
-    EXPECT_EQ(count, 3000);
+    EXPECT_EQ(count, 3000u);
 }
 
 static void long_sleeper() {
@@ -281,7 +281,7 @@ static void yield_timer() {
     // tight yield loop should take less than microsecond
     // this test depends on hardware and will probably fail
     // when run under debugging tools like valgrind/gdb
-    EXPECT_GT(counter, 100000);
+    EXPECT_GT(counter, 100000u);
 }
 
 TEST(Task, YieldTimer) {

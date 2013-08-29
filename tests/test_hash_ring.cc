@@ -61,7 +61,7 @@ TEST(HashRing, Basic) {
     }
 
     // remove a server
-    EXPECT_EQ(3, ring.remove("server3.example.com"));
+    EXPECT_EQ(3u, ring.remove("server3.example.com"));
 
     unsigned found = 0;
     for (auto it : data) {
@@ -82,8 +82,8 @@ TEST(HashRing, Remove) {
     ring.add("test1");
     ring.add("test2");
     ring.add("test3");
-    EXPECT_EQ(100, ring.remove("test1"));
-    EXPECT_EQ(100, ring.remove("test3"));
-    EXPECT_EQ(100, ring.remove("test2"));
+    EXPECT_EQ(100u, ring.remove("test1"));
+    EXPECT_EQ(100u, ring.remove("test3"));
+    EXPECT_EQ(100u, ring.remove("test2"));
 }
 

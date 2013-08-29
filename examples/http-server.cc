@@ -46,13 +46,13 @@ static void http_quit(std::weak_ptr<state> wst, http_exchange &ex) {
         LOG(INFO) << "quit requested over http";
         st->app->quit();
     }
-    ex.resp = { 200, { "Connection", "close" } };
+    ex.resp = { HTTP_OK, { "Connection", "close" } };
     ex.resp.set_body("");
     ex.send_response();
 }
 
 static void http_root(std::weak_ptr<state> wst, http_exchange &ex) {
-    ex.resp = { 200 };
+    ex.resp = { HTTP_OK };
     ex.resp.set_body("Hello World!\n", "text/plain");
     ex.send_response();
 }

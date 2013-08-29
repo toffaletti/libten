@@ -75,9 +75,9 @@ TEST(DescriptorTest, signal_fd_test) {
 TEST(DescriptorTest, event_fd_test) {
     event_fd efd;
     efd.write(1);
-    EXPECT_EQ(efd.read(), 1);
+    EXPECT_EQ(efd.read(), 1u);
     efd.write(1);
     efd.write(2);
     efd.write(3);
-    EXPECT_EQ(efd.read(), 1+2+3);
+    EXPECT_EQ(efd.read(), (unsigned)(1+2+3));
 }
