@@ -6,20 +6,16 @@
 using namespace ten;
 
 // make sure static init works, this will crash if we break it
-static const http_response test_static_init(200,
-        http_headers("Access-Control-Allow-Origin", "*")
-        );
+static const http_response test_static_init{ HTTP_OK, { "Access-Control-Allow-Origin", "*" } };
 
 TEST(Http, HeadersVariadicTemplate) {
-    http_request req{hs::GET, "/foo",
-        http_headers{"This", 4, "That", "that"}
-    };
+    http_request req{hs::GET, "/foo", {"This", 4, "That", "that"}};
     ASSERT_TRUE((bool)req.get<int>("this"));
     EXPECT_EQ(4, *req.get<int>("this"));
     ASSERT_TRUE((bool)req.get("that"));
     EXPECT_EQ("that", *req.get("that"));
 
-    http_response resp{200, http_headers{"Thing", "stuff"}};
+    http_response resp{HTTP_OK, {"Thing", "stuff"}};
     ASSERT_TRUE((bool)resp.get("thing"));
     EXPECT_EQ("stuff", *resp.get("thing"));
 }
@@ -33,7 +29,7 @@ TEST(Http, RequestConstructor) {
     EXPECT_EQ("/corge", req2.uri);
     EXPECT_EQ(default_http_version, req2.version);
     EXPECT_EQ("text/json", *req2.get("Content-Type"));
-    EXPECT_EQ(3, *req2.get<uint64_t>("Content-Length"));
+    EXPECT_EQ(3u, *req2.get<uint64_t>("Content-Length"));
     EXPECT_EQ("[1]", req2.body);
 }
 
@@ -121,7 +117,7 @@ TEST(Http, RequestParserNormalizeHeaderNames) {
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -150,7 +146,7 @@ TEST(Http, RequestParserHeaders) {
     EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -174,7 +170,7 @@ TEST(Http, RequestParserUnicodeEscape) {
     EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -198,7 +194,7 @@ TEST(Http, RequestParserPercents) {
     EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -224,7 +220,7 @@ TEST(Http, RequestParserBadPercents) {
     EXPECT_EQ(hs::GET, req.method);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -249,7 +245,7 @@ TEST(Http, RequestParserHeaderParts) {
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -271,7 +267,7 @@ TEST(Http, RequestParserNoHeaders) {
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
 }
 
 TEST(Http, RequestParserGarbage) {
@@ -302,7 +298,7 @@ TEST(Http, RequestParserProxyHttp12) {
     EXPECT_EQ("http://example.com:9182/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -327,7 +323,7 @@ TEST(Http, RequestClear) {
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -339,7 +335,7 @@ TEST(Http, RequestClear) {
     EXPECT_TRUE(req.uri.empty());
     EXPECT_EQ(req.version, default_http_version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
 
     req.parser_init(&parser);
     len = strlen(sdata);
@@ -350,7 +346,7 @@ TEST(Http, RequestClear) {
     EXPECT_EQ("/test/this?thing=1&stuff=2&fun&good", req.uri);
     EXPECT_EQ(http_1_1, req.version);
     EXPECT_TRUE(req.body.empty());
-    EXPECT_EQ(0, req.body_length);
+    EXPECT_EQ(0u, req.body_length);
     EXPECT_EQ("curl/7.21.0 (i686-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18",
         *req.get("User-Agent"));
     EXPECT_EQ("localhost:8080", *req.get("Host"));
@@ -389,26 +385,26 @@ TEST(Http, RequestHostWithUnderscores) {
 
 TEST(Http, ResponseConstructor) {
     http_response resp;
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(default_http_version, resp.version);
     EXPECT_TRUE(resp.body.empty());
 
-    http_response resp2{200, {"Foo", "bar"}, "[1]", std::string{"text/json"}};
-    EXPECT_EQ(200, resp2.status_code);
+    http_response resp2{HTTP_OK, {"Foo", "bar"}, "[1]", "text/json"};
+    EXPECT_EQ(HTTP_OK, resp2.status_code);
     EXPECT_EQ("OK", resp2.reason());
     EXPECT_EQ(default_http_version, resp2.version);
     EXPECT_EQ("text/json", *resp2.get("Content-Type"));
-    EXPECT_EQ(3, *resp2.get<uint64_t>("Content-Length"));
+    EXPECT_EQ(3u, *resp2.get<uint64_t>("Content-Length"));
     EXPECT_EQ("[1]", resp2.body);
 }
 
 TEST(Http, ResponseData) {
-    http_response resp{200};
+    http_response resp{HTTP_OK};
     resp.append("Host", "localhost");
     resp.append("Content-Length", "0");
 
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(http_1_1, resp.version);
     EXPECT_EQ("0", *resp.get("content-length"));
@@ -423,7 +419,7 @@ TEST(Http, ResponseData) {
 }
 
 TEST(Http, ResponseBody) {
-    http_response resp{200};
+    http_response resp{HTTP_OK};
 
     resp.append("Host", "localhost");
 
@@ -431,7 +427,7 @@ TEST(Http, ResponseBody) {
 
     resp.set_body(body, "text/plain");
 
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(http_1_1, resp.version);
     EXPECT_EQ("37", *resp.get("content-length"));
@@ -454,7 +450,34 @@ TEST(Http, ResponseParserInit) {
 
     resp.parser_init(&parser);
     EXPECT_TRUE(resp.body.empty());
+    EXPECT_EQ(0u, resp.body_length);
     EXPECT_EQ(parser.data, &resp);
+}
+
+TEST(Http, ResponseParserGuillotine) {
+    static const char *sdata =
+    "HTTP/1.1 200 OK\r\n"
+    "Host: localhost\r\n"
+    "Content-Length: 37\r\n"
+    "Content-Type: text/plain\r\n"
+    "\r\n"
+    "this is a test.\r\nthis is only a test.";
+
+    http_response resp;
+    http_parser parser;
+
+    resp.parser_init(&parser, true);
+    size_t len = strlen(sdata);
+    resp.parse(&parser, sdata, len);
+    EXPECT_TRUE(resp.complete);
+
+    EXPECT_EQ(HTTP_OK, resp.status_code);
+    EXPECT_EQ("OK", resp.reason());
+    EXPECT_EQ(http_1_1, resp.version);
+    EXPECT_EQ(37u, *resp.get<uint64_t>("content-length"));
+    EXPECT_EQ("text/plain", *resp.get("content-type"));
+    EXPECT_TRUE(resp.body.empty());
+    EXPECT_EQ(0u, resp.body_length);
 }
 
 TEST(Http, ResponseParserOneByte) {
@@ -481,14 +504,14 @@ TEST(Http, ResponseParserOneByte) {
     EXPECT_TRUE(resp.complete);
     VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(http_1_1, resp.version);
     EXPECT_EQ("37", *resp.get("content-length"));
-    EXPECT_EQ(37, *resp.get<uint64_t>("content-length"));
+    EXPECT_EQ(37u, *resp.get<uint64_t>("content-length"));
     EXPECT_EQ("text/plain", *resp.get("content-type"));
     EXPECT_EQ("this is a test.\r\nthis is only a test.", resp.body);
-    EXPECT_EQ(37, resp.body_length);
+    EXPECT_EQ(37u, resp.body_length);
 }
 
 TEST(Http, ResponseParserNormalizeHeaderNames) {
@@ -507,14 +530,14 @@ TEST(Http, ResponseParserNormalizeHeaderNames) {
     resp.parse(&parser, sdata, len);
     EXPECT_TRUE(resp.complete);
 
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(http_1_1, resp.version);
     EXPECT_EQ("37", *resp.get("content-length"));
-    EXPECT_EQ(37, *resp.get<uint64_t>("content-length"));
+    EXPECT_EQ(37u, *resp.get<uint64_t>("content-length"));
     EXPECT_EQ("text/plain", *resp.get("content-type"));
     EXPECT_EQ("this is a test.\r\nthis is only a test.", resp.body);
-    EXPECT_EQ(37, resp.body_length);
+    EXPECT_EQ(37u, resp.body_length);
 }
 
 TEST(Http, ResponseParserChunked) {
@@ -543,12 +566,12 @@ TEST(Http, ResponseParserChunked) {
     EXPECT_TRUE(resp.complete);
     VLOG(1) << "Response:\n" << resp.data() << resp.body;
 
-    EXPECT_EQ(200, resp.status_code);
+    EXPECT_EQ(HTTP_OK, resp.status_code);
     EXPECT_EQ("OK", resp.reason());
     EXPECT_EQ(http_1_1, resp.version);
     EXPECT_EQ("text/plain", *resp.get("Content-Type"));
     EXPECT_EQ("chunked", *resp.get("Transfer-Encoding"));
-    EXPECT_EQ(resp.body_length, 76);
+    EXPECT_EQ(76u, resp.body_length);
 }
 
 TEST(Http, BenchAsciiIequals) {

@@ -24,8 +24,8 @@ struct http_exchange {
 
     http_request &req;
     netsock &sock;
-    http_response resp {404};
-    bool resp_sent {false};
+    http_response resp{ HTTP_Not_Found };
+    bool resp_sent{false};
     std::chrono::steady_clock::time_point start;
     log_func_t log_func;
 
@@ -238,8 +238,8 @@ private:
                     got_headers = true;
                     auto exp_hdr = req.get("Expect");
                     if (exp_hdr && *exp_hdr == "100-continue") {
-                        http_response cont_resp(100);
-                        std::string data = cont_resp.data();
+                        static const http_response cont_resp{ HTTP_Continue };
+                        static const auto data = cont_resp.data();
                         ssize_t nw = s.send(data.data(), data.size());
                         (void)nw;
                     }
@@ -269,7 +269,7 @@ done:
                     r.callback(std::ref(ex));
                 } catch (std::exception &e) {
                     DVLOG(2) << "unhandled exception in " << ex.req.method << " of route [" << r.pattern << "]: " << e.what();
-                    ex.resp = { 500, { hs::Connection, hs::close } };
+                    ex.resp = { HTTP_Internal_Server_Error, { hs::Connection, hs::close } };
                     std::string msg = e.what();
                     if (!msg.empty() && *msg.rbegin() != '\n')
                         msg += '\n';
@@ -281,7 +281,7 @@ done:
         }
         // if at least one pattern would have matched except method was wrong, avoid nondescript 404
         if (bad_method)
-            ex.resp = { 405 };
+            ex.resp = { HTTP_Method_Not_Allowed };
     }
 };
 

@@ -114,7 +114,7 @@ TEST(Json, FilterKeyExists) {
 
     json r1{o.path("//book[doesnotexist]")};
     ASSERT_TRUE(r1.is_array());
-    EXPECT_EQ(0, r1.asize());
+    EXPECT_EQ(0u, r1.asize());
 }
 
 TEST(Json, Truth) {
@@ -153,7 +153,7 @@ TEST(Json, InitList) {
     };
     ASSERT_TRUE((bool)meta);
     ASSERT_TRUE(meta.is_object());
-    EXPECT_EQ(meta.osize(), 5);
+    EXPECT_EQ(meta.osize(), 5u);
     EXPECT_EQ(meta["foo"].integer(), 17);
     EXPECT_EQ(meta["corge"][0].integer(), 1);
     EXPECT_EQ(meta["grault"][1].str(), "world");
