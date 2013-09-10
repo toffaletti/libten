@@ -278,15 +278,21 @@ public:
     typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
     void visit(const visitor_func_t &visitor);
 
+    //
     // interfaces specific to object and array
+    //
+
+    // iterators
 
     class object_iterator {
-        json_t *_obj;
-        void *_it;
-
         friend class json;
-        explicit object_iterator(json_t *obj)           : _obj(obj), _it(json_object_iter(obj)) {}
-                 object_iterator(json_t *obj, void *it) : _obj(obj), _it(it) {}
+
+        json_t * const _obj;
+        void *_it;
+        object_iterator(json_t *obj, void *it) : _obj(obj), _it(it) {}
+
+        static object_iterator make_begin(json_t *obj) { return object_iterator{obj, json_object_iter(obj)}; }
+        static object_iterator make_end(json_t *obj)   { return object_iterator{obj, nullptr}; }
 
       public:
         typedef const char *key_type;
@@ -306,12 +312,19 @@ public:
         bool operator != (const object_iterator &right) const { return _it != right._it; }
     };
 
-    class array_iterator {
-        json_t *_arr;
-        size_t _i;
+    object_iterator obegin() { return object_iterator::make_begin(get()); }
+    object_iterator oend()   { return object_iterator::make_end(get()); }
 
+
+    class array_iterator {
         friend class json;
-        explicit array_iterator(json_t *arr, size_t i = 0) : _arr(arr), _i(i) {}
+
+        json_t * const _arr;
+        size_t _i;
+        array_iterator(json_t *arr, size_t i) : _arr(arr), _i(i) {}
+
+        static array_iterator make_begin(json_t *arr) { return array_iterator{arr, 0}; }
+        static array_iterator make_end(json_t *arr)   { return array_iterator{arr, json_array_size(arr)}; }
 
       public:
         typedef json value_type;
@@ -333,43 +346,32 @@ public:
         bool operator <  (const array_iterator &right)    const { return _i <  right._i; }
     };
 
+    array_iterator abegin()  { return array_iterator::make_begin(get()); }
+    array_iterator aend()    { return array_iterator::make_end(get()); }
 
-    // if you want to iterate without .arr() and .obj(), here you go
+    // foreach-compatible pseudocontainer views; use with foreach loops:
+    //    for (const auto &elem : j.arr()) {}
+    //    for (const auto &kv   : j.obj()) {}
 
-    object_iterator obegin() { return object_iterator(get()); }
-    object_iterator oend()   { return object_iterator(get(), nullptr); }
-
-    array_iterator  abegin() { return array_iterator( get()); }
-    array_iterator  aend()   { return array_iterator( get(), json_array_size(get())); }
-
-
-    // if you want to iterate with .arr() and .obj(), here you go
-
-    class obj_view {
-        json_t *_obj;
-
+    template <class Iter>
+    class aggregate_view {
         friend class json;
-        explicit obj_view(json_t *obj) : _obj(obj) {}
+
+        json_ptr _p;
+        explicit aggregate_view(json_ptr p) : _p(std::move(p)) {}
 
       public:
-        typedef object_iterator iterator;
-        iterator begin() const { return iterator(_obj); }
-        iterator end()   const { return iterator(_obj, nullptr); }
+        using iterator = Iter;
+
+        iterator begin()  { return Iter::make_begin(_p.get()); }
+        iterator end()    { return Iter::make_end(_p.get()); }
     };
-    obj_view obj()  { return obj_view(get()); }
 
-    class arr_view {
-        json_t *_arr;
+    using obj_view = aggregate_view<object_iterator>;
+    using arr_view = aggregate_view<array_iterator>;
 
-        friend class json;
-        explicit arr_view(json_t *arr) : _arr(arr) {}
-
-      public:
-        typedef array_iterator iterator;
-        iterator begin() const { return iterator(_arr); }
-        iterator end()   const { return iterator(_arr, json_array_size(_arr)); }
-    };
-    arr_view arr()  { return arr_view(get()); }
+    obj_view obj()  { return obj_view(_p); }
+    arr_view arr()  { return arr_view(_p); }
 };
 
 
