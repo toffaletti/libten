@@ -245,7 +245,8 @@ public:
 
     // aggregate access
 
-    template <class KEY> json operator [] (KEY key)    { return get(key); }
+    template <class Key>
+    json operator [] (Key &&key)            { return get(std::forward<Key>(key)); }
 
     size_t osize() const                               { return      json_object_size(   get());                       }
     json get(   const char *key)                       { return json(json_object_get(    get(), key));                 }
