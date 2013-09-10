@@ -109,16 +109,16 @@ public:
     // construction and assignment,
     //   including a selection of conversions from basic types
 
-    json()                                     : _p()             {}
-    json(const json  &js)                      : _p(js._p)        {}
-    json(      json &&js)                      : _p(std::move(js._p))  {}
-    explicit json(json_t *j)                   : _p(j)            {}
-             json(json_t *j, json_take_t t)    : _p(j, t)         {}
-    json & operator = (const json  &js)        { _p = js._p;       return *this; }
+    json()                                     : _p()                 {}
+    json(const json  &js)                      : _p(js._p)            {}
+    json(      json &&js)                      : _p(std::move(js._p)) {}
+    explicit json(json_t *j)                   : _p(j)                {}
+             json(json_t *j, json_take_t t)    : _p(j, t)             {}
+    json & operator = (const json  &js)        { _p = js._p;            return *this; }
     json & operator = (      json &&js)        { _p = std::move(js._p); return *this; }
 
     json(const char *s)                        : _p(json_string(s),                 json_take) {}
-    json(const std::string &s)                      : _p(json_string(s.c_str()),         json_take) {}
+    json(const std::string &s)                 : _p(json_string(s.c_str()),         json_take) {}
     json(int i)                                : _p(json_integer(i),                json_take) {}
     json(long i)                               : _p(json_integer(i),                json_take) {}
     json(long long i)                          : _p(json_integer(i),                json_take) {}
@@ -129,22 +129,22 @@ public:
     json(double r)                             : _p(json_real(r),                   json_take) {}
     json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
 
-    static json object()                 { return json(json_object(),   json_take); }
-    static json array()                  { return json(json_array(),    json_take); }
-    static json str(const char *s)       { return json(s); }
-    static json str(const std::string &s)     { return json(s); }
-    static json integer(int i)           { return json(i); }
-    static json integer(long i)          { return json(i); }
-    static json integer(long long i)     { return json(i); }
-    static json integer(unsigned u)      { return json(u); }
+    static json object()                   { return json(json_object(),   json_take); }
+    static json array()                    { return json(json_array(),    json_take); }
+    static json str(const char *s)         { return json(s); }
+    static json str(const std::string &s)  { return json(s); }
+    static json integer(int i)             { return json(i); }
+    static json integer(long i)            { return json(i); }
+    static json integer(long long i)       { return json(i); }
+    static json integer(unsigned u)        { return json(u); }
 #if ULONG_MAX < LLONG_MAX
-    static json integer(unsigned long u) { return json(u); }
+    static json integer(unsigned long u)   { return json(u); }
 #endif
-    static json real(double d)           { return json(d); }
-    static json boolean(bool b)          { return json(b); }
-    static json jtrue()                  { return json(json_true(),     json_take); }
-    static json jfalse()                 { return json(json_false(),    json_take); }
-    static json null()                   { return json(json_null(),     json_take); }
+    static json real(double d)             { return json(d); }
+    static json boolean(bool b)            { return json(b); }
+    static json jtrue()                    { return json(json_true(),     json_take); }
+    static json jfalse()                   { return json(json_false(),    json_take); }
+    static json null()                     { return json(json_null(),     json_take); }
 
     // default to building objects, they're more common
     json(std::initializer_list<std::pair<const char *, json>> init)
@@ -218,7 +218,7 @@ public:
 
     // scalar access
 
-    std::string str()         const  { return json_string_value(get()); }
+    std::string str()    const  { return json_string_value(get()); }
     const char *c_str()  const  { return json_string_value(get()); }
     json_int_t integer() const  { return json_integer_value(get()); }
     double real()        const  { return json_real_value(get()); }
@@ -245,29 +245,29 @@ public:
 
     // aggregate access
 
-    template <class KEY> json operator [] (KEY key)     { return get(key); }
+    template <class KEY> json operator [] (KEY key)    { return get(key); }
 
-    size_t osize() const                                { return      json_object_size(   get());                    }
-    json get(           const char *key)                { return json(json_object_get(    get(), key));              }
-    json get(         const std::string &key)                { return json(json_object_get(    get(), key.c_str()));      }
-    bool set(           const char *key, const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
-    bool set(         const std::string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
-    bool erase(         const char *key)                { return     !json_object_del(    get(), key);               }
-    bool erase(       const std::string &key)                { return     !json_object_del(    get(), key.c_str());       }
-    bool oclear()                                       { return     !json_object_clear(  get());                    }
-    bool omerge(         const json &oj)                { return     !json_object_update(          get(), oj.get()); }
-    bool omerge_existing(const json &oj)                { return     !json_object_update_existing( get(), oj.get()); }
-    bool omerge_missing( const json &oj)                { return     !json_object_update_missing(  get(), oj.get()); }
+    size_t osize() const                               { return      json_object_size(   get());                       }
+    json get(   const char *key)                       { return json(json_object_get(    get(), key));                 }
+    json get(   const std::string &key)                { return json(json_object_get(    get(), key.c_str()));         }
+    bool set(   const char *key,        const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
+    bool set(   const std::string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
+    bool erase( const char *key)                       { return     !json_object_del(    get(), key);                  }
+    bool erase( const std::string &key)                { return     !json_object_del(    get(), key.c_str());          }
+    bool oclear()                                      { return     !json_object_clear(  get());                       }
+    bool omerge(         const json &oj)               { return     !json_object_update(          get(), oj.get());    }
+    bool omerge_existing(const json &oj)               { return     !json_object_update_existing( get(), oj.get());    }
+    bool omerge_missing( const json &oj)               { return     !json_object_update_missing(  get(), oj.get());    }
 
-    size_t asize() const                           { return      json_array_size(   get());              }
-    json get(            int i)                    { return json(json_array_get(    get(), i));          }
-    json get(         size_t i)                    { return json(json_array_get(    get(), i));          }
-    bool set(         size_t i,  const json &j)    { return     !json_array_set( _a_get(), i, j.get());  }
-    bool insert(      size_t i,  const json &j)    { return     !json_array_insert( get(), i, j.get());  }
-    bool erase(       size_t i)                    { return     !json_array_remove( get(), i);           }
-    bool arr_clear()                               { return     !json_array_clear(  get());              }
-    bool push(                   const json &aj)   { return     !json_array_append( get(),    aj.get()); }
-    bool concat(                 const json &aj)   { return     !json_array_extend( get(),    aj.get()); }
+    size_t asize() const                               { return      json_array_size(   get());              }
+    json get(            int i)                        { return json(json_array_get(    get(), i));          }
+    json get(         size_t i)                        { return json(json_array_get(    get(), i));          }
+    bool set(         size_t i,  const json &j)        { return     !json_array_set( _a_get(), i, j.get());  }
+    bool insert(      size_t i,  const json &j)        { return     !json_array_insert( get(), i, j.get());  }
+    bool erase(       size_t i)                        { return     !json_array_remove( get(), i);           }
+    bool arr_clear()                                   { return     !json_array_clear(  get());              }
+    bool push(                   const json &aj)       { return     !json_array_append( get(),    aj.get()); }
+    bool concat(                 const json &aj)       { return     !json_array_extend( get(),    aj.get()); }
 
     // deep walk
 
