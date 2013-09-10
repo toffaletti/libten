@@ -104,6 +104,11 @@ private:
             _p.take(json_array());
         return get();
     }
+    // helper versions that depend on the key for tagging
+    json_t *_ao_get(const char *)         { return _o_get(); }
+    json_t *_ao_get(const std::string &)  { return _o_get(); }
+    json_t *_ao_get(int)                  { return _a_get(); }
+    json_t *_ao_get(size_t)               { return _a_get(); }
 
 public:
     // construction and assignment,
@@ -263,7 +268,10 @@ public:
     size_t asize() const                               { return      json_array_size(   get());              }
     json get(            int i)                        { return json(json_array_get(    get(), i));          }
     json get(         size_t i)                        { return json(json_array_get(    get(), i));          }
-    bool set(         size_t i,  const json &j)        { return     !json_array_set( _a_get(), i, j.get());  }
+    bool set(         size_t i,  const json &j)        { const auto a = _a_get();
+                                                         return a && (i == json_array_size(a)
+                                                                      ? !json_array_append(a, j.get())
+                                                                      : !json_array_set(a, i, j.get()));     }
     bool insert(      size_t i,  const json &j)        { return     !json_array_insert( get(), i, j.get());  }
     bool erase(          int i)                        { return     !json_array_remove( get(), i);           }
     bool erase(       size_t i)                        { return     !json_array_remove( get(), i);           }
@@ -277,6 +285,29 @@ public:
 
     typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
     void visit(const visitor_func_t &visitor);
+
+    // variadic deep walk - type-aware, mutation-capable
+
+    template <typename K1, typename K2, typename... Ks>
+    json get(K1 &&k1, K2 &&k2, Ks&&... ks) {
+        auto j2 = get(std::forward<K1>(k1));
+        if (!j2)
+            return json();
+        return j2.get(std::forward<K2>(k2), std::forward<Ks>(ks)...);
+    }
+
+    template <typename K1, typename K2, typename T3, typename... Ts>
+    bool set(K1 &&k1, K2 &&k2, T3 &&p3, Ts&&... ps) {
+        if (!_ao_get(k1))
+            return false;       // incompatible key type
+        auto j2 = get(std::forward<K1>(k1));
+        if (!j2) {
+            j2._ao_get(k2);     // can't fail
+            if (!set(std::forward<K1>(k1), j2))
+                return false;   // should never happen
+        }
+        return j2.set(std::forward<K2>(k2), std::forward<T3>(p3), std::forward<Ts>(ps)...);
+    }
 
     //
     // interfaces specific to object and array
