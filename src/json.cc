@@ -45,15 +45,31 @@ json json::load(const char *s, size_t len, unsigned flags) {
 // metaprogramming for conversions
 //
 
-// json integer
+namespace impl {
+
+// json -> string
+
+template <> string json_traits_conv<string>::cast(const json &j) {
+    if (!j.is_string()) throw errorx("not string: %s", j.dump().c_str());
+    return j.str();
+}
+
+// json -> const char *
+
+template <> const char * json_traits_conv<const char *>::cast(const json &j) {
+    if (!j.is_string()) throw errorx("not string: %s", j.dump().c_str());
+    return j.c_str();
+}
+
+// json -> integral types
 
 template <class T> inline T integral_cast(const json &j) {
     if (!j.is_integer()) throw errorx("not integral: %s", j.dump().c_str());
-    auto i = j.integer();
-    if ((numeric_limits<T>::is_signed
-           ? i < numeric_limits<T>::min()
-           : i < 0)
-        || i > numeric_limits<T>::max())
+    const auto i = j.integer();
+    constexpr auto
+        lowest    = std::numeric_limits<T>::min(),
+        highest   = std::numeric_limits<T>::max();
+    if (i < lowest || i > highest)
         throw errorx("%lld: out of range for %s", i, typeid(T).name());
     return static_cast<T>(i);
 };
@@ -67,13 +83,6 @@ template <> unsigned       json_traits_conv<unsigned      >::cast(const json &j)
 template <> unsigned long  json_traits_conv<unsigned long >::cast(const json &j) { return integral_cast<unsigned long >(j); }
 #endif
 
-// json string
-
-template <> string json_traits_conv<string>::cast(const json &j) {
-    if (!j.is_string()) throw errorx("not string: %s", j.dump().c_str());
-    return j.str();
-}
-
 // json real
 
 template <> double json_traits_conv<double>::cast(const json &j) {
@@ -82,9 +91,11 @@ template <> double json_traits_conv<double>::cast(const json &j) {
 }
 template <> float json_traits_conv<float>::cast(const json &j) {
     if (!j.is_real()) throw errorx("not real: %s", j.dump().c_str());
-    auto n = j.real();
-    constexpr float lowest = numeric_limits<float>::lowest();
-    if (n < lowest || n > numeric_limits<float>::max())
+    const auto n = j.real();
+    constexpr auto
+        lowest  = std::numeric_limits<float>::lowest(), // min() is useless here
+        highest = std::numeric_limits<float>::max();
+    if (n < lowest || n > highest)
         throw errorx("out of range for float: %g", n);
     return j.real();
 }
@@ -95,6 +106,8 @@ template <> bool json_traits_conv<bool>::cast(const json &j) {
     if (!j.is_boolean()) throw errorx("not boolean: %s", j.dump().c_str());
     return j.boolean();
 }
+
+} // end impl
 
 
 //

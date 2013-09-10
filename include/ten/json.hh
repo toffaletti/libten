@@ -386,6 +386,7 @@ inline json to_json(unsigned u)       { return json(u); }
 #if ULONG_MAX < LLONG_MAX
 inline json to_json(unsigned long u)  { return json(u); }
 #endif
+inline json to_json(float f)          { return json(f); }
 inline json to_json(double d)         { return json(d); }
 inline json to_json(bool b)           { return json(b); }
 
@@ -393,71 +394,100 @@ inline json to_json(bool b)           { return json(b); }
 //----------------------------------------------------------------
 // metaprogramming
 //
+// ends:
+//   make_json(T)    -> json
+//   json_cast<T>(j) -> T
+//
+// means:
+//   json_traits<T>
+//
 
-// conversions do not work for unspecified types
+// default = failure: conversions do not work for unspecified types
+
 template <class T> struct json_traits {
     typedef T type;
-    static const bool can_make = false;    // trait<T>::make() -> json works
-    static const bool can_cast = false;    // trait<T>::cast() -> T    works
+    static constexpr bool can_make = false;    // trait<T>::make() -> json works
+    static constexpr bool can_cast = false;    // trait<T>::cast() -> T    works
 };
 
-// convenience base class for conversions that work
+// convenience base class for most convertible types
+
+namespace impl {
 template <class T> struct json_traits_conv {
     typedef T type;
-    static const bool can_make = true;
-    static const bool can_cast = true;
+    static constexpr bool can_make = true;
+    static constexpr bool can_cast = true;
 
-    static json make(T t) { return json(t); }
-    static T cast(const json &j);              // default decl for most cases
+    static json make(T t)  { return json(t); }  // default for most cases
+    static T cast(const json &j);               // default for most cases (see json.cc)
+};
+} // impl
+
+// identity conversions
+
+template <> struct json_traits<json> : impl::json_traits_conv<json> {
+    static json make(const json  &j)  { return j; }
+    static json cast(const json  &j)  { return j; }
+
+    static json make(      json &&j)  { return std::move(j); }
+    static json cast(      json &&j)  { return std::move(j); }
 };
 
+// string conversions
+
+template <> struct json_traits<std::string> : impl::json_traits_conv<std::string> {
+    static json make(const std::string &s)  { return json(s); }
+};
+
+// const char * conversions
+
+template <> struct json_traits<const char *> : impl::json_traits_conv<const char *> {
+    static json make(const char *s)         { return json(s); }
+};
+
+// integral conversions
+
+template <> struct json_traits<short         > : impl::json_traits_conv<short         > {};
+template <> struct json_traits<int           > : impl::json_traits_conv<int           > {};
+template <> struct json_traits<long          > : impl::json_traits_conv<long          > {};
+template <> struct json_traits<long long     > : impl::json_traits_conv<long long     > {};
+template <> struct json_traits<unsigned short> : impl::json_traits_conv<unsigned short> {};
+template <> struct json_traits<unsigned      > : impl::json_traits_conv<unsigned      > {};
+#if ULONG_MAX < LLONG_MAX
+template <> struct json_traits<unsigned long > : impl::json_traits_conv<unsigned long > {};
+#endif
+
+// real conversions
+
+template <> struct json_traits<double> : impl::json_traits_conv<double> {};
+template <> struct json_traits<float>  : impl::json_traits_conv<float>  {};
+
+// boolean conversions
+
+template <> struct json_traits<bool> : impl::json_traits_conv<bool> {};
+
+
+//
+// the above dance dance of templates exists to support this:
+//   make_json<T>(t) -> json
+//   json_cast<T>(j) -> T
+//
+
+// make_json<> function, rather like to_json() but with a precise type
+
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_make, json>::type
+make_json(T &&t) {
+    return json_traits<T>::make(std::forward<T>(t));
+}
+
 // json_cast<> function, a la lexical_cast<>
+
 template <class T>
 inline typename std::enable_if<json_traits<T>::can_cast, T>::type
 json_cast(const json &j) {
     return json_traits<T>::cast(j);
 }
-
-// make_json<> function, rather like to_json() but with a precise type
-template <class T>
-inline typename std::enable_if<json_traits<T>::can_cast, T>::type
-make_json(T t) {
-    return json_traits<T>::make(t);
-}
-
-// identity
-template <> struct json_traits<json> : public json_traits_conv<json> {
-    static json cast(const json &j) { return j; }
-    static json make(const json &j) { return j; }
-};
-
-// string
-template <> struct json_traits<std::string> : public json_traits_conv<std::string> {};
-template <> struct json_traits<const char *> {
-    typedef const char *type;
-    static const bool can_make = true;   // makes copy
-    static const bool can_cast = false;  // sorry, private pointer
-
-    static json make(const char *s) { return json(s); }
-};
-
-// integer
-template <> struct json_traits<short         > : public json_traits_conv<short         > {};
-template <> struct json_traits<int           > : public json_traits_conv<int           > {};
-template <> struct json_traits<long          > : public json_traits_conv<long          > {};
-template <> struct json_traits<long long     > : public json_traits_conv<long long     > {};
-template <> struct json_traits<unsigned short> : public json_traits_conv<unsigned short> {};
-template <> struct json_traits<unsigned      > : public json_traits_conv<unsigned      > {};
-#if ULONG_MAX < LLONG_MAX
-template <> struct json_traits<unsigned long > : public json_traits_conv<unsigned long > {};
-#endif
-
-// real
-template <> struct json_traits<double> : public json_traits_conv<double> {};
-template <> struct json_traits<float>  : public json_traits_conv<float>  {};
-
-// boolean
-template <> struct json_traits<bool> : public json_traits_conv<bool> {};
 
 
 } // ten
