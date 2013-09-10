@@ -265,8 +265,9 @@ public:
     json get(         size_t i)                        { return json(json_array_get(    get(), i));          }
     bool set(         size_t i,  const json &j)        { return     !json_array_set( _a_get(), i, j.get());  }
     bool insert(      size_t i,  const json &j)        { return     !json_array_insert( get(), i, j.get());  }
+    bool erase(          int i)                        { return     !json_array_remove( get(), i);           }
     bool erase(       size_t i)                        { return     !json_array_remove( get(), i);           }
-    bool arr_clear()                                   { return     !json_array_clear(  get());              }
+    bool aclear()                                      { return     !json_array_clear(  get());              }
     bool push(                   const json &aj)       { return     !json_array_append( get(),    aj.get()); }
     bool concat(                 const json &aj)       { return     !json_array_extend( get(),    aj.get()); }
 
