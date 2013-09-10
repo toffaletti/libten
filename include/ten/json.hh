@@ -22,58 +22,51 @@ void dump(std::ostream &o, const json_t *j, unsigned flags = JSON_ENCODE_ANY);
 
 
 //----------------------------------------------------------------
-// shared_json_ptr<>
+// json_ptr ... like shared_ptr but only for Jansson's json_t
+// not generally for application use; prefer 'json' type
 //
 
 enum json_take_t { json_take };
 
-template <class J> class shared_json_ptr {
+namespace impl {
+
+class json_ptr {
 private:
-    J *p;
+    json_t *p;
 
 public:
     // ctor, dtor, assign
-    shared_json_ptr()                          : p() {}
-    explicit shared_json_ptr(J *j)             : p(json_incref(j)) {}
-    shared_json_ptr(J *j, json_take_t)         : p(j) {}
-    ~shared_json_ptr()                         { json_decref(p); }
+    json_ptr()                          : p() {}
+    explicit json_ptr(json_t *j)        : p(json_incref(j)) {}
+    json_ptr(json_t *j, json_take_t)    : p(j) {}
+    ~json_ptr()                         { json_decref(p); }
 
-    // construction and assignment - make the compiler work for a living
-                        shared_json_ptr(              const shared_json_ptr      &jp) : p(json_incref(jp.get())) {}
-    template <class J2> shared_json_ptr(              const shared_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
-    template <class J2> shared_json_ptr(                    shared_json_ptr<J2> &&jp) : p(jp.release())          {}
-                        shared_json_ptr & operator = (const shared_json_ptr      &jp) { reset(jp.get());    return *this; }
-    template <class J2> shared_json_ptr & operator = (const shared_json_ptr<J2>  &jp) { reset(jp.get());    return *this; }
-    template <class J2> shared_json_ptr & operator = (      shared_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
-
-    // object interface
-
-    void reset(J *j) { take(json_incref(j)); }
-    void take(J *j)  { json_decref(p); p = j; }  // must be convenient for use with C code
-
-    // operator interface
-
-    J * operator -> () const { return p; }
-    J *get() const           { return p; }
-    J *release()             { J *j = p; p = nullptr; return j; }
+    // copy, move, assign, and move-assign
+    json_ptr(              const json_ptr  &jp) : p(json_incref(jp.get())) {}
+    json_ptr(                    json_ptr &&jp) : p(jp.release())          {}
+    json_ptr & operator = (const json_ptr  &jp) { reset(jp.get());    return *this; }
+    json_ptr & operator = (      json_ptr &&jp) { take(jp.release()); return *this; }
 
     // boolean truth === has json_t of any type
-
     explicit operator bool () const { return get(); }
 
-    // "show me"
+    // object interface
+    void reset(json_t *j)  { take(json_incref(j)); }
+    void take(json_t *j)   { json_decref(p); p = j; }  // must be convenient for use with C code
 
-    friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) {
+    // smart pointer interface
+    json_t * operator -> () const { return p; }
+    json_t *get() const           { return p; }
+    json_t *release()             { auto j = p; p = nullptr; return j; }
+
+    // "show me"
+    friend std::ostream & operator << (std::ostream &o, const json_ptr &jp) {
         dump(o, jp.get());
         return o;
     }
 };
 
-typedef shared_json_ptr<      json_t>       json_ptr;
-typedef shared_json_ptr<const json_t> const_json_ptr;
-
-template <class J> shared_json_ptr<J> make_json_ptr(J *j) { return shared_json_ptr<J>(j); }
-template <class J> shared_json_ptr<J> take_json_ptr(J *j) { return shared_json_ptr<J>(j, json_take); }
+} // impl
 
 
 //----------------------------------------------------------------
@@ -97,6 +90,7 @@ enum ten_json_type {
 //! represent JSON values
 class json {
 private:
+    using json_ptr = impl::json_ptr;
     json_ptr _p;
 
     // autovivify array or object
@@ -118,8 +112,6 @@ public:
     json()                                     : _p()             {}
     json(const json  &js)                      : _p(js._p)        {}
     json(      json &&js)                      : _p(std::move(js._p))  {}
-    json(const json_ptr  &p)                   : _p(p)            {}
-    json(      json_ptr &&p)                   : _p(std::move(p)) {}
     explicit json(json_t *j)                   : _p(j)            {}
              json(json_t *j, json_take_t t)    : _p(j, t)         {}
     json & operator = (const json  &js)        { _p = js._p;       return *this; }
@@ -178,10 +170,8 @@ public:
     friend json take_json(json_t *j)           { return json(j, json_take); }
     void take(json_t *j)                       { _p.take(j); }
     void reset(json_t *j)                      { _p.reset(j); }
-    void reset(const json_ptr &p)              { _p = p; }
     json_t *get() const                        { return _p.get(); }
     json_t *release()                          { return _p.release(); }
-    json_ptr get_shared() const                { return _p; }
 
     // operator interface
 
