@@ -143,6 +143,43 @@ TEST(Json, Path3) {
     EXPECT_EQ(json(1), json::load(text).path("/[type=\"b\"]/value"));
 }
 
+TEST(Json, VariadicPath) {
+    json arr = json::array({ 42 });
+    EXPECT_FALSE(arr.set(0, "foo", 17)); // arr[0] is not an object
+    EXPECT_TRUE(arr.set(1, "foo", 0, "bar"));
+    EXPECT_TRUE(arr.set(2, "bar", "grault"));
+    EXPECT_FALSE(arr.set(1, 1, 1)); // arr[1] is not an array
+    VLOG(1) << "VariadicPath #1: " << arr.dump(JSON_SORT_KEYS | JSON_INDENT(4));
+
+    EXPECT_EQ(arr[1]["foo"][0], json{"bar"});
+    EXPECT_EQ(arr[2]["bar"], json{"grault"});
+
+    EXPECT_EQ(arr.get(1, "foo", 0), json{"bar"});
+    EXPECT_EQ(arr.get(2, "bar"), json{"grault"});
+
+    EXPECT_EQ(3u, arr.asize());
+    EXPECT_EQ(1u, arr[1].osize());
+    EXPECT_EQ(1u, arr[1]["foo"].asize());
+    EXPECT_EQ(1u, arr[2].osize());
+
+    json obj{
+        { "foo", json::array({ 17, 42 }) },
+    };
+    EXPECT_TRUE(obj.set("foo", 1, "corge"));
+    EXPECT_TRUE(obj.set("bar", "baz", "grault"));
+    EXPECT_FALSE(obj.set("foo", "bar", 1)); // wrong type at second level
+    VLOG(1) << "VariadicPath #2: " << obj.dump(JSON_SORT_KEYS | JSON_INDENT(4));
+
+    EXPECT_EQ(obj["foo"][1], json{"corge"});
+    EXPECT_EQ(obj["bar"]["baz"], json{"grault"});
+
+    EXPECT_EQ(obj.get("foo", 1), json{"corge"});
+    EXPECT_EQ(obj.get("bar", "baz"), json{"grault"});
+
+    EXPECT_EQ(obj.osize(), 2u);
+    EXPECT_EQ(obj["foo"].asize(), 2u);
+}
+
 TEST(Json, InitList) {
     json meta{
         { "foo", 17 },
