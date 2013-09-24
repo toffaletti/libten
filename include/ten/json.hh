@@ -22,58 +22,51 @@ void dump(std::ostream &o, const json_t *j, unsigned flags = JSON_ENCODE_ANY);
 
 
 //----------------------------------------------------------------
-// shared_json_ptr<>
+// json_ptr ... like shared_ptr but only for Jansson's json_t
+// not generally for application use; prefer 'json' type
 //
 
 enum json_take_t { json_take };
 
-template <class J> class shared_json_ptr {
+namespace impl {
+
+class json_ptr {
 private:
-    J *p;
+    json_t *p;
 
 public:
     // ctor, dtor, assign
-    shared_json_ptr()                          : p() {}
-    explicit shared_json_ptr(J *j)             : p(json_incref(j)) {}
-    shared_json_ptr(J *j, json_take_t)         : p(j) {}
-    ~shared_json_ptr()                         { json_decref(p); }
+    json_ptr()                          : p() {}
+    explicit json_ptr(json_t *j)        : p(json_incref(j)) {}
+    json_ptr(json_t *j, json_take_t)    : p(j) {}
+    ~json_ptr()                         { json_decref(p); }
 
-    // construction and assignment - make the compiler work for a living
-                        shared_json_ptr(              const shared_json_ptr      &jp) : p(json_incref(jp.get())) {}
-    template <class J2> shared_json_ptr(              const shared_json_ptr<J2>  &jp) : p(json_incref(jp.get())) {}
-    template <class J2> shared_json_ptr(                    shared_json_ptr<J2> &&jp) : p(jp.release())          {}
-                        shared_json_ptr & operator = (const shared_json_ptr      &jp) { reset(jp.get());    return *this; }
-    template <class J2> shared_json_ptr & operator = (const shared_json_ptr<J2>  &jp) { reset(jp.get());    return *this; }
-    template <class J2> shared_json_ptr & operator = (      shared_json_ptr<J2> &&jp) { take(jp.release()); return *this; }
-
-    // object interface
-
-    void reset(J *j) { take(json_incref(j)); }
-    void take(J *j)  { json_decref(p); p = j; }  // must be convenient for use with C code
-
-    // operator interface
-
-    J * operator -> () const { return p; }
-    J *get() const           { return p; }
-    J *release()             { J *j = p; p = nullptr; return j; }
+    // copy, move, assign, and move-assign
+    json_ptr(              const json_ptr  &jp) : p(json_incref(jp.get())) {}
+    json_ptr(                    json_ptr &&jp) : p(jp.release())          {}
+    json_ptr & operator = (const json_ptr  &jp) { reset(jp.get());    return *this; }
+    json_ptr & operator = (      json_ptr &&jp) { take(jp.release()); return *this; }
 
     // boolean truth === has json_t of any type
-
     explicit operator bool () const { return get(); }
 
-    // "show me"
+    // object interface
+    void reset(json_t *j)  { take(json_incref(j)); }
+    void take(json_t *j)   { json_decref(p); p = j; }  // must be convenient for use with C code
 
-    friend std::ostream & operator << (std::ostream &o, const shared_json_ptr &jp) {
+    // smart pointer interface
+    json_t * operator -> () const { return p; }
+    json_t *get() const           { return p; }
+    json_t *release()             { auto j = p; p = nullptr; return j; }
+
+    // "show me"
+    friend std::ostream & operator << (std::ostream &o, const json_ptr &jp) {
         dump(o, jp.get());
         return o;
     }
 };
 
-typedef shared_json_ptr<      json_t>       json_ptr;
-typedef shared_json_ptr<const json_t> const_json_ptr;
-
-template <class J> shared_json_ptr<J> make_json_ptr(J *j) { return shared_json_ptr<J>(j); }
-template <class J> shared_json_ptr<J> take_json_ptr(J *j) { return shared_json_ptr<J>(j, json_take); }
+} // impl
 
 
 //----------------------------------------------------------------
@@ -97,6 +90,7 @@ enum ten_json_type {
 //! represent JSON values
 class json {
 private:
+    using json_ptr = impl::json_ptr;
     json_ptr _p;
 
     // autovivify array or object
@@ -110,23 +104,26 @@ private:
             _p.take(json_array());
         return get();
     }
+    // helper versions that depend on the key for tagging
+    json_t *_ao_get(const char *)         { return _o_get(); }
+    json_t *_ao_get(const std::string &)  { return _o_get(); }
+    json_t *_ao_get(int)                  { return _a_get(); }
+    json_t *_ao_get(size_t)               { return _a_get(); }
 
 public:
     // construction and assignment,
     //   including a selection of conversions from basic types
 
-    json()                                     : _p()             {}
-    json(const json  &js)                      : _p(js._p)        {}
-    json(      json &&js)                      : _p(std::move(js._p))  {}
-    json(const json_ptr  &p)                   : _p(p)            {}
-    json(      json_ptr &&p)                   : _p(std::move(p)) {}
-    explicit json(json_t *j)                   : _p(j)            {}
-             json(json_t *j, json_take_t t)    : _p(j, t)         {}
-    json & operator = (const json  &js)        { _p = js._p;       return *this; }
+    json()                                     : _p()                 {}
+    json(const json  &js)                      : _p(js._p)            {}
+    json(      json &&js)                      : _p(std::move(js._p)) {}
+    explicit json(json_t *j)                   : _p(j)                {}
+             json(json_t *j, json_take_t t)    : _p(j, t)             {}
+    json & operator = (const json  &js)        { _p = js._p;            return *this; }
     json & operator = (      json &&js)        { _p = std::move(js._p); return *this; }
 
     json(const char *s)                        : _p(json_string(s),                 json_take) {}
-    json(const std::string &s)                      : _p(json_string(s.c_str()),         json_take) {}
+    json(const std::string &s)                 : _p(json_string(s.c_str()),         json_take) {}
     json(int i)                                : _p(json_integer(i),                json_take) {}
     json(long i)                               : _p(json_integer(i),                json_take) {}
     json(long long i)                          : _p(json_integer(i),                json_take) {}
@@ -137,22 +134,22 @@ public:
     json(double r)                             : _p(json_real(r),                   json_take) {}
     json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
 
-    static json object()                 { return json(json_object(),   json_take); }
-    static json array()                  { return json(json_array(),    json_take); }
-    static json str(const char *s)       { return json(s); }
-    static json str(const std::string &s)     { return json(s); }
-    static json integer(int i)           { return json(i); }
-    static json integer(long i)          { return json(i); }
-    static json integer(long long i)     { return json(i); }
-    static json integer(unsigned u)      { return json(u); }
+    static json object()                   { return json(json_object(),   json_take); }
+    static json array()                    { return json(json_array(),    json_take); }
+    static json str(const char *s)         { return json(s); }
+    static json str(const std::string &s)  { return json(s); }
+    static json integer(int i)             { return json(i); }
+    static json integer(long i)            { return json(i); }
+    static json integer(long long i)       { return json(i); }
+    static json integer(unsigned u)        { return json(u); }
 #if ULONG_MAX < LLONG_MAX
-    static json integer(unsigned long u) { return json(u); }
+    static json integer(unsigned long u)   { return json(u); }
 #endif
-    static json real(double d)           { return json(d); }
-    static json boolean(bool b)          { return json(b); }
-    static json jtrue()                  { return json(json_true(),     json_take); }
-    static json jfalse()                 { return json(json_false(),    json_take); }
-    static json null()                   { return json(json_null(),     json_take); }
+    static json real(double d)             { return json(d); }
+    static json boolean(bool b)            { return json(b); }
+    static json jtrue()                    { return json(json_true(),     json_take); }
+    static json jfalse()                   { return json(json_false(),    json_take); }
+    static json null()                     { return json(json_null(),     json_take); }
 
     // default to building objects, they're more common
     json(std::initializer_list<std::pair<const char *, json>> init)
@@ -178,10 +175,8 @@ public:
     friend json take_json(json_t *j)           { return json(j, json_take); }
     void take(json_t *j)                       { _p.take(j); }
     void reset(json_t *j)                      { _p.reset(j); }
-    void reset(const json_ptr &p)              { _p = p; }
     json_t *get() const                        { return _p.get(); }
     json_t *release()                          { return _p.release(); }
-    json_ptr get_shared() const                { return _p; }
 
     // operator interface
 
@@ -228,7 +223,7 @@ public:
 
     // scalar access
 
-    std::string str()         const  { return json_string_value(get()); }
+    std::string str()    const  { return json_string_value(get()); }
     const char *c_str()  const  { return json_string_value(get()); }
     json_int_t integer() const  { return json_integer_value(get()); }
     double real()        const  { return json_real_value(get()); }
@@ -255,29 +250,34 @@ public:
 
     // aggregate access
 
-    template <class KEY> json operator [] (KEY key)     { return get(key); }
+    template <class Key>
+    json operator [] (Key &&key)            { return get(std::forward<Key>(key)); }
 
-    size_t osize() const                                { return      json_object_size(   get());                    }
-    json get(           const char *key)                { return json(json_object_get(    get(), key));              }
-    json get(         const std::string &key)                { return json(json_object_get(    get(), key.c_str()));      }
-    bool set(           const char *key, const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
-    bool set(         const std::string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
-    bool erase(         const char *key)                { return     !json_object_del(    get(), key);               }
-    bool erase(       const std::string &key)                { return     !json_object_del(    get(), key.c_str());       }
-    bool oclear()                                       { return     !json_object_clear(  get());                    }
-    bool omerge(         const json &oj)                { return     !json_object_update(          get(), oj.get()); }
-    bool omerge_existing(const json &oj)                { return     !json_object_update_existing( get(), oj.get()); }
-    bool omerge_missing( const json &oj)                { return     !json_object_update_missing(  get(), oj.get()); }
+    size_t osize() const                               { return      json_object_size(   get());                       }
+    json get(   const char *key)                       { return json(json_object_get(    get(), key));                 }
+    json get(   const std::string &key)                { return json(json_object_get(    get(), key.c_str()));         }
+    bool set(   const char *key,        const json &j) { return     !json_object_set( _o_get(), key,         j.get()); }
+    bool set(   const std::string &key, const json &j) { return     !json_object_set( _o_get(), key.c_str(), j.get()); }
+    bool erase( const char *key)                       { return     !json_object_del(    get(), key);                  }
+    bool erase( const std::string &key)                { return     !json_object_del(    get(), key.c_str());          }
+    bool oclear()                                      { return     !json_object_clear(  get());                       }
+    bool omerge(         const json &oj)               { return     !json_object_update(          get(), oj.get());    }
+    bool omerge_existing(const json &oj)               { return     !json_object_update_existing( get(), oj.get());    }
+    bool omerge_missing( const json &oj)               { return     !json_object_update_missing(  get(), oj.get());    }
 
-    size_t asize() const                           { return      json_array_size(   get());              }
-    json get(            int i)                    { return json(json_array_get(    get(), i));          }
-    json get(         size_t i)                    { return json(json_array_get(    get(), i));          }
-    bool set(         size_t i,  const json &j)    { return     !json_array_set( _a_get(), i, j.get());  }
-    bool insert(      size_t i,  const json &j)    { return     !json_array_insert( get(), i, j.get());  }
-    bool erase(       size_t i)                    { return     !json_array_remove( get(), i);           }
-    bool arr_clear()                               { return     !json_array_clear(  get());              }
-    bool push(                   const json &aj)   { return     !json_array_append( get(),    aj.get()); }
-    bool concat(                 const json &aj)   { return     !json_array_extend( get(),    aj.get()); }
+    size_t asize() const                               { return      json_array_size(   get());              }
+    json get(            int i)                        { return json(json_array_get(    get(), i));          }
+    json get(         size_t i)                        { return json(json_array_get(    get(), i));          }
+    bool set(         size_t i,  const json &j)        { const auto a = _a_get();
+                                                         return a && (i == json_array_size(a)
+                                                                      ? !json_array_append(a, j.get())
+                                                                      : !json_array_set(a, i, j.get()));     }
+    bool insert(      size_t i,  const json &j)        { return     !json_array_insert( get(), i, j.get());  }
+    bool erase(          int i)                        { return     !json_array_remove( get(), i);           }
+    bool erase(       size_t i)                        { return     !json_array_remove( get(), i);           }
+    bool aclear()                                      { return     !json_array_clear(  get());              }
+    bool push(                   const json &aj)       { return     !json_array_append( get(),    aj.get()); }
+    bool concat(                 const json &aj)       { return     !json_array_extend( get(),    aj.get()); }
 
     // deep walk
 
@@ -286,15 +286,44 @@ public:
     typedef std::function<bool (json_t *parent, const char *key, json_t *value)> visitor_func_t;
     void visit(const visitor_func_t &visitor);
 
+    // variadic deep walk - type-aware, mutation-capable
+
+    template <typename K1, typename K2, typename... Ks>
+    json get(K1 &&k1, K2 &&k2, Ks&&... ks) {
+        auto j2 = get(std::forward<K1>(k1));
+        if (!j2)
+            return json();
+        return j2.get(std::forward<K2>(k2), std::forward<Ks>(ks)...);
+    }
+
+    template <typename K1, typename K2, typename T3, typename... Ts>
+    bool set(K1 &&k1, K2 &&k2, T3 &&p3, Ts&&... ps) {
+        if (!_ao_get(k1))
+            return false;       // incompatible key type
+        auto j2 = get(std::forward<K1>(k1));
+        if (!j2) {
+            j2._ao_get(k2);     // can't fail
+            if (!set(std::forward<K1>(k1), j2))
+                return false;   // should never happen
+        }
+        return j2.set(std::forward<K2>(k2), std::forward<T3>(p3), std::forward<Ts>(ps)...);
+    }
+
+    //
     // interfaces specific to object and array
+    //
+
+    // iterators
 
     class object_iterator {
-        json_t *_obj;
-        void *_it;
-
         friend class json;
-        explicit object_iterator(json_t *obj)           : _obj(obj), _it(json_object_iter(obj)) {}
-                 object_iterator(json_t *obj, void *it) : _obj(obj), _it(it) {}
+
+        json_t * const _obj;
+        void *_it;
+        object_iterator(json_t *obj, void *it) : _obj(obj), _it(it) {}
+
+        static object_iterator make_begin(json_t *obj) { return object_iterator{obj, json_object_iter(obj)}; }
+        static object_iterator make_end(json_t *obj)   { return object_iterator{obj, nullptr}; }
 
       public:
         typedef const char *key_type;
@@ -314,12 +343,19 @@ public:
         bool operator != (const object_iterator &right) const { return _it != right._it; }
     };
 
-    class array_iterator {
-        json_t *_arr;
-        size_t _i;
+    object_iterator obegin() { return object_iterator::make_begin(get()); }
+    object_iterator oend()   { return object_iterator::make_end(get()); }
 
+
+    class array_iterator {
         friend class json;
-        explicit array_iterator(json_t *arr, size_t i = 0) : _arr(arr), _i(i) {}
+
+        json_t * const _arr;
+        size_t _i;
+        array_iterator(json_t *arr, size_t i) : _arr(arr), _i(i) {}
+
+        static array_iterator make_begin(json_t *arr) { return array_iterator{arr, 0}; }
+        static array_iterator make_end(json_t *arr)   { return array_iterator{arr, json_array_size(arr)}; }
 
       public:
         typedef json value_type;
@@ -341,43 +377,32 @@ public:
         bool operator <  (const array_iterator &right)    const { return _i <  right._i; }
     };
 
+    array_iterator abegin()  { return array_iterator::make_begin(get()); }
+    array_iterator aend()    { return array_iterator::make_end(get()); }
 
-    // if you want to iterate without .arr() and .obj(), here you go
+    // foreach-compatible pseudocontainer views; use with foreach loops:
+    //    for (const auto &elem : j.arr()) {}
+    //    for (const auto &kv   : j.obj()) {}
 
-    object_iterator obegin() { return object_iterator(get()); }
-    object_iterator oend()   { return object_iterator(get(), nullptr); }
-
-    array_iterator  abegin() { return array_iterator( get()); }
-    array_iterator  aend()   { return array_iterator( get(), json_array_size(get())); }
-
-
-    // if you want to iterate with .arr() and .obj(), here you go
-
-    class obj_view {
-        json_t *_obj;
-
+    template <class Iter>
+    class aggregate_view {
         friend class json;
-        explicit obj_view(json_t *obj) : _obj(obj) {}
+
+        json_ptr _p;
+        explicit aggregate_view(json_ptr p) : _p(std::move(p)) {}
 
       public:
-        typedef object_iterator iterator;
-        iterator begin() const { return iterator(_obj); }
-        iterator end()   const { return iterator(_obj, nullptr); }
+        using iterator = Iter;
+
+        iterator begin()  { return Iter::make_begin(_p.get()); }
+        iterator end()    { return Iter::make_end(_p.get()); }
     };
-    obj_view obj()  { return obj_view(get()); }
 
-    class arr_view {
-        json_t *_arr;
+    using obj_view = aggregate_view<object_iterator>;
+    using arr_view = aggregate_view<array_iterator>;
 
-        friend class json;
-        explicit arr_view(json_t *arr) : _arr(arr) {}
-
-      public:
-        typedef array_iterator iterator;
-        iterator begin() const { return iterator(_arr); }
-        iterator end()   const { return iterator(_arr, json_array_size(_arr)); }
-    };
-    arr_view arr()  { return arr_view(get()); }
+    obj_view obj()  { return obj_view(_p); }
+    arr_view arr()  { return arr_view(_p); }
 };
 
 
@@ -396,6 +421,7 @@ inline json to_json(unsigned u)       { return json(u); }
 #if ULONG_MAX < LLONG_MAX
 inline json to_json(unsigned long u)  { return json(u); }
 #endif
+inline json to_json(float f)          { return json(f); }
 inline json to_json(double d)         { return json(d); }
 inline json to_json(bool b)           { return json(b); }
 
@@ -403,71 +429,100 @@ inline json to_json(bool b)           { return json(b); }
 //----------------------------------------------------------------
 // metaprogramming
 //
+// ends:
+//   make_json(T)    -> json
+//   json_cast<T>(j) -> T
+//
+// means:
+//   json_traits<T>
+//
 
-// conversions do not work for unspecified types
+// default = failure: conversions do not work for unspecified types
+
 template <class T> struct json_traits {
     typedef T type;
-    static const bool can_make = false;    // trait<T>::make() -> json works
-    static const bool can_cast = false;    // trait<T>::cast() -> T    works
+    static constexpr bool can_make = false;    // trait<T>::make() -> json works
+    static constexpr bool can_cast = false;    // trait<T>::cast() -> T    works
 };
 
-// convenience base class for conversions that work
+// convenience base class for most convertible types
+
+namespace impl {
 template <class T> struct json_traits_conv {
     typedef T type;
-    static const bool can_make = true;
-    static const bool can_cast = true;
+    static constexpr bool can_make = true;
+    static constexpr bool can_cast = true;
 
-    static json make(T t) { return json(t); }
-    static T cast(const json &j);              // default decl for most cases
+    static json make(T t)  { return json(t); }  // default for most cases
+    static T cast(const json &j);               // default for most cases (see json.cc)
+};
+} // impl
+
+// identity conversions
+
+template <> struct json_traits<json> : impl::json_traits_conv<json> {
+    static json make(const json  &j)  { return j; }
+    static json cast(const json  &j)  { return j; }
+
+    static json make(      json &&j)  { return std::move(j); }
+    static json cast(      json &&j)  { return std::move(j); }
 };
 
+// string conversions
+
+template <> struct json_traits<std::string> : impl::json_traits_conv<std::string> {
+    static json make(const std::string &s)  { return json(s); }
+};
+
+// const char * conversions
+
+template <> struct json_traits<const char *> : impl::json_traits_conv<const char *> {
+    static json make(const char *s)         { return json(s); }
+};
+
+// integral conversions
+
+template <> struct json_traits<short         > : impl::json_traits_conv<short         > {};
+template <> struct json_traits<int           > : impl::json_traits_conv<int           > {};
+template <> struct json_traits<long          > : impl::json_traits_conv<long          > {};
+template <> struct json_traits<long long     > : impl::json_traits_conv<long long     > {};
+template <> struct json_traits<unsigned short> : impl::json_traits_conv<unsigned short> {};
+template <> struct json_traits<unsigned      > : impl::json_traits_conv<unsigned      > {};
+#if ULONG_MAX < LLONG_MAX
+template <> struct json_traits<unsigned long > : impl::json_traits_conv<unsigned long > {};
+#endif
+
+// real conversions
+
+template <> struct json_traits<double> : impl::json_traits_conv<double> {};
+template <> struct json_traits<float>  : impl::json_traits_conv<float>  {};
+
+// boolean conversions
+
+template <> struct json_traits<bool> : impl::json_traits_conv<bool> {};
+
+
+//
+// the above dance dance of templates exists to support this:
+//   make_json<T>(t) -> json
+//   json_cast<T>(j) -> T
+//
+
+// make_json<> function, rather like to_json() but with a precise type
+
+template <class T>
+inline typename std::enable_if<json_traits<T>::can_make, json>::type
+make_json(T &&t) {
+    return json_traits<T>::make(std::forward<T>(t));
+}
+
 // json_cast<> function, a la lexical_cast<>
+
 template <class T>
 inline typename std::enable_if<json_traits<T>::can_cast, T>::type
 json_cast(const json &j) {
     return json_traits<T>::cast(j);
 }
-
-// make_json<> function, rather like to_json() but with a precise type
-template <class T>
-inline typename std::enable_if<json_traits<T>::can_cast, T>::type
-make_json(T t) {
-    return json_traits<T>::make(t);
-}
-
-// identity
-template <> struct json_traits<json> : public json_traits_conv<json> {
-    static json cast(const json &j) { return j; }
-    static json make(const json &j) { return j; }
-};
-
-// string
-template <> struct json_traits<std::string> : public json_traits_conv<std::string> {};
-template <> struct json_traits<const char *> {
-    typedef const char *type;
-    static const bool can_make = true;   // makes copy
-    static const bool can_cast = false;  // sorry, private pointer
-
-    static json make(const char *s) { return json(s); }
-};
-
-// integer
-template <> struct json_traits<short         > : public json_traits_conv<short         > {};
-template <> struct json_traits<int           > : public json_traits_conv<int           > {};
-template <> struct json_traits<long          > : public json_traits_conv<long          > {};
-template <> struct json_traits<long long     > : public json_traits_conv<long long     > {};
-template <> struct json_traits<unsigned short> : public json_traits_conv<unsigned short> {};
-template <> struct json_traits<unsigned      > : public json_traits_conv<unsigned      > {};
-#if ULONG_MAX < LLONG_MAX
-template <> struct json_traits<unsigned long > : public json_traits_conv<unsigned long > {};
-#endif
-
-// real
-template <> struct json_traits<double> : public json_traits_conv<double> {};
-template <> struct json_traits<float>  : public json_traits_conv<float>  {};
-
-// boolean
-template <> struct json_traits<bool> : public json_traits_conv<bool> {};
 
 
 } // ten
