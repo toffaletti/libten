@@ -41,4 +41,6 @@ add_gtest(test_hash_ring LIBS ten)
 add_gtest(test_llqueue LIBS ten)
 add_gtest(test_thread_local LIBS ten)
 add_gtest(test_metrics LIBS ten jansson)
+add_gtest(test_mpmc_queue LIBS ten)
+add_gtest(test_mpsc_queue LIBS ten)
 
