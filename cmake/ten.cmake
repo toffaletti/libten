@@ -1,6 +1,7 @@
 get_filename_component(CWD ${CMAKE_CURRENT_LIST_FILE} PATH)
 include(${CWD}/defaults.cmake)
 include(FindOpenSSL)
+include(CheckSymbolExists)
 
 #add_definitions(-DUSE_UCONTEXT)
 add_definitions(-DUSE_BOOST_FCONTEXT)
@@ -18,6 +19,12 @@ if (JANSSON_LIB AND JANSSON_INCLUDE)
 else (JANSSON_LIB AND JANSSON_INCLUDE)
     message(FATAL_ERROR "jansson not found")
 endif (JANSSON_LIB AND JANSSON_INCLUDE)
+
+set(CMAKE_REQUIRED_LIBRARIES "jansson")
+CHECK_SYMBOL_EXISTS(json_string_length "jansson.h" HAVE_JANSSON_STRLEN)
+if (HAVE_JANSSON_STRLEN)
+    add_definitions(-DHAVE_JANSSON_STRLEN)
+endif (HAVE_JANSSON_STRLEN)
 
 find_library(CARES_LIB cares)
 find_file(CARES_INCLUDE ares.h)
