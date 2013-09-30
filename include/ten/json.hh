@@ -236,8 +236,15 @@ public:
 
     // parse and output
 
-    static json load(const std::string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
-    static json load(const char *s, unsigned flags = JSON_DECODE_ANY)         { return load(s, strlen(s), flags); }
+    static constexpr unsigned default_load_flags =
+                JSON_DECODE_ANY
+#ifdef HAVE_JANSSON_STRLEN
+                | JSON_ALLOW_NUL
+#endif
+                ;
+
+    static json load(const std::string &s, unsigned flags = default_load_flags)  { return load(s.data(), s.size(), flags); }
+    static json load(const char *s, unsigned flags = default_load_flags)         { return load(s, strlen(s), flags); }
     static json load(const char *s, size_t len, unsigned flags);
 
     std::string dump(unsigned flags = JSON_ENCODE_ANY) const;
