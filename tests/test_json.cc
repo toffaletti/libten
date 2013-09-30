@@ -217,6 +217,16 @@ TEST(Json, Conversions) {
     test_conv<string>(string("hello"), json::str("hello"), JSON_STRING);
     EXPECT_EQ(to_json("world"), json::str("world"));
 
+#if HAVE_JANSSON_STRLEN
+    static const char hi_c[] = "hi\0there";
+    constexpr size_t hi_c_len = sizeof(hi_c) - 1;
+    std::string hi(hi_c, hi_c_len);
+
+    test_conv<string>(hi, json::str(hi), JSON_STRING);
+    EXPECT_EQ(to_json(hi), json::str(hi));
+    EXPECT_EQ(to_json(hi), json::str(hi_c, hi_c_len));
+#endif
+
     test_conv_num<short>();
     test_conv_num<int>();
     test_conv_num<long>();
