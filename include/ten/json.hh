@@ -2,15 +2,15 @@
 #define LIBTEN_JSON_HH
 
 #include <jansson.h>
+#ifndef JSON_INTEGER_IS_LONG_LONG
+# error Y2038
+#endif
+
+#include <limits.h>
 #include <string.h>
 #include <string>
 #include <functional>
 #include <type_traits>
-
-#include <limits.h>
-#ifndef JSON_INTEGER_IS_LONG_LONG
-# error Y2038
-#endif
 
 namespace ten {
 
@@ -110,6 +110,41 @@ private:
     json_t *_ao_get(int)                  { return _a_get(); }
     json_t *_ao_get(size_t)               { return _a_get(); }
 
+    static json_t *jstring(const std::string &s) noexcept {
+#ifdef HAVE_JANSSON_STRLEN
+        return json_stringn(s.c_str(), s.size());
+#else
+        return json_string(s.c_str());
+#endif
+    }
+    static std::string jstring(json_t *j) noexcept {
+        std::string s;
+        const auto v = json_string_value(j);
+        if (v) {
+#ifdef HAVE_JANSSON_STRLEN
+            s.assign(v, json_string_length(j));
+#else
+            s.assign(v);
+#endif
+        }
+        return s;
+    }
+    static size_t jslength(json_t *j) noexcept {
+#ifdef HAVE_JANSSON_STRLEN
+        return json_string_length(j);
+#else
+        const auto v = json_string_value(j);
+        return v ? strlen(v) : 0;
+#endif
+    }
+    static int jsset(json_t *j, const char *v, size_t n __attribute__((__unused__))) {
+#ifdef HAVE_JANSSON_STRLEN
+        return json_string_setn(j, v, n);
+#else
+        return json_string_set(j, v);
+#endif
+    }
+
 public:
     // construction and assignment,
     //   including a selection of conversions from basic types
@@ -123,7 +158,10 @@ public:
     json & operator = (      json &&js)        { _p = std::move(js._p); return *this; }
 
     json(const char *s)                        : _p(json_string(s),                 json_take) {}
-    json(const std::string &s)                 : _p(json_string(s.c_str()),         json_take) {}
+#ifdef HAVE_JANSSON_STRLEN
+    json(const char *s, size_t n)              : _p(json_stringn(s, n),             json_take) {}
+#endif
+    json(const std::string &s)                 : _p(jstring(s),                     json_take) {}
     json(int i)                                : _p(json_integer(i),                json_take) {}
     json(long i)                               : _p(json_integer(i),                json_take) {}
     json(long long i)                          : _p(json_integer(i),                json_take) {}
@@ -134,22 +172,25 @@ public:
     json(double r)                             : _p(json_real(r),                   json_take) {}
     json(bool b)                               : _p(b ? json_true() : json_false(), json_take) {}
 
-    static json object()                   { return json(json_object(),   json_take); }
-    static json array()                    { return json(json_array(),    json_take); }
-    static json str(const char *s)         { return json(s); }
-    static json str(const std::string &s)  { return json(s); }
-    static json integer(int i)             { return json(i); }
-    static json integer(long i)            { return json(i); }
-    static json integer(long long i)       { return json(i); }
-    static json integer(unsigned u)        { return json(u); }
-#if ULONG_MAX < LLONG_MAX
-    static json integer(unsigned long u)   { return json(u); }
+    static json object()                     { return json(json_object(),   json_take); }
+    static json array()                      { return json(json_array(),    json_take); }
+    static json str(const char *s)           { return json(s); }
+#ifdef HAVE_JANSSON_STRLEN
+    static json str(const char *s, size_t n) { return json(s, n); }
 #endif
-    static json real(double d)             { return json(d); }
-    static json boolean(bool b)            { return json(b); }
-    static json jtrue()                    { return json(json_true(),     json_take); }
-    static json jfalse()                   { return json(json_false(),    json_take); }
-    static json null()                     { return json(json_null(),     json_take); }
+    static json str(const std::string &s)    { return json(s); }
+    static json integer(int i)               { return json(i); }
+    static json integer(long i)              { return json(i); }
+    static json integer(long long i)         { return json(i); }
+    static json integer(unsigned u)          { return json(u); }
+#if ULONG_MAX < LLONG_MAX
+    static json integer(unsigned long u)     { return json(u); }
+#endif
+    static json real(double d)               { return json(d); }
+    static json boolean(bool b)              { return json(b); }
+    static json jtrue()                      { return json(json_true(),     json_take); }
+    static json jfalse()                     { return json(json_false(),    json_take); }
+    static json null()                       { return json(json_null(),     json_take); }
 
     // default to building objects, they're more common
     json(std::initializer_list<std::pair<const char *, json>> init)
@@ -196,7 +237,7 @@ public:
     // parse and output
 
     static json load(const std::string &s, unsigned flags = JSON_DECODE_ANY)  { return load(s.data(), s.size(), flags); }
-    static json load(const char *s, unsigned flags = JSON_DECODE_ANY)    { return load(s, strlen(s), flags); }
+    static json load(const char *s, unsigned flags = JSON_DECODE_ANY)         { return load(s, strlen(s), flags); }
     static json load(const char *s, size_t len, unsigned flags);
 
     std::string dump(unsigned flags = JSON_ENCODE_ANY) const;
@@ -223,8 +264,9 @@ public:
 
     // scalar access
 
-    std::string str()    const  { return json_string_value(get()); }
     const char *c_str()  const  { return json_string_value(get()); }
+    size_t str_length()  const  { return jslength(get()); }
+    std::string str()    const  { return jstring(get()); }
     json_int_t integer() const  { return json_integer_value(get()); }
     double real()        const  { return json_real_value(get()); }
     bool boolean()       const  { return json_is_true(get()); }
@@ -234,7 +276,7 @@ public:
     bool truthy() const  {
         switch (type()) {
         case TEN_JSON_FALSE:   return false;
-        case TEN_JSON_STRING:  return *c_str();
+        case TEN_JSON_STRING:  return str_length();
         case TEN_JSON_INTEGER: return integer();
         case TEN_JSON_REAL:    return real();
         default:               return false;
@@ -243,10 +285,13 @@ public:
 
     // scalar mutation - TODO - is this worth keeping?
 
-    bool set_string(const char *sv)         { return !json_string_set( get(), sv); }
-    bool set_string(const std::string &sv)  { return !json_string_set( get(), sv.c_str()); }
-    bool set_integer(json_int_t iv)         { return !json_integer_set(get(), iv); }
-    bool set_real(double rv)                { return !json_real_set(   get(), rv); }
+    bool set_string(const char *sv)            { return !json_string_set( get(), sv); }
+#ifdef HAVE_JANSSON_STRLEN
+    bool set_string(const char *sv, size_t sz) { return !json_string_setn(get(), sv, sz); }
+#endif
+    bool set_string(const std::string &sv)     { return !jsset(           get(), sv.c_str(), sv.size()); }
+    bool set_integer(json_int_t iv)            { return !json_integer_set(get(), iv); }
+    bool set_real(double rv)                   { return !json_real_set(   get(), rv); }
 
     // aggregate access
 
