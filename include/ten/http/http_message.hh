@@ -215,7 +215,7 @@ struct http_base : http_headers {
     }
 
     void set_body(std::string body_, const char *content_type) {
-        set_body(std::move(body_), optional<std::string>(emplace, content_type));
+        set_body(std::move(body_), optional<std::string>(in_place, content_type));
     }
     void set_body(std::string body_, optional<std::string> content_type = nullopt) {
         body = std::move(body_);

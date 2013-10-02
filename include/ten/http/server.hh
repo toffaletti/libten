@@ -127,7 +127,7 @@ struct http_exchange {
         if (sock.getpeername(addr)) {
             char buf[INET6_ADDRSTRLEN];
             if (addr.ntop(buf, sizeof(buf))) {
-                return optional<std::string>(emplace, buf);
+                return optional<std::string>(in_place, buf);
             }
         }
         return nullopt;
