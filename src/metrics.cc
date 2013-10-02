@@ -103,7 +103,7 @@ auto intervals::last(interval_type span) const -> optional<result_type> {
         );
         return from == q.rend()
                 ? ret_t()
-                : ret_t(emplace, seconds{to->first - from->first}, to->second - from->second);
+                : ret_t(in_place, seconds{to->first - from->first}, to->second - from->second);
     });
 }
 
