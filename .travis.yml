@@ -1,0 +1,30 @@
+language: cpp
+
+before_install:
+    - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+    - sudo apt-get update -qq
+    - export CC=${CC} CXX=${CXX}
+
+install:
+    - sudo apt-get install cmake
+    - sudo apt-get install -qq g++-4.8
+    - sudo apt-get install libboost-dev
+
+env:
+    gcc48:
+        - CC=gcc-4.8
+        - CXX=g++-4.8
+
+matrix:
+    include:
+        - compiler: gcc
+        - env: CC=gcc-4.8 CXX=g++-4.8
+
+script:
+    - mkdir b
+    - cd b
+    - cmake ..
+    - make
+
+after_script:
+    - make test
