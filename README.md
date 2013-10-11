@@ -48,7 +48,8 @@ Dependencies
   * libboost-test-dev = 1.51
   * libboost-context-dev = 1.51
   * ragel >= 6.5
-  * libjansson >= 2.3
+  * libjansson-dev >= 2.3
+  * libc-ares-dev
 
 Bundled 3rd-party components
 ____________________________

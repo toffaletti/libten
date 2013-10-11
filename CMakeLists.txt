@@ -22,7 +22,7 @@ if (BOOST_ROOT)
 endif ()
 
 find_package(Boost 1.51.0 COMPONENTS
-    context unit_test_framework program_options)
+    context program_options)
 if (NOT Boost_FOUND)
     message(FATAL_ERROR, "Boost >= 1.51 not found")
 else()
