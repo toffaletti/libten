@@ -2,8 +2,16 @@
 #define LIBTEN_TASK_CONTEXT_HH
 
 #include "stack_alloc.hh"
-#include <boost/context/fcontext.hpp>
-#include <boost/context/stack_utils.hpp>
+#include <boost/version.hpp>
+
+#if BOOST_VERSION == 105100
+    #include <boost/context/fcontext.hpp>
+    #include <boost/context/stack_utils.hpp>
+    namespace ctx = boost::ctx;
+#elif BOOST_VERSION >= 105200
+    #include <boost/context/fcontext.hpp>
+    namespace ctx = boost::context;
+#endif
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
@@ -12,7 +20,7 @@
 namespace ten {
 
 class context {
-    boost::ctx::fcontext_t _ctx;
+    ctx::fcontext_t _ctx;
 #ifndef NVALGRIND
     //! stack id so valgrind doesn't freak when stack swapping happens
     int valgrind_stack_id;
@@ -27,7 +35,7 @@ public:
     context() noexcept {}
 
     //! make a new context and stack
-    explicit context(func_type f, size_t stack_size = boost::ctx::default_stacksize()) {
+    explicit context(func_type f, size_t stack_size) {
         memset(&_ctx, 0, sizeof(_ctx));
         void *stack = stack_allocator::allocate(stack_size);
 #ifndef NVALGRIND
@@ -36,11 +44,11 @@ public:
 #endif
         _ctx.fc_stack.base = stack;
         _ctx.fc_stack.limit = reinterpret_cast<void *>(reinterpret_cast<intptr_t>(stack)-stack_size);
-        boost::ctx::make_fcontext(&_ctx, f);
+        ctx::make_fcontext(&_ctx, f);
     }
 
     intptr_t swap(context &other, intptr_t arg=0) noexcept {
-        return boost::ctx::jump_fcontext(&_ctx,
+        return ctx::jump_fcontext(&_ctx,
                 &other._ctx,
                 arg);
     }
