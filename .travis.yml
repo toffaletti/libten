@@ -4,7 +4,7 @@ before_install:
     - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
     - sudo add-apt-repository ppa:boost-latest/ppa -y
     - sudo apt-get update -qq
-    - export CC=${CC} CXX=${CXX}
+    - export CC=${REAL_CC} CXX=${REAL_CXX}
 
 install:
     - sudo apt-get install cmake
@@ -16,14 +16,14 @@ install:
     - sudo apt-get install libboost1.54-all-dev
 
 env:
-    gcc48:
-        - CC=gcc-4.8
-        - CXX=g++-4.8
+    - ignore=this
 
 matrix:
+    exclude:
+        - env: ignore=this
     include:
         - compiler: gcc
-        - env: CC=gcc-4.8 CXX=g++-4.8
+        - env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
 
 script:
     - mkdir b
