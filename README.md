@@ -58,3 +58,5 @@ ____________________________
   * stlencoders 1.1.1 from http://code.google.com/p/stlencoders/
   * msgpack-0.5.7 from http://msgpack.org/
   * miniz v1.14 from http://code.google.com/p/miniz/
+
+[![Build Status](https://travis-ci.org/toffaletti/libten.png)](https://travis-ci.org/toffaletti/libten)
