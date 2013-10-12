@@ -5,6 +5,7 @@
 #include <boost/context/stack_utils.hpp>
 #include <sys/mman.h>
 #include <algorithm>
+#include <atomic>
 
 namespace ten {
 

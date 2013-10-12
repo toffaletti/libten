@@ -21,6 +21,7 @@ namespace {
     int dummy = stack_allocator::initialize();
 } // anon namespace
 
+thread_cached<context::os_fctx, ctx::fcontext_t> context::_os_ctx;
 inotify_fd resolv_conf_watch_fd{IN_NONBLOCK};
 __thread thread_context *this_ctx = nullptr;
 // *** end global ordering **

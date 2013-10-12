@@ -2,6 +2,7 @@
 #define LIBTEN_TASK_CONTEXT_HH
 
 #include "stack_alloc.hh"
+#include "ten/thread_local.hh"
 #include <boost/version.hpp>
 
 #if BOOST_VERSION == 105100
@@ -20,7 +21,11 @@
 namespace ten {
 
 class context {
-    ctx::fcontext_t _ctx;
+private:
+    struct os_fctx;
+    // XXX: defined in thread_context.cc for global ordering
+    static thread_cached<os_fctx, ctx::fcontext_t> _os_ctx;
+    ctx::fcontext_t *_ctx;
 #ifndef NVALGRIND
     //! stack id so valgrind doesn't freak when stack swapping happens
     int valgrind_stack_id;
@@ -32,41 +37,16 @@ public:
     context(const context &&) = delete;
 
     //! make context for existing stack
-    context() noexcept {}
+    context() noexcept;
 
     //! make a new context and stack
-    explicit context(func_type f, size_t stack_size) {
-        memset(&_ctx, 0, sizeof(_ctx));
-        void *stack = stack_allocator::allocate(stack_size);
-#ifndef NVALGRIND
-        valgrind_stack_id =
-            VALGRIND_STACK_REGISTER(stack, reinterpret_cast<intptr_t>(stack)-stack_size);
-#endif
-        _ctx.fc_stack.base = stack;
-        _ctx.fc_stack.limit = reinterpret_cast<void *>(reinterpret_cast<intptr_t>(stack)-stack_size);
-        ctx::make_fcontext(&_ctx, f);
-    }
+    explicit context(func_type f, size_t stack_size);
 
-    intptr_t swap(context &other, intptr_t arg=0) noexcept {
-        return ctx::jump_fcontext(&_ctx,
-                &other._ctx,
-                arg);
-    }
+    intptr_t swap(context &other, intptr_t arg=0) noexcept;
 
-    size_t stack_size() const {
-        return reinterpret_cast<intptr_t>(_ctx.fc_stack.base) -
-            reinterpret_cast<intptr_t>(_ctx.fc_stack.limit);
-    }
+    size_t stack_size() const;
 
-    ~context() {
-        if (_ctx.fc_stack.base) {
-            void *stack = _ctx.fc_stack.base;
-#ifndef NVALGRIND
-            VALGRIND_STACK_DEREGISTER(valgrind_stack_id);
-#endif
-            stack_allocator::deallocate(stack, stack_size());
-        }
-    }
+    ~context();
 };
 
 } // ten

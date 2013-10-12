@@ -84,6 +84,7 @@ add_library(ten
     src/scheduler.cc
     src/io.cc
     src/error.cc
+    src/context.cc
     src/app.cc
     src/chrono_io.cpp
     )

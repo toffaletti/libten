@@ -2,7 +2,6 @@
 #define LIBTEN_TASK_STACK_ALLOC_HH_
 
 #include <memory>
-#include <atomic>
 
 namespace ten {
 
