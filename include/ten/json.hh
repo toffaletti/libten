@@ -13,7 +13,7 @@
 #include <type_traits>
 
 #if JANSSON_VERSION_HEX < 0x020300
-#define JSON_ENCODE_ANY 0x0
+#define JSON_DECODE_ANY 0x0
 #endif
 
 namespace ten {
