@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include <boost/algorithm/string/predicate.hpp>
+#include "ten/http/http_error.hh"
 #include "ten/http/http_message.hh"
 #include "ten/logging.hh"
 
@@ -277,7 +278,7 @@ TEST(Http, RequestParserGarbage) {
     http_parser parser;
     req.parser_init(&parser);
     size_t len = strlen(sdata);
-    EXPECT_THROW(req.parse(&parser, sdata, len), errorx);
+    EXPECT_THROW(req.parse(&parser, sdata, len), http_parse_error);
 }
 
 TEST(Http, RequestParserProxyHttp12) {

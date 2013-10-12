@@ -9,6 +9,9 @@
 using namespace std;
 using namespace ten;
 
+// disable these tests on old versions of jansson.
+#if JANSSON_VERSION_HEX >= 0x020300
+
 const char json_text[] =
 "{ \"store\": {"
 "    \"book\": ["
@@ -77,12 +80,10 @@ TEST(Json, Path1) {
     json r5{o.path("//book[3]")};
     EXPECT_EQ(json::load(a5), r5);
 
-#if JANSSON_VERSION_HEX >= 0x020300
     static const char a6[] = "\"J. R. R. Tolkien\"";
     json r6{o.path("/store/book[3]/author")};
     EXPECT_EQ(json::load(a6), r6);
     EXPECT_TRUE(json::load(a6) == r6);
-#endif
 
     static const char a7[] = "[{\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}]";
     json r7{o.path("/store/book[category=\"fiction\"]")};
@@ -93,6 +94,26 @@ TEST(Json, Path2) {
     json o{json::load("[{\"type\": 0}, {\"type\": 1}]")};
     EXPECT_EQ(json::load("[{\"type\":1}]"), o.path("/[type=1]"));
 }
+
+TEST(Json, Path3) {
+    json o{json::load(json_text)};
+    ASSERT_TRUE(o.get());
+
+    EXPECT_EQ(o, o.path("/"));
+    EXPECT_EQ("Sayings of the Century",
+        o.path("/store/book[category=\"reference\"]/title"));
+
+    static const char text[] = "["
+    "{\"type\":\"a\", \"value\":0},"
+    "{\"type\":\"b\", \"value\":1},"
+    "{\"type\":\"c\", \"value\":2},"
+    "{\"type\":\"c\", \"value\":3}"
+    "]";
+
+    EXPECT_EQ(json(1), json::load(text).path("/[type=\"b\"]/value"));
+}
+
+#endif // JANSSON_VERSION_HEX >= 0x020300
 
 TEST(Json, FilterKeyExists) {
     json o{json::load(json_text)};
@@ -125,24 +146,6 @@ TEST(Json, Truth) {
     EXPECT_TRUE(o.get("nothing").is_false() == false);
     EXPECT_TRUE(o.get("nothing").is_null() == false);
     EXPECT_TRUE(!o.get("nothing"));
-}
-
-TEST(Json, Path3) {
-    json o{json::load(json_text)};
-    ASSERT_TRUE(o.get());
-
-    EXPECT_EQ(o, o.path("/"));
-    EXPECT_EQ("Sayings of the Century",
-        o.path("/store/book[category=\"reference\"]/title"));
-
-    static const char text[] = "["
-    "{\"type\":\"a\", \"value\":0},"
-    "{\"type\":\"b\", \"value\":1},"
-    "{\"type\":\"c\", \"value\":2},"
-    "{\"type\":\"c\", \"value\":3}"
-    "]";
-
-    EXPECT_EQ(json(1), json::load(text).path("/[type=\"b\"]/value"));
 }
 
 TEST(Json, VariadicPath) {
