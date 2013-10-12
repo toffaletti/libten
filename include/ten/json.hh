@@ -318,8 +318,10 @@ public:
     bool erase( const std::string &key)                { return     !json_object_del(    get(), key.c_str());          }
     bool oclear()                                      { return     !json_object_clear(  get());                       }
     bool omerge(         const json &oj)               { return     !json_object_update(          get(), oj.get());    }
+#if JANSSON_VERSION_HEX >= 0x020300
     bool omerge_existing(const json &oj)               { return     !json_object_update_existing( get(), oj.get());    }
     bool omerge_missing( const json &oj)               { return     !json_object_update_missing(  get(), oj.get());    }
+#endif
 
     size_t asize() const                               { return      json_array_size(   get());              }
     json get(            int i)                        { return json(json_array_get(    get(), i));          }
