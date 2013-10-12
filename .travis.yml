@@ -17,16 +17,6 @@ install:
 
 env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
 
-#env:
-#    - ignore=this
-#
-#matrix:
-#    exclude:
-#        - env: ignore=this
-#    include:
-#        - compiler: gcc
-#        - env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
-
 script:
     - mkdir b
     - cd b
@@ -34,6 +24,4 @@ script:
     - make
 
 after_script:
-    - make test
-    - ./tests/test_json
-    - ./tests/test_http
+    - ctest
