@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 2.8)
 include(${CMAKE_SOURCE_DIR}/cmake/ExternalProject.cmake)
 ExternalProject_Add(googletest
     SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk
-    SVN_REVISION -r646
+    # release 1.7.0
+    SVN_REVISION -r664
     # Disable install
     INSTALL_COMMAND ""
     # Disable update
