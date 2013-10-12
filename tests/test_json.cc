@@ -77,10 +77,12 @@ TEST(Json, Path1) {
     json r5{o.path("//book[3]")};
     EXPECT_EQ(json::load(a5), r5);
 
+#if JANSSON_VERSION_HEX >= 0x020300
     static const char a6[] = "\"J. R. R. Tolkien\"";
     json r6{o.path("/store/book[3]/author")};
     EXPECT_EQ(json::load(a6), r6);
     EXPECT_TRUE(json::load(a6) == r6);
+#endif
 
     static const char a7[] = "[{\"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99}, {\"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99}, {\"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99}]";
     json r7{o.path("/store/book[category=\"fiction\"]")};
