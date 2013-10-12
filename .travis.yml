@@ -15,15 +15,17 @@ install:
     - sudo apt-get install libc-ares-dev
     - sudo apt-get install libboost1.54-all-dev
 
-env:
-    - ignore=this
+- env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
 
-matrix:
-    exclude:
-        - env: ignore=this
-    include:
-        - compiler: gcc
-        - env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
+#env:
+#    - ignore=this
+#
+#matrix:
+#    exclude:
+#        - env: ignore=this
+#    include:
+#        - compiler: gcc
+#        - env: REAL_CC=gcc-4.8 REAL_CXX=g++-4.8
 
 script:
     - mkdir b
