@@ -9,9 +9,6 @@
 using namespace std;
 using namespace ten;
 
-// disable these tests on old versions of jansson.
-#if JANSSON_VERSION_HEX >= 0x020300
-
 const char json_text[] =
 "{ \"store\": {"
 "    \"book\": ["
@@ -45,6 +42,8 @@ const char json_text[] =
 "  }"
 "}";
 
+// disable these tests on old versions of jansson.
+#if JANSSON_VERSION_HEX >= 0x020300
 
 TEST(Json, Path1) {
     json o{json::load(json_text)};
