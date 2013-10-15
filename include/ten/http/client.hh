@@ -197,7 +197,7 @@ public:
     {
         if (_lifetime) {
             if (_lifetime->count() <= 0)
-                throw_stream() << name() << ": invalid client lifetime " << *_lifetime;
+                throw_stream() << name() << ": invalid client lifetime " << *_lifetime << endx;
             _lt = std::make_shared<lt_state>();
             _lt->t = task::spawn([=] {
                 _lt_run(_impl(), _lt, _lifetime);
