@@ -25,3 +25,4 @@ script:
 
 after_script:
     - ctest
+    - ./tests/test_http
