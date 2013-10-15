@@ -10,6 +10,7 @@
 #include <string>
 #include <string.h>
 #include <errno.h>
+#include <ten/logging.hh>
 
 namespace ten {
 
@@ -106,14 +107,16 @@ void throw_if(NotBool, Args ...args) {
 
 //! conveniently create an errorx with stream output
 
+enum endx_t { endx };
+
 template <class Exception>
 class error_stream {
     std::unique_ptr<std::ostringstream> _os;
 
 public:
     error_stream()                     : _os(new std::ostringstream) {}
-    error_stream(error_stream &&other) : _os(other._os.release())    {}
-    ~error_stream()                    { if (_os) throw Exception(_os->str()); }
+    error_stream(error_stream &&other) : _os(std::move(other._os))   {}
+    ~error_stream()                    { if (_os) LOG(FATAL) << "error_stream<" << typeid(Exception).name() << "> missing endx"; }
 
     error_stream(const error_stream &) = delete;
     error_stream & operator = (const error_stream &) = delete;
@@ -123,6 +126,12 @@ public:
     error_stream & operator << (const T &t) {
         if (_os) *_os << t;
         return *this;
+    }
+    void operator << (endx_t) {
+        if (_os) {
+            auto os = std::move(_os);
+            throw Exception(os->str());
+        }
     }
 };
 
