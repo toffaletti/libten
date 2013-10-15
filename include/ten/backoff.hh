@@ -27,7 +27,7 @@ public:
           _scale(scale)
     {
         if (min_delay.count() < 0 || min_delay > max_delay)
-            throw_stream() << "invalid backoff(" << min_delay << ", " << max_delay << ")";
+            throw_stream() << "invalid backoff(" << min_delay << ", " << max_delay << ")" << endx;
     }
 
     void reset() { _try = 0; }

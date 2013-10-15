@@ -22,7 +22,7 @@ deadline::deadline(milliseconds ms) {
 
 void deadline::_set_deadline(kernel::duration dur) {
     if (dur.count() < 0)
-        throw_stream() << "negative deadline: " << dur;
+        throw_stream() << "negative deadline: " << dur << endx;
     if (dur.count() > 0) {
         const auto t = scheduler::current_task();
         auto now = kernel::now();

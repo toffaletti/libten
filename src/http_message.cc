@@ -308,7 +308,8 @@ void http_request::parse(struct http_parser *p, const char *data_, size_t &len) 
         len = nparsed;
         throw_stream<http_parse_error>()
             << http_errno_description((http_errno)p->http_errno)
-            << " (" << http_errno_name((http_errno)p->http_errno) << ")";
+            << " (" << http_errno_name((http_errno)p->http_errno) << ")"
+            << endx;
     }
     len = nparsed;
 }
