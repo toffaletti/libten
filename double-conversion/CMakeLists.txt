@@ -1,5 +1,5 @@
+project(DOUBLE_CONVERSION)
 cmake_minimum_required(VERSION 2.8)
-project(double-conversion)
 
 # pick a version #
 set(double-conversion_VERSION

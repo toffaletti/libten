@@ -13,7 +13,6 @@ Dependencies
     * libboost-dev = 1.51
     * libboost-date-time-dev = 1.51
     * libboost-program-options-dev = 1.51
-    * libboost-test-dev = 1.51
     * libboost-context-dev = 1.51
     * ragel >= 6.5
     * libjansson >= 2.3

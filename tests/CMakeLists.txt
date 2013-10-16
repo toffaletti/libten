@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
-
-#include(ExternalProject)
 include(${CMAKE_SOURCE_DIR}/cmake/ExternalProject.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/ParseArguments.cmake)
+
+if (TEN_SUBPROJECT)
+  include(${CMAKE_SOURCE_DIR}/cmake/prog.cmake)
+endif ()
+
 ExternalProject_Add(googletest
     SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk
     # release 1.7.0
@@ -15,8 +19,6 @@ ExternalProject_Add(googletest
 ExternalProject_Get_Property(googletest source_dir binary_dir)
 include_directories(${source_dir}/include)
 link_directories(${binary_dir})
-
-include(${CMAKE_SOURCE_DIR}/cmake/ParseArguments.cmake)
 
 function(add_gtest gtest_name)
     PARSE_ARGUMENTS(GTEST "LIBS" "" ${ARGN})
