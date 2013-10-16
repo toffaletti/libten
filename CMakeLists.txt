@@ -1,36 +1,13 @@
-project(ten)
+project(TEN)
 cmake_minimum_required(VERSION 2.8)
 enable_testing()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ten.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ragel.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure.cmake)
-
-if (${CMAKE_EXE_LINKER_FLAGS} MATCHES "-static")
-    add_definitions(-DBOOST_TEST_MAIN)
-    # must force entire libpthread.a see http://gcc.gnu.org/bugzilla/show_bug.cgi?id=52590
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--whole-archive -lpthread -Wl,--no-whole-archive")
-else ()
-    add_definitions(-DBOOST_TEST_DYN_LINK)
+if (NOT TEN_SUBPROJECT)
+  include(${CMAKE_SOURCE_DIR}/cmake/prog.cmake)
 endif ()
-
-set(Boost_FIND_REQUIRED ON)
-set(Boost_USE_MULTITHREADED OFF) # Linux doesn't need this
-if (BOOST_ROOT)
-  # Prevent falling back to system paths when using a custom Boost prefix.
-  set(Boost_NO_SYSTEM_PATHS ON)
-endif ()
-
-find_package(Boost 1.51.0 COMPONENTS
-    context program_options)
-if (NOT Boost_FOUND)
-    message(FATAL_ERROR, "Boost >= 1.51 not found")
-else()
-    message(STATUS "boost includes: ${Boost_INCLUDE_DIRS}")
-    message(STATUS "boost libs: ${Boost_LIBRARY_DIRS}")
-    include_directories(${Boost_INCLUDE_DIRS})
-    link_directories(${Boost_LIBRARY_DIRS})
-endif()
+include(${CMAKE_SOURCE_DIR}/cmake/ten.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/ragel.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/configure.cmake)
 
 #set (CMAKE_EXE_LINKER_FLAGS -lc++abi)
 #set (CMAKE_SHARED_LINKER_FLAGS -lc++abi)
