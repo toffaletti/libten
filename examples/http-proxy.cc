@@ -54,7 +54,7 @@ void proxy_task(int sock) {
             got_headers = true;
             auto exp_hdr = req.get("Expect");
             if (exp_hdr && *exp_hdr == "100-continue") {
-                http_response cont_resp(100);
+                http_response cont_resp(HTTP_Continue);
                 std::string data = cont_resp.data();
                 ssize_t nw = s.send(data.data(), data.size());
                 (void)nw;
@@ -76,7 +76,7 @@ void proxy_task(int sock) {
             u.port = boost::lexical_cast<uint16_t>(u.path.substr(pos+1));
             cs.dial(u.host.c_str(), u.port, duration_cast<milliseconds>(seconds{10}));
 
-            http_response resp{200};
+            http_response resp{HTTP_OK};
             std::string data = resp.data();
             ssize_t nw = s.send(data.data(), data.size(), 0, duration_cast<milliseconds>(seconds{5}));
             (void)nw;
@@ -108,7 +108,7 @@ void proxy_task(int sock) {
                 if (nw <= 0) { goto request_send_error; }
             }
 
-            http_response resp{&r};
+            http_response resp;
             resp.parser_init(&parser);
             bool headers_sent = false;
             optional<std::string> tx_enc_hdr;

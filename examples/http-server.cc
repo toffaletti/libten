@@ -33,7 +33,7 @@ static void log_request(http_exchange &ex) {
     using namespace std::chrono;
     const auto stop = steady_clock::now();
     auto cl_hdr = ex.resp.get("Content-Length");
-    VLOG(1) << get_value_or(ex.agent_ip(), "noaddr") << ": " <<
+    VLOG(1) << ex.agent_ip().value_or("noaddr") << ": " <<
         ex.req.method << " " <<
         ex.req.uri << " " <<
         ex.resp.status_code << " " <<

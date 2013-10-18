@@ -73,7 +73,7 @@ set_source_files_properties(src/zip.cc PROPERTIES
 
 target_link_libraries(ten glog double-conversion boost_context ${CARES_LIB} rt ${OPENSSL_LIBRARIES})
 
-if (CMAKE_PROJECT_NAME STREQUAL "ten")
+if (NOT TEN_SUBPROJECT)
     add_subdirectory(examples)
     add_subdirectory(tests)
     add_subdirectory(benchmarks)
