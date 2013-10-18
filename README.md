@@ -42,10 +42,10 @@ Dependencies
   * cmake >= 2.8
   * g++ >= 4.7.0
   * libssl-dev >= 0.9.8
-  * libboost-dev = 1.51
-  * libboost-date-time-dev = 1.51
-  * libboost-program-options-dev = 1.51
-  * libboost-context-dev = 1.51
+  * libboost-dev >= 1.51
+  * libboost-date-time-dev >= 1.51
+  * libboost-program-options-dev >= 1.51
+  * libboost-context-dev >= 1.51
   * ragel >= 6.5
   * libjansson-dev >= 2.3
   * libc-ares-dev
