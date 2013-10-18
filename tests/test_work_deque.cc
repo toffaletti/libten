@@ -17,11 +17,11 @@ TEST(WorkDeque, Test) {
 
     auto producer = [&] {
         for (size_t i=0; i<work_units; ++i) {
-            q.push(std::unique_ptr<int>(new int(i)));
+            q.push(i);
         }
         size_t count = 0;
         for (;;) {
-            std::unique_ptr<int> work = q.take();
+            optional<int> work = q.take();
             if (work) {
                 ++count;
                 std::this_thread::sleep_for(milliseconds(1));

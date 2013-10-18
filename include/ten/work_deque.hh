@@ -14,11 +14,6 @@
 
 namespace ten {
 
-template <class T>
-    constexpr bool bigger_than_ptr() {
-        return sizeof(T) > sizeof(T*);
-    }
-
 template <typename T>
 class work_deque {
 private:
@@ -41,7 +36,7 @@ public:
     }
 
     // push_back
-    void push(std::unique_ptr<T> x) {
+    void push(T x) {
         size_t b = _bottom.load(std::memory_order_relaxed);
         size_t t = _top.load(std::memory_order_acquire);
         array *a = _array.load(std::memory_order_relaxed);
@@ -49,19 +44,19 @@ public:
             a = a->grow(t, b).release();
             std::unique_ptr<array> old{_array.exchange(a)};
         }
-        a->put(b, x.release());
+        a->put(b, x);
         std::atomic_thread_fence(std::memory_order_release);
         _bottom.store(b + 1, std::memory_order_relaxed);
     }
 
     // pop_back 
-    std::unique_ptr<T> take() {
+    optional<T> take() {
         size_t b = _bottom.load(std::memory_order_relaxed) - 1;
         array *a = _array.load(std::memory_order_relaxed);
         _bottom.store(b, std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         size_t t = _top.load(std::memory_order_relaxed); 
-        T *x;
+        optional<T> x;
         if (t <= b) {
             // non-empty queue
             x = a->get(b);
@@ -70,24 +65,27 @@ public:
                 if (!_top.compare_exchange_strong(t, t + 1,
                             std::memory_order_seq_cst, std::memory_order_relaxed)) {
                     // failed race
-                    x = nullptr;
+                    x = nullopt;
                 }
                 _bottom.store(b + 1, std::memory_order_relaxed);
             }
         } else {
             // empty queue
-            x = nullptr;
+            //x = nullptr;
             _bottom.store(b + 1, std::memory_order_relaxed);
         }
-        return std::unique_ptr<T>(x);
+        return x;
     }
 
     // pop_front
-    std::pair<bool, std::unique_ptr<T> > steal() {
+    // pair of
+    //  bool success? - false means try again
+    //  optional<T> item
+    std::pair<bool, optional<T> > steal() {
         size_t t = _top.load(std::memory_order_acquire); 
         std::atomic_thread_fence(std::memory_order_seq_cst);
         size_t b = _bottom.load(std::memory_order_acquire);
-        T *x = nullptr;
+        optional<T> x;
         if (t < b) {
             // non empty
             array *a = _array.load(std::memory_order_relaxed);
@@ -95,20 +93,20 @@ public:
             if (!_top.compare_exchange_strong(t, t + 1,
                         std::memory_order_seq_cst, std::memory_order_relaxed)) {
                 // failed race
-                return std::make_pair(false, std::unique_ptr<T>(nullptr));
+                return std::make_pair(false, nullopt);
             }
         }
-        return std::make_pair(true, std::unique_ptr<T>(x));
+        return std::make_pair(true, x);
     }
 
 private:
     struct array {
         std::atomic<size_t> _size;
-        std::atomic<std::atomic<T *> *> _buffer;
+        std::atomic<std::atomic<T> *> _buffer;
 
         array(size_t size) {
             _size.store(size, std::memory_order_relaxed);
-            _buffer.store(new std::atomic<T *>[this->size()], std::memory_order_relaxed);
+            _buffer.store(new std::atomic<T>[this->size()], std::memory_order_relaxed);
         }
 
         ~array() {
@@ -119,11 +117,11 @@ private:
             return 1<<_size.load(std::memory_order_seq_cst);
         }
 
-        void put(size_t i, T *v) {
+        void put(size_t i, T v) {
             _buffer[i % size()].store(v, std::memory_order_relaxed);
         }
 
-        T *get(size_t i) const {
+        T get(size_t i) const {
             return _buffer[i % size()].load(std::memory_order_relaxed);
         }
 
