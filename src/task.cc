@@ -169,7 +169,7 @@ void task::impl::yield() {
     task::impl::cancellation_point cancellable;
     if (_ready.exchange(true) == false) {
         setstate("yield");
-        _scheduler->unsafe_ready(ptr<task::impl>{this});
+        _scheduler->yield_ready(ptr<task::impl>{this});
     }
     swap();
 }

@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include "ten/descriptors.hh"
 #include "ten/llqueue.hh"
+#include "ten/work_deque.hh"
 #include "alarm.hh"
 #include "io.hh"
 
@@ -31,11 +32,15 @@ private:
     //! ptr to the currently running task
     ptr<task::impl> _current_task;
     //! queue of tasks ready to run
-    std::deque<ptr<task::impl>> _readyq;
+    work_deque<ptr<task::impl>> _readyq;
+    //! queue of tasks ready to run after yield
+    std::deque<ptr<task::impl>> _yieldq;
     //! other threads use this to add tasks to ready queue
     llqueue<ptr<task::impl>> _dirtyq;
     //! epoll io
     optional<io> _io;
+    //! tasks waiting to be cleared from dirtyq before gc
+    std::vector<std::shared_ptr<task::impl>> _dirty_gctasks;
     //! tasks to be garbage collected in the next scheduler iteration
     std::deque<std::shared_ptr<task::impl>> _gctasks;
     //! current time cached in a few places through the event loop
@@ -56,6 +61,7 @@ private:
     bool _looping = false;
 
     void check_canceled();
+    void check_yield_queue();
     void check_dirty_queue();
     void check_timeout_tasks();
 
@@ -108,7 +114,7 @@ private:
     friend void this_task::yield();
     void ready(ptr<task::impl> t, bool front=false);
     void ready_for_io(ptr<task::impl> t);
-    void unsafe_ready(ptr<task::impl> t);
+    void yield_ready(ptr<task::impl> t);
 };
 
 } // ten

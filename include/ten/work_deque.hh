@@ -35,6 +35,12 @@ public:
         delete _array.load();
     }
 
+    bool empty() const {
+        size_t b = _bottom.load(std::memory_order_acquire);
+        size_t t = _top.load(std::memory_order_acquire);
+        return t >= b;
+    }
+
     // push_back
     void push(T x) {
         size_t b = _bottom.load(std::memory_order_relaxed);
@@ -56,8 +62,9 @@ public:
         _bottom.store(b, std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         size_t t = _top.load(std::memory_order_relaxed); 
+        const ssize_t size = b - t;
         optional<T> x;
-        if (t <= b) {
+        if (size >= 0) {
             // non-empty queue
             x = a->get(b);
             if (t == b) {
@@ -71,7 +78,7 @@ public:
             }
         } else {
             // empty queue
-            //x = nullptr;
+            //x = nullopt;
             _bottom.store(b + 1, std::memory_order_relaxed);
         }
         return x;

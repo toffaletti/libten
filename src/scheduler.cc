@@ -6,6 +6,7 @@ namespace ten {
 scheduler::scheduler()
   : _os_task{std::make_shared<task::impl>()},
     _current_task{_os_task.get()},
+    _readyq{100},
     _canceled{false}
 {
     _os_task->_scheduler.reset(this);
@@ -66,11 +67,26 @@ void scheduler::check_canceled() {
     }
 }
 
+void scheduler::check_yield_queue() {
+    if (!_yieldq.empty()) {
+        _readyq.push(_yieldq.front());
+        _yieldq.pop_front();
+    }
+}
+
 void scheduler::check_dirty_queue() {
     ptr<task::impl> t;
     while (_dirtyq.pop(t)) {
-        DVLOG(5) << "dirty readying " << t;
-        _readyq.push_front(t);
+        auto i = find_if(begin(_dirty_gctasks), end(_dirty_gctasks), [=](std::shared_ptr<task::impl> &tt) -> bool {
+            return tt.get() == t.get();
+        });
+        if (i == end(_dirty_gctasks)) {
+            DVLOG(5) << "dirty readying " << t;
+            _readyq.push(t);
+        } else {
+            _dirty_gctasks.erase(i);
+            _gctasks.emplace_back(*i);
+        }
     }
 }
 
@@ -117,29 +133,35 @@ void scheduler::schedule() {
     }
     const auto saved_task = _current_task;
     try {
+        optional<ptr<task::impl>> opt_task;
         do {
-            check_canceled();
-            check_dirty_queue();
-            check_timeout_tasks();
-            if (_readyq.empty()) {
-                auto when = _alarms.when();
-                std::unique_lock<std::mutex> lock{_mutex};
-                wait(lock, when);
-            }
-        } while (_readyq.empty());
-        const auto t = _readyq.front();
-        _readyq.pop_front();
-        DCHECK(t->_ready);
-        t->_ready.store(false);
-        _current_task = t;
-        DVLOG(5) << this << " swapping to: " << t;
+            opt_task = _readyq.take();
+            if (opt_task) {
+                const auto t = opt_task.value();
+                DCHECK(t->_ready);
+                t->_ready.store(false);
+                _current_task = t;
+                DVLOG(5) << this << " swapping to: " << t;
 #ifdef TEN_TASK_TRACE
-        saved_task->_trace.capture();
+                saved_task->_trace.capture();
 #endif
-        if (t != saved_task) {
-            saved_task->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t.get()));
-        }
-        _current_task = saved_task;
+                if (t != saved_task) {
+                    saved_task->_ctx.swap(t->_ctx, reinterpret_cast<intptr_t>(t.get()));
+                }
+                _current_task = saved_task;
+                check_yield_queue();
+            } else {
+                check_yield_queue();
+                check_canceled();
+                check_dirty_queue();
+                check_timeout_tasks();
+                if (_readyq.empty()) {
+                    auto when = _alarms.when();
+                    std::unique_lock<std::mutex> lock{_mutex};
+                    wait(lock, when);
+                }
+            }
+        } while (!opt_task);
         _gctasks.clear();
     } catch (backtrace_exception &e) {
         LOG(FATAL) << e.what() << "\n" << e.backtrace_str();
@@ -155,14 +177,26 @@ void scheduler::attach_task(std::shared_ptr<task::impl> t) {
 }
 
 void scheduler::remove_task(ptr<task::impl> t) {
+    DVLOG(5) << "removing " << t;
     DCHECK(t);
     DCHECK(t->_scheduler.get() == this);
+
+#if 0
+    DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))
+        << "BUG: " << t << " found in _readyq while being deleted";
+#endif
+    auto i = find_if(begin(_user_tasks), end(_user_tasks), [=](std::shared_ptr<task::impl> &tt) -> bool {
+        return tt.get() == t.get();
+    });
+    DCHECK(i != end(_user_tasks));
     // set _ready to true here so task::cancel won't work
     // after the task has been removed from the scheduler
     if (t->_ready.exchange(true) == true) {
         // another thread made us ready while we were exiting
         // this can happen with cancel or deadline for example
         // while waiting on a qutex or rendez
+        _dirty_gctasks.emplace_back(*i);
+#if 0
         auto i = find(begin(_readyq), end(_readyq), t);
         while (i == end(_readyq)) {
             sched_yield();
@@ -170,14 +204,10 @@ void scheduler::remove_task(ptr<task::impl> t) {
             i = find(begin(_readyq), end(_readyq), t);
         }
         _readyq.erase(i);
+#endif
+    } else {
+        _gctasks.emplace_back(*i);
     }
-    DCHECK(find(begin(_readyq), end(_readyq), t) == end(_readyq))
-        << "BUG: " << t << " found in _readyq while being deleted";
-    auto i = find_if(begin(_user_tasks), end(_user_tasks), [=](std::shared_ptr<task::impl> &tt) -> bool {
-        return tt.get() == t.get();
-    });
-    DCHECK(i != end(_user_tasks));
-    _gctasks.emplace_back(*i);
     _user_tasks.erase(i);
 }
 
@@ -189,9 +219,9 @@ void scheduler::ready(ptr<task::impl> t, bool front) {
             wakeup();
         } else {
             if (front) {
-                _readyq.push_front(t);
+                _readyq.push(t);
             } else {
-                _readyq.push_back(t);
+                _readyq.push(t);
             }
         }
     }
@@ -200,13 +230,13 @@ void scheduler::ready(ptr<task::impl> t, bool front) {
 void scheduler::ready_for_io(ptr<task::impl> t) {
     DVLOG(5) << "readying for io: " << t;
     if (t->_ready.exchange(true) == false) {
-        _readyq.push_back(t);
+        _readyq.push(t);
     }
 }
 
-void scheduler::unsafe_ready(ptr<task::impl> t) {
+void scheduler::yield_ready(ptr<task::impl> t) {
     DVLOG(5) << "readying: " << t;
-    _readyq.push_back(t);
+    _yieldq.push_back(t);
 }
 
 bool scheduler::cancel_task_by_id(uint64_t id) {
