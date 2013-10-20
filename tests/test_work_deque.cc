@@ -6,6 +6,25 @@
 
 using namespace ten;
 
+TEST(Speed, DISABLED_Test) {
+    using namespace std::chrono;
+    work_deque<uintptr_t> q{10};
+    auto start = high_resolution_clock::now();
+    uintptr_t count = 0;
+    for (;;) {
+        ++count;
+        q.push(count);
+        optional<uintptr_t> x = q.take();
+        auto now = high_resolution_clock::now();
+        auto passed = now - start;
+        if (passed >= seconds{1}) {
+            VLOG(1) << "count: " << count;
+            start = now;
+            count = 0;
+        }
+    }
+}
+
 TEST(WorkDeque, Test) {
     using namespace std::chrono;
     work_deque<int> q{100};
