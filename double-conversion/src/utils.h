@@ -304,8 +304,12 @@ class StringBuilder {
 template <class Dest, class Source>
 inline Dest BitCast(const Source& source) {
   // Compile time assertion: sizeof(Dest) == sizeof(Source)
+#if __cplusplus > 199711L
+  static_assert(sizeof(Dest) == sizeof(Source), "BitCast of different sizes");
+#else
   // A compile error here means your Dest and Source have different sizes.
   typedef char VerifySizesAreEqual[sizeof(Dest) == sizeof(Source) ? 1 : -1];
+#endif
 
   Dest dest;
   memmove(&dest, &source, sizeof(dest));
