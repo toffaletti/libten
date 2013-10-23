@@ -1,4 +1,4 @@
-libten
+libten [![Build Status](https://travis-ci.org/toffaletti/libten.png)](https://travis-ci.org/toffaletti/libten)
 ======
 
 C++11 library for network services on modern x86-64 Linux.
@@ -59,4 +59,3 @@ ____________________________
   * msgpack-0.5.7 from http://msgpack.org/
   * miniz v1.14 from http://code.google.com/p/miniz/
 
-[![Build Status](https://travis-ci.org/toffaletti/libten.png)](https://travis-ci.org/toffaletti/libten)
