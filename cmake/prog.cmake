@@ -36,7 +36,7 @@ if (WITH_PGO STREQUAL "use")
     set(GNU_FLAGS "${GNU_FLAGS} -fprofile-use")
 endif (WITH_PGO STREQUAL "use")
 
-set(GXX_FLAGS "-std=c++11 ${GNU_FLAGS} -Wno-unused-local-typedefs")
+set(GXX_FLAGS "-std=c++11 ${GNU_FLAGS}")
 set(GCC_FLAGS "-std=c11   ${GNU_FLAGS} -Wstrict-prototypes -Wmissing-prototypes")
 
 # release- and debug-specific flags for gcc
