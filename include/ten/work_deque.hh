@@ -12,9 +12,6 @@
 // Correct and Efﬁcient Work-Stealing for Weak Memory Models
 // http://www.di.ens.fr/~zappa/readings/ppopp13.pdf
 
-// TODO: need to finish implementing section 4
-// to fix race conditions when GC isn't present
-
 namespace ten {
 
 template <typename T>
@@ -45,7 +42,9 @@ public:
         array *a = _array.load(std::memory_order_relaxed);
         if (b - t > a->size() - 1) {
             a = a->grow(t, b).release();
+            size_t ss = a->size();
             std::unique_ptr<array> old{_array.exchange(a)};
+            _bottom.store(b + ss);
         }
         a->put(b, x);
         std::atomic_thread_fence(std::memory_order_release);
@@ -85,19 +84,33 @@ public:
     //  bool success? - false means try again
     //  optional<T> item
     std::pair<bool, optional<T> > steal() {
+        optional<T> x;
         size_t t = _top.load(std::memory_order_acquire); 
         std::atomic_thread_fence(std::memory_order_seq_cst);
+        array *old_a = _array.load(std::memory_order_relaxed);
         size_t b = _bottom.load(std::memory_order_acquire);
-        optional<T> x;
-        if (t < b) {
-            // non empty
-            array *a = _array.load(std::memory_order_relaxed);
-            x = a->get(t);
-            if (!_top.compare_exchange_strong(t, t + 1,
-                        std::memory_order_seq_cst, std::memory_order_relaxed)) {
-                // failed race
+        array *a = _array.load(std::memory_order_relaxed);
+        ssize_t size = b - t;
+        if (size <= 0) {
+            // empty
+            return std::make_pair(true, x);
+        }
+        if ((size % a->size()) == 0) {
+            if (a == old_a && t == _top.load(std::memory_order_relaxed)) {
+                // empty
+                return std::make_pair(true, x);
+            } else {
+                // abort, failed race
                 return std::make_pair(false, nullopt);
             }
+
+        }
+        // non empty
+        x = a->get(t);
+        if (!_top.compare_exchange_strong(t, t + 1,
+                    std::memory_order_seq_cst, std::memory_order_relaxed)) {
+            // failed race
+            return std::make_pair(false, nullopt);
         }
         return std::make_pair(true, x);
     }
