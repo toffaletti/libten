@@ -22,9 +22,9 @@ public:
     using pointer = T *;
     using reference = T &;
 
-    constexpr ptr()               : _t{} {}
-    constexpr ptr(std::nullptr_t) : _t{} {}
-    constexpr explicit ptr(T *t)  : _t{t} {}
+    constexpr ptr()               noexcept : _t{} {}
+    constexpr ptr(std::nullptr_t) noexcept : _t{} {}
+    constexpr explicit ptr(T *t)  noexcept : _t{t} {}
     ptr & operator = (std::nullptr_t) { _t = nullptr; return *this; }
 
     ptr(const ptr &other)    { reset(other.get()); }
