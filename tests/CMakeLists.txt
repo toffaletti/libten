@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
-include(${CMAKE_SOURCE_DIR}/cmake/ExternalProject.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/ParseArguments.cmake)
+include(${TEN_SOURCE_DIR}/cmake/ExternalProject.cmake)
+include(${TEN_SOURCE_DIR}/cmake/ParseArguments.cmake)
 
 if (TEN_SUBPROJECT)
-  include(${CMAKE_SOURCE_DIR}/cmake/prog.cmake)
+  include(${TEN_SOURCE_DIR}/cmake/prog.cmake)
 endif ()
 
 ExternalProject_Add(googletest

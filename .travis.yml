@@ -21,6 +21,7 @@ script:
     - mkdir b
     - cd b
     - cmake ..
+    - make
     - make world
 
 after_script:
