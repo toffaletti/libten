@@ -33,25 +33,28 @@
 
 namespace ten {
 
-template<typename T, std::size_t buffer_size>
+template<typename T, std::size_t buffer_size_, typename SizeType = std::size_t>
 class mpmc_bounded_queue
 {
+public:
+    typedef SizeType size_type;
+    static const std::size_t buffer_size = buffer_size_;
 private:
     struct cell_t {
-        std::atomic<std::size_t> sequence_;
-        T                   data_;
+        std::atomic<size_type> sequence_;
+        T                      data_;
     };
 
-    static std::size_t const     cacheline_size = 64;
-    typedef char            cacheline_pad_t [cacheline_size];
+    static std::size_t const  cacheline_size = 64;
+    typedef char              cacheline_pad_t [cacheline_size];
 
     cacheline_pad_t           pad0_;
     cell_t *const             buffer_;
-    std::size_t const         buffer_mask_ = buffer_size-1;
+    size_type const           buffer_mask_ = buffer_size-1;
     cacheline_pad_t           pad1_;
-    std::atomic<std::size_t>  enqueue_pos_;
+    std::atomic<size_type>    enqueue_pos_;
     cacheline_pad_t           pad2_;
-    std::atomic<std::size_t>  dequeue_pos_;
+    std::atomic<size_type>    dequeue_pos_;
     cacheline_pad_t           pad3_;
 
 public:
@@ -78,10 +81,10 @@ public:
 
     bool enqueue(T const& data) {
         cell_t* cell;
-        std::size_t pos = enqueue_pos_.load(std::memory_order_relaxed);
+        size_type pos = enqueue_pos_.load(std::memory_order_relaxed);
         for (;;) {
             cell = &buffer_[pos & buffer_mask_];
-            std::size_t seq = cell->sequence_.load(std::memory_order_acquire);
+            size_type seq = cell->sequence_.load(std::memory_order_acquire);
             intptr_t dif = (intptr_t)seq - (intptr_t)pos;
             if (dif == 0) {
                 if (enqueue_pos_.compare_exchange_weak(
@@ -89,6 +92,10 @@ public:
                     break;
                 }
             } else if (dif < 0) {
+                return false;
+            } else if (pos == 0 && (seq-1) % buffer_size == 0) {
+                // this handles the case where enqueue_pos has overflowed
+                // back to 0 and the queue is full
                 return false;
             } else {
                 pos = enqueue_pos_.load(std::memory_order_relaxed);
@@ -103,12 +110,19 @@ public:
 
     bool dequeue(T& data) {
         cell_t* cell;
-        std::size_t pos = dequeue_pos_.load(std::memory_order_relaxed);
+        size_type pos = dequeue_pos_.load(std::memory_order_relaxed);
         for (;;) {
             cell = &buffer_[pos & buffer_mask_];
-            std::size_t seq = cell->sequence_.load(std::memory_order_acquire);
+            size_type seq = cell->sequence_.load(std::memory_order_acquire);
             intptr_t dif = (intptr_t)seq - (intptr_t)(pos + 1);
             if (dif == 0) {
+                if (dequeue_pos_.compare_exchange_weak(
+                            pos, pos + 1, std::memory_order_relaxed)) {
+                    break;
+                }
+            } else if (seq == 0 && pos == std::numeric_limits<uint8_t>::max()) {
+                // catch the case where pos+1 would overflow back to 0 causing
+                // diff to be negative and dequeue to fail
                 if (dequeue_pos_.compare_exchange_weak(
                             pos, pos + 1, std::memory_order_relaxed)) {
                     break;

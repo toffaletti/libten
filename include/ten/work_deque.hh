@@ -12,6 +12,9 @@
 // Correct and Efﬁcient Work-Stealing for Weak Memory Models
 // http://www.di.ens.fr/~zappa/readings/ppopp13.pdf
 
+// TODO: need to finish implementing section 4
+// to fix race conditions when GC isn't present
+
 namespace ten {
 
 template <typename T>
