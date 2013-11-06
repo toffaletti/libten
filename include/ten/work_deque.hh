@@ -117,12 +117,12 @@ public:
 
 private:
     struct array {
-        std::atomic<size_t> _size;
-        std::atomic<std::atomic<T> *> _buffer;
+        size_t _size;
+        std::atomic<T> * _buffer;
 
         array(size_t size) {
-            _size.store(size, std::memory_order_relaxed);
-            _buffer.store(new std::atomic<T>[this->size()], std::memory_order_relaxed);
+            _size = size;
+            _buffer = new std::atomic<T>[this->size()];
         }
 
         ~array() {
@@ -130,7 +130,7 @@ private:
         }
 
         size_t size() const {
-            return 1<<_size.load(std::memory_order_seq_cst);
+            return 1<<_size;
         }
 
         void put(size_t i, T v) {
