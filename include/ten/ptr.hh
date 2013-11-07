@@ -24,7 +24,7 @@ public:
 
     constexpr ptr()               noexcept : _t{} {}
     constexpr ptr(std::nullptr_t) noexcept : _t{} {}
-    constexpr explicit ptr(T *t)  noexcept : _t{t} {}
+    constexpr ptr(T *t)           noexcept : _t{t} {}
     ptr & operator = (std::nullptr_t) { _t = nullptr; return *this; }
 
     ptr(const ptr &other)    { reset(other.get()); }
@@ -68,9 +68,6 @@ public:
 
     friend void swap(ptr &left, ptr &right) noexcept { std::swap(left._t, right._t); }
 };
-
-template <class T>
-  inline ptr<T> make_ptr(T *t) noexcept  { return ptr<T>(t); }
 
 
 } // namespace ten
