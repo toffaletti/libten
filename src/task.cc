@@ -178,9 +178,7 @@ void task::impl::safe_swap() noexcept {
     _scheduler->schedule();
 }
 
-void task::impl::swap() {
-    _scheduler->schedule();
-
+void task::impl::check_canceled() {
     if (_canceled && _cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
         throw task_interrupted();
@@ -192,6 +190,13 @@ void task::impl::swap() {
         std::swap(tmp, _exception);
         std::rethrow_exception(tmp);
     }
+}
+
+void task::impl::swap() {
+    // don't put canceled or deadlined tasks to sleep
+    check_canceled();
+    _scheduler->schedule();
+    check_canceled();
 }
 
 bool task::impl::cancelable() const {
