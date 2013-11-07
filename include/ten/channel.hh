@@ -27,37 +27,9 @@ struct channel_closed_error : std::exception {
 //! channels are thread and task safe.
 template <typename T, typename ContainerT = std::deque<T> > class channel {
 private:
-    struct impl {
-        typedef typename ContainerT::size_type size_type;
-
-        impl(size_type capacity_=0) : capacity(capacity_), unread(0),
-            queue(ContainerT()), closed(false) {}
-        impl(const impl &) = delete;
-        impl &operator =(const impl &) = delete;
-
-        // unbuffered channels use 0 capacity so send
-        // will block waiting for recv on empty channel
-        size_type capacity;
-        size_type unread;
-        std::queue<T, ContainerT> queue;
-        qutex qtx;
-        rendez not_empty;
-        rendez not_full;
-        bool closed;
-
-        bool is_empty() const { return unread == 0; }
-        bool is_full() const { return unread >= capacity; }
-    };
-
-private:
+    struct impl;
     std::shared_ptr<impl> _m;
     bool _autoclose;
-
-    void check_closed() {
-        // i dont like throwing an exception for this
-        // but i don't want to complicate the interface for send/recv
-        if (_m->closed) throw channel_closed_error();
-    }
 public:
     //! create a new channel
     //! \param capacity number of items to buffer. the default is 0, unbuffered.
@@ -81,80 +53,13 @@ public:
 
     //! send data
     typename impl::size_type send(T &&p) {
-        std::unique_lock<qutex> l(_m->qtx);
-        typename impl::size_type ret = _m->unread;
-        while (_m->is_full() && !_m->closed) {
-            _m->not_full.sleep(l);
-        }
-        check_closed();
-        _m->queue.push(std::move(p));
-        ++_m->unread;
-        _m->not_empty.wakeup();
-        return ret;
+        return _m->send(std::move(p));
     }
 
     //! receive data
     T recv() {
-        std::unique_lock<qutex> l(_m->qtx);
-        bool unbuffered = _m->capacity == 0;
-        if (unbuffered) {
-            // grow the capacity for a single item
-            _m->capacity = 1;
-            // unblock sender
-            _m->not_full.wakeup();
-        }
-        while (_m->is_empty() && !_m->closed) {
-            _m->not_empty.sleep(l);
-        }
-        if (_m->unread == 0) {
-            check_closed();
-        }
-
-        --_m->unread;
-        T item(std::move(_m->queue.front()));
-        _m->queue.pop();
-        if (unbuffered) {
-            // shrink capacity again so sends will block
-            // waiting for recv
-            _m->capacity = 0;
-        } else {
-            _m->not_full.wakeup();
-        }
-        return item;
+       return _m->recv(); 
     }
-
-    // TODO: rewrite this
-#if 0
-    //! timed receive data
-    bool timed_recv(T &item, unsigned int ms) {
-        std::unique_lock<qutex> l(m->qtx);
-        bool unbuffered = m->capacity == 0;
-        if (unbuffered) {
-            // grow the capacity for a single item
-            m->capacity = 1;
-            // unblock sender
-            m->not_full.wakeup();
-        }
-        while (m->is_empty() && !m->closed) {
-            if (!m->not_empty.sleep_for(l, ms)) return false;
-        }
-        if (m->unread == 0) {
-            check_closed();
-        }
-
-        // we don't pop_back because the item will just get overwritten
-        // when the circular buffer wraps around
-        item = m->container[--m->unread];
-        if (unbuffered) {
-            // shrink capacity again so sends will block
-            // waiting for recv
-            m->capacity = 0;
-        } else {
-            m->not_full.wakeup();
-        }
-        return true;
-    }
-#endif
 
     bool empty() {
         return unread() == 0;
@@ -172,22 +77,98 @@ public:
     }
 
     void close() {
-        std::lock_guard<qutex> l(_m->qtx);
-        _m->closed = true;
-        // wake up all users of channel
-        _m->not_empty.wakeupall();
-        _m->not_full.wakeupall();
+        _m->close();
     }
 
     void clear() {
-        std::lock_guard<qutex> l(_m->qtx);
-        while (!_m->queue.empty()) {
-            _m->queue.pop();
-        }
-        _m->unread = 0;
-        _m->not_full.wakeupall();
+        _m->clear();
     }
+private:
+    struct impl {
+        typedef typename ContainerT::size_type size_type;
+        impl(size_type capacity_=0) : capacity(capacity_), unread(0),
+            queue(ContainerT()), closed(false) {}
+        impl(const impl &) = delete;
+        impl &operator =(const impl &) = delete;
 
+        // unbuffered channels use 0 capacity so send
+        // will block waiting for recv on empty channel
+        size_type capacity;
+        size_type unread;
+        std::queue<T, ContainerT> queue;
+        qutex qtx;
+        rendez not_empty;
+        rendez not_full;
+        bool closed;
+
+        bool is_empty() const { return unread == 0; }
+        bool is_full() const { return unread >= capacity; }
+
+        size_type send(T &&p) {
+            std::unique_lock<qutex> lk(qtx);
+            size_type ret = unread;
+            while (is_full() && !closed) {
+                not_full.sleep(lk);
+            }
+            check_closed();
+            queue.push(std::move(p));
+            ++unread;
+            not_empty.wakeup();
+            return ret;
+        }
+
+        T recv() {
+            std::unique_lock<qutex> lk(qtx);
+            bool unbuffered = capacity == 0;
+            if (unbuffered) {
+                // grow the capacity for a single item
+                capacity = 1;
+                // unblock sender
+                not_full.wakeup();
+            }
+            while (is_empty() && !closed) {
+                not_empty.sleep(lk);
+            }
+            if (unread == 0) {
+                check_closed();
+            }
+
+            --unread;
+            T item(std::move(queue.front()));
+            queue.pop();
+            if (unbuffered) {
+                // shrink capacity again so sends will block
+                // waiting for recv
+                capacity = 0;
+            } else {
+                not_full.wakeup();
+            }
+            return item;
+        }
+
+        void check_closed() {
+            // i dont like throwing an exception for this
+            // but i don't want to complicate the interface for send/recv
+            if (closed) throw channel_closed_error();
+        }
+
+        void close() {
+            std::lock_guard<qutex> l(qtx);
+            closed = true;
+            // wake up all users of channel
+            not_empty.wakeupall();
+            not_full.wakeupall();
+        }
+
+        void clear() {
+            std::lock_guard<qutex> l(qtx);
+            while (!queue.empty()) {
+                queue.pop();
+            }
+            unread = 0;
+            not_full.wakeupall();
+        }
+    };
 };
 
 } // end namespace ten
