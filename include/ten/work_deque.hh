@@ -28,11 +28,11 @@ private:
     cacheline_pad_t pad1_;
 public:
     work_deque(size_t size) : _top{0}, _bottom{0} {
-        _array.store(new array{(size_t)std::log(size)});
+        _array.store(new array{(size_t)std::log(size)}, std::memory_order_seq_cst);
     }
 
     ~work_deque() {
-        delete _array.load();
+        delete _array.load(std::memory_order_seq_cst);
     }
 
     bool empty() const {
@@ -43,45 +43,50 @@ public:
 
     // push_back
     void push(T x) {
-        size_t b = _bottom.load(std::memory_order_relaxed);
-        size_t t = _top.load(std::memory_order_acquire);
-        array *a = _array.load(std::memory_order_relaxed);
+        size_t b = _bottom.load(std::memory_order_seq_cst);
+        size_t t = _top.load(std::memory_order_seq_cst);
+        array *a = _array.load(std::memory_order_seq_cst);
         if (b - t > a->size() - 1) {
             a = a->grow(t, b).release();
             size_t ss = a->size();
-            std::unique_ptr<array> old{_array.exchange(a)};
-            _bottom.store(b + ss);
+            std::unique_ptr<array> old{_array.exchange(a, std::memory_order_seq_cst)};
+            _bottom.store(b + ss, std::memory_order_seq_cst);
+            t = _top.load(std::memory_order_seq_cst);
+            if (!_top.compare_exchange_strong(t, t + ss,
+                        std::memory_order_seq_cst, std::memory_order_seq_cst)) {
+                _bottom.store(b, std::memory_order_seq_cst);
+            }
+            b = _bottom.load(std::memory_order_seq_cst);
+
         }
         a->put(b, x);
-        std::atomic_thread_fence(std::memory_order_release);
-        _bottom.store(b + 1, std::memory_order_relaxed);
+        _bottom.store(b + 1, std::memory_order_seq_cst);
     }
 
     // pop_back 
     optional<T> take() {
-        size_t b = _bottom.load(std::memory_order_relaxed) - 1;
-        array *a = _array.load(std::memory_order_relaxed);
-        _bottom.store(b, std::memory_order_relaxed);
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        size_t t = _top.load(std::memory_order_relaxed); 
-        const ssize_t size = b - t;
+        size_t b = _bottom.load(std::memory_order_seq_cst) - 1;
+        array *a = _array.load(std::memory_order_seq_cst);
+        _bottom.store(b, std::memory_order_release);
+        size_t t = _top.load(std::memory_order_seq_cst); 
         optional<T> x;
+        ssize_t size = b - t;
         if (size >= 0) {
             // non-empty queue
             x = a->get(b);
             if (t == b) {
                 // last element in queue
                 if (!_top.compare_exchange_strong(t, t + 1,
-                            std::memory_order_seq_cst, std::memory_order_relaxed)) {
+                            std::memory_order_seq_cst, std::memory_order_seq_cst)) {
                     // failed race
                     x = nullopt;
                 }
-                _bottom.store(b + 1, std::memory_order_relaxed);
+                _bottom.store(b + 1, std::memory_order_seq_cst);
             }
         } else {
             // empty queue
-            //x = nullopt;
-            _bottom.store(b + 1, std::memory_order_relaxed);
+            //x = nullptr;
+            _bottom.store(b + 1, std::memory_order_seq_cst);
         }
         return x;
     }
@@ -92,18 +97,17 @@ public:
     //  optional<T> item
     std::pair<bool, optional<T> > steal() {
         optional<T> x;
-        size_t t = _top.load(std::memory_order_acquire); 
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        array *old_a = _array.load(std::memory_order_relaxed);
-        size_t b = _bottom.load(std::memory_order_acquire);
-        array *a = _array.load(std::memory_order_relaxed);
+        size_t t = _top.load(std::memory_order_seq_cst); 
+        array *old_a = _array.load(std::memory_order_seq_cst);
+        size_t b = _bottom.load(std::memory_order_seq_cst);
+        array *a = _array.load(std::memory_order_seq_cst);
         ssize_t size = b - t;
         if (size <= 0) {
             // empty
             return std::make_pair(true, x);
         }
         if ((size % a->size()) == 0) {
-            if (a == old_a && t == _top.load(std::memory_order_relaxed)) {
+            if (a == old_a && t == _top.load(std::memory_order_seq_cst)) {
                 // empty
                 return std::make_pair(true, x);
             } else {
@@ -115,7 +119,7 @@ public:
         // non empty
         x = a->get(t);
         if (!_top.compare_exchange_strong(t, t + 1,
-                    std::memory_order_seq_cst, std::memory_order_relaxed)) {
+                    std::memory_order_seq_cst, std::memory_order_seq_cst)) {
             // failed race
             return std::make_pair(false, nullopt);
         }
@@ -124,12 +128,13 @@ public:
 
 private:
     struct array {
-        std::atomic<size_t> _size;
-        std::atomic<std::atomic<T> *> _buffer;
+        size_t _size;
+        std::atomic<T> * _buffer;
 
-        array(size_t size) {
-            _size.store(size, std::memory_order_relaxed);
-            _buffer.store(new std::atomic<T>[this->size()], std::memory_order_relaxed);
+        array(size_t size) :
+            _size{size},
+            _buffer{new std::atomic<T>[this->size()]}
+        {
         }
 
         ~array() {
@@ -137,15 +142,15 @@ private:
         }
 
         size_t size() const {
-            return 1<<_size.load(std::memory_order_seq_cst);
+            return 1<<_size;
         }
 
         void put(size_t i, T v) {
-            _buffer[i % size()].store(v, std::memory_order_relaxed);
+            _buffer[i % size()].store(v, std::memory_order_seq_cst);
         }
 
         T get(size_t i) const {
-            return _buffer[i % size()].load(std::memory_order_relaxed);
+            return _buffer[i % size()].load(std::memory_order_seq_cst);
         }
 
         std::unique_ptr<array> grow(size_t top, size_t bottom) {

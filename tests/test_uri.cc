@@ -426,3 +426,15 @@ TEST(Uri, QueryParts) {
             "stuff", false}.str();
     EXPECT_EQ(u.query, "?this=that+&thing=1234&stuff=0");
 }
+
+TEST(Uri, QueryPartParse) {
+    uri tmp;
+    tmp.host = "localhost";
+    tmp.scheme = "http";
+    tmp.path = "/static?fn=stats.html";
+    uri u(tmp.compose());
+    uri::query_params qparams = u.query_part();
+    auto expected = std::make_pair<std::string, std::string>("fn", "stats.html");
+    auto actual = *qparams.begin();
+    EXPECT_EQ(expected, actual);
+}
