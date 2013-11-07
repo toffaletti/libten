@@ -27,14 +27,25 @@ void rendez::sleep(std::unique_lock<qutex> &lk) {
         }
         lk.lock();
     } catch (...) {
+        ptr<task::impl> wake_task = nullptr;
         {
             std::lock_guard<std::mutex> ll(_m);
             auto i = std::find(_waiting.begin(), _waiting.end(), t);
             if (i != _waiting.end()) {
                 _waiting.erase(i);
+            } else if (!_waiting.empty()) {
+                // this handles the case where the task was woken up
+                // by the rendez *and* canceled or deadlined.
+                // so it needs to wake up another task instead of itself
+                // before it dies otherwise we could deadlock
+                wake_task = _waiting.front();
+                _waiting.pop_front();
             }
         }
-        lk.lock();
+        if (wake_task) {
+            DVLOG(5) << "RENDEZ[" << this << "] " << scheduler::current_task() << " wakeup instead: " << wake_task;
+            wake_task->ready();
+        }
         throw;
     }
 }

@@ -180,7 +180,6 @@ void task::impl::safe_swap() noexcept {
 
 void task::impl::swap() {
     _scheduler->schedule();
-    //ctx.swap(this_ctx->scheduler.sched_context(), 0);
 
     if (_canceled && _cancel_points > 0) {
         DVLOG(5) << "THROW INTERRUPT: " << this << "\n" << saved_backtrace().str();
