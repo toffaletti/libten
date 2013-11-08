@@ -23,6 +23,4 @@ script:
     - cmake ..
     - make
     - make world
-
-after_script:
-    - ctest
+    - ctest --output-on-failure
