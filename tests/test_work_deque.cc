@@ -15,6 +15,7 @@ TEST(Speed, DISABLED_Test) {
         ++count;
         q.push(count);
         optional<uintptr_t> x = q.take();
+        (void)x;
         auto now = high_resolution_clock::now();
         auto passed = now - start;
         if (passed >= seconds{1}) {
