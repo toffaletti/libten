@@ -10,7 +10,7 @@ static void channel_recv(channel<intptr_t> c, channel<int> done_chan) {
     EXPECT_EQ(d, 8675309);
     char *str = reinterpret_cast<char *>(c.recv());
     EXPECT_STREQ(str, "hi");
-    done_chan.send(1);
+    done_chan.send(2);
 }
 
 static void channel_send(channel<intptr_t> c, channel<int> done_chan) {
@@ -30,7 +30,8 @@ void channel_test_task() {
         channel_send(c, done_chan);
     });
     for (int i=0; i<2; ++i) {
-        done_chan.recv();
+        int r = done_chan.recv();
+        (void)r;
     }
     EXPECT_TRUE(c.empty());
 }

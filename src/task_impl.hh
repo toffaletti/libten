@@ -80,6 +80,7 @@ public:
     void join() noexcept;
 private:
     static void trampoline(intptr_t arg);
+    void check_canceled();
 };
 
 std::ostream &operator << (std::ostream &o, ptr<task::impl> t);
