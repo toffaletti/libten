@@ -24,7 +24,7 @@ public:
 
     constexpr ptr()               noexcept : _t{} {}
     constexpr ptr(std::nullptr_t) noexcept : _t{} {}
-    constexpr explicit ptr(T *t)  noexcept : _t{t} {}
+    constexpr ptr(T *t)           noexcept : _t{t} {}
     ptr & operator = (std::nullptr_t) { _t = nullptr; return *this; }
 
     ptr(const ptr &other)    { reset(other.get()); }
@@ -53,14 +53,23 @@ public:
     explicit operator bool () const noexcept  { return  get(); }
     bool operator ! ()        const noexcept  { return !get(); }
 
-    bool operator == (const ptr &other) const noexcept  { return get() == other.get(); }
-    bool operator != (const ptr &other) const noexcept  { return get() != other.get(); }
-    bool operator <  (const ptr &other) const noexcept  { return get() <  other.get(); }
-    bool operator <= (const ptr &other) const noexcept  { return get() <= other.get(); }
-    bool operator >  (const ptr &other) const noexcept  { return get() >  other.get(); }
-    bool operator >= (const ptr &other) const noexcept  { return get() >= other.get(); }
+    // these templates will match in cases where comparision is not legal, but that's OK;
+    //  the important thing to always permit comparisons that *are* legal.
 
-    friend bool operator != (const ptr &p, std::nullptr_t) noexcept  { return p; }
+    template <class U>
+      friend bool operator == (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() == q.get(); }
+    template <class U>
+      friend bool operator != (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() != q.get(); }
+    template <class U>
+      friend bool operator <  (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() <  q.get(); }
+    template <class U>
+      friend bool operator <= (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() <= q.get(); }
+    template <class U>
+      friend bool operator >  (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() >  q.get(); }
+    template <class U>
+      friend bool operator >= (const ptr<T> &p, const ptr<U> &q) noexcept  { return p.get() >= q.get(); }
+
+    friend bool operator != (const ptr &p, std::nullptr_t) noexcept { return p; }
     friend bool operator != (std::nullptr_t, const ptr &p) noexcept { return p; }
 
     friend bool operator == (const ptr &p, std::nullptr_t) noexcept { return !p; }
@@ -68,9 +77,6 @@ public:
 
     friend void swap(ptr &left, ptr &right) noexcept { std::swap(left._t, right._t); }
 };
-
-template <class T>
-  inline ptr<T> make_ptr(T *t) noexcept  { return ptr<T>(t); }
 
 
 } // namespace ten
