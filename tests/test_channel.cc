@@ -5,6 +5,16 @@
 
 using namespace ten;
 
+TEST(Channel, Clear) {
+    task::main([] {
+        channel<int> ch{10};
+        ch.send(1);
+        EXPECT_FALSE(ch.empty());
+        ch.clear();
+        EXPECT_TRUE(ch.empty());
+    });
+}
+
 static void channel_recv(channel<intptr_t> c, channel<int> done_chan) {
     intptr_t d = c.recv();
     EXPECT_EQ(d, 8675309);

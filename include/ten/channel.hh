@@ -166,7 +166,6 @@ private:
             while (!queue.empty()) {
                 queue.pop();
             }
-            unread = 0;
             not_full.wakeupall();
         }
     };
