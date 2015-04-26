@@ -1,7 +1,0 @@
-changes made to glog for libten
-
-1) cmake build system
-2) fix race condition http://code.google.com/p/google-glog/issues/detail?id=62&can=6
-3) enable FLAG_vmodule (add DECLARE_string(vmodule) to logging.h)
-4) fix explicit references to google namespace
-5) enable SA_ONSTACK for InstallFailureSignalHandler
